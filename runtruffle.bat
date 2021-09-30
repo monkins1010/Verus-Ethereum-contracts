@@ -1,0 +1,1 @@
+truffle deploy --network rinkeby --reset

@@ -1,0 +1,53 @@
+{
+	"compiler": {
+		"version": "0.7.6+commit.7338295f"
+	},
+	"language": "Solidity",
+	"output": {
+		"abi": [],
+		"devdoc": {
+			"kind": "dev",
+			"methods": {},
+			"version": 1
+		},
+		"userdoc": {
+			"kind": "user",
+			"methods": {},
+			"version": 1
+		}
+	},
+	"settings": {
+		"compilationTarget": {
+			"contracts/Libraries/VerusConstantsProof.sol": "VerusObjectsProof"
+		},
+		"evmVersion": "istanbul",
+		"libraries": {},
+		"metadata": {
+			"bytecodeHash": "ipfs"
+		},
+		"optimizer": {
+			"enabled": false,
+			"runs": 200
+		},
+		"remappings": []
+	},
+	"sources": {
+		"contracts/Libraries/VerusConstantsProof.sol": {
+			"keccak256": "0x6c393fd6d00c237de3b9b7505520b8a15b98d3cb3cd1797a00fd13787e6d9434",
+			"license": "MIT",
+			"urls": [
+				"bzz-raw://f853445a7927a0189a65be99087619d2332dbd6fcb3d131ccd07ebda5943ff86",
+				"dweb:/ipfs/QmbG2VoATC6xpMwEfp8gL9yDEjrpQbs7XUz7H7DLnrvoua"
+			]
+		},
+		"contracts/Libraries/VerusObjectsCommon.sol": {
+			"keccak256": "0xfe058b5e96065103d3aad3ac2dedca134b01af3016a96d240664e54d22959d53",
+			"license": "MIT",
+			"urls": [
+				"bzz-raw://022d2f5fa8c0199590303608a07648eb3a0a3c3200e29e172b9745ff230da16c",
+				"dweb:/ipfs/QmXp1gcMuLojTUvGjQ3ttvQotuGvYUkepdwiUoXsBzP5uG"
+			]
+		}
+	},
+	"version": 1
+}

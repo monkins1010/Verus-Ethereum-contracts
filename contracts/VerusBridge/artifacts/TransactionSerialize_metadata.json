@@ -1,0 +1,71 @@
+{
+	"compiler": {
+		"version": "0.6.12+commit.27d51765"
+	},
+	"language": "Solidity",
+	"output": {
+		"abi": [
+			{
+				"inputs": [],
+				"stateMutability": "nonpayable",
+				"type": "constructor"
+			},
+			{
+				"inputs": [],
+				"name": "encodeTest",
+				"outputs": [
+					{
+						"internalType": "bytes",
+						"name": "",
+						"type": "bytes"
+					}
+				],
+				"stateMutability": "nonpayable",
+				"type": "function"
+			}
+		],
+		"devdoc": {
+			"kind": "dev",
+			"methods": {},
+			"version": 1
+		},
+		"userdoc": {
+			"kind": "user",
+			"methods": {},
+			"version": 1
+		}
+	},
+	"settings": {
+		"compilationTarget": {
+			"localhost/contracts/VerusBridge/TransactionSerialize.sol": "TransactionSerialize"
+		},
+		"evmVersion": "istanbul",
+		"libraries": {},
+		"metadata": {
+			"bytecodeHash": "ipfs"
+		},
+		"optimizer": {
+			"enabled": false,
+			"runs": 200
+		},
+		"remappings": []
+	},
+	"sources": {
+		"localhost/contracts/VerusBridge/TransactionSerialize.sol": {
+			"keccak256": "0x0c88d6e39cb34a8d2de577bd1f20e65c00e2f6b66ef40b03ec35a8a0d8d81798",
+			"urls": [
+				"bzz-raw://6749d2d319581780bd904619d33207888e7df00d649c108e7706b640d0f8f856",
+				"dweb:/ipfs/QmVZQk7xA9yicx3HHxKuuu33NJ4Y9LHhHr5k8QLqXubeYo"
+			]
+		},
+		"localhost/contracts/VerusBridge/VerusSerializer.sol": {
+			"keccak256": "0x17ab29a3ff18be2f0a9e8be44c1c4936e70163b4322ed5a67465e7df202b10d1",
+			"license": "MIT",
+			"urls": [
+				"bzz-raw://6c1241d1732ed7485b642f7f5542fdd9ff0f638ff3c47f388b5fd3374180d0ed",
+				"dweb:/ipfs/QmTHc8GBxKFhDGRQ14Vj5ib2W4CBmttJ7vmT5MTrgPozxG"
+			]
+		}
+	},
+	"version": 1
+}

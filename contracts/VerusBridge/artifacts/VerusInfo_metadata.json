@@ -1,0 +1,299 @@
+{
+	"compiler": {
+		"version": "0.7.6+commit.7338295f"
+	},
+	"language": "Solidity",
+	"output": {
+		"abi": [
+			{
+				"inputs": [
+					{
+						"internalType": "address",
+						"name": "verusNotarizerAddress",
+						"type": "address"
+					},
+					{
+						"internalType": "uint256",
+						"name": "chainVersion",
+						"type": "uint256"
+					},
+					{
+						"internalType": "string",
+						"name": "chainVerusVersion",
+						"type": "string"
+					},
+					{
+						"internalType": "string",
+						"name": "chainName",
+						"type": "string"
+					},
+					{
+						"internalType": "bool",
+						"name": "chainTestnet",
+						"type": "bool"
+					}
+				],
+				"stateMutability": "nonpayable",
+				"type": "constructor"
+			},
+			{
+				"inputs": [
+					{
+						"internalType": "address",
+						"name": "_currencyid",
+						"type": "address"
+					}
+				],
+				"name": "getcurrency",
+				"outputs": [
+					{
+						"components": [
+							{
+								"internalType": "uint256",
+								"name": "version",
+								"type": "uint256"
+							},
+							{
+								"internalType": "string",
+								"name": "name",
+								"type": "string"
+							},
+							{
+								"internalType": "address",
+								"name": "currencyid",
+								"type": "address"
+							},
+							{
+								"internalType": "address",
+								"name": "parent",
+								"type": "address"
+							},
+							{
+								"internalType": "address",
+								"name": "systemid",
+								"type": "address"
+							},
+							{
+								"internalType": "uint8",
+								"name": "notarizationprotocol",
+								"type": "uint8"
+							},
+							{
+								"internalType": "uint8",
+								"name": "proofprotocol",
+								"type": "uint8"
+							},
+							{
+								"components": [
+									{
+										"internalType": "uint8",
+										"name": "destinationtype",
+										"type": "uint8"
+									},
+									{
+										"internalType": "address",
+										"name": "destinationaddress",
+										"type": "address"
+									}
+								],
+								"internalType": "struct VerusObjectsCommon.CTransferDestination",
+								"name": "nativecurrencyid",
+								"type": "tuple"
+							},
+							{
+								"internalType": "address",
+								"name": "launchsystemid",
+								"type": "address"
+							},
+							{
+								"internalType": "uint256",
+								"name": "startblock",
+								"type": "uint256"
+							},
+							{
+								"internalType": "uint256",
+								"name": "endblock",
+								"type": "uint256"
+							},
+							{
+								"internalType": "uint256",
+								"name": "initialsupply",
+								"type": "uint256"
+							},
+							{
+								"internalType": "uint256",
+								"name": "prelaunchcarveout",
+								"type": "uint256"
+							},
+							{
+								"internalType": "address",
+								"name": "gatewayid",
+								"type": "address"
+							},
+							{
+								"internalType": "address[]",
+								"name": "notaries",
+								"type": "address[]"
+							},
+							{
+								"internalType": "uint256",
+								"name": "minnotariesconfirm",
+								"type": "uint256"
+							}
+						],
+						"internalType": "struct VerusObjects.currencyDetail",
+						"name": "",
+						"type": "tuple"
+					}
+				],
+				"stateMutability": "view",
+				"type": "function"
+			},
+			{
+				"inputs": [],
+				"name": "getinfo",
+				"outputs": [
+					{
+						"components": [
+							{
+								"internalType": "uint256",
+								"name": "version",
+								"type": "uint256"
+							},
+							{
+								"internalType": "string",
+								"name": "VRSCversion",
+								"type": "string"
+							},
+							{
+								"internalType": "uint256",
+								"name": "blocks",
+								"type": "uint256"
+							},
+							{
+								"internalType": "uint256",
+								"name": "tiptime",
+								"type": "uint256"
+							},
+							{
+								"internalType": "string",
+								"name": "name",
+								"type": "string"
+							},
+							{
+								"internalType": "bool",
+								"name": "testnet",
+								"type": "bool"
+							}
+						],
+						"internalType": "struct VerusObjects.infoDetails",
+						"name": "",
+						"type": "tuple"
+					}
+				],
+				"stateMutability": "view",
+				"type": "function"
+			}
+		],
+		"devdoc": {
+			"kind": "dev",
+			"methods": {},
+			"version": 1
+		},
+		"userdoc": {
+			"kind": "user",
+			"methods": {},
+			"version": 1
+		}
+	},
+	"settings": {
+		"compilationTarget": {
+			"contracts/VerusBridge/VerusInfo.sol": "VerusInfo"
+		},
+		"evmVersion": "istanbul",
+		"libraries": {},
+		"metadata": {
+			"bytecodeHash": "ipfs"
+		},
+		"optimizer": {
+			"enabled": false,
+			"runs": 200
+		},
+		"remappings": []
+	},
+	"sources": {
+		"contracts/Libraries/VerusConstants.sol": {
+			"keccak256": "0x1f56515608af4324b6d9d725b3ab88b97b32e0e557b0215e61e773a3a6d31c82",
+			"license": "MIT",
+			"urls": [
+				"bzz-raw://db5eba3185fe588b353ad545b297297db5e3a9e580e1c51a3f8172446f0a0b75",
+				"dweb:/ipfs/QmdYW5pDhgFqixDzyHTjwb1sCazTHQp4tLJSuW9msB4rXF"
+			]
+		},
+		"contracts/Libraries/VerusObjects.sol": {
+			"keccak256": "0x1ff8dba383329c4eb567023607d8d5ed91e39811500742c61b9f547a94412505",
+			"license": "MIT",
+			"urls": [
+				"bzz-raw://5861d3c29102fc160e635bf401e2f7afc70ae774232aa85e8ff2cb27c2dcebd3",
+				"dweb:/ipfs/QmV75juzUhaS59mVE5NreoUtUwRmETzXCfbrP5hrJ8Kk8z"
+			]
+		},
+		"contracts/Libraries/VerusObjectsCommon.sol": {
+			"keccak256": "0xfe058b5e96065103d3aad3ac2dedca134b01af3016a96d240664e54d22959d53",
+			"license": "MIT",
+			"urls": [
+				"bzz-raw://022d2f5fa8c0199590303608a07648eb3a0a3c3200e29e172b9745ff230da16c",
+				"dweb:/ipfs/QmXp1gcMuLojTUvGjQ3ttvQotuGvYUkepdwiUoXsBzP5uG"
+			]
+		},
+		"contracts/Libraries/VerusObjectsNotarization.sol": {
+			"keccak256": "0xdffb141ca8e542554532a5bbec4428bb31766260eccd354cc7b271e6c9cb6cd7",
+			"license": "MIT",
+			"urls": [
+				"bzz-raw://b07f9be5d84abd64e699b85dbbb1e4b1ac3759ad3316cd5a20ec7337a25318df",
+				"dweb:/ipfs/QmWPVUA6W3DSw5afrR3M645AWCARdqhGuUVNjXYnVmisVJ"
+			]
+		},
+		"contracts/MMR/Blake2b.sol": {
+			"keccak256": "0x2f3905aee56e95fe87f56c79e5f0fe14ec606f12862f539b223c6c621715446a",
+			"license": "MIT",
+			"urls": [
+				"bzz-raw://a2e1bc986d4d1900320807c6a484860de20cf3421814fb533de391b04708df89",
+				"dweb:/ipfs/QmT7MAHy7kqttPqJ5qT5JaqJmCt1BMDv1H4zCRUtdpXBE9"
+			]
+		},
+		"contracts/MMR/VerusBlake2b.sol": {
+			"keccak256": "0x57c88ed3ecb2d38439812ce55646bf20defbb0d1a9aa2dce3894f418b2de36d5",
+			"license": "MIT",
+			"urls": [
+				"bzz-raw://2c10ad741c8a59f4fd2a21ad955202e1ff91b6ba4efb1e0925381f2fd29039b8",
+				"dweb:/ipfs/QmeT2ntxvhm162uewhXQQZvzZZaP2nghZ3C9vpeyZzCRa6"
+			]
+		},
+		"contracts/VerusBridge/VerusInfo.sol": {
+			"keccak256": "0x1afac35b4fd18de328f4fecc674ef1edce51e3ce6e42e9d984fa7b34f541aa58",
+			"license": "MIT",
+			"urls": [
+				"bzz-raw://725087675df8371da3d69d0562069f316667f6047b70e34bb6f0a123c8d283df",
+				"dweb:/ipfs/QmUvJ91aTnNzou69apyTneVPUqB7J24rH4BrLwXnZa1yhW"
+			]
+		},
+		"contracts/VerusBridge/VerusSerializer.sol": {
+			"keccak256": "0xb588cab7b1ef56844521b1cb16a2e8a9467ef6f8b0b5e774590fbc6145d7c35c",
+			"license": "MIT",
+			"urls": [
+				"bzz-raw://2a730eca9deaaec25000448857d5ac6dd37cad55e4b9f9cd0c070b9f57ef6005",
+				"dweb:/ipfs/Qmf1f5EUaStEjxzJEFNnjqPX6SKZu6iqCqHfNsaFGsqi9U"
+			]
+		},
+		"contracts/VerusNotarizer/VerusNotarizer.sol": {
+			"keccak256": "0x19237efd67d09adefd2fb639be6c76941f5236087d9038440d7f812cbea72e53",
+			"license": "MIT",
+			"urls": [
+				"bzz-raw://bb5760889e4e14bf1919e450fa642ecd6f47bc26dd09aabb7b926fa01a1033bd",
+				"dweb:/ipfs/QmQgQCLp88Z6J6KGcLTEbrSgv7kQ7NCPx27p2BSnSJPUpU"
+			]
+		}
+	},
+	"version": 1
+}

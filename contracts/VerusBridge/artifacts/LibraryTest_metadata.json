@@ -1,0 +1,53 @@
+{
+	"compiler": {
+		"version": "0.6.12+commit.27d51765"
+	},
+	"language": "Solidity",
+	"output": {
+		"abi": [],
+		"devdoc": {
+			"kind": "dev",
+			"methods": {},
+			"version": 1
+		},
+		"userdoc": {
+			"kind": "user",
+			"methods": {},
+			"version": 1
+		}
+	},
+	"settings": {
+		"compilationTarget": {
+			"localhost/contracts/VerusBridge/libraryTest.sol": "LibraryTest"
+		},
+		"evmVersion": "istanbul",
+		"libraries": {},
+		"metadata": {
+			"bytecodeHash": "ipfs"
+		},
+		"optimizer": {
+			"enabled": false,
+			"runs": 200
+		},
+		"remappings": []
+	},
+	"sources": {
+		"localhost/contracts/VerusBridge/VerusObjects.sol": {
+			"keccak256": "0xe0c998f79688631ca5854492c6d6d29084ff8258cc685916985d0b5c5be23f70",
+			"license": "MIT",
+			"urls": [
+				"bzz-raw://2f2ff7b119d02487c0da384edb6350ee9a37cf3810f35232315de0f53fb31aa6",
+				"dweb:/ipfs/QmUbrPbF1zfH3TkgLX9BokoHEzjzQA3zUdEtnjuKdo5ATG"
+			]
+		},
+		"localhost/contracts/VerusBridge/libraryTest.sol": {
+			"keccak256": "0x4f2468dd44944857867b537adb25211c9a5e08b61c9047153b59409041803a90",
+			"license": "MIT",
+			"urls": [
+				"bzz-raw://fce45133ad01c330237e9cad63f0e9091ba810ee0154c881a8fb91826577b62b",
+				"dweb:/ipfs/QmXt57tYPmjEDDJh5QVmvTCvyHPZnPP4KzX6rKwMqG3L3D"
+			]
+		}
+	},
+	"version": 1
+}

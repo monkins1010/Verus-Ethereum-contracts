@@ -1,0 +1,45 @@
+{
+	"compiler": {
+		"version": "0.6.12+commit.27d51765"
+	},
+	"language": "Solidity",
+	"output": {
+		"abi": [],
+		"devdoc": {
+			"kind": "dev",
+			"methods": {},
+			"version": 1
+		},
+		"userdoc": {
+			"kind": "user",
+			"methods": {},
+			"version": 1
+		}
+	},
+	"settings": {
+		"compilationTarget": {
+			"localhost/contracts/Standard/Memory.sol": "Memory"
+		},
+		"evmVersion": "istanbul",
+		"libraries": {},
+		"metadata": {
+			"bytecodeHash": "ipfs"
+		},
+		"optimizer": {
+			"enabled": false,
+			"runs": 200
+		},
+		"remappings": []
+	},
+	"sources": {
+		"localhost/contracts/Standard/Memory.sol": {
+			"keccak256": "0xe4f42e9d7c15136509461e2d0aeb762aad3780c9c683089d4b0ed604687d716c",
+			"license": "MIT",
+			"urls": [
+				"bzz-raw://d6601e1c9a71b10d220e26d40519ce91d11c867cd7834d5c1bd3d51c48ddf254",
+				"dweb:/ipfs/QmdrWMf62BHvJK2G9fGnUJeGeVTcB2JSZoND67jqm56iLf"
+			]
+		}
+	},
+	"version": 1
+}
