@@ -76,12 +76,12 @@ contract VerusBridge {
     }
 
     function isPoolAvailable(uint256 _feesAmount,address _feeCurrencyID) private view returns(bool){
-        if(verusNotarizer.numNotarizedBlocks() >= 1) {
+        if(verusNotarizer.poolAvailable(_feeCurrencyID)) {
             //the bridge has been activated
             return false;
         } else {
             require(_feeCurrencyID == VerusConstants.VerusCurrencyId,"Bridge is not yet available only Verus can be used for fees");
-            require(poolSize > _feesAmount,"Bridge is not yet available fees cannot exceed existing pool.");
+            require(poolSize >= _feesAmount,"Bridge is not yet available fees cannot exceed existing pool.");
             return true;
         }
     }

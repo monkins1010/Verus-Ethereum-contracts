@@ -792,25 +792,6 @@
 			{
 				"inputs": [
 					{
-						"internalType": "address",
-						"name": "",
-						"type": "address"
-					}
-				],
-				"name": "poolAvailable",
-				"outputs": [
-					{
-						"internalType": "bool",
-						"name": "",
-						"type": "bool"
-					}
-				],
-				"stateMutability": "view",
-				"type": "function"
-			},
-			{
-				"inputs": [
-					{
 						"internalType": "bytes32",
 						"name": "_h",
 						"type": "bytes32"
@@ -1239,9 +1220,21 @@
 				"name": "setLatestData",
 				"outputs": [
 					{
-						"internalType": "bool",
+						"components": [
+							{
+								"internalType": "address[]",
+								"name": "signer",
+								"type": "address[]"
+							},
+							{
+								"internalType": "bytes[]",
+								"name": "toHash",
+								"type": "bytes[]"
+							}
+						],
+						"internalType": "struct VerusNotarizer.teststruct",
 						"name": "output",
-						"type": "bool"
+						"type": "tuple"
 					}
 				],
 				"stateMutability": "nonpayable",
@@ -1274,7 +1267,7 @@
 	},
 	"settings": {
 		"compilationTarget": {
-			"contracts/VerusNotarizer/VerusNotarizer.sol": "VerusNotarizer"
+			"contracts/VerusBridge/test.sol": "VerusNotarizer"
 		},
 		"evmVersion": "istanbul",
 		"libraries": {},
@@ -1344,12 +1337,12 @@
 				"dweb:/ipfs/Qmf1f5EUaStEjxzJEFNnjqPX6SKZu6iqCqHfNsaFGsqi9U"
 			]
 		},
-		"contracts/VerusNotarizer/VerusNotarizer.sol": {
-			"keccak256": "0x28977eb4d7db44cde3e0cf941190a1a24699a5c929000bf51f067a1a187eaf48",
+		"contracts/VerusBridge/test.sol": {
+			"keccak256": "0x8ea59a0ab0b2c539d21533db7b0a493ed0b4aa5f096f1db4785d1ce4d25fc559",
 			"license": "MIT",
 			"urls": [
-				"bzz-raw://76ac37d5a5231e925eaddeffe49e6b97cf933f4b2d51ce18d1ecb99e88e5fcca",
-				"dweb:/ipfs/QmYcPr2e3me7GtkPdujqYPgLosBSm2iamMqEWsi49Z268X"
+				"bzz-raw://e8148d64f37c2ab3cb7a21ff981f8a77722e7229dc24cb93f6699afad47d9d89",
+				"dweb:/ipfs/QmWdi6anMMWPAoV9iFFem4wCw1Zj1Bxi2b6qSLumoSGUJj"
 			]
 		}
 	},
