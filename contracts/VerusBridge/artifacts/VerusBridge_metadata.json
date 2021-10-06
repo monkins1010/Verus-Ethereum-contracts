@@ -1616,11 +1616,11 @@
 			]
 		},
 		"contracts/VerusBridge/VerusBridge.sol": {
-			"keccak256": "0x5f6bac2598a060389c1bc4fffd8bcd13d25ea5888bfb22c46e1eaefb491aa200",
+			"keccak256": "0x5ac8390ec37c79c38f45fde78c61144d8e4ed87ad29df8a62251fe1bf14ce6bf",
 			"license": "MIT",
 			"urls": [
-				"bzz-raw://833ef0b8d149a9b124425a2bfc4010d4ad468a98cd36aa15f09a5001bbe7b9a4",
-				"dweb:/ipfs/QmTceegSeQpSfNUNmtvB1qc53U2kyS5GfPfpgXyygWuK8L"
+				"bzz-raw://6266ff6ca5406794aa888f906ef26dfe3b86e0d62fa812fcbef297f62683c2c8",
+				"dweb:/ipfs/QmdDhMXFJYeU6b5zXmXFurLbPQ3gXSkNDSjm9zu4FRhQ4G"
 			]
 		},
 		"contracts/VerusBridge/VerusCrossChainExport.sol": {

@@ -116,7 +116,17 @@ contract VerusBridge {
  
     function export(VerusObjects.CReserveTransfer memory transfer) public payable{
         require(!deprecated,"Contract has been deprecated");
-        require(msg.value >= VerusConstants.transactionFee + uint64(transfer.fees),"Please send the appropriate transaction fee.");
+        uint256 requiredFees =  VerusConstants.transactionFee;
+        
+        //if there is fees in the pool spend those and not the amount that
+        if(isPoolAvailable(transfer.fees,transfer.feecurrencyid)) {
+            poolSize -= transfer.fees;
+        } else {
+            //fees need to be paid for verus as well
+            requiredFees = requiredFees * 3;
+        }
+        
+        require(msg.value >= requiredFees + uint64(transfer.fees),"Please send the appropriate transaction fee.");
         if(transfer.currencyvalue.currency != VerusConstants.VEth){
             //check there are enough fees sent
             feesHeld += msg.value;
@@ -145,11 +155,6 @@ contract VerusBridge {
         uint currentHeight = block.number;
         uint exportIndex;
         bool newHash;
-
-        //if there is fees in the pool spend those and not the amount that
-        if(isPoolAvailable(newTransaction.fees,newTransaction.feecurrencyid)) {
-            poolSize -= newTransaction.fees;
-        }
 
         //check if the current block height has a set of transfers associated with it if so add to the existing array
         if(readyExportsByBlock[currentHeight].created) {
