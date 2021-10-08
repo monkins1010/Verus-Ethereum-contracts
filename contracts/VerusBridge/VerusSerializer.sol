@@ -149,11 +149,8 @@ contract VerusSerializer {
     
 function serializeCTransferDestination(VerusObjectsCommon.CTransferDestination memory ctd) public pure returns(bytes memory){
         
-        bytes memory be = abi.encodePacked(serializeUint8(ctd.destinationtype),writeCompactSize(20),serializeAddress(ctd.destinationaddress));
-         if((ctd.destinationtype & 0x80)>0) {
-         be = abi.encodePacked(be,serializeAddress(ctd.gatewayid),serializeAddress(ctd.gatewaycode),serializeInt64(ctd.fees));
-         }
-        return be;
+         return abi.encodePacked(serializeUint8(ctd.destinationtype),writeCompactSize(20),ctd.destinationaddress);
+       
     }    
 
     function serializeCCurrencyValueMap(VerusObjects.CCurrencyValueMap memory _ccvm) public pure returns(bytes memory){

@@ -174,10 +174,10 @@ contract VerusBridge {
        
         //create a cross chain export, serialize it and hash it
         
-        VerusObjects.CCrossChainExport memory CCCE = verusCCE.generateCCE(_readyExports[exportIndex]);
+     //   VerusObjects.CCrossChainExport memory CCCE = ;
         //create a hash of the CCCE
         
-        bytes memory serializedCCE = verusSerializer.serializeCCrossChainExport(CCCE);
+        bytes memory serializedCCE = verusSerializer.serializeCCrossChainExport(verusCCE.generateCCE(_readyExports[exportIndex]));
         bytes memory serializedTransfers = verusSerializer.serializeCReserveTransfers(_readyExports[exportIndex],false);
         SerializedCRTs.push(serializedTransfers);
         bytes32 hashedTransfers = keccak256(serializedTransfers);
@@ -224,6 +224,12 @@ contract VerusBridge {
         }
     }
 
+    function bytesToAddress(bytes memory bys) private pure returns (address addr) {
+    assembly {
+      addr := mload(add(bys,20))
+    } 
+}
+
     function _createImports(VerusObjects.CReserveTransferImport memory _import) public returns(bool){
 
         if(processedTxids[_import.txid] == true) return false; 
@@ -246,7 +252,7 @@ contract VerusBridge {
             if(_import.transfers[i].currencyvalue.currency == VerusConstants.VEth) {
                 //cast the destination as an ethAddress
                     require(amount <= address(this).balance,"Requested amount exceeds contract balance");
-                    sendEth(amount,payable(address(_import.transfers[i].destination.destinationaddress)));
+                    sendEth(amount,payable(bytesToAddress(_import.transfers[i].destination.destinationaddress)));
                     ethHeld -= amount;
         
            } else {
@@ -254,7 +260,7 @@ contract VerusBridge {
                 //amount convesrion is handled in token manager
                 tokenManager.importERC20Tokens(_import.transfers[i].currencyvalue.currency,
                     _import.transfers[i].currencyvalue.amount,
-                    _import.transfers[i].destination.destinationaddress);
+                    bytesToAddress(_import.transfers[i].destination.destinationaddress));
            }
             //handle the distributions of the fees
             //add them into the fees array to be claimed by the message sender

@@ -10,9 +10,6 @@ library VerusObjectsCommon {
     }
     struct CTransferDestination {
         uint8 destinationtype;
-        address destinationaddress;
-        address gatewayid;
-        address gatewaycode;
-        int64 fees;
+        bytes destinationaddress;
     }
 }
