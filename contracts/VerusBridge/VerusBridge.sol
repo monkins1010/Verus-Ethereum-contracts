@@ -80,8 +80,8 @@ contract VerusBridge {
             //the bridge has been activated
             return false;
         } else {
-            require(_feeCurrencyID == VerusConstants.VerusCurrencyId,"Bridge is not yet available only Verus can be used for fees");
-            require(poolSize >= _feesAmount,"Bridge is not yet available fees cannot exceed existing pool.");
+            assert(_feeCurrencyID == VerusConstants.VerusCurrencyId);
+            assert(poolSize >= _feesAmount);
             return true;
         }
     }
@@ -115,7 +115,7 @@ contract VerusBridge {
     }
  
     function export(VerusObjects.CReserveTransfer memory transfer) public payable{
-        require(!deprecated,"Contract has been deprecated");
+        assert(!deprecated);
         uint256 requiredFees =  VerusConstants.transactionFee;
         
         //if there is fees in the pool spend those and not the amount that
@@ -126,17 +126,17 @@ contract VerusBridge {
             requiredFees = requiredFees * 3;
         }
         
-        require(msg.value >= requiredFees + uint64(transfer.fees),"Please send the appropriate transaction fee.");
+        assert(msg.value >= requiredFees + uint64(transfer.fees));
         if(transfer.currencyvalue.currency != VerusConstants.VEth){
             //check there are enough fees sent
             feesHeld += msg.value;
             //check that the token is registered
             (address ERC20TokenAddress, bool VerusOwned, bool isRegistered) = tokenManager.verusToERC20mapping(transfer.currencyvalue.currency);
-            require(isRegistered, "The token is not registered");
+            assert(isRegistered);
             Token token = Token(ERC20TokenAddress);
             uint256 allowedTokens = token.allowance(msg.sender,address(this));
             uint256 tokenAmount = convertFromVerusNumber(transfer.currencyvalue.amount,token.decimals()); //convert to wei from verus satoshis
-            require( allowedTokens >= tokenAmount,"This contract must have an allowance of greater than or equal to the number of tokens");
+            assert( allowedTokens >= tokenAmount);
             //transfer the tokens to this contract
             token.transferFrom(msg.sender,address(this),tokenAmount); 
             token.approve(address(tokenManager),tokenAmount);
@@ -238,9 +238,9 @@ contract VerusBridge {
         assembly {
             txidfound := mload(add(sliced, 32))
         }
-        require(_import.txid == txidfound, "Txid not correct in header"); //the txid should be present in the header
+        assert(_import.txid == txidfound); //the txid should be present in the header
         bool proved = verusProof.proveImports(_import);
-        require(proved,"Transfers do not prove against the last notarization");
+        assert(proved);
         processedTxids[_import.txid] = true;
         if(lastTxidimport < _import.height)
             lastTxidimport = _import.height;
@@ -251,7 +251,7 @@ contract VerusBridge {
             amount = convertFromVerusNumber(uint256(_import.transfers[i].currencyvalue.amount),18);
             if(_import.transfers[i].currencyvalue.currency == VerusConstants.VEth) {
                 //cast the destination as an ethAddress
-                    require(amount <= address(this).balance,"Requested amount exceeds contract balance");
+                    assert(amount <= address(this).balance);
                     sendEth(amount,payable(bytesToAddress(_import.transfers[i].destination.destinationaddress)));
                     ethHeld -= amount;
         
@@ -306,14 +306,14 @@ contract VerusBridge {
     }
  
     function sendEth(uint256 _ethAmount,address payable _ethAddress) private {
-        require(!deprecated,"Contract has been deprecated");
+        assert(!deprecated);
         //do we take fees here????
         
         _ethAddress.transfer(_ethAmount);
     }
    
     function claimFees() public returns(uint256){
-        require(!deprecated,"Contract has been deprecated");
+        assert(!deprecated);
         if(claimableFees[msg.sender] > 0 ){
             sendEth(claimableFees[msg.sender],msg.sender);
         }
