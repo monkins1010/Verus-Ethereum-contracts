@@ -31,7 +31,7 @@ contract VerusNotarizer{
     mapping (uint32 => VerusObjectsNotarization.CProofRoot) public notarizedProofRoots;
     mapping (uint32 => bytes32) public notarizedStateRoots;
     
-    mapping (address => bool) public poolAvailable;
+    mapping (address => uint32) public poolAvailable;
     
     uint32[] public blockHeights;
     //used to record the number of notaries
@@ -153,8 +153,8 @@ contract VerusNotarizer{
                 // checks for launchconfrimed (flags & (FLAG_FRACTIONAL(1) + FLAG_REFUNDING(4) + FLAG_LAUNCHCONFIRMED(0x10) + FLAG_LAUNCHCOMPLETEMARKER(0x20))) 
                 //== (1 + 0x10 + 0x20)
                 if(_pbaasNotarization.currencystates[k].currencystate.flags & (1 + 4 + 0x10 + 0x20) == (1 + 0x10 + 0x20)
-                    && !poolAvailable[_pbaasNotarization.currencystates[k].currencyid]){
-                    poolAvailable[_pbaasNotarization.currencystates[k].currencyid] = true;
+                    && poolAvailable[_pbaasNotarization.currencystates[k].currencyid] == 0){
+                    poolAvailable[_pbaasNotarization.currencystates[k].currencyid] = uint32(block.number);
                 }
             }
             

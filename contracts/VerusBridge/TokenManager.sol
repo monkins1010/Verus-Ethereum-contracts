@@ -6,6 +6,7 @@ pragma experimental ABIEncoderV2;
 
 import "./Token.sol";
 import "./VerusAddressCalculator.sol";
+import "../Libraries/VerusConstants.sol";
 
 contract TokenManager {
 
@@ -131,6 +132,14 @@ contract TokenManager {
         destinationToAddress[_verusAddress] = _ERC20contractAddress;
         return _verusAddress;
     }
+
+        function getTokenERC20(address VRSCAddress) public view returns(Token){
+        hostedToken memory internalToken = verusToERC20mapping[VRSCAddress];
+        require(internalToken.isRegistered, "The token is not registered");
+        Token token = Token(internalToken.destinationCurrencyID);
+        return token;
+    }
+ 
 /* no longer required unless we want auto token creation
 
     function deployNewToken(address _destinationCurrencyID) public returns (address) {

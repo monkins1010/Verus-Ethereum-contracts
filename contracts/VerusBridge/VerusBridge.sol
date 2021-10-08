@@ -50,9 +50,9 @@ contract VerusBridge {
     mapping (uint => VerusObjects.blockCreated) public readyExportsByBlock;
     mapping (address => uint256) public claimableFees;
     
-    bytes[] public SerializedCRTs;
-    bytes[] public SerializedCCEs;
-    bytes32[] public hashedCRTs;
+  //  bytes[] public SerializedCRTs;
+  //  bytes[] public SerializedCCEs;
+  //  bytes32[] public hashedCRTs;
     uint public lastTxidimport;
     
     
@@ -76,7 +76,9 @@ contract VerusBridge {
     }
 
     function isPoolAvailable(uint256 _feesAmount,address _feeCurrencyID) private view returns(bool){
-        if(verusNotarizer.poolAvailable(_feeCurrencyID)) {
+
+        if(0 < verusNotarizer.poolAvailable(VerusConstants.VerusBridgeAddress) &&
+            verusNotarizer.poolAvailable(VerusConstants.VerusBridgeAddress) < uint32(block.number)) {
             //the bridge has been activated
             return false;
         } else {
@@ -117,23 +119,44 @@ contract VerusBridge {
     function export(VerusObjects.CReserveTransfer memory transfer) public payable{
         assert(!deprecated);
         uint256 requiredFees =  VerusConstants.transactionFee;
-        
+        uint256 verusFees = VerusConstants.verusTransactionFee;
+
+       if(readyExportsByBlock[block.number].created){
+           uint exportIndex = readyExportsByBlock[block.number].index;
+          assert( _readyExports[exportIndex][0].destcurrencyid == transfer.destcurrencyid);
+         
+        }
+
         //if there is fees in the pool spend those and not the amount that
         if(isPoolAvailable(transfer.fees,transfer.feecurrencyid)) {
-            poolSize -= transfer.fees;
+            poolSize -= VerusConstants.verusTransactionFee;
         } else {
+            //if fees are being paid in verustest we need to take it from the msg sender
+            assert(transfer.feecurrencyid == VerusConstants.VerusCurrencyId || transfer.feecurrencyid == VerusConstants.VEth);
+            if(transfer.feecurrencyid == VerusConstants.VerusCurrencyId) {
+                
+                //burn the required amount of vrsctest from the user
+                Token token = tokenManager.getTokenERC20(transfer.feecurrencyid);
+                uint256 VRSTallowedTokens = token.allowance(msg.sender,address(this));
+                assert( VRSTallowedTokens >= convertFromVerusNumber(verusFees,18));
+                token.transferFrom(msg.sender,address(this), convertFromVerusNumber(verusFees,18)); 
+                //transfer the tokens to this contract
+                token.burn(verusFees); 
+            
+            } else if(transfer.feecurrencyid == VerusConstants.VEth){
+                requiredFees = requiredFees * 3;
+                assert(msg.value >= requiredFees + convertFromVerusNumber(transfer.fees,18));    
+            }
+            //if the fees are being paid in veth then require the user to send it
             //fees need to be paid for verus as well
-            requiredFees = requiredFees * 3;
+            
         }
-        
-        assert(msg.value >= requiredFees + uint64(transfer.fees));
+               
         if(transfer.currencyvalue.currency != VerusConstants.VEth){
             //check there are enough fees sent
             feesHeld += msg.value;
             //check that the token is registered
-            (address ERC20TokenAddress, bool VerusOwned, bool isRegistered) = tokenManager.verusToERC20mapping(transfer.currencyvalue.currency);
-            assert(isRegistered);
-            Token token = Token(ERC20TokenAddress);
+            Token token = tokenManager.getTokenERC20(transfer.currencyvalue.currency);
             uint256 allowedTokens = token.allowance(msg.sender,address(this));
             uint256 tokenAmount = convertFromVerusNumber(transfer.currencyvalue.amount,token.decimals()); //convert to wei from verus satoshis
             assert( allowedTokens >= tokenAmount);
@@ -141,11 +164,11 @@ contract VerusBridge {
             token.transferFrom(msg.sender,address(this),tokenAmount); 
             token.approve(address(tokenManager),tokenAmount);
             //give an approval for the tokenmanagerinstance to spend the tokens
-            tokenManager.exportERC20Tokens(ERC20TokenAddress, tokenAmount);  //total amount kept as wei until export to verus
+            tokenManager.exportERC20Tokens(address(token), tokenAmount);  //total amount kept as wei until export to verus
         } else {
             //handle a vEth transfer
             transfer.currencyvalue.amount = uint64(convertToVerusNumber(msg.value - VerusConstants.transactionFee,18));
-            ethHeld += transfer.currencyvalue.amount;
+            ethHeld += transfer.currencyvalue.amount;  
             feesHeld += VerusConstants.transactionFee;
         }
         _createExports(transfer);
@@ -178,12 +201,12 @@ contract VerusBridge {
         //create a hash of the CCCE
         
         bytes memory serializedCCE = verusSerializer.serializeCCrossChainExport(verusCCE.generateCCE(_readyExports[exportIndex]));
-        bytes memory serializedTransfers = verusSerializer.serializeCReserveTransfers(_readyExports[exportIndex],false);
-        SerializedCRTs.push(serializedTransfers);
-        bytes32 hashedTransfers = keccak256(serializedTransfers);
-        bytes memory toHash = abi.encodePacked(serializedCCE,serializedTransfers);
-        SerializedCCEs.push(toHash);
-        hashedCRTs.push(hashedTransfers);
+       // bytes memory serializedTransfers = verusSerializer.serializeCReserveTransfers(_readyExports[exportIndex],false);
+      //  SerializedCRTs.push(serializedTransfers);
+        //bytes32 hashedTransfers = keccak256(serializedTransfers);
+       // bytes memory toHash = abi.encodePacked(serializedCCE,serializedTransfers);
+       // SerializedCCEs.push(toHash);
+      //  hashedCRTs.push(hashedTransfers);
         //bytes32 hashedTransfers = keccak256(serializedTransfers);
         //bytes memory toHash = abi.encodePacked(serializedCCE,serializedTransfers);
         bytes32 hashedCCE;
