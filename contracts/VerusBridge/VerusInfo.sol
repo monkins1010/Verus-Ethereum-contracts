@@ -67,7 +67,7 @@ contract VerusInfo {
                 VerusConstants.VerusSystemId,
                 2,
                 3,
-                VerusObjectsCommon.CTransferDestination(9,currencyAddress),
+                VerusObjectsCommon.CTransferDestination(9,currencyAddress,address(0),address(0),0),
                 VerusConstants.VerusSystemId,
                 0,
                 0,

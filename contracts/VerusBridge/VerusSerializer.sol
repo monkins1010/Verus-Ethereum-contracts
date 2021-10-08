@@ -147,9 +147,14 @@ contract VerusSerializer {
         return(flipArray(be));
     }
     
-    function serializeCTransferDestination(VerusObjectsCommon.CTransferDestination memory ctd) public pure returns(bytes memory){
-        return abi.encodePacked(serializeUint8(ctd.destinationtype),writeCompactSize(20),serializeAddress(ctd.destinationaddress));
-    }   
+function serializeCTransferDestination(VerusObjectsCommon.CTransferDestination memory ctd) public pure returns(bytes memory){
+        
+        bytes memory be = abi.encodePacked(serializeUint8(ctd.destinationtype),writeCompactSize(20),serializeAddress(ctd.destinationaddress));
+         if((ctd.destinationtype & 0x80)>0) {
+         be = abi.encodePacked(be,serializeAddress(ctd.gatewayid),serializeAddress(ctd.gatewaycode),serializeInt64(ctd.fees));
+         }
+        return be;
+    }    
 
     function serializeCCurrencyValueMap(VerusObjects.CCurrencyValueMap memory _ccvm) public pure returns(bytes memory){
          return abi.encodePacked(serializeAddress(_ccvm.currency),serializeUint64(_ccvm.amount));
