@@ -56,7 +56,7 @@ contract VerusCrossChainExport{
         return -1;
     }
 
-    function generateCCE(VerusObjects.CReserveTransfer[] memory transfers) public returns(VerusObjects.CCrossChainExport memory){
+    function generateCCE(VerusObjects.CReserveTransfer[] memory transfers, bool bridgeReady) public returns(VerusObjects.CCrossChainExport memory){
 
         VerusObjects.CCrossChainExport memory workingCCE;
         //create a hash of the transfers and then 
@@ -67,13 +67,15 @@ contract VerusCrossChainExport{
         
         workingCCE.version = 1;
         workingCCE.flags = 2;
-        //workingCCE.flags = 1;
-        //need to pick up the 
         workingCCE.sourceheightstart = uint32(block.number);
         workingCCE.sourceheightend = uint32(block.number);
         workingCCE.sourcesystemid = VerusConstants.VEth;
         workingCCE.destinationsystemid = VerusConstants.VerusSystemId;
-        workingCCE.destinationcurrencyid = transfers[0].destcurrencyid;
+        if(bridgeReady){ // RESERVETORESERVE FLAG
+            workingCCE.destinationcurrencyid = VerusConstants.VerusBridgeAddress;  //TODO:transfers are bundled by type
+        }else{
+            workingCCE.destinationcurrencyid = VerusConstants.VEth; //TODO:transfers are bundled by type
+        }
         workingCCE.numinputs = uint32(transfers.length);
         //loop through the array and create totals of the amounts and fees
         
@@ -110,7 +112,7 @@ contract VerusCrossChainExport{
         quickSort(fees, int(0), int(fees.length - 1));
                
         workingCCE.totalamounts = currencies;
-        workingCCE.totalfees = fees;
+        workingCCE.totalfees = fees; 
 
         workingCCE.hashtransfers = hashedTransfers;
         VerusObjects.CCurrencyValueMap memory totalburnedCCVM = VerusObjects.CCurrencyValueMap(0x0000000000000000000000000000000000000000,0);

@@ -49,10 +49,7 @@ contract VerusBridge {
     mapping(bytes32 => bool) public processedTxids;
     mapping (uint => VerusObjects.blockCreated) public readyExportsByBlock;
     mapping (address => uint256) public claimableFees;
-    
-  //  bytes[] public SerializedCRTs;
-  //  bytes[] public SerializedCCEs;
-  //  bytes32[] public hashedCRTs;
+
     uint public lastTxidimport;
     
     
@@ -121,10 +118,12 @@ contract VerusBridge {
         uint256 requiredFees =  VerusConstants.transactionFee;
         uint256 verusFees = VerusConstants.verusTransactionFee;
 
+        //TODO: We cant mix differnt transfer destinations together in the CCE assert on non same fields.
        if(readyExportsByBlock[block.number].created){
            uint exportIndex = readyExportsByBlock[block.number].index;
           assert( _readyExports[exportIndex][0].destcurrencyid == transfer.destcurrencyid);
-         
+          assert( _readyExports[exportIndex][0].secondreserveid == transfer.secondreserveid);
+          assert( (_readyExports[exportIndex][0].flags & 1024) == transfer.flags & 1024);
         }
 
         //if there is fees in the pool spend those and not the amount that
@@ -195,20 +194,11 @@ contract VerusBridge {
             newHash = true;
         }
        
-        //create a cross chain export, serialize it and hash it
-        
-     //   VerusObjects.CCrossChainExport memory CCCE = ;
-        //create a hash of the CCCE
-        
-        bytes memory serializedCCE = verusSerializer.serializeCCrossChainExport(verusCCE.generateCCE(_readyExports[exportIndex]));
-       // bytes memory serializedTransfers = verusSerializer.serializeCReserveTransfers(_readyExports[exportIndex],false);
-      //  SerializedCRTs.push(serializedTransfers);
-        //bytes32 hashedTransfers = keccak256(serializedTransfers);
-       // bytes memory toHash = abi.encodePacked(serializedCCE,serializedTransfers);
-       // SerializedCCEs.push(toHash);
-      //  hashedCRTs.push(hashedTransfers);
-        //bytes32 hashedTransfers = keccak256(serializedTransfers);
-        //bytes memory toHash = abi.encodePacked(serializedCCE,serializedTransfers);
+         bool bridgeReady =   (0 < verusNotarizer.poolAvailable(VerusConstants.VerusBridgeAddress) &&
+            verusNotarizer.poolAvailable(VerusConstants.VerusBridgeAddress) < uint32(block.number));
+
+        bytes memory serializedCCE = verusSerializer.serializeCCrossChainExport(verusCCE.generateCCE(_readyExports[exportIndex],bridgeReady));
+
         bytes32 hashedCCE;
         bytes32 lastProofRoot = 0;
         if(exportIndex != 0)  lastProofRoot = readyExportHashes[exportIndex -1];
