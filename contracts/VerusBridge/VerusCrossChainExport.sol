@@ -70,7 +70,7 @@ contract VerusCrossChainExport{
         workingCCE.sourceheightstart = uint32(block.number);
         workingCCE.sourceheightend = uint32(block.number);
         workingCCE.sourcesystemid = VerusConstants.VEth;
-        workingCCE.destinationsystemid = VerusConstants.VEth;
+        workingCCE.destinationsystemid = VerusConstants.VerusSystemId;
         if(bridgeReady){ // RESERVETORESERVE FLAG
             workingCCE.destinationcurrencyid = VerusConstants.VerusBridgeAddress;  //TODO:transfers are bundled by type
         }else{
