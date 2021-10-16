@@ -114,8 +114,8 @@ contract VerusBridge {
     }
  
     function export(VerusObjects.CReserveTransfer memory transfer) public payable{
+        
         assert(!deprecated);
-        uint256 requiredFees =  VerusConstants.transactionFee;
         uint256 verusFees = VerusConstants.verusTransactionFee;
 
         //TODO: We cant mix differnt transfer destinations together in the CCE assert on non same fields.
@@ -130,33 +130,32 @@ contract VerusBridge {
             poolSize -= VerusConstants.verusTransactionFee;
         } else {
             //if fees are being paid in verustest we need to take it from the msg sender
-            assert(transfer.feecurrencyid == VerusConstants.VerusCurrencyId || transfer.feecurrencyid == VerusConstants.VEth);
-            if(transfer.feecurrencyid == VerusConstants.VerusCurrencyId) {
+            require(transfer.feecurrencyid == VerusConstants.VerusCurrencyId || transfer.feecurrencyid == VerusConstants.VEth,"incorrect fee currency");
+            if (transfer.feecurrencyid == VerusConstants.VerusCurrencyId) {
                 
                 //burn the required amount of vrsctest from the user
                 Token token = tokenManager.getTokenERC20(transfer.feecurrencyid);
                 uint256 VRSTallowedTokens = token.allowance(msg.sender,address(this));
-                assert( VRSTallowedTokens >= convertFromVerusNumber(verusFees,18));
+                require( VRSTallowedTokens >= convertFromVerusNumber(verusFees,18), "not enough vrsc tokens in users balance");
                 token.transferFrom(msg.sender,address(this), convertFromVerusNumber(verusFees,18)); 
                 //transfer the tokens to this contract
                 token.burn(verusFees); 
             
-            } else if(transfer.feecurrencyid == VerusConstants.VEth){
-                requiredFees = requiredFees * 3;
-                assert(msg.value >= requiredFees + convertFromVerusNumber(transfer.fees,18));    
+            } else if (transfer.feecurrencyid == VerusConstants.VEth){
+                require(msg.value >= (VerusConstants.transactionFee * 3) + convertFromVerusNumber(transfer.fees,18), "Desposit to small to cover fees");    
             }
             //if the fees are being paid in veth then require the user to send it
             //fees need to be paid for verus as well
         }
 
-        if(transfer.currencyvalue.currency != VerusConstants.VEth){
+        if (transfer.currencyvalue.currency != VerusConstants.VEth){
             //check there are enough fees sent
             feesHeld += msg.value;
             //check that the token is registered
             Token token = tokenManager.getTokenERC20(transfer.currencyvalue.currency);
             uint256 allowedTokens = token.allowance(msg.sender,address(this));
             uint256 tokenAmount = convertFromVerusNumber(transfer.currencyvalue.amount,token.decimals()); //convert to wei from verus satoshis
-            assert( allowedTokens >= tokenAmount);
+            require( allowedTokens >= tokenAmount, "Not enough allowed tokens");
             //transfer the tokens to this contract
             token.transferFrom(msg.sender,address(this),tokenAmount); 
             token.approve(address(tokenManager),tokenAmount);
@@ -177,7 +176,7 @@ contract VerusBridge {
         bool newHash;
 
         //check if the current block height has a set of transfers associated with it if so add to the existing array
-        if(readyExportsByBlock[currentHeight].created) {
+        if (readyExportsByBlock[currentHeight].created) {
             //append to an existing array of transfers
             exportIndex = readyExportsByBlock[currentHeight].index;
             _readyExports[exportIndex].push(newTransaction);
@@ -198,14 +197,25 @@ contract VerusBridge {
         bytes memory serializedCCE = verusSerializer.serializeCCrossChainExport(verusCCE.generateCCE(_readyExports[exportIndex],bridgeReady));
 
         bytes32 hashedCCE;
-        bytes32 lastProofRoot = 0;
-        if(exportIndex != 0)  lastProofRoot = readyExportHashes[exportIndex -1];
+        bytes32 lastProofRoot;  
+        if (exportIndex != 0) {
+            lastProofRoot = readyExportHashes[exportIndex -1];
+        } else {
+            lastProofRoot = 0;
+        }
+        
         hashedCCE = keccak256(abi.encodePacked(serializedCCE,lastProofRoot));
         
         //add the hashed value
-        if(newHash) readyExportHashes.push(hashedCCE);
-        else readyExportHashes[exportIndex] = hashedCCE;
-        if(firstBlock == 0) firstBlock = currentHeight;
+        if(newHash) {
+            readyExportHashes.push(hashedCCE);
+        } else {
+            readyExportHashes[exportIndex] = hashedCCE;
+        }
+        
+        if(firstBlock == 0) {
+            firstBlock = currentHeight;
+        }
         
     }
 

@@ -13,7 +13,6 @@ contract VerusCrossChainExport{
     VerusObjects.CCurrencyValueMap[] currencies;
     VerusObjects.CCurrencyValueMap[] fees;
     VerusSerializer verusSerializer;
- //   event test1(VerusObjects.CCrossChainExport ted);
 
     function quickSort(VerusObjects.CCurrencyValueMap[] storage currencey, int left, int right) private {
         int i = left;
@@ -71,10 +70,10 @@ contract VerusCrossChainExport{
         workingCCE.sourceheightend = uint32(block.number);
         workingCCE.sourcesystemid = VerusConstants.VEth;
         workingCCE.destinationsystemid = VerusConstants.VerusSystemId;
-        if(bridgeReady){ // RESERVETORESERVE FLAG
-            workingCCE.destinationcurrencyid = VerusConstants.VerusBridgeAddress;  //TODO:transfers are bundled by type
+        if(bridgeReady){ 
+            workingCCE.destinationcurrencyid = VerusConstants.VerusBridgeAddress;  
         }else{
-            workingCCE.destinationcurrencyid = VerusConstants.VEth; //TODO:transfers are bundled by type
+            workingCCE.destinationcurrencyid = VerusConstants.VEth; 
         }
         workingCCE.numinputs = uint32(transfers.length);
         //loop through the array and create totals of the amounts and fees
@@ -108,7 +107,7 @@ contract VerusCrossChainExport{
             
         }
         
-        quickSort(currencies, int(0), int(currencies.length - 1));
+        quickSort(currencies, int(0), int(currencies.length - 1));  //maps in the daemon are sorted, sort array.
         quickSort(fees, int(0), int(fees.length - 1));
                
         workingCCE.totalamounts = currencies;
@@ -125,7 +124,7 @@ contract VerusCrossChainExport{
         //clear the arrays
         delete currencies;
         delete fees;
-      //  emit test1(workingCCE);
+
         return workingCCE;
 
     }

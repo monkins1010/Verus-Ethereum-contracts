@@ -57,44 +57,6 @@
 			{
 				"inputs": [
 					{
-						"internalType": "uint256",
-						"name": "",
-						"type": "uint256"
-					}
-				],
-				"name": "SerializedCCEs",
-				"outputs": [
-					{
-						"internalType": "bytes",
-						"name": "",
-						"type": "bytes"
-					}
-				],
-				"stateMutability": "view",
-				"type": "function"
-			},
-			{
-				"inputs": [
-					{
-						"internalType": "uint256",
-						"name": "",
-						"type": "uint256"
-					}
-				],
-				"name": "SerializedCRTs",
-				"outputs": [
-					{
-						"internalType": "bytes",
-						"name": "",
-						"type": "bytes"
-					}
-				],
-				"stateMutability": "view",
-				"type": "function"
-			},
-			{
-				"inputs": [
-					{
 						"components": [
 							{
 								"internalType": "uint256",
@@ -1017,25 +979,6 @@
 				"type": "function"
 			},
 			{
-				"inputs": [
-					{
-						"internalType": "uint256",
-						"name": "",
-						"type": "uint256"
-					}
-				],
-				"name": "hashedCRTs",
-				"outputs": [
-					{
-						"internalType": "bytes32",
-						"name": "",
-						"type": "bytes32"
-					}
-				],
-				"stateMutability": "view",
-				"type": "function"
-			},
-			{
 				"inputs": [],
 				"name": "lastTxidimport",
 				"outputs": [
@@ -1536,11 +1479,11 @@
 	},
 	"sources": {
 		"contracts/Libraries/VerusConstants.sol": {
-			"keccak256": "0x6f8ab80f663acc519d3b2c71a3a914167f9576e72e422f0c3a399f914ca98a61",
+			"keccak256": "0xc2bd5f64f4465a82125f3e258651db2689025d7e21d26da7d796917f5495ccad",
 			"license": "MIT",
 			"urls": [
-				"bzz-raw://75e75607ef17af4d7bd200a767d4aa02069c5078cf37749faacf802019007e0e",
-				"dweb:/ipfs/QmXCN86n8MoAsoieNLX6XEK8f1AZQ8h1dmbk5fusjS1REs"
+				"bzz-raw://05791150980a36b501850f82660117924b0144a8bedb8eaf0a81fab8a4d56f85",
+				"dweb:/ipfs/QmQ1cbTg3zjMWQK1MiZpFrnKKKHLJmpCMaRe44qkqJSXE2"
 			]
 		},
 		"contracts/Libraries/VerusObjects.sol": {
@@ -1616,19 +1559,19 @@
 			]
 		},
 		"contracts/VerusBridge/VerusBridge.sol": {
-			"keccak256": "0x9076a0aa0d845898a0e2485090d6f392a14ded2d0e6e99cf793eb8524af0cf16",
+			"keccak256": "0x0c024642e9a9a668e54697e23ece53818a95e8047f7dc2432bd0bf4a9c406226",
 			"license": "MIT",
 			"urls": [
-				"bzz-raw://91242b4cf584f7dd8c4f564a3a5e9ed9432c5f45179b67280e15baa3b27b09ac",
-				"dweb:/ipfs/QmPPqGwXNrKGFPjAGbRE2FbNHucMkp6hWQVLEwf5rnfj8b"
+				"bzz-raw://cffdd7db402a68f25b6dc6167152bbe5dbb55df9f15edd0c69e884c74b4ccace",
+				"dweb:/ipfs/QmSzEFYGfDcWsd6oxNSNVdxVUV6w9SqaQfyjc2L9aADB3N"
 			]
 		},
 		"contracts/VerusBridge/VerusCrossChainExport.sol": {
-			"keccak256": "0xd400efb939548594c449f9894985a4e2bb23e0ade8f4d7775b1e60fc666c03eb",
+			"keccak256": "0x08a34f4a65d3e2fca18014ee5abb98a1274eb3edcd4c4236031fa289cf6d4d49",
 			"license": "MIT",
 			"urls": [
-				"bzz-raw://af27bbfdfa4a255ced3292a495d5ba4d87a604e2d94eb9cd1839296d611bc03f",
-				"dweb:/ipfs/QmRi7En4bo4wcohKz82GXGDGhAv4Sr7RsMDYM2Zb1Fyx7p"
+				"bzz-raw://ddd96f27bf265852d8df4e6369f9d95b3efc41a5c5773793f11d5b63b9229403",
+				"dweb:/ipfs/QmYy4YcpSzzB26QobUeusGHu5CYRDWwd17exX57u6hmxD2"
 			]
 		},
 		"contracts/VerusBridge/VerusSerializer.sol": {
@@ -1640,11 +1583,11 @@
 			]
 		},
 		"contracts/VerusNotarizer/VerusNotarizer.sol": {
-			"keccak256": "0x23fe3bb23f7140b2e07930b87e08e360b5aa83ddaddbd0f05358e4518d512ff8",
+			"keccak256": "0x3fa5834142654041abf4fe1df7976d15c27fed3af23bec46457ffc20af36c72a",
 			"license": "MIT",
 			"urls": [
-				"bzz-raw://04132bb64c0914aa68eec21d08d79ac3cce1d9fccbc8f7a6193972d346deb29e",
-				"dweb:/ipfs/QmSt3cKotkQaH7wZwB9xwFTu3sUX26UgynRwYx7dKDLdwu"
+				"bzz-raw://e209c7d8a28063bca4fb04946d27a43b0adc2116a7df9914dd0db464ca2834de",
+				"dweb:/ipfs/QmPsYSVhVkHAtMDpftCenu31HU6KKxe3idnTxG3ueuHCeX"
 			]
 		},
 		"node_modules/openzeppelin-solidity/contracts/math/SafeMath.sol": {
