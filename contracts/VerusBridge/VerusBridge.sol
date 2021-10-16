@@ -119,15 +119,14 @@ contract VerusBridge {
         uint256 verusFees = VerusConstants.verusTransactionFee;
 
         //TODO: We cant mix differnt transfer destinations together in the CCE assert on non same fields.
-       if(readyExportsByBlock[block.number].created){
+        if (readyExportsByBlock[block.number].created)
+        {
            uint exportIndex = readyExportsByBlock[block.number].index;
-          assert( _readyExports[exportIndex][0].destcurrencyid == transfer.destcurrencyid);
-          assert( _readyExports[exportIndex][0].secondreserveid == transfer.secondreserveid);
-          assert( (_readyExports[exportIndex][0].flags & 1024) == transfer.flags & 1024);
+           assert( _readyExports[exportIndex][0].destcurrencyid == transfer.destcurrencyid);
         }
 
         //if there is fees in the pool spend those and not the amount that
-        if(isPoolAvailable(transfer.fees,transfer.feecurrencyid)) {
+        if (isPoolAvailable(transfer.fees,transfer.feecurrencyid)) {
             poolSize -= VerusConstants.verusTransactionFee;
         } else {
             //if fees are being paid in verustest we need to take it from the msg sender
@@ -148,9 +147,8 @@ contract VerusBridge {
             }
             //if the fees are being paid in veth then require the user to send it
             //fees need to be paid for verus as well
-            
         }
-               
+
         if(transfer.currencyvalue.currency != VerusConstants.VEth){
             //check there are enough fees sent
             feesHeld += msg.value;
