@@ -9,9 +9,11 @@ var Verusaddress = artifacts.require("./VerusBridge/VerusAddressCalculator.sol")
 var VerusInfo = artifacts.require("./VerusBridge/VerusInfo.sol");
 var Token = artifacts.require("./VerusBridge/Token.sol");
 
+// QUESTION: remove all hard coded values like those below (tokenmanvrsctest, etc.) and put them in config or parameters
+// What is the most correct approach / actual best practice?
 const verusNotariserIDS = ["0xb26820ee0c9b1276aac834cf457026a575dfce84","0x51f9f5f053ce16cb7ca070f5c68a1cb0616ba624","0x65374d6a8b853a5f61070ad7d774ee54621f9638"];
 const verusNotariserSigner = ["0xD010dEBcBf4183188B00cafd8902e34a2C1E9f41","0xD010dEBcBf4183188B00cafd8902e34a2C1E9f41","0xD010dEBcBf4183188B00cafd8902e34a2C1E9f41"];
-const tokenmanvrsctest = ["0xA6ef9ea235635E328124Ff3429dB9F9E91b64e2d","VRSCTEST","VRST"] 
+const tokenmanvrsctest = ["0xA6ef9ea235635E328124Ff3429dB9F9E91b64e2d","VRSCTEST","VRST"]
 const tokenmanbeth = ["0xffece948b8a38bbcc813411d2597f7f8485a0689","bridge.veth","BETH"] 
 const tokenmanUSDC = ["0xeb8f08a975ab53e34d8a0330e0d34de942c95926","0xf0a1263056c30e221f0f851c36b767fff2544f7f"]
 

@@ -30,7 +30,7 @@ contract VerusProof{
     }
 
     function hashTransfers(VerusObjects.CReserveTransfer[] memory _transfers) public view returns (bytes32){
-        bytes memory sTransfers = verusSerializer.serializeCReserveTransfers(_transfers,false);
+        bytes memory sTransfers = verusSerializer.serializeCReserveTransfers(_transfers, false);
         return keccak256(sTransfers);
     }
 

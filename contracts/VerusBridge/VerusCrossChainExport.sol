@@ -13,7 +13,7 @@ contract VerusCrossChainExport{
     VerusObjects.CCurrencyValueMap[] currencies;
     VerusObjects.CCurrencyValueMap[] fees;
     VerusSerializer verusSerializer;
- //   event test1(VerusObjects.CCrossChainExport ted);
+    //   event test1(VerusObjects.CCrossChainExport ted);
 
     function quickSort(VerusObjects.CCurrencyValueMap[] storage currencey, int left, int right) private {
         int i = left;
@@ -60,7 +60,7 @@ contract VerusCrossChainExport{
 
         VerusObjects.CCrossChainExport memory workingCCE;
         //create a hash of the transfers and then 
-        bytes memory serializedTransfers = verusSerializer.serializeCReserveTransfers(transfers,false);
+        bytes memory serializedTransfers = verusSerializer.serializeCReserveTransfers(transfers, false);
         bytes32 hashedTransfers = keccak256(serializedTransfers);
 
         //create the Cross ChainExport to then serialize and hash

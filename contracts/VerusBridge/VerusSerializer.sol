@@ -185,10 +185,10 @@ function serializeCTransferDestination(VerusObjectsCommon.CTransferDestination m
         return output;
     }
     
-    function serializeCReserveTransfers(VerusObjects.CReserveTransfer[] memory _bts,bool includeSize) public pure returns(bytes memory){
+    function serializeCReserveTransfers(VerusObjects.CReserveTransfer[] memory _bts, bool includeSize) public pure returns(bytes memory){
         bytes memory inProgress;
         
-        if(includeSize) inProgress =writeCompactSize(_bts.length);
+        if (includeSize) inProgress = writeCompactSize(_bts.length);
         
         for(uint i=0; i < _bts.length; i++){
             inProgress = abi.encodePacked(inProgress,serializeCReserveTransfer(_bts[i]));

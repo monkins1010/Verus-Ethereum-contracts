@@ -11,6 +11,7 @@ import "../Libraries/VerusConstants.sol";
 contract TokenManager {
 
     event TokenCreated(address tokenAddress);
+
     //array of contracts address mapped to the token name
     struct hostedToken{
         address destinationCurrencyID;
@@ -27,9 +28,8 @@ contract TokenManager {
     constructor() public {
         verusBridgeContract = address(0);
     }
-    
-        
-    function convertFromVerusNumber(uint256 a,uint8 decimals) public pure returns (uint256) {
+
+    function convertFromVerusNumber(uint256 a, uint8 decimals) public pure returns (uint256) {
          uint8 power = 10; //default value for 18
          uint256 c = a;
         if(decimals > 8 ) {
@@ -54,7 +54,7 @@ contract TokenManager {
     }
     
     //Tokens that are being exported from the eth blockchain are either destroyed or held until imported
-    function exportERC20Tokens(address _contractAddress,uint256 _tokenAmount) public {
+    function exportERC20Tokens(address _contractAddress, uint256 _tokenAmount) public {
         require(isVerusBridgeContract(),"Call can only be made from Verus Bridge Contract");
         //check that the erc20 token is registered with the tokenManager
         require(isToken(_contractAddress),"Token has not been registered yet");
@@ -67,13 +67,14 @@ contract TokenManager {
         //if its not approved it wont work
         token.transferFrom(msg.sender,address(this),_tokenAmount);   
         
-        if(!isToken(_contractAddress)){
+        if(!isToken(_contractAddress)) {
             tokenDetail = vERC20Tokens[_contractAddress];
             //if the token has been cerated by this contract then burn the token
         }
-        if(tokenDetail.VerusOwned){
-                require(token.balanceOf(address(this)) >= _tokenAmount,"Tokens didnt transfer");
-                burnToken(_contractAddress,_tokenAmount);
+
+        if (tokenDetail.VerusOwned){
+            require(token.balanceOf(address(this)) >= _tokenAmount,"Tokens didnt transfer");
+            burnToken(_contractAddress,_tokenAmount);
         } else {
             //the contract stores the token
         }
