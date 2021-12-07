@@ -74,7 +74,7 @@ library VerusObjects {
 
     struct CReserveTransferImport {
         uint height;
-        bytes32 txid;                                   // QUESTION: TRUE? : this is actually the hash of the transfers that can be used for proof
+        bytes32 txid;                                   // this is actually the hash of the serializaed CCrossChainExport that can be used for proof
         uint txoutnum;                                  // index of the transfers in the exports array
         CCrossChainExport exportinfo;
         CPtransactionproof partialtransactionproof;     // partial transaction proof is for the 
@@ -85,6 +85,7 @@ library VerusObjects {
         uint16 version;
         uint16 flags;
         address sourcesystemid;
+        bytes32 hashtransfers;                          // hashtransfers
         uint32 sourceheightstart;
         uint32 sourceheightend;
         address destinationsystemid;
@@ -92,7 +93,6 @@ library VerusObjects {
         uint32 numinputs;
         CCurrencyValueMap[] totalamounts;
         CCurrencyValueMap[] totalfees;
-        bytes32 hashtransfers;                          // hashtransfers
         CCurrencyValueMap[] totalburned;
         VerusObjectsCommon.CTransferDestination rewardaddress; //reward address
         int32 firstinput;
@@ -115,7 +115,6 @@ library VerusObjects {
         uint8 elIdx;
         bytes elVchObj;
         CTXProof[] elProof;
-        uint32 VchObjIndex;
     }
     
     struct CPtransactionproof {

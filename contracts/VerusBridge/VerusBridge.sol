@@ -255,7 +255,7 @@ contract VerusBridge {
         bytes32 txidfound;
         bytes memory sliced = _import.partialtransactionproof.components[0].elVchObj;
         assembly {
-            txidfound := mload(add(sliced, 32))                                 // QUESTION: why is it using a hard coded offset?
+            txidfound := mload(add(sliced, 32))                                 // skip memory length (ETH encoded in an efficient 32 bytes ;) )
         }
         assert(_import.txid == txidfound); //the txid should be present in the header
         bool proved = verusProof.proveImports(_import);

@@ -39,7 +39,7 @@ contract VerusNotarizer {
     mapping (uint32 => bytes32) public notarizedStateRoots;
     
     mapping (address => uint32) public poolAvailable;
-    
+
     uint32[] public blockHeights;
     //used to record the number of notaries
     uint8 private notaryCount;

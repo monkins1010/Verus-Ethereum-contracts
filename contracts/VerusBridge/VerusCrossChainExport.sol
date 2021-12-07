@@ -71,6 +71,7 @@ contract VerusCrossChainExport{
         workingCCE.sourceheightend = uint32(block.number);
         workingCCE.sourcesystemid = VerusConstants.VEth;
         workingCCE.destinationsystemid = VerusConstants.VerusSystemId;
+        workingCCE.hashtransfers = hashedTransfers;
         if(bridgeReady){ // RESERVETORESERVE FLAG
             workingCCE.destinationcurrencyid = VerusConstants.VerusBridgeAddress;  //TODO:transfers are bundled by type
         }else{
@@ -114,7 +115,6 @@ contract VerusCrossChainExport{
         workingCCE.totalamounts = currencies;
         workingCCE.totalfees = fees; 
 
-        workingCCE.hashtransfers = hashedTransfers;
         VerusObjects.CCurrencyValueMap memory totalburnedCCVM = VerusObjects.CCurrencyValueMap(0x0000000000000000000000000000000000000000,0);
         
         workingCCE.totalburned = new VerusObjects.CCurrencyValueMap[](1);

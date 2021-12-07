@@ -329,14 +329,14 @@ function serializeCTransferDestination(VerusObjectsCommon.CTransferDestination m
             serializeUint16(_ccce.version),
             serializeUint16(_ccce.flags),
             serializeAddress(_ccce.sourcesystemid),
+            flipArray(serializeBytes32(_ccce.hashtransfers)),
             writeVarInt(_ccce.sourceheightstart),
             writeVarInt(_ccce.sourceheightend),
-            serializeAddress(_ccce.destinationsystemid),
-            serializeAddress(_ccce.destinationcurrencyid));
+            serializeAddress(_ccce.destinationsystemid));
         bytes memory part2 = abi.encodePacked(serializeUint32(_ccce.numinputs),
+            serializeAddress(_ccce.destinationcurrencyid),
             serializeCCurrencyValueMaps(_ccce.totalamounts),
             serializeCCurrencyValueMaps(_ccce.totalfees),
-            flipArray(serializeBytes32(_ccce.hashtransfers)),
             serializeCCurrencyValueMaps(_ccce.totalburned),
             serializeCTransferDestination(_ccce.rewardaddress),
             serializeInt32(_ccce.firstinput),bytes1(0x00));

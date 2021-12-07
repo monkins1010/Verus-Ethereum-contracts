@@ -8,7 +8,7 @@ import "./VerusBlake2b.sol";
 import "../VerusBridge/VerusSerializer.sol";
 import "../VerusNotarizer/VerusNotarizer.sol";
 
-contract VerusProof{
+contract VerusProof {
 
     uint256 mmrRoot;
     VerusBlake2b blake2b;
@@ -20,6 +20,10 @@ contract VerusProof{
     bytes32 public txValue;
     bytes public testTransfers;
     bool public testResult;
+
+    uint32 constant HASH_RESERVE_TRANSFERS_OFFSET = (32 + 24);
+    uint32 constant COMPONENT_TYPE_OFFSET = 32;
+    uint32 constant TYPE_TX_OUTPUT = 4;
     
     event HashEvent(bytes32 newHash,uint8 eventType);
 
@@ -69,46 +73,71 @@ contract VerusProof{
 
     }
     
-    function checkTransfers(VerusObjects.CReserveTransferImport memory _import) public view returns (bool){
+    function checkTransfers(VerusObjects.CReserveTransferImport memory _import) public view returns (bool) {
+
+        if (_import.partialtransactionproof.components.length != 2)
+        {
+            return false;
+        }
+
         //identify if the hashed transfers are in the 
         bytes32 hashedTransfers = hashTransfers(_import.transfers);
-        //check they occur in the last elVchObj
-        uint transfersIndex = _import.partialtransactionproof.components[_import.partialtransactionproof.components.length -1].VchObjIndex;
-        bytes memory toCheck = _import.partialtransactionproof.components[_import.partialtransactionproof.components.length -1].elVchObj;
-        bytes32 incomingValue = blake2b.bytesToBytes32(slice(toCheck,transfersIndex,32));
-        if(hashedTransfers == incomingValue) return true;
-        else return false;
+
+        // the first component of the import partial transaction proof is the transaction header, for each version of
+        // transaction header, we have a specific offset for the hash of transfers. if we change this, we must
+        // deprecate and deploy new contracts
+        uint doneLen = _import.partialtransactionproof.components.length;
+        uint i;
+        bool success = false;
+        bool found = false;
+        for (i = 1; i < doneLen; i++)
+        {
+            if (_import.partialtransactionproof.components[i].elType == TYPE_TX_OUTPUT)
+            {
+                // only one output can be valid
+                // TODO: HARDENING - make sure the output is the correct export && destination
+                if (found)
+                {
+                    return false;
+                }
+                found = true;
+                bytes32 incomingValue;
+                bytes memory firstObj = _import.partialtransactionproof.components[i].elVchObj; // we should have a first entry that is the export
+                assembly {
+                    incomingValue := mload(add(firstObj, HASH_RESERVE_TRANSFERS_OFFSET))  // get hash of reserve transfers from partial transaction proof
+                }
+                success = hashedTransfers == incomingValue;
+            }
+        }
+        return success;
     }
-    
-    
+
     //roll through each proveComponents
     function proveComponents(VerusObjects.CReserveTransferImport memory _import) public view returns(bytes32 txRoot){
         //delete computedValues
         bytes32 hashInProgress;
         bytes32 testHash;
-        
+
         if (_import.partialtransactionproof.components.length > 0)
         {   
-             hashInProgress = blake2b.createHash(_import.partialtransactionproof.components[0].elVchObj);
+            hashInProgress = blake2b.createHash(_import.partialtransactionproof.components[0].elVchObj);
             if (_import.partialtransactionproof.components[0].elType == 1 )
             {
                 txRoot = checkProof(hashInProgress,_import.partialtransactionproof.components[0].elProof);           
             }
         }
-        
-        for(uint i = 1; i < _import.partialtransactionproof.components.length; i++){
+
+        for (uint i = 1; i < _import.partialtransactionproof.components.length; i++) {
             hashInProgress = blake2b.createHash(_import.partialtransactionproof.components[i].elVchObj);
             testHash = checkProof(hashInProgress,_import.partialtransactionproof.components[i].elProof);
         
-           if(txRoot != testHash){
-               txRoot = 0x0000000000000000000000000000000000000000000000000000000000000000;
-               break;
-           }          
+            if (txRoot != testHash) {
+                txRoot = 0x0000000000000000000000000000000000000000000000000000000000000000;
+                break;
+            }
         }
-        
-        
+
         return txRoot;
-        
     }
     
     function proveTransaction(VerusObjects.CReserveTransferImport memory _import) public view returns(bytes32 stateRoot){
@@ -133,8 +162,7 @@ contract VerusProof{
     
     }
 
-    
-/*
+    /*
     function proveTransaction(bytes32 mmrRootHash,bytes32 notarisationHash,bytes32[] memory _transfersProof,uint32 _hashIndex) public view returns(bool){
         if (mmrRootHash == predictedRootHash(notarisationHash,_hashIndex,_transfersProof)) return true;
         else return false;

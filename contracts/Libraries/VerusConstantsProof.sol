@@ -26,8 +26,6 @@ library VerusObjectsProof {
         uint8 elIdx;
         bytes elVchObj;
         CTXProof[] elProof;
-        uint32 VchObjIndex;
-
     }
     
     struct CPtransactionproof {
