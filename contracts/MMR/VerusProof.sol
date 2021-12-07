@@ -94,12 +94,16 @@ contract VerusProof {
         {
             if (_import.partialtransactionproof.components[i].elType == TYPE_TX_OUTPUT)
             {
-                // only one output can be valid
-                // TODO: HARDENING - make sure the output is the correct export && destination
+                // only one output on a valid export proof
                 if (found)
                 {
                     return false;
                 }
+
+                // TODO: HARDENING - make sure the output is the correct export && destination
+                // to prevent an attack of just providing a provable, non-export transaction with a hash of fake
+                // reserve transfers in the fake export
+
                 found = true;
                 bytes32 incomingValue;
                 bytes memory firstObj = _import.partialtransactionproof.components[i].elVchObj; // we should have a first entry that is the export
@@ -159,7 +163,6 @@ contract VerusProof {
         if(predictedRootHash == predictedStateRoot) {
             return true;
         } else return false;
-    
     }
 
     /*
