@@ -8,7 +8,28 @@ import "../Libraries/VerusObjectsNotarization.sol";
 
 contract VerusSerializer {
 
-    //hashing functions
+    struct UintReader {
+        uint32 offset;
+        uint32 value;
+    }
+
+    function readVarUintLE(bytes memory incoming, uint32 offset) public pure returns(VerusSerializer.UintReader memory) {
+        uint32 retVal = 0;
+        while (true)
+        {
+            uint8 oneByte;
+            assembly {
+                oneByte := mload(add(incoming, offset))
+            }
+            retVal += (uint32)(oneByte & 0x7f) << (offset * 7);
+            offset++;
+            if (oneByte <= 0x7f)
+            {
+                break;
+            }
+        }
+        return UintReader(offset, retVal);
+    }
 
     function writeVarInt(uint256 incoming) public pure returns(bytes memory) {
         bytes1 inProgress;
@@ -140,7 +161,6 @@ contract VerusSerializer {
         }
         return(be);
     }
-
 
     function serializeUint256(uint256 number) public pure returns(bytes memory){
         bytes memory be = abi.encodePacked(number);
@@ -330,11 +350,11 @@ function serializeCTransferDestination(VerusObjectsCommon.CTransferDestination m
             serializeUint16(_ccce.flags),
             serializeAddress(_ccce.sourcesystemid),
             flipArray(serializeBytes32(_ccce.hashtransfers)),
+            serializeAddress(_ccce.destinationsystemid),
+            serializeAddress(_ccce.destinationcurrencyid));
+        bytes memory part2 = abi.encodePacked(serializeUint32(_ccce.numinputs),
             writeVarInt(_ccce.sourceheightstart),
             writeVarInt(_ccce.sourceheightend),
-            serializeAddress(_ccce.destinationsystemid));
-        bytes memory part2 = abi.encodePacked(serializeUint32(_ccce.numinputs),
-            serializeAddress(_ccce.destinationcurrencyid),
             serializeCCurrencyValueMaps(_ccce.totalamounts),
             serializeCCurrencyValueMaps(_ccce.totalfees),
             serializeCCurrencyValueMaps(_ccce.totalburned),

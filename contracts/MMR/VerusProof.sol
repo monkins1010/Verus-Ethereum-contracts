@@ -21,10 +21,23 @@ contract VerusProof {
     bytes public testTransfers;
     bool public testResult;
 
-    uint32 constant HASH_RESERVE_TRANSFERS_OFFSET = (32 + 24);
-    uint32 constant COMPONENT_TYPE_OFFSET = 32;
+    // these constants should be able to reference each other, as many are relative, but Solidity does not
+    // allow referencing them and still considering the result a constant. For any changes to these constants,
+    // which are designed to ensure smart transaction provability, care must be take to ensure that OUTPUT_SCRIPT_OFFSET
+    // is present and substituted for all equivalent values (currently (32 + 8))
+    uint32 constant COMPONENT_OFFSET = 32;
+    uint32 constant CCE_SOURCE_SYSTEM_OFFSET = 4;
+    uint32 constant CCE_HASH_TRANSFERS_DELTA = 20;
+    uint32 constant CCE_DEST_SYSTEM_DELTA = 32;
+    uint32 constant CCE_DEST_CURRENCY_DELTA = 20;
+    uint32 constant OUTPUT_SCRIPT_OFFSET = (32 + 8);
+    uint32 constant SCRIPT_MASTERTOSKIP_OFFSET = (32 + 8 + 1);   // confirm that this starts the main COptCCParam
+    uint32 constant SCRIPT_OP_CHECKCRYPTOCONDITION = 0xcc;
+    uint32 constant SCRIPT_OP_PUSHDATA1 = 0x4c;
+    uint32 constant SCRIPT_OP_PUSHDATA2 = 0x4d;
     uint32 constant TYPE_TX_OUTPUT = 4;
-    
+    uint32 constant EVAL_VALID_CCEUINT32 = 0x30c0101;
+
     event HashEvent(bytes32 newHash,uint8 eventType);
 
     constructor(address notarizerAddress,address verusBLAKE2b,address verusSerializerAddress) {
@@ -88,32 +101,84 @@ contract VerusProof {
         // deprecate and deploy new contracts
         uint doneLen = _import.partialtransactionproof.components.length;
         uint i;
-        bool success = false;
-        bool found = false;
+
         for (i = 1; i < doneLen; i++)
         {
             if (_import.partialtransactionproof.components[i].elType == TYPE_TX_OUTPUT)
             {
-                // only one output on a valid export proof
-                if (found)
+                bytes memory firstObj = _import.partialtransactionproof.components[i].elVchObj; // we should have a first entry that is the txout with the export
+
+                VerusSerializer.UintReader memory scriptLen = verusSerializer.readVarUintLE(firstObj, VerusProof.OUTPUT_SCRIPT_OFFSET);
+
+                // TODO: now we have the beginning of the script and its length,
+                // ensure it is an export to VETH and pull the hash for reserve transfers
+                // to be a valid export, it should be first a push, then OP_CHECKCRYPTOCONDITION, then
+                // another push of the main COptCCParams
+                // this is a vector with header data of 4 bytes, followed by a set of keys, followed by a set of
+                // serialized data objects.
+                // the eval code for the main COptCCParams must be EVAL_CROSSCHAIN_EXPORT, and the destination system
+                // must match VETH
+
+                uint8 opCode1;
+                uint32 nextOffset;
+                uint8 opCode2;
+                uint8 opCode3;
+                VerusSerializer.UintReader memory readerLen;
+
+                readerLen = verusSerializer.readVarUintLE(firstObj, SCRIPT_MASTERTOSKIP_OFFSET);
+                nextOffset = readerLen.offset + readerLen.value;
+
+                assembly {
+                    opCode1 := mload(add(firstObj, OUTPUT_SCRIPT_OFFSET))   // this should be OP_PUSHDATA1 or OP_PUSHDATA2
+                    opCode2 := mload(add(firstObj, nextOffset))             // this should be OP_CHECKCRYPTOCONDITION
+                    nextOffset := add(nextOffset, 1)
+                    opCode3 := mload(add(firstObj, nextOffset))             // this should be OP_PUSHDATA1 or OP_PUSHDATA2
+                    nextOffset := add(nextOffset, 1)                        // point to the length of the pushed data after CC instruction
+                }
+
+                // if we do not have correct op code for push and smart transaction
+                if ((opCode1 != SCRIPT_OP_PUSHDATA1 && opCode1 != SCRIPT_OP_PUSHDATA2) ||
+                    opCode2 != SCRIPT_OP_CHECKCRYPTOCONDITION ||
+                    (opCode3 != SCRIPT_OP_PUSHDATA1 && opCode3 != SCRIPT_OP_PUSHDATA2))
                 {
                     return false;
                 }
 
-                // TODO: HARDENING - make sure the output is the correct export && destination
-                // to prevent an attack of just providing a provable, non-export transaction with a hash of fake
-                // reserve transfers in the fake export
+                readerLen = verusSerializer.readVarUintLE(firstObj, nextOffset); // get length
+                nextOffset = readerLen.offset;                              // this points to the primary COptCCParams vector
 
-                found = true;
-                bytes32 incomingValue;
-                bytes memory firstObj = _import.partialtransactionproof.components[i].elVchObj; // we should have a first entry that is the export
+                uint32 validCCEUint32;
+
                 assembly {
-                    incomingValue := mload(add(firstObj, HASH_RESERVE_TRANSFERS_OFFSET))  // get hash of reserve transfers from partial transaction proof
+                    validCCEUint32 := mload(add(firstObj, nextOffset))
                 }
-                success = hashedTransfers == incomingValue;
+
+                if (validCCEUint32 != EVAL_VALID_CCEUINT32)
+                {
+                    return false;
+                }
+
+                bytes32 incomingValue;
+                bytes20 systemSourceID;
+                bytes20 destSystemID;
+                bytes20 destCurrencyID;
+
+                assembly {
+                    nextOffset := add(nextOffset, CCE_SOURCE_SYSTEM_OFFSET)
+                    systemSourceID := mload(add(firstObj, nextOffset))
+                    nextOffset := add(nextOffset, CCE_HASH_TRANSFERS_DELTA)
+                    incomingValue := mload(add(firstObj, nextOffset))       // get hash of reserve transfers from partial transaction proof
+                    nextOffset := add(nextOffset, CCE_DEST_SYSTEM_DELTA)
+                    destSystemID := mload(add(firstObj, nextOffset))       // get hash of reserve transfers from partial transaction proof
+                    nextOffset := add(nextOffset, CCE_DEST_CURRENCY_DELTA)
+                    destCurrencyID := mload(add(firstObj, nextOffset))       // get hash of reserve transfers from partial transaction proof
+                }
+
+                // validate source and destination values as well
+                return hashedTransfers == incomingValue;
             }
         }
-        return success;
+        return false;
     }
 
     //roll through each proveComponents
