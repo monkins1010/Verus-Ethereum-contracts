@@ -150,7 +150,6 @@ contract VerusSerializer {
     function serializeAddress(address number) public pure returns(bytes memory){
         bytes memory be = abi.encodePacked(number);
         return be;
-        
     }
     
     function serializeUint160Array(uint160[] memory numbers) public pure returns(bytes memory){
@@ -167,10 +166,8 @@ contract VerusSerializer {
         return(flipArray(be));
     }
     
-function serializeCTransferDestination(VerusObjectsCommon.CTransferDestination memory ctd) public pure returns(bytes memory){
-        
-         return abi.encodePacked(serializeUint8(ctd.destinationtype),writeCompactSize(20),ctd.destinationaddress);
-       
+    function serializeCTransferDestination(VerusObjectsCommon.CTransferDestination memory ctd) public pure returns(bytes memory){
+        return abi.encodePacked(serializeUint8(ctd.destinationtype),writeCompactSize(20),ctd.destinationaddress);
     }    
 
     function serializeCCurrencyValueMap(VerusObjects.CCurrencyValueMap memory _ccvm) public pure returns(bytes memory){

@@ -159,23 +159,26 @@ contract VerusProof {
                 }
 
                 bytes32 incomingValue;
-                bytes20 systemSourceID;
-                bytes20 destSystemID;
-                bytes20 destCurrencyID;
+                address systemSourceID;
+                address destSystemID;
+                address destCurrencyID;
 
                 assembly {
                     nextOffset := add(nextOffset, CCE_SOURCE_SYSTEM_OFFSET)
-                    systemSourceID := mload(add(firstObj, nextOffset))
+                    systemSourceID := mload(add(firstObj, nextOffset))      // source system ID, which should match expected source (VRSC/VRSCTEST)
                     nextOffset := add(nextOffset, CCE_HASH_TRANSFERS_DELTA)
                     incomingValue := mload(add(firstObj, nextOffset))       // get hash of reserve transfers from partial transaction proof
                     nextOffset := add(nextOffset, CCE_DEST_SYSTEM_DELTA)
-                    destSystemID := mload(add(firstObj, nextOffset))       // get hash of reserve transfers from partial transaction proof
+                    destSystemID := mload(add(firstObj, nextOffset))        // destination system, which should be vETH
                     nextOffset := add(nextOffset, CCE_DEST_CURRENCY_DELTA)
-                    destCurrencyID := mload(add(firstObj, nextOffset))       // get hash of reserve transfers from partial transaction proof
+                    destCurrencyID := mload(add(firstObj, nextOffset))      // destination currency, which should be vETH
                 }
 
                 // validate source and destination values as well
-                return hashedTransfers == incomingValue;
+                return (hashedTransfers == incomingValue &&
+                        systemSourceID == VerusConstants.VerusSystemId &&
+                        destSystemID == VerusConstants.EthSystemID &&
+                        destCurrencyID == VerusConstants.VEth);
             }
         }
         return false;
