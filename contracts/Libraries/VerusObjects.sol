@@ -74,7 +74,7 @@ library VerusObjects {
 
     struct CReserveTransferImport {
         uint height;
-        bytes32 txid;                                   // this is actually the hash of the serializaed CCrossChainExport that can be used for proof
+        bytes32 txid;                                   // when from ETH, this is hash of the serialized CCrossChainExport that can be used for proof
         uint txoutnum;                                  // index of the transfers in the exports array
         CCrossChainExport exportinfo;
         CPtransactionproof partialtransactionproof;     // partial transaction proof is for the 

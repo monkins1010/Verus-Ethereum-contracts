@@ -251,19 +251,24 @@ contract VerusBridge {
 
     function _createImports(VerusObjects.CReserveTransferImport memory _import) public returns(bool) {
 
-        if (processedTxids[_import.txid] == true) return false; 
         bytes32 txidfound;
         bytes memory sliced = _import.partialtransactionproof.components[0].elVchObj;
+
         assembly {
             txidfound := mload(add(sliced, 32))                                 // skip memory length (ETH encoded in an efficient 32 bytes ;) )
         }
-        assert(_import.txid == txidfound); //the txid should be present in the header
-        bool proved = verusProof.proveImports(_import);
-        assert(proved);
-        processedTxids[_import.txid] = true;
+        if (processedTxids[txidfound] == true) return false; 
+
+        bool proven = verusProof.proveImports(_import);
+
+        assert(proven);
+        processedTxids[txidfound] = true;
+
         if (lastTxImportHeight < _import.height)
             lastTxImportHeight = _import.height;
+
         uint256 amount;
+
         //check the transfers were in the hash.
         for(uint i = 0; i < _import.transfers.length; i++){
             //handle eth transactions

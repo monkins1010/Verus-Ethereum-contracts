@@ -31,6 +31,35 @@ contract VerusSerializer {
         return UintReader(offset, retVal);
     }
 
+    // uses the varint encoding from Bitcoin script pushes
+    // this does not support numbers larger than uint16, and if it encounters one or any invalid data, it returns a value of 
+    // zero and the original offset
+    function readCompactSizeLE(bytes memory incoming, uint32 offset) public pure returns(VerusSerializer.UintReader memory) {
+        uint32 retVal = 0;
+        uint8 oneByte;
+        assembly {
+            oneByte := mload(add(incoming, offset))
+        }
+        offset++;
+        if (oneByte < 253)
+        {
+            return UintReader(offset, oneByte);
+        }
+        else if (oneByte == 253)
+        {
+            assembly {
+                oneByte := mload(add(incoming, offset))
+            }
+            uint16 twoByte = oneByte;
+            offset++;
+            assembly {
+                oneByte := mload(add(incoming, offset))
+            }
+            return UintReader(offset + 1, (twoByte << 8) + oneByte);
+        }
+        return UintReader(offset, 0);
+    }
+
     function writeVarInt(uint256 incoming) public pure returns(bytes memory) {
         bytes1 inProgress;
         bytes memory output;
