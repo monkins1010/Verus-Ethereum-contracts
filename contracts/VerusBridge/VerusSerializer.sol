@@ -329,18 +329,22 @@ function serializeCTransferDestination(VerusObjectsCommon.CTransferDestination m
             serializeUint16(_ccce.version),
             serializeUint16(_ccce.flags),
             serializeAddress(_ccce.sourcesystemid),
-            writeVarInt(_ccce.sourceheightstart),
-            writeVarInt(_ccce.sourceheightend),
+            flipArray(serializeBytes32(_ccce.hashtransfers)),
             serializeAddress(_ccce.destinationsystemid),
             serializeAddress(_ccce.destinationcurrencyid));
-        bytes memory part2 = abi.encodePacked(serializeUint32(_ccce.numinputs),
+        bytes memory part2 = abi.encodePacked(
+            writeVarInt(_ccce.sourceheightstart),
+            writeVarInt(_ccce.sourceheightend),
+            serializeUint32(_ccce.numinputs),
             serializeCCurrencyValueMaps(_ccce.totalamounts),
             serializeCCurrencyValueMaps(_ccce.totalfees),
-            flipArray(serializeBytes32(_ccce.hashtransfers)),
             serializeCCurrencyValueMaps(_ccce.totalburned),
             serializeCTransferDestination(_ccce.rewardaddress),
-            serializeInt32(_ccce.firstinput),bytes1(0x00));
+            serializeInt32(_ccce.firstinput),
+            bytes1(0x00));
+            
         return abi.encodePacked(part1,part2);
+
     }
 
     function flipArray(bytes memory incoming) public pure returns(bytes memory){
