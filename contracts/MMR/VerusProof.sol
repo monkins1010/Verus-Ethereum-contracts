@@ -28,12 +28,12 @@ contract VerusProof {
     uint8 constant CCE_EVAL_EXPORT = 0xc;
     uint32 constant CCE_COPTP_HEADERSIZE = 0x1c;
     uint32 constant CCE_COPTP_EVALOFFSET = 2;
-    uint32 constant CCE_SOURCE_SYSTEM_OFFSET = 4;
-    uint32 constant CCE_HASH_TRANSFERS_DELTA = 20;
-    uint32 constant CCE_DEST_SYSTEM_DELTA = 32;
+    uint32 constant CCE_SOURCE_SYSTEM_OFFSET = (4 + 19);
+    uint32 constant CCE_HASH_TRANSFERS_DELTA = 32;
+    uint32 constant CCE_DEST_SYSTEM_DELTA = 20;
     uint32 constant CCE_DEST_CURRENCY_DELTA = 20;
 
-    uint32 constant OUTPUT_SCRIPT_OFFSET = (32 + 8);                // start of prevector serialization for output script
+    uint32 constant OUTPUT_SCRIPT_OFFSET = (8 + 1);                 // start of prevector serialization for output script
     uint32 constant SCRIPT_OP_CHECKCRYPTOCONDITION = 0xcc;
     uint32 constant SCRIPT_OP_PUSHDATA1 = 0x4c;
     uint32 constant SCRIPT_OP_PUSHDATA2 = 0x4d;
