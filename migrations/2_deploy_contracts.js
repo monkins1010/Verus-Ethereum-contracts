@@ -56,6 +56,15 @@ module.exports = async function (deployer) {
     let USDCInst = await Token.at(USDCERC20);
 
     USDCInst.increaseAllowance(VerusBridgeInst.address,"1000000000000000000000000")
+
+    const settingString = "verusbridgeaddress=" + VerusBridgeInst.address + "\n" +
+    "verusnotarizeraddress=" + notarizerInst.address + "\n" +
+    "verusproofaddress=" + ProofInst.address + "\n" +
+    "verusinfoaddress=" + INFOInst.address + "\n" +
+    "verusserializeraddress=" + serializerInst.address + "\n\n" +
+    "tokenmanager:" + tokenInst.address;
+
+    console.log("Settings to be pasted into *.conf file (except the tokenmanger, thats for the bridge website) \n\n", settingString);
     
 
 
