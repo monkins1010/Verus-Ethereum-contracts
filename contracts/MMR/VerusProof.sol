@@ -7,6 +7,7 @@ import "../Libraries/VerusObjects.sol";
 import "./VerusBlake2b.sol";
 import "../VerusBridge/VerusSerializer.sol";
 import "../VerusNotarizer/VerusNotarizer.sol";
+import "../Libraries/VerusObjectsCommon.sol";
 
 contract VerusProof {
 
@@ -112,7 +113,7 @@ contract VerusProof {
                 uint32 nextOffset;
                 uint8 opCode1;
                 uint8 opCode2;
-                VerusSerializer.UintReader memory readerLen;
+                VerusObjectsCommon.UintReader memory readerLen;
 
                 readerLen = verusSerializer.readCompactSizeLE(firstObj, OUTPUT_SCRIPT_OFFSET);    // get the length of the output script
                 readerLen = verusSerializer.readCompactSizeLE(firstObj, readerLen.offset);        // then length of first master push

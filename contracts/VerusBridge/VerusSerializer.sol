@@ -5,15 +5,11 @@ pragma solidity >=0.6.0 < 0.9.0;
 pragma experimental ABIEncoderV2;   
 import "../Libraries/VerusObjects.sol";
 import "../Libraries/VerusObjectsNotarization.sol";
+import "../Libraries/VerusObjectsCommon.sol";
 
 contract VerusSerializer {
 
-    struct UintReader {
-        uint32 offset;
-        uint32 value;
-    }
-
-    function readVarUintLE(bytes memory incoming, uint32 offset) public pure returns(VerusSerializer.UintReader memory) {
+    function readVarUintLE(bytes memory incoming, uint32 offset) public pure returns(VerusObjectsCommon.UintReader memory) {
         uint32 retVal = 0;
         while (true)
         {
@@ -28,13 +24,13 @@ contract VerusSerializer {
                 break;
             }
         }
-        return UintReader(offset, retVal);
+        return VerusObjectsCommon.UintReader(offset, retVal);
     }
 
     // uses the varint encoding from Bitcoin script pushes
     // this does not support numbers larger than uint16, and if it encounters one or any invalid data, it returns a value of 
     // zero and the original offset
-    function readCompactSizeLE(bytes memory incoming, uint32 offset) public pure returns(VerusSerializer.UintReader memory) {
+    function readCompactSizeLE(bytes memory incoming, uint32 offset) public pure returns(VerusObjectsCommon.UintReader memory) {
         uint32 retVal = 0;
         uint8 oneByte;
         assembly {
@@ -43,7 +39,7 @@ contract VerusSerializer {
         offset++;
         if (oneByte < 253)
         {
-            return UintReader(offset, oneByte);
+            return VerusObjectsCommon.UintReader(offset, oneByte);
         }
         else if (oneByte == 253)
         {
@@ -55,9 +51,9 @@ contract VerusSerializer {
             assembly {
                 oneByte := mload(add(incoming, offset))
             }
-            return UintReader(offset + 1, (twoByte << 8) + oneByte);
+            return VerusObjectsCommon.UintReader(offset + 1, (twoByte << 8) + oneByte);
         }
-        return UintReader(offset, 0);
+        return VerusObjectsCommon.UintReader(offset, 0);
     }
 
     function writeVarInt(uint256 incoming) public pure returns(bytes memory) {
