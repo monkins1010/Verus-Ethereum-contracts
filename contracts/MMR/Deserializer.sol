@@ -37,7 +37,7 @@ contract Deserializer {
 
         bytes memory name = new bytes(nameStringLength);
 
-        for (uint256 i = 0; i <= nameStringLength; i++) {
+        for (uint256 i = 0; i < nameStringLength; i++) {
             name[i] = input[i + nextOffset];
         }
 
