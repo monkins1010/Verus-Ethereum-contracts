@@ -380,9 +380,10 @@ contract VerusSerializer {
             flipArray(serializeBytes32(_ccce.hashtransfers)),
             serializeAddress(_ccce.destinationsystemid),
             serializeAddress(_ccce.destinationcurrencyid));
-        bytes memory part2 = abi.encodePacked(serializeUint32(_ccce.numinputs),
+        bytes memory part2 = abi.encodePacked(
             writeVarInt(_ccce.sourceheightstart),
             writeVarInt(_ccce.sourceheightend),
+            serializeUint32(_ccce.numinputs),
             serializeCCurrencyValueMaps(_ccce.totalamounts),
             serializeCCurrencyValueMaps(_ccce.totalfees),
             serializeCCurrencyValueMaps(_ccce.totalburned),
