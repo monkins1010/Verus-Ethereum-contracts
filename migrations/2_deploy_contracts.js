@@ -8,8 +8,6 @@ var VerusBridge = artifacts.require("./VerusBridge/VerusBridge.sol");
 var Verusaddress = artifacts.require("./VerusBridge/VerusAddressCalculator.sol");
 var VerusInfo = artifacts.require("./VerusBridge/VerusInfo.sol");
 var Token = artifacts.require("./VerusBridge/Token.sol");
-var Deserializer = artifacts.require("./MMR/Deserializer.sol");
-
 
 // QUESTION: remove all hard coded values like those below (tokenmanvrsctest, etc.) and put them in config or parameters
 // What is the most correct approach / actual best practice?
@@ -27,17 +25,15 @@ module.exports = async function (deployer) {
     const addressInst = await Verusaddress.deployed();
 
     await deployer.link(Verusaddress, VerusTokenManager);
-    await deployer.deploy(VerusTokenManager)
-    const tokenInst = await VerusTokenManager.deployed();
-
+    
     await deployer.deploy(VerusBlake2b);
     const blakeInst = await VerusBlake2b.deployed();
-
+    
     await deployer.deploy(VerusSerializer);
     const serializerInst = await VerusSerializer.deployed();
 
-    await deployer.deploy(Deserializer, serializerInst.address);
-    const deserInst = await Deserializer.deployed();
+    await deployer.deploy(VerusTokenManager, serializerInst.address)
+    const tokenInst = await VerusTokenManager.deployed();
 
     await tokenInst.deployNewToken(tokenmanvrsctest[0], tokenmanvrsctest[1], tokenmanvrsctest[2]); //registers VRSCTEST
     await tokenInst.deployNewToken(tokenmanbeth[0], tokenmanbeth[1], tokenmanbeth[2]); //registers bridge
