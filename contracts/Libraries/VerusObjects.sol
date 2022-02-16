@@ -98,6 +98,12 @@ library VerusObjects {
         int32 firstinput;
     }
 
+    struct CcurrencyDefinition {
+         address parent;
+         string name;
+         address launchSystemID;
+     }
+
     struct CMerkleBranch {
         uint8  CMerkleBranchBase;
         uint32 nIndex;

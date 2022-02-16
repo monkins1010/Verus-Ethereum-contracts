@@ -5,12 +5,14 @@ pragma solidity >=0.4.20;
 pragma experimental ABIEncoderV2;
 
 import "./Token.sol";
-import "./VerusAddressCalculator.sol";
 import "../Libraries/VerusConstants.sol";
+import "../Libraries/VerusObjects.sol";
+import "./VerusSerializer.sol";
 
 contract TokenManager {
 
     event TokenCreated(address tokenAddress);
+    VerusSerializer verusSerializer;
 
     //array of contracts address mapped to the token name
     struct hostedToken{
@@ -25,8 +27,9 @@ contract TokenManager {
     
     address verusBridgeContract;
     
-    constructor() public {
+    constructor(address verusSerializerAddress) {
         verusBridgeContract = address(0);
+        verusSerializer = VerusSerializer(verusSerializerAddress);
     }
 
     function convertFromVerusNumber(uint256 a, uint8 decimals) public pure returns (uint256) {
@@ -134,86 +137,75 @@ contract TokenManager {
         return _verusAddress;
     }
 
-        function getTokenERC20(address VRSCAddress) public view returns(Token){
+    function getTokenERC20(address VRSCAddress) public view returns(Token){
         hostedToken memory internalToken = verusToERC20mapping[VRSCAddress];
         require(internalToken.isRegistered, "The token is not registered");
         Token token = Token(internalToken.destinationCurrencyID);
         return token;
     }
- 
-/* no longer required unless we want auto token creation
 
-    function deployNewToken(address _destinationCurrencyID) public returns (address) {
-        require(isVerusBridgeContract(),"Call can only be made from Verus Bridge Contract");
-        //generate a name based on the address and deploy the token
-        string memory IDAsString; 
-        IDAsString= VerusAddressCalculator.addressToString(_destinationCurrencyID);
-        
-        //capitalised version of the first 4 letters becomes the symbol the full address is the token name
-        bytes memory tokenSymbolBytes = abi.encodePacked(bytes4(VerusAddressCalculator.stringToBytes32(IDAsString)));
-        //convert them to uppercase
-        bytes memory symbolUpper = new bytes(4);
-        for(uint i = 0; i < 4; i++){
-            if ((uint8(tokenSymbolBytes[i]) >= 97) && (uint8(tokenSymbolBytes[i]) <= 122)){
-                symbolUpper[i] = bytes1(uint8(tokenSymbolBytes[i]) - 32);
+    function getSymbol(string memory _text) public pure returns (string memory)
+    {
+        bytes memory copy = new bytes(4);
+        bytes memory textAsBytes = bytes(_text);
+        uint256 max = (textAsBytes.length > 4 ? 4 : uint8(textAsBytes.length)) + 31;
+        for (uint256 i=32; i<=max; i+=32)
+        {
+            assembly { mstore(add(copy, i), mload(add(textAsBytes, i))) }
+        }
+        return string(copy);
+    }
+
+    function sha256d(bytes32 _bytes) internal pure returns(bytes32){
+        return sha256(abi.encodePacked(sha256(abi.encodePacked(_bytes))));
+    }
+
+    function sha256d(string memory _string) internal pure returns(bytes32){
+        return sha256(abi.encodePacked(sha256(abi.encodePacked(_string))));
+    }
+
+    function sha256d(bytes memory _bytes) internal pure returns(bytes32){
+        return sha256(abi.encodePacked(sha256(abi.encodePacked(_bytes))));
+    }
+
+    function _toLower(string memory str) internal pure returns (string memory) {
+        bytes memory bStr = bytes(str);
+        bytes memory bLower = new bytes(bStr.length);
+        for (uint i = 0; i < bStr.length; i++) {
+            // Uppercase character...
+            if ((uint8(bStr[i]) >= 65) && (uint8(bStr[i]) <= 90)) {
+                // So we add 32 to make it lowercase
+                bLower[i] = bytes1(uint8(bStr[i]) + 32);
             } else {
-                symbolUpper[i] = tokenSymbolBytes[i];
+                bLower[i] = bStr[i];
             }
         }
-        return deployNewToken(_destinationCurrencyID,IDAsString,string(symbolUpper));
-    }*/
+        return string(bLower);
+    }
 
-    function deployNewToken(address _destinationCurrencyID,string memory _tokenName, string memory _symbol) public returns (address) {
+    function getIAddress(VerusObjects.CcurrencyDefinition memory _ccd) public pure returns (address){
+        return address(ripemd160(abi.encodePacked(sha256(abi.encodePacked(sha256d(abi.encodePacked(_ccd.parent,sha256d(_toLower(_ccd.name)))))))));
+    }
+
+    function deployNewToken(bytes memory _serializedCcd) public returns (address) {
         //require(isVerusBridgeContract(),"Call can only be made from Verus Bridge Contract");
-        if(verusToERC20mapping[_destinationCurrencyID].isRegistered) 
-            return verusToERC20mapping[_destinationCurrencyID].destinationCurrencyID;
-        Token t = new Token(_tokenName, _symbol);
-        verusToERC20mapping[_destinationCurrencyID] = hostedToken(address(t),true,true); 
-        vERC20Tokens[address(t)]= hostedToken(_destinationCurrencyID,true,true);
-        destinationToAddress[_destinationCurrencyID] = address(t);
+        
+        VerusObjects.CcurrencyDefinition memory ccd = verusSerializer.deSerializeCurrencyDefinition(_serializedCcd);
+        //we need to make sure that the parent is not Veth and not registered as another token
+        require(ccd.parent != VerusConstants.VEth && !verusToERC20mapping[ccd.parent].isRegistered,"Invalid parent");
+        //create the destination currency id
+        //create a trimmed version of the name for symbol        
+        address destinationCurrencyID = getIAddress(ccd);
+        if(verusToERC20mapping[destinationCurrencyID].isRegistered) 
+            return verusToERC20mapping[destinationCurrencyID].destinationCurrencyID;
+
+        Token t = new Token(ccd.name, getSymbol(ccd.name));
+        verusToERC20mapping[destinationCurrencyID] = hostedToken(address(t),true,true); 
+        vERC20Tokens[address(t)]= hostedToken(destinationCurrencyID,true,true);
+        destinationToAddress[destinationCurrencyID] = address(t);
         emit TokenCreated(address(t));
         return address(t);
     }
-/*
-no longer required unless we want automatic token creation
-    function generateDestinationCurrencyID(string memory _tokenName) public view returns(address){
-        bytes memory reducedTokenName = abi.encodePacked(bytes9(VerusAddressCalculator.stringToBytes32(_tokenName)));
-        address output;
-        uint coinNumber = 0;
-        string memory coinNumberAsStr;
-        uint maxLen = 9;
-        bytes memory tokenNameAsBytes;
-        bytes memory numberAsBytes;
-        output = VerusAddressCalculator.stringToAddress(string(abi.encodePacked(reducedTokenName,bytes11(".erc20.eth."))));
-        while(isToken(output)){
-            
-            //need to be able to handle
-            coinNumber++;
-            coinNumberAsStr = _uintToStr(coinNumber);
-            tokenNameAsBytes = abi.encodePacked(reducedTokenName);
-            numberAsBytes = abi.encodePacked(coinNumberAsStr);
-            
-            //check for the very slim possibility that this maxes out
-            require(maxLen >= 0,"tokenName permutations exceeded.");
-            
-            for(uint i = 1;i <= numberAsBytes.length; i++){
-                tokenNameAsBytes[tokenNameAsBytes.length -i] = numberAsBytes[numberAsBytes.length -i];
-            }
-            
-            //truncate the bytes array
-            reducedTokenName =abi.encodePacked(tokenNameAsBytes);
-            output = VerusAddressCalculator.stringToAddress(string(abi.encodePacked(reducedTokenName,bytes11(".erc20.eth."))));
-            
-        }
-        return output;
-    }
-
-    function _newDestinationCurrencyID(string memory _tokenName) private pure returns(address){
-        //a verus address is made up of tokenName.erc20.eth. where tokenName is a max of 9 chars
-        //check if the tokenName already exists
-        bytes9 reducedTokenName = bytes9(VerusAddressCalculator.stringToBytes32(_tokenName));
-        return VerusAddressCalculator.stringToAddress(string(abi.encodePacked(reducedTokenName,bytes11(".erc20.eth."))));
-    }*/
 
     function isToken(address _contractAddress) public view returns(bool){
         return vERC20Tokens[_contractAddress].isRegistered;
@@ -222,27 +214,5 @@ no longer required unless we want automatic token creation
     function isVerusOwned(address _contractAddress) public view returns(bool){
         return vERC20Tokens[_contractAddress].VerusOwned;
     }
-
-    /* no longer required unless we want to automatically generate currencies
-    helper function for generating currency ids
-    function _uintToStr(uint _i) private pure returns (string memory _uintAsString) {
-        uint number = _i;
-        if (number == 0) {
-            return "0";
-        }
-        uint j = number;
-        uint len;
-        while (j != 0) {
-            len++;
-            j /= 10;
-        }
-        bytes memory bstr = new bytes(len);
-        uint k = len - 1;
-        while (number != 0) {
-            bstr[k--] = bytes1(uint8(48 + number % 10));
-            number /= 10;
-        }
-        return string(bstr);
-    }*/
 
 }

@@ -19,13 +19,7 @@ library VerusObjectsCommon {
         uint8 destinationtype;
         bytes destinationaddress;
     }
-
-    struct CcurrencyDefinition {
-        address parent;
-        string name;
-        address launchSystemID;
-    }
-
+    
     struct UintReader {
         uint32 offset;
         uint32 value;
