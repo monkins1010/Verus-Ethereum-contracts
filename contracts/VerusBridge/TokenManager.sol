@@ -87,15 +87,13 @@ contract TokenManager {
     function importERC20Tokens(address _destCurrencyID,uint64 _tokenAmount,address _destination) public {
         require(isVerusBridgeContract(),"Call can only be made from Verus Bridge Contract");
         address contractAddress;
-        //if the token has not been previously created then it must be deployed
-        //require(isToken(destCurrencyID),"Token is not registered");
-        if(!verusToERC20mapping[_destCurrencyID].isRegistered) {
-            //contractAddress = deployNewToken(_destCurrencyID);
-            require(verusToERC20mapping[_destCurrencyID].isRegistered,
-            "Destination Currency ID is not registered");
-        } else {
-            contractAddress = destinationToAddress[_destCurrencyID];
-        }
+        // if the token has not been previously created then it must be deployed
+    
+        require(verusToERC20mapping[_destCurrencyID].isRegistered,
+        "Destination Currency ID is not registered");
+        
+        contractAddress = destinationToAddress[_destCurrencyID];
+        
         hostedToken memory tokenDetail = vERC20Tokens[contractAddress];
         Token token = Token(contractAddress);
         uint256 processedTokenAmount = convertFromVerusNumber(_tokenAmount, token.decimals());
@@ -199,11 +197,11 @@ contract TokenManager {
     }
 
     function deployNewToken(bytes memory _serializedCcd) public returns (address) {
-        //require(isVerusBridgeContract(),"Call can only be made from Verus Bridge Contract");
+        // TODO: require(isVerusBridgeContract(),"Call can only be made from Verus Bridge Contract");
         
         VerusObjects.CcurrencyDefinition memory ccd = verusSerializer.deSerializeCurrencyDefinition(_serializedCcd);
         //we need to make sure that the parent is not Veth and not registered as another token
-        require((ccd.parent != VerusConstants.VEth || compareStrings(ccd.name,"bridge")) && !verusToERC20mapping[ccd.parent].isRegistered,"Invalid parent");
+       // require((ccd.parent != VerusConstants.VEth || compareStrings(ccd.name,"bridge")) && !verusToERC20mapping[ccd.parent].isRegistered,"Invalid parent");
         //create the destination currency id
         //create a trimmed version of the name for symbol        
         address destinationCurrencyID = getIAddress(ccd);
