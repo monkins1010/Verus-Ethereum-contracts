@@ -13,6 +13,7 @@ contract TokenManager {
 
     event TokenCreated(address tokenAddress);
     VerusSerializer verusSerializer;
+    uint256 constant TICKER_LENGTH_MAX = 4;
 
     //array of contracts address mapped to the token name
     struct hostedToken{
@@ -146,9 +147,9 @@ contract TokenManager {
 
     function getSymbol(string memory _text) public pure returns (string memory)
     {
-        bytes memory copy = new bytes(4);
+        bytes memory copy = new bytes(TICKER_LENGTH_MAX);
         bytes memory textAsBytes = bytes(_text);
-        uint256 max = (textAsBytes.length > 4 ? 4 : uint8(textAsBytes.length)) + 31;
+        uint256 max = (textAsBytes.length > TICKER_LENGTH_MAX ? TICKER_LENGTH_MAX : uint8(textAsBytes.length)) + 31;
         for (uint256 i=32; i<=max; i+=32)
         {
             assembly { mstore(add(copy, i), mload(add(textAsBytes, i))) }
@@ -184,7 +185,17 @@ contract TokenManager {
     }
 
     function getIAddress(VerusObjects.CcurrencyDefinition memory _ccd) public pure returns (address){
-        return address(ripemd160(abi.encodePacked(sha256(abi.encodePacked(sha256d(abi.encodePacked(_ccd.parent,sha256d(_toLower(_ccd.name)))))))));
+
+        if(_ccd.parent == 0x0000000000000000000000000000000000000000) {
+            return address(ripemd160(abi.encodePacked(sha256(abi.encodePacked(sha256d(_toLower(_ccd.name)))))));
+        }
+        else {
+            return address(ripemd160(abi.encodePacked(sha256(abi.encodePacked(sha256d(abi.encodePacked(_ccd.parent,sha256d(_toLower(_ccd.name)))))))));
+        }
+    }
+
+    function compareStrings(string memory a, string memory b) public view returns (bool) {
+        return (keccak256(abi.encodePacked((a))) == keccak256(abi.encodePacked((b))));
     }
 
     function deployNewToken(bytes memory _serializedCcd) public returns (address) {
@@ -192,7 +203,7 @@ contract TokenManager {
         
         VerusObjects.CcurrencyDefinition memory ccd = verusSerializer.deSerializeCurrencyDefinition(_serializedCcd);
         //we need to make sure that the parent is not Veth and not registered as another token
-        require(ccd.parent != VerusConstants.VEth && !verusToERC20mapping[ccd.parent].isRegistered,"Invalid parent");
+        require((ccd.parent != VerusConstants.VEth || compareStrings(ccd.name,"bridge")) && !verusToERC20mapping[ccd.parent].isRegistered,"Invalid parent");
         //create the destination currency id
         //create a trimmed version of the name for symbol        
         address destinationCurrencyID = getIAddress(ccd);

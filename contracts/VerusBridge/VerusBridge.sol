@@ -57,6 +57,9 @@ contract VerusBridge {
     uint public lastTxImportHeight;
 
     event Deprecate(address newAddress);
+
+    uint32 constant CTRX_CURRENCY_EXPORT_FLAG = 0x2000;
+    uint8 constant DEST_REGISTERCURRENCY = 6;
     
     constructor(address verusProofAddress,
         address tokenManagerAddress,
@@ -269,22 +272,32 @@ contract VerusBridge {
 
         uint256 amount;
 
-        //check the transfers were in the hash.
+        // check the transfers were in the hash.
         for(uint i = 0; i < _import.transfers.length; i++){
-            //handle eth transactions
+            // handle eth transactions
             amount = convertFromVerusNumber(uint256(_import.transfers[i].currencyvalue.amount),18);
-            if(_import.transfers[i].currencyvalue.currency == VerusConstants.VEth) {
-                //cast the destination as an ethAddress
-                assert(amount <= address(this).balance);
-                sendEth(amount,payable(bytesToAddress(_import.transfers[i].destination.destinationaddress)));
-                ethHeld -= amount;
-        
+
+            // if the transfer does not have the EXPORT_CURRENCY flag set
+            if(_import.transfers[i].flags & CTRX_CURRENCY_EXPORT_FLAG != CTRX_CURRENCY_EXPORT_FLAG){
+
+                if(_import.transfers[i].currencyvalue.currency == VerusConstants.VEth) {
+                    // cast the destination as an ethAddress
+                    assert(amount <= address(this).balance);
+                    sendEth(amount,payable(bytesToAddress(_import.transfers[i].destination.destinationaddress)));
+                    ethHeld -= amount;
+            
+                } else {
+                    // handle erc20 transactions  
+                    // amount conversion is handled in token manager
+                    tokenManager.importERC20Tokens(_import.transfers[i].currencyvalue.currency,
+                        _import.transfers[i].currencyvalue.amount,
+                        bytesToAddress(_import.transfers[i].destination.destinationaddress));
+                }
             } else {
-                // handle erc20 transactions  
-                // amount conversion is handled in token manager
-                tokenManager.importERC20Tokens(_import.transfers[i].currencyvalue.currency,
-                    _import.transfers[i].currencyvalue.amount,
-                    bytesToAddress(_import.transfers[i].destination.destinationaddress));
+                // If the type of address is a CCurrencyDefinition i.e. flag type DEST_REGISTERCURRENCY
+                if(_import.transfers[i].destination.destinationtype & DEST_REGISTERCURRENCY == DEST_REGISTERCURRENCY)
+                     tokenManager.deployNewToken(_import.transfers[i].destination.destinationaddress);
+                
             }
             //handle the distributions of the fees
             //add them into the fees array to be claimed by the message sender
