@@ -200,8 +200,8 @@ contract TokenManager {
         // TODO: require(isVerusBridgeContract(),"Call can only be made from Verus Bridge Contract");
         
         VerusObjects.CcurrencyDefinition memory ccd = verusSerializer.deSerializeCurrencyDefinition(_serializedCcd);
-        //we need to make sure that the parent is not Veth and not registered as another token
-       // require((ccd.parent != VerusConstants.VEth || compareStrings(ccd.name,"bridge")) && !verusToERC20mapping[ccd.parent].isRegistered,"Invalid parent");
+        //we need to make sure that the parent is not Veth (except for bridge.veth) and not registered as another token
+        require(ccd.parent != VerusConstants.VEth || (ccd.parent == VerusConstants.VEth && compareStrings(ccd.name,"bridge")),"Invalid parent");
         //create the destination currency id
         //create a trimmed version of the name for symbol        
         address destinationCurrencyID = getIAddress(ccd);
