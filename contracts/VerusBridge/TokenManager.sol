@@ -196,24 +196,40 @@ contract TokenManager {
         return (keccak256(abi.encodePacked((a))) == keccak256(abi.encodePacked((b))));
     }
 
-    function deployNewToken(bytes memory _serializedCcd) public returns (address) {
+    function deployToken(bytes memory _serializedCcd) public returns (address) {
         // TODO: require(isVerusBridgeContract(),"Call can only be made from Verus Bridge Contract");
         
         VerusObjects.CcurrencyDefinition memory ccd = verusSerializer.deSerializeCurrencyDefinition(_serializedCcd);
-        //we need to make sure that the parent is not Veth (except for bridge.veth) and not registered as another token
-        require(ccd.parent != VerusConstants.VEth || (ccd.parent == VerusConstants.VEth && compareStrings(ccd.name,"bridge")),"Invalid parent");
-        //create the destination currency id
-        //create a trimmed version of the name for symbol        
         address destinationCurrencyID = getIAddress(ccd);
+
         if(verusToERC20mapping[destinationCurrencyID].isRegistered) 
             return verusToERC20mapping[destinationCurrencyID].destinationCurrencyID;
 
-        Token t = new Token(ccd.name, getSymbol(ccd.name));
-        verusToERC20mapping[destinationCurrencyID] = hostedToken(address(t),true,true); 
-        vERC20Tokens[address(t)]= hostedToken(destinationCurrencyID,true,true);
-        destinationToAddress[destinationCurrencyID] = address(t);
-        emit TokenCreated(address(t));
-        return address(t);
+        if(ccd.nativeCurrencyID == 0x0000000000000000000000000000000000000000) { //we are minting a new ERC20 token
+            //we need to make sure that the parent is not Veth (except for bridge.veth) and not registered as another token
+            require(ccd.parent != VerusConstants.VEth || (ccd.parent == VerusConstants.VEth && compareStrings(ccd.name,"bridge")),"Invalid parent");
+
+            // create a trimmed version of the name for symbol        
+
+            Token t = new Token(ccd.name, getSymbol(ccd.name));
+            verusToERC20mapping[destinationCurrencyID] = hostedToken(address(t),true,true); 
+            vERC20Tokens[address(t)]= hostedToken(destinationCurrencyID,true,true);
+            destinationToAddress[destinationCurrencyID] = address(t);
+            emit TokenCreated(address(t));
+            return address(t);
+
+        } else { // we are adding an existing token to the list
+
+            if(isToken(ccd.nativeCurrencyID)) {
+                // Check if ERC20 Address already registered
+                return ccd.nativeCurrencyID;
+            }
+
+            verusToERC20mapping[destinationCurrencyID] = hostedToken(address(ccd.nativeCurrencyID),false,true);
+            vERC20Tokens[ccd.nativeCurrencyID] = hostedToken(destinationCurrencyID,false,true);
+            destinationToAddress[destinationCurrencyID] = ccd.nativeCurrencyID;
+            return ccd.nativeCurrencyID;
+        }
     }
 
     function isToken(address _contractAddress) public view returns(bool){
