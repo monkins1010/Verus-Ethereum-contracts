@@ -410,8 +410,10 @@ contract VerusSerializer {
         uint8 nameStringLength;
         address parent;
         address launchSystemID;
+        address systemID;
+        address nativeCurrencyID;
         uint32 CCC_PREFIX_TO_PARENT = 4 + 4 + 20;
-        uint32 CCC_LAUNCH_ID_LEN = 20;
+        uint32 CCC_ID_LEN = 20;
 
         nextOffset = CCC_PREFIX_TO_PARENT;
 
@@ -430,13 +432,19 @@ contract VerusSerializer {
         }
 
         ccurrencyDefinition.name = string(name);
-        nextOffset = nextOffset + nameStringLength + CCC_LAUNCH_ID_LEN;
+        nextOffset = nextOffset + nameStringLength + CCC_ID_LEN;
 
         assembly {
             launchSystemID := mload(add(input, nextOffset)) // this should be launchsysemID
+            nextOffset := add(nextOffset, CCC_ID_LEN)
+            systemID := mload(add(input, nextOffset)) // this should be launchsysemID
+            nextOffset := add(nextOffset, CCC_ID_LEN)
+            nativeCurrencyID := mload(add(input, nextOffset)) // this should be launchsysemID
         }
 
         ccurrencyDefinition.launchSystemID = launchSystemID;
+        ccurrencyDefinition.systemID = systemID;
+        ccurrencyDefinition.nativeCurrencyID = nativeCurrencyID;
     }
 
 }

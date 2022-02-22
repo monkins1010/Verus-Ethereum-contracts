@@ -293,10 +293,9 @@ contract VerusBridge {
                         _import.transfers[i].currencyvalue.amount,
                         bytesToAddress(_import.transfers[i].destination.destinationaddress));
                 }
-            } else {
-                // If the type of address is a CCurrencyDefinition i.e. flag type DEST_REGISTERCURRENCY
-                if(_import.transfers[i].destination.destinationtype & DEST_REGISTERCURRENCY == DEST_REGISTERCURRENCY)
-                     tokenManager.deployNewToken(_import.transfers[i].destination.destinationaddress);
+            } else if(_import.transfers[i].destination.destinationtype & DEST_REGISTERCURRENCY == DEST_REGISTERCURRENCY) {
+                     
+                tokenManager.deployToken(_import.transfers[i].destination.destinationaddress);
                 
             }
             //handle the distributions of the fees

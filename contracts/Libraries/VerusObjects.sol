@@ -102,6 +102,8 @@ library VerusObjects {
          address parent;
          string name;
          address launchSystemID;
+         address systemID;
+         address nativeCurrencyID;
      }
 
     struct CMerkleBranch {
