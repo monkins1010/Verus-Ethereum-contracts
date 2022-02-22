@@ -437,9 +437,9 @@ contract VerusSerializer {
         assembly {
             launchSystemID := mload(add(input, nextOffset)) // this should be launchsysemID
             nextOffset := add(nextOffset, CCC_ID_LEN)
-            systemID := mload(add(input, nextOffset)) // this should be launchsysemID
+            systemID := mload(add(input, nextOffset)) // this should be systemID 
             nextOffset := add(nextOffset, CCC_ID_LEN)
-            nativeCurrencyID := mload(add(input, nextOffset)) // this should be launchsysemID
+            nativeCurrencyID := mload(add(input, nextOffset)) //TODO: daemon serilaization to be changed this should be nativeCurrencyID
         }
 
         ccurrencyDefinition.launchSystemID = launchSystemID;

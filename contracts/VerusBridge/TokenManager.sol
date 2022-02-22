@@ -220,8 +220,8 @@ contract TokenManager {
 
         } else { // we are adding an existing token to the list
 
-            if(isToken(ccd.nativeCurrencyID)) {
-                // Check if ERC20 Address already registered
+            if(isToken(ccd.nativeCurrencyID) || ccd.systemID != VerusConstants.VEth) {
+                // Check if ERC20 Address already registered or the systemID != VEth
                 return ccd.nativeCurrencyID;
             }
 
