@@ -205,12 +205,8 @@ contract TokenManager {
         if(verusToERC20mapping[destinationCurrencyID].isRegistered) 
             return verusToERC20mapping[destinationCurrencyID].destinationCurrencyID;
 
-        if(ccd.nativeCurrencyID == 0x0000000000000000000000000000000000000000) { //we are minting a new ERC20 token
-            //we need to make sure that the parent is not Veth (except for bridge.veth) and not registered as another token
-            require(ccd.parent != VerusConstants.VEth || (ccd.parent == VerusConstants.VEth && compareStrings(ccd.name,"bridge")),"Invalid parent");
-
-            // create a trimmed version of the name for symbol        
-
+        if(ccd.systemID != VerusConstants.VEth) { //we are minting a new ERC20 token
+            
             Token t = new Token(ccd.name, getSymbol(ccd.name));
             verusToERC20mapping[destinationCurrencyID] = hostedToken(address(t),true,true); 
             vERC20Tokens[address(t)]= hostedToken(destinationCurrencyID,true,true);
@@ -219,11 +215,6 @@ contract TokenManager {
             return address(t);
 
         } else { // we are adding an existing token to the list
-
-            if(isToken(ccd.nativeCurrencyID) || ccd.systemID != VerusConstants.VEth) {
-                // Check if ERC20 Address already registered or the systemID != VEth
-                return ccd.nativeCurrencyID;
-            }
 
             verusToERC20mapping[destinationCurrencyID] = hostedToken(address(ccd.nativeCurrencyID),false,true);
             vERC20Tokens[ccd.nativeCurrencyID] = hostedToken(destinationCurrencyID,false,true);
