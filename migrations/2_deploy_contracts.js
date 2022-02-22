@@ -13,9 +13,11 @@ var Token = artifacts.require("./VerusBridge/Token.sol");
 // What is the most correct approach / actual best practice?
 const verusNotariserIDS = ["0xb26820ee0c9b1276aac834cf457026a575dfce84", "0x51f9f5f053ce16cb7ca070f5c68a1cb0616ba624", "0x65374d6a8b853a5f61070ad7d774ee54621f9638"];
 const verusNotariserSigner = ["0xD010dEBcBf4183188B00cafd8902e34a2C1E9f41", "0xD010dEBcBf4183188B00cafd8902e34a2C1E9f41", "0xD010dEBcBf4183188B00cafd8902e34a2C1E9f41"];
-const tokenmanvrsctest = ["0x01000000880000000000000000000000000000000000000000000000087672736374657374a6ef9ea235635e328124ff3429db9f9e91b64e2d"]
-const tokenmanbeth = ["0x010000008800000067460C2f56774eD27EeB8685f29f6CEC0B090B0006627269646765a6ef9ea235635e328124ff3429db9f9e91b64e2da6ef9ea235635e328124ff3429db9f9e91b64e2d"]
-const tokenmanUSDC = ["0xeb8f08a975ab53e34d8a0330e0d34de942c95926", "0xf0a1263056c30e221f0f851c36b767fff2544f7f"]
+const tokenmanvrsctest = ["0xA6ef9ea235635E328124Ff3429dB9F9E91b64e2d","0x000000000000000000000000000000000000000", false, "vrsctest", "VRSC"];
+const tokenmanbeth = ["0x67460C2f56774eD27EeB8685f29f6CEC0B090B00", ,"0x000000000000000000000000000000000000000", false, "bridge.vETH", "BETH"];
+const tokenmanUSDC = ["0xf0a1263056c30e221f0f851c36b767fff2544f7f","0xeb8f08a975ab53e34d8a0330e0d34de942c95926",true, "",""];
+
+const launchCurrencies = [tokenmanvrsctest, tokenmanbeth, tokenmanUSDC];
 
 const USDCERC20 = "0xeb8f08a975ab53e34d8a0330e0d34de942c95926";
 
@@ -32,12 +34,8 @@ module.exports = async function (deployer) {
     await deployer.deploy(VerusSerializer);
     const serializerInst = await VerusSerializer.deployed();
 
-    await deployer.deploy(VerusTokenManager, serializerInst.address)
+    await deployer.deploy(VerusTokenManager, serializerInst.address, launchCurrencies)
     const tokenInst = await VerusTokenManager.deployed();
-
-    await tokenInst.deployNewToken(tokenmanvrsctest[0]); //registers VRSCTEST
-    await tokenInst.deployNewToken(tokenmanbeth[0]); //registers bridge
-    await tokenInst.addExistingToken(tokenmanUSDC[0], tokenmanUSDC[1]);  //registers USDC
 
     await deployer.deploy(VerusNotarizer, blakeInst.address, serializerInst.address, verusNotariserIDS, verusNotariserSigner);
     const notarizerInst = await VerusNotarizer.deployed();
