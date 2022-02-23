@@ -169,7 +169,7 @@ contract VerusBridge {
             token.transferFrom(msg.sender,address(this),tokenAmount); 
             token.approve(address(tokenManager),tokenAmount);
             //give an approval for the tokenmanagerinstance to spend the tokens
-            tokenManager.exportERC20Tokens(address(token), tokenAmount);  //total amount kept as wei until export to verus
+            tokenManager.exportERC20Tokens(transfer.currencyvalue.currency, tokenAmount);  //total amount kept as wei until export to verus
         } else {
             //handle a vEth transfer
             transfer.currencyvalue.amount = uint64(convertToVerusNumber(msg.value - VerusConstants.transactionFee,18));
