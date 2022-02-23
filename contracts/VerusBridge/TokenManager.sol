@@ -31,7 +31,6 @@ contract TokenManager {
     }
     
     mapping(address => hostedToken) public verusToERC20mapping;
-    mapping(address => address) public destinationToAddress;
     mapping(address => hostedToken) public vERC20Tokens;
     
     address verusBridgeContract;
@@ -93,7 +92,7 @@ contract TokenManager {
         }
     }
 
-    function importERC20Tokens(address _destCurrencyID,uint64 _tokenAmount,address _destination) public {
+    function importERC20Tokens(address _destCurrencyID, uint64 _tokenAmount,address _destination) public {
         require(isVerusBridgeContract(),"Call can only be made from Verus Bridge Contract");
         address contractAddress;
         // if the token has not been previously created then it must be deployed
@@ -101,7 +100,7 @@ contract TokenManager {
         // if token that has been sent from verus is not registered on ETH burn the tokens
         if (verusToERC20mapping[_destCurrencyID].isRegistered) {
                
-            contractAddress = destinationToAddress[_destCurrencyID];
+            contractAddress = verusToERC20mapping[_destCurrencyID].destcurrencyid;
             
             hostedToken memory tokenDetail = vERC20Tokens[contractAddress];
             Token token = Token(contractAddress);
@@ -114,7 +113,6 @@ contract TokenManager {
                 token.transfer(address(_destination),processedTokenAmount);   
             }
         }
-
     }
 
     function balanceOf(address _contractAddress,address _account) public view returns(uint256){
@@ -212,19 +210,13 @@ contract TokenManager {
             return verusToERC20mapping[destinationCurrencyID].destinationCurrencyID;
 
         if(ccd.systemID != VerusConstants.VEth) { //we are minting a new ERC20 token
-            
-            Token t = new Token(ccd.name, getSymbol(ccd.name));
-            verusToERC20mapping[destinationCurrencyID] = hostedToken(address(t),true,true); 
-            vERC20Tokens[address(t)]= hostedToken(destinationCurrencyID,true,true);
-            destinationToAddress[destinationCurrencyID] = address(t);
-            emit TokenCreated(address(t));
-            return address(t);
+
+            return  recordMintedToken(destinationCurrencyID, ccd.name, getSymbol(ccd.name));
 
         } else { // we are adding an existing token to the list
-
-            verusToERC20mapping[destinationCurrencyID] = hostedToken(address(ccd.nativeCurrencyID),false,true);
-            vERC20Tokens[ccd.nativeCurrencyID] = hostedToken(destinationCurrencyID,false,true);
-            destinationToAddress[destinationCurrencyID] = ccd.nativeCurrencyID;
+        
+            recordMappedToken(destinationCurrencyID, ccd.nativeCurrencyID);
+            // destinationToAddress[destinationCurrencyID] = ccd.nativeCurrencyID;
             return ccd.nativeCurrencyID;
         }
     }
@@ -238,22 +230,32 @@ contract TokenManager {
 
             if(tokensToDeploy[i].mapped) {
 
-                //TODO: Duplicate code of above make into a function
-                verusToERC20mapping[tokensToDeploy[i].verusID] = hostedToken(address(tokensToDeploy[i].eth_contract),false,true);
-                vERC20Tokens[tokensToDeploy[i].eth_contract] = hostedToken(tokensToDeploy[i].verusID,false,true);
-                destinationToAddress[tokensToDeploy[i].verusID] = tokensToDeploy[i].eth_contract;
+                recordMappedToken(tokensToDeploy[i].verusID, tokensToDeploy[i].eth_contract);
+                // destinationToAddress[tokensToDeploy[i].verusID] = tokensToDeploy[i].eth_contract;
 
             } else {
 
-                Token t = new Token(tokensToDeploy[i].name, tokensToDeploy[i].ticker);
-                verusToERC20mapping[tokensToDeploy[i].verusID] = hostedToken(address(t),true,true); 
-                vERC20Tokens[address(t)]= hostedToken(tokensToDeploy[i].verusID,true,true);
-                destinationToAddress[tokensToDeploy[i].verusID] = address(t);
-                emit TokenCreated(address(t));
+                recordMintedToken(tokensToDeploy[i].verusID, tokensToDeploy[i].name, tokensToDeploy[i].ticker);
 
             }
         }
- 
+    }
+
+    function recordMappedToken(address verusID, address ethContractAddress) private returns (address) {
+
+        verusToERC20mapping[verusID] = hostedToken(address(ethContractAddress),false,true);
+        vERC20Tokens[ethContractAddress] = hostedToken(verusID,false,true);
+        return verusID;
+
+    }
+
+    function recordMintedToken(address verusID, string memory name, string memory ticker) private returns (address) {
+                
+        Token t = new Token(name, ticker);
+        verusToERC20mapping[verusID] = hostedToken(address(t),true,true); 
+        vERC20Tokens[address(t)]= hostedToken(verusID,true,true);
+        emit TokenCreated(address(t));
+        return address(t);
     }
 
     function isToken(address _contractAddress) public view returns(bool){
