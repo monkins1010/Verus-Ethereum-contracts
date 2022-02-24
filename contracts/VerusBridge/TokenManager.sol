@@ -24,13 +24,13 @@ contract TokenManager {
     struct deployTokens {
         address iaddress;
         address eth_contract;
+        bool mapped;
         string name;
         string ticker;
-        bool mapped;
     }
 
     mapping(address => hostedToken) public verusToERC20mapping;
-    hostedToken[] public tokenList;
+    deployTokens[] public tokenList;
     address verusBridgeContract;
 
     constructor(
@@ -42,14 +42,14 @@ contract TokenManager {
         launchTokens(tokensToLaunch);
     }
 
-    function getTokenList() public view returns(hostedToken[] memory retval) {
+    function getTokenList() public view returns(deployTokens[] memory ) {
 
-        hostedToken[] memory temp = new hostedToken[](tokenList.length);
+        deployTokens[] memory temp = new deployTokens[](tokenList.length);
 
         for(uint i=0; i< tokenList.length; i++)
             temp[i] = tokenList[i];
 
-        return retval;
+        return temp;
     }
 
     function convertFromVerusNumber(uint256 a, uint8 decimals)
@@ -276,6 +276,8 @@ contract TokenManager {
             false,
             true
         );
+        Token token = Token(ethContractAddress);
+        tokenList.push(deployTokens(_iaddress, ethContractAddress, false, token.name(), token.symbol()));
         return _iaddress;
     }
 
@@ -286,6 +288,7 @@ contract TokenManager {
     ) private returns (address) {
         Token t = new Token(name, ticker);
         verusToERC20mapping[_iaddress] = hostedToken(address(t), true, true);
+        tokenList.push(deployTokens(_iaddress, address(t), false, name, ticker));
         emit TokenCreated(address(t));
         return address(t);
     }
