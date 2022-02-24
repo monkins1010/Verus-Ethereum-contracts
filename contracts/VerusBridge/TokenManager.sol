@@ -30,7 +30,7 @@ contract TokenManager {
     }
 
     mapping(address => hostedToken) public verusToERC20mapping;
-
+    hostedToken[] public tokenList;
     address verusBridgeContract;
 
     constructor(
@@ -40,6 +40,16 @@ contract TokenManager {
         verusBridgeContract = address(0);
         verusSerializer = VerusSerializer(verusSerializerAddress);
         launchTokens(tokensToLaunch);
+    }
+
+    function getTokenList() public view returns(hostedToken[] memory retval) {
+
+        hostedToken[] memory temp = new hostedToken[](tokenList.length);
+
+        for(uint i=0; i< tokenList.length; i++)
+            temp[i] = tokenList[i];
+
+        return retval;
     }
 
     function convertFromVerusNumber(uint256 a, uint8 decimals)

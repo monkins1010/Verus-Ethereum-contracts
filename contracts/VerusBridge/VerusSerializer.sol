@@ -8,6 +8,8 @@ import "../Libraries/VerusObjectsNotarization.sol";
 
 contract VerusSerializer {
 
+    uint constant ETH_ADDRESS_SIZE_BYTES = 20;
+
 
 
     function readVarUintLE(bytes memory incoming, uint32 offset) public pure returns(VerusObjectsCommon.UintReader memory) {
@@ -193,7 +195,7 @@ contract VerusSerializer {
     }
     
     function serializeCTransferDestination(VerusObjectsCommon.CTransferDestination memory ctd) public pure returns(bytes memory){
-        return abi.encodePacked(serializeUint8(ctd.destinationtype),writeCompactSize(ctd.destinationaddress.length),ctd.destinationaddress);
+        return abi.encodePacked(serializeUint8(ctd.destinationtype),writeCompactSize(ETH_ADDRESS_SIZE_BYTES),ctd.destinationaddress);
     }    
 
     function serializeCCurrencyValueMap(VerusObjects.CCurrencyValueMap memory _ccvm) public pure returns(bytes memory){
