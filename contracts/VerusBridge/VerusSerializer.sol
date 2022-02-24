@@ -8,8 +8,6 @@ import "../Libraries/VerusObjectsNotarization.sol";
 
 contract VerusSerializer {
 
-    uint32 constant ETH_ADDRESS_SIZE_BYTES = 20;
-
 
 
     function readVarUintLE(bytes memory incoming, uint32 offset) public pure returns(VerusObjectsCommon.UintReader memory) {
@@ -195,10 +193,7 @@ contract VerusSerializer {
     }
     
     function serializeCTransferDestination(VerusObjectsCommon.CTransferDestination memory ctd) public pure returns(bytes memory){
-
-        // NOTE: When the destination address is (type & FLAG_DEST_GATEWAY), the object destinationaddress has the
-        // gatewayID,  gatewayCode & fees padded on the end as uint160, uint160 & uint64LE.
-        return abi.encodePacked(serializeUint8(ctd.destinationtype),writeCompactSize(ETH_ADDRESS_SIZE_BYTES),ctd.destinationaddress);
+        return abi.encodePacked(serializeUint8(ctd.destinationtype),writeCompactSize(ctd.destinationaddress.length),ctd.destinationaddress);
     }    
 
     function serializeCCurrencyValueMap(VerusObjects.CCurrencyValueMap memory _ccvm) public pure returns(bytes memory){
@@ -388,8 +383,7 @@ contract VerusSerializer {
             serializeCCurrencyValueMaps(_ccce.totalfees),
             serializeCCurrencyValueMaps(_ccce.totalburned),
             serializeCTransferDestination(_ccce.rewardaddress),
-            serializeInt32(_ccce.firstinput),
-            bytes1(0x00));
+            serializeInt32(_ccce.firstinput),bytes1(0x00));
         return abi.encodePacked(part1,part2);
     }
 

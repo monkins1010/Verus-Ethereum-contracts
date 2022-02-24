@@ -24,9 +24,9 @@ contract TokenManager {
     struct deployTokens {
         address iaddress;
         address eth_contract;
-        bool mapped;
         string name;
         string ticker;
+        bool mapped;
     }
 
     mapping(address => hostedToken) public verusToERC20mapping;
