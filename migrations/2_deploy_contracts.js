@@ -13,9 +13,9 @@ var Token = artifacts.require("./VerusBridge/Token.sol");
 // What is the most correct approach / actual best practice?
 const verusNotariserIDS = ["0xb26820ee0c9b1276aac834cf457026a575dfce84", "0x51f9f5f053ce16cb7ca070f5c68a1cb0616ba624", "0x65374d6a8b853a5f61070ad7d774ee54621f9638"];
 const verusNotariserSigner = ["0xD010dEBcBf4183188B00cafd8902e34a2C1E9f41", "0xD010dEBcBf4183188B00cafd8902e34a2C1E9f41", "0xD010dEBcBf4183188B00cafd8902e34a2C1E9f41"];
-const tokenmanvrsctest = ["0xA6ef9ea235635E328124Ff3429dB9F9E91b64e2d","0x000000000000000000000000000000000000000", false, "vrsctest", "VRSC"];
-const tokenmanbeth = ["0x67460C2f56774eD27EeB8685f29f6CEC0B090B00", ,"0x000000000000000000000000000000000000000", false, "bridge.vETH", "BETH"];
-const tokenmanUSDC = ["0xf0a1263056c30e221f0f851c36b767fff2544f7f","0xeb8f08a975ab53e34d8a0330e0d34de942c95926",true, "",""];
+const tokenmanvrsctest = ["0xA6ef9ea235635E328124Ff3429dB9F9E91b64e2d", "0x0000000000000000000000000000000000000000", false, "vrsctest", "VRSC"];
+const tokenmanbeth = ["0x67460C2f56774eD27EeB8685f29f6CEC0B090B00", "0x0000000000000000000000000000000000000000", false, "bridge.vETH", "BETH"];
+const tokenmanUSDC = ["0xf0a1263056c30e221f0f851c36b767fff2544f7f", "0xeb8f08a975ab53e34d8a0330e0d34de942c95926", true, "", ""];
 
 const launchCurrencies = [tokenmanvrsctest, tokenmanbeth, tokenmanUSDC];
 
@@ -27,10 +27,10 @@ module.exports = async function (deployer) {
     const addressInst = await Verusaddress.deployed();
 
     await deployer.link(Verusaddress, VerusTokenManager);
-    
+
     await deployer.deploy(VerusBlake2b);
     const blakeInst = await VerusBlake2b.deployed();
-    
+
     await deployer.deploy(VerusSerializer);
     const serializerInst = await VerusSerializer.deployed();
 
@@ -58,13 +58,13 @@ module.exports = async function (deployer) {
     USDCInst.increaseAllowance(VerusBridgeInst.address, "1000000000000000000000000");
 
     const settingString = "verusbridgeaddress=" + VerusBridgeInst.address + "\n" +
-    "verusnotarizeraddress=" + notarizerInst.address + "\n" +
-    "verusproofaddress=" + ProofInst.address + "\n" +
-    "verusinfoaddress=" + INFOInst.address + "\n" +
-    "verusserializeraddress=" + serializerInst.address + "\n\n" +
-    "{\"bridge\":\"" + VerusBridgeInst.address + "\",\n" +
-    "\"notarizer\":\"" + notarizerInst.address + "\",\n" +
-    "\"tokenmanager\":\"" + tokenInst.address + "\"}\n";
+        "verusnotarizeraddress=" + notarizerInst.address + "\n" +
+        "verusproofaddress=" + ProofInst.address + "\n" +
+        "verusinfoaddress=" + INFOInst.address + "\n" +
+        "verusserializeraddress=" + serializerInst.address + "\n\n" +
+        "{\"bridge\":\"" + VerusBridgeInst.address + "\",\n" +
+        "\"notarizer\":\"" + notarizerInst.address + "\",\n" +
+        "\"tokenmanager\":\"" + tokenInst.address + "\"}\n";
 
-    console.log("Settings to be pasted into *.conf file (except the tokenmanger, thats for the bridge website) \n\n", settingString);
+    console.log("Settings to be pasted into *.conf file and website \n\n", settingString);
 };
