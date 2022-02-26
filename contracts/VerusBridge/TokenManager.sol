@@ -277,7 +277,7 @@ contract TokenManager {
             true
         );
         Token token = Token(ethContractAddress);
-        tokenList.push(deployTokens(_iaddress, ethContractAddress, false, token.name(), token.symbol()));
+        tokenList.push(deployTokens(_iaddress, ethContractAddress, true, token.name(), token.symbol()));
         return _iaddress;
     }
 
