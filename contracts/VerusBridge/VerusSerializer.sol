@@ -5,6 +5,7 @@ pragma solidity >=0.6.0 < 0.9.0;
 pragma experimental ABIEncoderV2;   
 import "../Libraries/VerusObjects.sol";
 import "../Libraries/VerusObjectsNotarization.sol";
+import "../Libraries/VerusConstants.sol";
 
 contract VerusSerializer {
 
@@ -223,9 +224,9 @@ contract VerusSerializer {
             serializeAddress(ct.destcurrencyid)
            );
            
-        if((ct.flags & 0x400)>0) output = abi.encodePacked(output,serializeAddress(ct.secondreserveid));           
-         //see if its got a cross_system flag
-        if((ct.flags & 0x40)>0) output = abi.encodePacked(output,serializeAddress(ct.destsystemid));
+        if((ct.flags & VerusConstants.RESERVE_TO_RESERVE )>0) output = abi.encodePacked(output,serializeAddress(ct.secondreserveid));           
+         //see if it has a cross_system flag
+        if((ct.flags & VerusConstants.CROSS_SYSTEM)>0) output = abi.encodePacked(output,serializeAddress(ct.destsystemid));
         
         return output;
     }
