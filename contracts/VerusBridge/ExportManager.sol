@@ -36,7 +36,7 @@ contract ExportManager {
 
     function checkExport(VerusObjects.CReserveTransfer memory transfer, uint256 ETHSent) public view returns (uint256 fees){
 
-       // function returns false for low level errors, or requires for higher level errors.
+       // function returns 0 for low level errors, however uses requires for higher level errors.
 
        require(tokenManager.ERC20Registered(transfer.currencyvalue.currency) && 
                 tokenManager.ERC20Registered(transfer.feecurrencyid) &&
@@ -44,7 +44,6 @@ contract ExportManager {
                 (tokenManager.ERC20Registered(transfer.secondreserveid) || 
                 transfer.secondreserveid == address(0)) ,
                 "One or more currencies has not been registered");
-
 
         uint256 requiredFees =  VerusConstants.transactionFee;  //0.003 eth in WEI
         uint256 verusFees = VerusConstants.verusTransactionFee; //0.02 verus in SATS
@@ -55,7 +54,7 @@ contract ExportManager {
         address destAddressID;
 
         
-        if (transfer.version != 1 || (transfer.flags & INVALID_FLAGS) > 0)
+        if (!checkTransferFlags(transfer))
             return 0;
                                   
         require(transfer.destsystemid == VerusConstants.VerusCurrencyId, "Destination system not VRSC"); //Always VRSCTEST
@@ -91,8 +90,8 @@ contract ExportManager {
 
         if (verusBridge.isPoolUnavailable(transfer.fees, transfer.feecurrencyid)) {
 
-            if(!(transfer.flags == DEST_PKH ||
-                   transfer.flags== DEST_ID))
+            if(!(transfer.destination.destinationtype == DEST_PKH ||
+                   transfer.destination.destinationtype == DEST_ID))
                     return 0;
 
             if(!(transfer.secondreserveid == address(0) && transfer.destcurrencyid == VerusConstants.VEth))
@@ -113,11 +112,11 @@ contract ExportManager {
 
             require(transfer.destsystemid == VerusConstants.VEth, "Fee Currency not vETH"); //TODO:Accept more fee currencies
 
-            if(transfer.flags & FLAG_DEST_GATEWAY == FLAG_DEST_GATEWAY) {
+            if(transfer.destination.destinationtype & FLAG_DEST_GATEWAY == FLAG_DEST_GATEWAY) {
 
-                if(!(transfer.flags == (FLAG_DEST_GATEWAY & DEST_PKH )  ||
-                   transfer.flags == (FLAG_DEST_GATEWAY & DEST_ID )     ||
-                   transfer.flags == (FLAG_DEST_GATEWAY & DEST_ETH )))
+                if(!(transfer.destination.destinationtype == (FLAG_DEST_GATEWAY & DEST_PKH )  ||
+                   transfer.destination.destinationtype == (FLAG_DEST_GATEWAY & DEST_ID )     ||
+                   transfer.destination.destinationtype == (FLAG_DEST_GATEWAY & DEST_ETH )))
                     return 0;
 
                 require(transfer.destination.destinationaddress.length == (20 + 20 + 8), "destination address not 48 bytes");
@@ -128,14 +127,15 @@ contract ExportManager {
                     bounceBackFee := mload(add(serializedDest, FEE_OFFSET))
                 }
 
-                assert(tokenManager.ERC20Registered(gatewayID));
+                assert(gatewayID == VerusConstants.VEth);
                 require(convertFromVerusNumber(bounceBackFee, 18) >= requiredFees, "Return fee not large enough");
 
                 requiredFees += requiredFees;  //TODO: bounceback fees required as well as send fees
 
                  require(ETHSent >= requiredFees, "ETH fees to low"); //TODO:ETH fees always required for now
 
-            } else if (!(transfer.flags == DEST_PKH || transfer.flags == DEST_ID || transfer.flags == DEST_ETH )) {
+            } else if (!(transfer.destination.destinationtype == DEST_PKH || transfer.destination.destinationtype == DEST_ID 
+                        || transfer.destination.destinationtype == DEST_ETH )) {
 
                 return 0;
 
@@ -143,6 +143,7 @@ contract ExportManager {
 
         }
 
+        // Check fees are included in the ETH value if sending ETH, or are equal to the fee value for tokens.
        
         if(transfer.currencyvalue.currency == VerusConstants.VEth) {
 
@@ -156,25 +157,26 @@ contract ExportManager {
         return requiredFees;
     }
 
-        function checkReadyExports() public view returns(address) {
+    function checkReadyExports() public view returns(address) {
 
            
-            (uint created , bool readyBlock) = verusBridge.readyExportsByBlock(block.number);
+        (uint created , bool readyBlock) = verusBridge.readyExportsByBlock(block.number);
 
-            if(readyBlock) {
-     
-                return verusBridge.getCreatedExport(created);
+        if(readyBlock) {
+    
+            return verusBridge.getCreatedExport(created);
 
-            } else {
+        } else {
 
-                return address(0);
-            }
-
+            return address(0);
         }
 
-        function convertFromVerusNumber(uint256 a,uint8 decimals) public pure returns (uint256) {
-         uint8 power = 10; //default value for 18
-         uint256 c = a;
+    }
+
+    function convertFromVerusNumber(uint256 a,uint8 decimals) public pure returns (uint256) {
+        uint8 power = 10; //default value for 18
+        uint256 c = a;
+
         if(decimals > 8 ) {
             power = decimals - 8;// number of decimals in verus
             c = a * (10 ** power);
@@ -184,6 +186,90 @@ contract ExportManager {
         }
       
         return c;
+    }
+
+    function checkTransferFlags(VerusObjects.CReserveTransfer memory transfer) public view returns(bool) {
+
+        if (transfer.version != 1 || (transfer.flags & INVALID_FLAGS) > 0)
+            return false;
+
+        if(!(transfer.flags & VALID == VALID))
+            return false;
+
+       
+        if(transfer.destination.destinationtype == DEST_ID || transfer.destination.destinationtype == DEST_PKH ) {
+
+            if(transfer.destcurrencyid == VerusConstants.VEth)
+                return false;
+
+        } else if (transfer.destination.destinationtype & DEST_ETH == DEST_ETH &&
+                   transfer.destination.destinationtype & FLAG_DEST_GATEWAY == FLAG_DEST_GATEWAY ) {
+
+            if(transfer.currencyvalue.currency == VerusConstants.VerusBridgeAddress) {
+
+                if(transfer.destcurrencyid == VerusConstants.VerusBridgeAddress)
+                    return false;
+
+            } else {
+
+                if(transfer.destcurrencyid != VerusConstants.VerusBridgeAddress)
+                    return false;
+
+            }
+
+        } else {
+
+            return false;
+
+        }
+
+        if(!(transfer.flags & IMPORT_TO_SOURCE == IMPORT_TO_SOURCE ||
+           transfer.flags & RESERVE_TO_RESERVE == RESERVE_TO_RESERVE)) {
+
+               if(transfer.flags & CONVERT != CONVERT) {
+                   if(transfer.destcurrencyid != VerusConstants.VerusBridgeAddress ||
+                       transfer.destcurrencyid != VerusConstants.VerusCurrencyId )
+                       return false;
+
+               } else {
+
+                    if(transfer.destcurrencyid != VerusConstants.VerusBridgeAddress)
+                       return false;
+
+               }
+        }
+
+        if(transfer.flags & IMPORT_TO_SOURCE == IMPORT_TO_SOURCE) {
+
+            if(transfer.destcurrencyid == VerusConstants.VerusBridgeAddress ||
+                transfer.flags & RESERVE_TO_RESERVE == RESERVE_TO_RESERVE ||
+                 transfer.flags & CONVERT != CONVERT )
+                return false;
+
+        }
+
+        if(transfer.flags & RESERVE_TO_RESERVE == RESERVE_TO_RESERVE) {
+
+            if(transfer.destcurrencyid == VerusConstants.VerusBridgeAddress ||
+                transfer.flags & IMPORT_TO_SOURCE == IMPORT_TO_SOURCE ||
+                 transfer.flags & CONVERT != CONVERT )
+                return false;
+
+            if(transfer.destination.destinationtype & FLAG_DEST_GATEWAY == FLAG_DEST_GATEWAY) { 
+
+                if(transfer.secondreserveid == VerusConstants.VerusBridgeAddress )
+                    return false;
+
+            } else {
+
+                if(transfer.destcurrencyid != VerusConstants.VerusBridgeAddress )
+                    return false;
+
+            }
+
+        }
+
+      
     }
 
 }
