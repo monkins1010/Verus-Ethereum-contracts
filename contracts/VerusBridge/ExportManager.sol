@@ -230,10 +230,10 @@ contract ExportManager {
                     return false;
             } 
             else if (!(transfer.flags == (VerusConstants.VALID & VerusConstants.CONVERT & VerusConstants.IMPORT_TO_SOURCE) &&
-                      (transfer.secondreserveid == VerusConstants.VEth || 
-                      transfer.secondreserveid == VerusConstants.VerusSystemId || 
-                      transfer.secondreserveid == VerusConstants.VerusUSDCId))
-                      && transfer.secondreserveid == transfer.currencyvalue.currency) {
+                      (transfer.destcurrencyid == VerusConstants.VEth || 
+                      transfer.destcurrencyid == VerusConstants.VerusSystemId || 
+                      transfer.destcurrencyid == VerusConstants.VerusUSDCId)) &&
+                      transfer.secondreserveid != address(0)) {
                     return false;
             } 
             else if (!(transfer.flags == (VerusConstants.VALID & VerusConstants.CONVERT & VerusConstants.RESERVE_TO_RESERVE) &&
