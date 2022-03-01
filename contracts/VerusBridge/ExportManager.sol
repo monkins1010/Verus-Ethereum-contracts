@@ -268,8 +268,8 @@ contract ExportManager {
             }
 
         }
-
-      
+   
+        return true;
     }
 
 }

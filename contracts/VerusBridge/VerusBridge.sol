@@ -74,7 +74,6 @@ contract VerusBridge {
         address verusSerializerAddress,
         address verusNotarizerAddress,
         address verusCCEAddress,
-        address exportManagerAddress,
         uint256 _poolSize) public {
         contractOwner = msg.sender; 
         verusProof =  VerusProof(verusProofAddress);
@@ -82,7 +81,6 @@ contract VerusBridge {
         verusSerializer = VerusSerializer(verusSerializerAddress);
         verusNotarizer = VerusNotarizer(verusNotarizerAddress);
         verusCCE = VerusCrossChainExport(verusCCEAddress);
-        exportManager = ExportManager(exportManagerAddress);
         poolSize = _poolSize;
         lastimport.height = 0;
         lastimport.txid = 0x00000000000000000000000000000000;
@@ -127,6 +125,15 @@ contract VerusBridge {
         }
 
         return c;
+    }
+
+    function setExportManagerContract(address newAddress) public payable returns (address) {
+
+        assert(contractOwner == msg.sender);
+                exportManager = ExportManager(newAddress);
+        
+        return newAddress;
+
     }
 
     function getCreatedExport(uint created) public view returns (address) {

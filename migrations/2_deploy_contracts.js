@@ -53,7 +53,9 @@ module.exports = async function (deployer) {
     const VerusBridgeInst = await VerusBridge.deployed();
 
     await deployer.deploy(ExportManager, tokenInst.address, VerusBridgeInst.address);
-    await ExportManager.deployed();
+    const ExportManInst = await ExportManager.deployed();
+
+    await VerusBridgeInst.setExportManagerContract(ExportManInst.address);
 
     await deployer.deploy(VerusInfo, notarizerInst.address, "2000753", "0.7.3-9-rc1", "VETH", true);
     const INFOInst = await VerusInfo.deployed();
