@@ -190,7 +190,7 @@ contract ExportManager {
                     ( transfer.secondreserveid == VerusConstants.VEth || 
                       transfer.secondreserveid == VerusConstants.VerusSystemId || 
                       transfer.secondreserveid == VerusConstants.VerusUSDCId
-                    ))) {
+                    )) && transfer.secondreserveid == transfer.currencyvalue.currency) {
                         return false;
 
                 } else if (transfer.flags == (VerusConstants.VALID & VerusConstants.CONVERT ) &&
@@ -232,14 +232,16 @@ contract ExportManager {
             else if (!(transfer.flags == (VerusConstants.VALID & VerusConstants.CONVERT & VerusConstants.IMPORT_TO_SOURCE) &&
                       (transfer.secondreserveid == VerusConstants.VEth || 
                       transfer.secondreserveid == VerusConstants.VerusSystemId || 
-                      transfer.secondreserveid == VerusConstants.VerusUSDCId))) {
+                      transfer.secondreserveid == VerusConstants.VerusUSDCId))
+                      && transfer.secondreserveid == transfer.currencyvalue.currency) {
                     return false;
             } 
             else if (!(transfer.flags == (VerusConstants.VALID & VerusConstants.CONVERT & VerusConstants.RESERVE_TO_RESERVE) &&
                       transfer.destcurrencyid == VerusConstants.VerusBridgeAddress &&
                       (transfer.secondreserveid == VerusConstants.VEth || 
                       transfer.secondreserveid == VerusConstants.VerusSystemId ||
-                      transfer.secondreserveid == VerusConstants.VerusUSDCId))) {
+                      transfer.secondreserveid == VerusConstants.VerusUSDCId))
+                      && transfer.secondreserveid == transfer.currencyvalue.currency) {
                     return false;
             } else {
 
