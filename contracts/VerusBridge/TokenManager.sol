@@ -149,6 +149,12 @@ contract TokenManager {
         }
     }
 
+    function ERC20Registered(address hosted) public view returns (bool) {
+
+        return verusToERC20mapping[hosted].isRegistered;
+        
+    }
+
     function getTokenERC20(address VRSCAddress) public view returns (Token) {
         hostedToken memory internalToken = verusToERC20mapping[VRSCAddress];
         require(internalToken.isRegistered, "The token is not registered");

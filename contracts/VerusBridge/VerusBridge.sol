@@ -13,6 +13,7 @@ import "./Token.sol";
 import "./VerusSerializer.sol";
 import "../VerusNotarizer/VerusNotarizer.sol";
 import "./VerusCrossChainExport.sol";
+import "./ExportManager.sol";
 
 contract VerusBridge {
 
@@ -24,6 +25,7 @@ contract VerusBridge {
     VerusProof verusProof;
     VerusNotarizer verusNotarizer;
     VerusCrossChainExport verusCCE;
+    ExportManager exportManager;
 
     // THE CONTRACT OWNER NEEDS TO BE REPLACED BY A SET OF NOTARIES
     address contractOwner;
@@ -72,6 +74,7 @@ contract VerusBridge {
         address verusSerializerAddress,
         address verusNotarizerAddress,
         address verusCCEAddress,
+        address exportManagerAddress,
         uint256 _poolSize) public {
         contractOwner = msg.sender; 
         verusProof =  VerusProof(verusProofAddress);
@@ -79,12 +82,13 @@ contract VerusBridge {
         verusSerializer = VerusSerializer(verusSerializerAddress);
         verusNotarizer = VerusNotarizer(verusNotarizerAddress);
         verusCCE = VerusCrossChainExport(verusCCEAddress);
+        exportManager = ExportManager(exportManagerAddress);
         poolSize = _poolSize;
         lastimport.height = 0;
         lastimport.txid = 0x00000000000000000000000000000000;
     }
 
-    function isPoolUnavailable(uint256 _feesAmount,address _feeCurrencyID) private view returns(bool){
+    function isPoolUnavailable(uint256 _feesAmount,address _feeCurrencyID) public view returns(bool){
 
         if(0 < verusNotarizer.poolAvailable(VerusConstants.VerusBridgeAddress) &&
             verusNotarizer.poolAvailable(VerusConstants.VerusBridgeAddress) < uint32(block.number)) {
@@ -124,84 +128,20 @@ contract VerusBridge {
 
         return c;
     }
+
+    function getCreatedExport(uint created) public view returns (address) {
+
+        return  _readyExports[created][0].destcurrencyid;
+        
+    }
  
     function export(VerusObjects.CReserveTransfer memory transfer) public payable {
 
-        assert(!deprecated && tokenManager.verusToERC20mapping(transfer.currencyvalue.currency).isRegistered && 
-                tokenManager.verusToERC20mapping(transfer.feecurrency).isRegistered &&
-                tokenManager.verusToERC20mapping(transfer.destcurrencyid).isRegistered );
+        uint256 fees;
 
-        uint256 requiredFees =  VerusConstants.transactionFee;  //0.003 eth in WEI
-        uint256 verusFees = VerusConstants.verusTransactionFee; //0.02 verus in SATS
-        transfer.version = 1;
-        transfer.destsystemid = VerusConstants.VerusCurrencyId; //Always VRSCTEST
+        fees = exportManager.checkExport(transfer, msg.value);
 
-        //TODO: We cant mix different transfer destinations together in the CCE assert on non same fields.
-        if (readyExportsByBlock[block.number].created)
-        {
-            uint exportIndex = readyExportsByBlock[block.number].index;
-
-            // QUESTION: what about reserve transfers that are import to source?
-            assert( _readyExports[exportIndex][0].destcurrencyid == transfer.destcurrencyid);
-        }
-
-        //if there are fees in the pool and the bridge currency hasn't launched, and the feecurrency is vrsctest proceed.
-        if (isPoolUnavailable(transfer.fees, transfer.feecurrencyid)) {
-
-            assert(transfer.fees >= VerusConstants.verusTransactionFee && (transfer.flags == VALID & CROSS_SYSTEM ) 
-                    && (transfer.destination.destinationtype == DEST_PKH || transfer.destination.destinationtype == DEST_ID ) );
-                    //TODO: also need in here tokenManager.verusToERC20mapping(transfer.currencyvalue.currency).isRegistered
-
-            transfer.secondreserveid = 0x0000000000000000000000000000000000000000;
-            transfer.destcurrencyid = VerusConstants.VEth;
-            poolSize -= VerusConstants.verusTransactionFee; //0.02 verus in SATS
-
-        } else {
-            //if fees are being paid in vrsctest we need to take it from the msg sender
-            assert(transfer.feecurrencyid == VerusConstants.VerusCurrencyId || transfer.feecurrencyid == VerusConstants.VEth);
-
-            uint64 bounceBackFee;
-            uint8  FEE_OFFSET = 20 + 20;
-            bytes memory serializedDest = new bytes(20 + 20 + 8);
-            address gateway;
-            address destAddress;
-            serializedDest = transfer.destination.destinationaddress;
-
-            if (transfer.flags & FLAG_DEST_GATEWAY == FLAG_DEST_GATEWAY ) {
-
-                assert(transfer.destination.destinationaddress.length == (20 + 20 + 8));
-
-                assembly {
-                    gateway := mload(add(serializedDest, 20))
-                    bounceBackFee := mload(add(serializedDest, FEE_OFFSET))
-                }
-                assert(tokenManager.verusToERC20mapping(gateway).isRegistered);
-
-                assert( msg.value == convertFromVerusNumber(bounceBackFee,18) + convertFromVerusNumber(transfer.fees,18) + convertFromVerusNumber(transfer.currencyvalue.currency));
-           
-            } else {
-
-                assert(transfer.destination.destinationaddress.length == 20);
-
-            }
-
-            if(transfer.feecurrencyid == VerusConstants.VerusCurrencyId) {
-                
-                //burn the required amount of vrsctest from the user
-                Token token = tokenManager.getTokenERC20(transfer.feecurrencyid);
-                uint256 VRSTallowedTokens = token.allowance(msg.sender, address(this));
-                assert( VRSTallowedTokens >= convertFromVerusNumber(verusFees,18));
-                token.transferFrom(msg.sender,address(this), convertFromVerusNumber(verusFees,18)); 
-                //transfer the tokens to this contract
-                token.burn(verusFees); 
-
-            } else if(transfer.feecurrencyid == VerusConstants.VEth){
-                requiredFees += convertFromVerusNumber(bounceBackFee,18);
-                assert(msg.value >= requiredFees + convertFromVerusNumber(transfer.currencyvalue.currency));    
-            }
-            //if the fees are being paid in veth then require the user to send it
-            //fees need to be paid for verus as well
-        }
+        assert(fees != 0); 
 
         if (transfer.currencyvalue.currency != VerusConstants.VEth) {
             //check there are enough fees sent

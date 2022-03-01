@@ -13,7 +13,7 @@ library VerusConstants {
     address constant public RewardAddress = 0xB26820ee0C9b1276Aac834Cf457026a575dfCe84;
     address constant public VerusBridgeAddress = 0xffEce948b8A38bBcC813411D2597f7f8485a0689;
     uint8 constant public RewardAddressType = 4;
-    uint256 constant public transactionFee = 100000000000000; //0.0001 eth
+    uint256 constant public transactionFee = 3000000000000000; //0.003 eth
     string constant public currencyName = "VETH";
     uint256 constant public verusTransactionFee = 2000000; //0.02 verus
 }
