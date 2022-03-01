@@ -100,9 +100,9 @@ contract ExportManager {
 
             if (transfer.destination.destinationtype & VerusConstants.FLAG_DEST_GATEWAY == VerusConstants.FLAG_DEST_GATEWAY) {
 
-                if (!(transfer.destination.destinationtype == (VerusConstants.FLAG_DEST_GATEWAY & VerusConstants.DEST_PKH )  ||
-                   transfer.destination.destinationtype == (VerusConstants.FLAG_DEST_GATEWAY & VerusConstants.DEST_ID )     ||
-                   transfer.destination.destinationtype == (VerusConstants.FLAG_DEST_GATEWAY & VerusConstants.DEST_ETH )))
+                if (!(transfer.destination.destinationtype == (VerusConstants.FLAG_DEST_GATEWAY | VerusConstants.DEST_PKH )  ||
+                   transfer.destination.destinationtype == (VerusConstants.FLAG_DEST_GATEWAY | VerusConstants.DEST_ID )     ||
+                   transfer.destination.destinationtype == (VerusConstants.FLAG_DEST_GATEWAY | VerusConstants.DEST_ETH )))
                     return 0;
 
                 require (transfer.destination.destinationaddress.length == (20 + 20 + 8), "destination address not 48 bytes");
@@ -180,26 +180,26 @@ contract ExportManager {
         if (transfer.version != 1 || (transfer.flags & (VerusConstants.INVALID_FLAGS | VerusConstants.VALID) ) > 1)
             return false;
 
-        if (transfer.destination.destinationtype == (VerusConstants.DEST_ETH & VerusConstants.FLAG_DEST_GATEWAY))
+        if (transfer.destination.destinationtype == (VerusConstants.DEST_ETH + VerusConstants.FLAG_DEST_GATEWAY))
         {
             // ensure that this is prepared properly for valid bounce back
 
             if (transfer.destcurrencyid == VerusConstants.VerusBridgeAddress) {
 
-                if (!(transfer.flags == (VerusConstants.VALID & VerusConstants.CONVERT & VerusConstants.RESERVE_TO_RESERVE) &&
+                if (!(transfer.flags == (VerusConstants.VALID | VerusConstants.CONVERT | VerusConstants.RESERVE_TO_RESERVE) &&
                     ( transfer.secondreserveid == VerusConstants.VEth || 
                       transfer.secondreserveid == VerusConstants.VerusSystemId || 
                       transfer.secondreserveid == VerusConstants.VerusUSDCId
                     )) && transfer.secondreserveid == transfer.currencyvalue.currency) {
                         return false;
 
-                } else if (transfer.flags == (VerusConstants.VALID & VerusConstants.CONVERT ) &&
+                } else if (transfer.flags == (VerusConstants.VALID | VerusConstants.CONVERT ) &&
                         transfer.secondreserveid != address(0)
                     ) { 
                         return false;               
                 }
 
-            } else if (!(transfer.flags == (VerusConstants.VALID & VerusConstants.CONVERT & VerusConstants.IMPORT_TO_SOURCE) &&
+            } else if (!(transfer.flags == (VerusConstants.VALID | VerusConstants.CONVERT | VerusConstants.IMPORT_TO_SOURCE) &&
                         (transfer.destcurrencyid == VerusConstants.VEth || 
                          transfer.destcurrencyid == VerusConstants.VerusSystemId || 
                          transfer.destcurrencyid == VerusConstants.VerusUSDCId 
@@ -225,18 +225,18 @@ contract ExportManager {
                 transfer.destcurrencyid != VerusConstants.VerusSystemId) {
                     return false;
             } 
-            else if (transfer.flags == (VerusConstants.VALID & VerusConstants.CONVERT) &&
+            else if (transfer.flags == (VerusConstants.VALID | VerusConstants.CONVERT) &&
                 transfer.destcurrencyid != VerusConstants.VerusBridgeAddress) {
                     return false;
             } 
-            else if (!(transfer.flags == (VerusConstants.VALID & VerusConstants.CONVERT & VerusConstants.IMPORT_TO_SOURCE) &&
+            else if (!(transfer.flags == (VerusConstants.VALID | VerusConstants.CONVERT | VerusConstants.IMPORT_TO_SOURCE) &&
                       (transfer.destcurrencyid == VerusConstants.VEth || 
                       transfer.destcurrencyid == VerusConstants.VerusSystemId || 
                       transfer.destcurrencyid == VerusConstants.VerusUSDCId)) &&
                       transfer.secondreserveid != address(0)) {
                     return false;
             } 
-            else if (!(transfer.flags == (VerusConstants.VALID & VerusConstants.CONVERT & VerusConstants.RESERVE_TO_RESERVE) &&
+            else if (!(transfer.flags == (VerusConstants.VALID | VerusConstants.CONVERT | VerusConstants.RESERVE_TO_RESERVE) &&
                       transfer.destcurrencyid == VerusConstants.VerusBridgeAddress &&
                       (transfer.secondreserveid == VerusConstants.VEth || 
                       transfer.secondreserveid == VerusConstants.VerusSystemId ||
