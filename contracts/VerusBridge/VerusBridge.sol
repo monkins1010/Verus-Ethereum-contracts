@@ -166,8 +166,8 @@ contract VerusBridge {
         } else {
             //handle a vEth transfer
             transfer.currencyvalue.amount = uint64(convertToVerusNumber(msg.value - VerusConstants.transactionFee,18));
-            ethHeld += transfer.currencyvalue.amount;  
-            feesHeld += VerusConstants.transactionFee; //TODO: what happens if they send to much fee?
+            ethHeld += (msg.value - fees);  // msg.value == fees +amount in transaction checked in checkExport()
+            feesHeld += fees; //TODO: what happens if they send to much fee?
         }
         _createExports(transfer);
     }

@@ -106,7 +106,7 @@ contract TokenManager {
         if (verusToERC20mapping[_iaddress].VerusOwned) {
 
             require(token.balanceOf(address(this)) >= _tokenAmount,
-                "Tokens didnt transfer"
+                "Tokens didn't transfer"
             );
             token.burn(_tokenAmount);
 
