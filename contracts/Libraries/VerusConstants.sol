@@ -30,4 +30,5 @@ library VerusConstants {
     uint8 constant DEST_ID = 4;
     uint8 constant DEST_ETH = 9;
     uint8 constant FLAG_DEST_GATEWAY = 128;
+    uint8 constant CURRENT_VERSION = 1;
 }

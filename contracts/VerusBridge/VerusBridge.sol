@@ -273,18 +273,23 @@ contract VerusBridge {
             // if the transfer does not have the EXPORT_CURRENCY flag set
             if(_import.transfers[i].flags & CTRX_CURRENCY_EXPORT_FLAG != CTRX_CURRENCY_EXPORT_FLAG){
 
-                if(_import.transfers[i].currencyvalue.currency == VerusConstants.VEth) {
-                    // cast the destination as an ethAddress
-                    assert(amount <= address(this).balance);
-                    sendEth(amount,payable(bytesToAddress(_import.transfers[i].destination.destinationaddress)));
-                    ethHeld -= amount;
-            
-                } else {
-                    // handle erc20 transactions  
-                    // amount conversion is handled in token manager
-                    tokenManager.importERC20Tokens(_import.transfers[i].currencyvalue.currency,
-                        _import.transfers[i].currencyvalue.amount,
-                        bytesToAddress(_import.transfers[i].destination.destinationaddress));
+                if(bytesToAddress(_import.transfers[i].destination.destinationaddress) != address(0)){
+
+                    if(_import.transfers[i].currencyvalue.currency == VerusConstants.VEth) {
+                        // cast the destination as an ethAddress
+                        assert(amount <= address(this).balance);
+                            sendEth(amount,payable(bytesToAddress(_import.transfers[i].destination.destinationaddress)));
+                            ethHeld -= amount;
+                            
+                
+                    } else {
+                        // handle erc20 transactions  
+                        // amount conversion is handled in token manager
+
+                        tokenManager.importERC20Tokens(_import.transfers[i].currencyvalue.currency,
+                            _import.transfers[i].currencyvalue.amount,
+                            bytesToAddress(_import.transfers[i].destination.destinationaddress));
+                    }
                 }
             } else if(_import.transfers[i].destination.destinationtype & DEST_REGISTERCURRENCY == DEST_REGISTERCURRENCY) {
                      
