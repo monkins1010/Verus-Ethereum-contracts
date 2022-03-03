@@ -59,15 +59,6 @@ contract VerusBridge {
     uint public lastTxImportHeight;
 
     event Deprecate(address newAddress);
-
-    uint32 constant CTRX_CURRENCY_EXPORT_FLAG = 0x2000;
-    uint8 constant DEST_REGISTERCURRENCY = 6;
-    uint32 constant VALID = 1;
-    uint32 constant CROSS_SYSTEM = 0x40;
-    uint8 constant DEST_ID = 4;
-    uint8 constant DEST_PKH = 2;
-    uint8 constant DEST_ETH = 9;
-    uint8 constant FLAG_DEST_GATEWAY = 128;
     
     constructor(address verusProofAddress,
         address tokenManagerAddress,
@@ -271,7 +262,7 @@ contract VerusBridge {
             amount = convertFromVerusNumber(uint256(_import.transfers[i].currencyvalue.amount),18);
 
             // if the transfer does not have the EXPORT_CURRENCY flag set
-            if(_import.transfers[i].flags & CTRX_CURRENCY_EXPORT_FLAG != CTRX_CURRENCY_EXPORT_FLAG){
+            if(_import.transfers[i].flags & VerusConstants.CTRX_CURRENCY_EXPORT_FLAG != VerusConstants.CTRX_CURRENCY_EXPORT_FLAG){
 
                 if(bytesToAddress(_import.transfers[i].destination.destinationaddress) != address(0)){
 
@@ -291,7 +282,7 @@ contract VerusBridge {
                             bytesToAddress(_import.transfers[i].destination.destinationaddress));
                     }
                 }
-            } else if(_import.transfers[i].destination.destinationtype & DEST_REGISTERCURRENCY == DEST_REGISTERCURRENCY) {
+            } else if(_import.transfers[i].destination.destinationtype & VerusConstants.DEST_REGISTERCURRENCY == VerusConstants.DEST_REGISTERCURRENCY) {
                      
                 tokenManager.deployToken(_import.transfers[i].destination.destinationaddress);
                 

@@ -196,7 +196,19 @@ contract VerusSerializer {
     }
     
     function serializeCTransferDestination(VerusObjectsCommon.CTransferDestination memory ctd) public pure returns(bytes memory){
-        return abi.encodePacked(serializeUint8(ctd.destinationtype),writeCompactSize(ETH_ADDRESS_SIZE_BYTES),ctd.destinationaddress);
+
+        uint256 destinationSize;
+
+        if ((ctd.destinationtype & VerusConstants.DEST_REGISTERCURRENCY) == VerusConstants.DEST_REGISTERCURRENCY) {
+
+            destinationSize = ctd.destinationaddress.length;
+
+        } else {
+
+            destinationSize = ETH_ADDRESS_SIZE_BYTES;
+        }
+
+        return abi.encodePacked(serializeUint8(ctd.destinationtype),writeCompactSize(destinationSize),ctd.destinationaddress);
     }    
 
     function serializeCCurrencyValueMap(VerusObjects.CCurrencyValueMap memory _ccvm) public pure returns(bytes memory){
@@ -417,6 +429,7 @@ contract VerusSerializer {
         address nativeCurrencyID;
         uint32 CCC_PREFIX_TO_PARENT = 4 + 4 + 20;
         uint32 CCC_ID_LEN = 20;
+        uint32 CCC_NATIVE_OFFSET = CCC_ID_LEN + 4 + 4;
 
         nextOffset = CCC_PREFIX_TO_PARENT;
 
@@ -441,7 +454,7 @@ contract VerusSerializer {
             launchSystemID := mload(add(input, nextOffset)) // this should be launchsysemID
             nextOffset := add(nextOffset, CCC_ID_LEN)
             systemID := mload(add(input, nextOffset)) // this should be systemID 
-            nextOffset := add(nextOffset, CCC_ID_LEN)
+            nextOffset := add(nextOffset, CCC_NATIVE_OFFSET)
             nativeCurrencyID := mload(add(input, nextOffset)) //TODO: daemon serilaization to be changed this should be nativeCurrencyID
         }
 

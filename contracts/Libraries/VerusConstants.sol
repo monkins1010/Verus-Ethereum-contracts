@@ -28,7 +28,10 @@ library VerusConstants {
     uint8 constant DEST_PKH = 2;
     uint8 constant DEST_SH = 3;
     uint8 constant DEST_ID = 4;
+    uint8 constant DEST_REGISTERCURRENCY = 6;
     uint8 constant DEST_ETH = 9;
     uint8 constant FLAG_DEST_GATEWAY = 128;
     uint8 constant CURRENT_VERSION = 1;
+    uint32 constant CTRX_CURRENCY_EXPORT_FLAG = 0x2000;
+    
 }
