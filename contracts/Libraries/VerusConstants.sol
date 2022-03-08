@@ -33,5 +33,11 @@ library VerusConstants {
     uint8 constant FLAG_DEST_GATEWAY = 128;
     uint8 constant CURRENT_VERSION = 1;
     uint32 constant CTRX_CURRENCY_EXPORT_FLAG = 0x2000;
+
+    // deployTokens flags 
+    uint8 constant MAPPING_ETHEREUM_OWNED = 0;
+    uint8 constant MAPPING_VERUS_OWNED = 1;
+    uint8 constant MAPPING_PARTOF_BRIDGEVETH = 2;
+    uint8 constant MAPPING_ISBRIDGE_CURRENCY = 4;
     
 }

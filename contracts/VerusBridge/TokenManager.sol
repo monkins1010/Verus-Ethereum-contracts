@@ -16,17 +16,16 @@ contract TokenManager {
 
     //array of contracts address mapped to the token name
     struct hostedToken {
+        address iaddress;
         address erc20ContractAddress;
-        bool VerusOwned;
-        bool isRegistered;
+        uint8 flags;
+        string name;
+        string ticker;
+        uint tokenIndex;
     }
 
     struct deployTokens {
         address iaddress;
-        address eth_contract;
-        bool mapped;
-        string name;
-        string ticker;
     }
 
     mapping(address => hostedToken) public verusToERC20mapping;
@@ -35,19 +34,19 @@ contract TokenManager {
 
     constructor(
         address verusSerializerAddress,
-        deployTokens[] memory tokensToLaunch
+        hostedToken[] memory tokensToLaunch
     ) {
         verusBridgeContract = address(0);
         verusSerializer = VerusSerializer(verusSerializerAddress);
         launchTokens(tokensToLaunch);
     }
 
-    function getTokenList() public view returns(deployTokens[] memory ) {
+    function getTokenList() public view returns(hostedToken[] memory ) {
 
-        deployTokens[] memory temp = new deployTokens[](tokenList.length);
+        hostedToken[] memory temp = new hostedToken[](tokenList.length);
 
         for(uint i=0; i< tokenList.length; i++)
-            temp[i] = tokenList[i];
+            temp[i] = verusToERC20mapping[tokenList[i].iaddress];
 
         return temp;
     }
@@ -90,7 +89,7 @@ contract TokenManager {
             "Call can only be made from Verus Bridge Contract"
         );
         //check that the erc20 token is registered with the tokenManager
-        require(verusToERC20mapping[_iaddress].isRegistered, "Token has not been registered yet");
+        require(verusToERC20mapping[_iaddress].erc20ContractAddress != address(0), "Token has not been registered yet");
 
         Token token = Token(verusToERC20mapping[_iaddress].erc20ContractAddress);
 
@@ -103,7 +102,8 @@ contract TokenManager {
         //if its not approved it wont work
         token.transferFrom(msg.sender, address(this), _tokenAmount);
 
-        if (verusToERC20mapping[_iaddress].VerusOwned) {
+        if (verusToERC20mapping[_iaddress].flags & 
+              VerusConstants.MAPPING_VERUS_OWNED != VerusConstants.MAPPING_VERUS_OWNED) {
 
             require(token.balanceOf(address(this)) >= _tokenAmount,
                 "Tokens didn't transfer"
@@ -128,7 +128,7 @@ contract TokenManager {
         // if the token has not been previously created then it must be deployed
 
         // if token that has been sent from verus is not registered on ETH burn the tokens
-        if (verusToERC20mapping[_iaddress].isRegistered) {
+        if (verusToERC20mapping[_iaddress].erc20ContractAddress != address(0)) {
             contractAddress = verusToERC20mapping[_iaddress]
                 .erc20ContractAddress;
 
@@ -138,7 +138,8 @@ contract TokenManager {
                 token.decimals()
             );
             //if the token has been created by this contract then burn the token
-            if (verusToERC20mapping[_iaddress].VerusOwned) {
+            if (verusToERC20mapping[_iaddress].flags & 
+              VerusConstants.MAPPING_VERUS_OWNED != VerusConstants.MAPPING_VERUS_OWNED) {
 
                 token.mint(address(_destination), processedTokenAmount);
 
@@ -151,13 +152,13 @@ contract TokenManager {
 
     function ERC20Registered(address hosted) public view returns (bool) {
 
-        return verusToERC20mapping[hosted].isRegistered;
+        return verusToERC20mapping[hosted].erc20ContractAddress != address(0);
         
     }
 
     function getTokenERC20(address VRSCAddress) public view returns (Token) {
         hostedToken memory internalToken = verusToERC20mapping[VRSCAddress];
-        require(internalToken.isRegistered, "The token is not registered");
+        require(internalToken.erc20ContractAddress != address(0), "The token is not registered");
         Token token = Token(internalToken.erc20ContractAddress);
         return token;
     }
@@ -227,76 +228,59 @@ contract TokenManager {
             .deSerializeCurrencyDefinition(_serializedCcd);
         address destinationCurrencyID = getIAddress(ccd);
 
-        if (verusToERC20mapping[destinationCurrencyID].isRegistered)
-            return
-                verusToERC20mapping[destinationCurrencyID].erc20ContractAddress;
+        if (verusToERC20mapping[destinationCurrencyID].erc20ContractAddress != address(0))
+            return verusToERC20mapping[destinationCurrencyID].erc20ContractAddress;
 
-        if (ccd.systemID != VerusConstants.VEth) {
-            //we are minting a new ERC20 token
+        uint8 currencyFlags;
 
-            return
-                recordCreatedToken(
-                    destinationCurrencyID,
-                    ccd.name,
-                    getSymbol(ccd.name)
-                );
-        } else {
-            // we are adding an existing token to the list
+        if (ccd.systemID != VerusConstants.VEth) 
+            currencyFlags = VerusConstants.MAPPING_VERUS_OWNED;
 
-            recordMappedToken(destinationCurrencyID, ccd.nativeCurrencyID);
-            // destinationToAddress[destinationCurrencyID] = ccd.nativeCurrencyID;
-            return ccd.nativeCurrencyID;
-        }
+        return recordToken(destinationCurrencyID, ccd.nativeCurrencyID, ccd.name, getSymbol(ccd.name), currencyFlags);
     }
 
     // Called from constructor to launch pre-defined currencies.
-    function launchTokens(deployTokens[] memory tokensToDeploy) private {
+    function launchTokens(hostedToken[] memory tokensToDeploy) private {
         require(
             isVerusBridgeContract(),
             "Call can only be made from Verus Bridge Contract"
         );
 
         for (uint256 i = 0; i < tokensToDeploy.length; i++) {
-            if (tokensToDeploy[i].mapped) {
-                recordMappedToken(
-                    tokensToDeploy[i].iaddress,
-                    tokensToDeploy[i].eth_contract
-                );
-                // destinationToAddress[tokensToDeploy[i].verusID] = tokensToDeploy[i].eth_contract;
-            } else {
-                recordCreatedToken(
-                    tokensToDeploy[i].iaddress,
-                    tokensToDeploy[i].name,
-                    tokensToDeploy[i].ticker
-                );
-            }
+            recordToken(
+                tokensToDeploy[i].iaddress,
+                tokensToDeploy[i].erc20ContractAddress,
+                tokensToDeploy[i].name,
+                tokensToDeploy[i].ticker,
+                tokensToDeploy[i].flags
+            );
         }
     }
 
-    function recordMappedToken(address _iaddress, address ethContractAddress)
-        private
-        returns (address)
-    {
-        verusToERC20mapping[_iaddress] = hostedToken(
-            address(ethContractAddress),
-            false,
-            true
-        );
-        Token token = Token(ethContractAddress);
-        tokenList.push(deployTokens(_iaddress, ethContractAddress, true, token.name(), token.symbol()));
-        return _iaddress;
-    }
-
-    function recordCreatedToken(
+    function recordToken(
         address _iaddress,
+        address ethContractAddress,
         string memory name,
-        string memory ticker
+        string memory ticker,
+        uint8 flags
     ) private returns (address) {
-        Token t = new Token(name, ticker);
-        verusToERC20mapping[_iaddress] = hostedToken(address(t), true, true);
-        tokenList.push(deployTokens(_iaddress, address(t), false, name, ticker));
-        emit TokenCreated(address(t));
-        return address(t);
+
+        if (flags & VerusConstants.MAPPING_VERUS_OWNED != VerusConstants.MAPPING_VERUS_OWNED ) {
+
+            Token t = new Token(name, ticker);      
+            verusToERC20mapping[_iaddress] = hostedToken(address(t),_iaddress, flags, name, ticker, tokenList.length);
+            tokenList.push(deployTokens(_iaddress)); 
+            emit TokenCreated(address(t));
+            return address(t);
+
+        } else {
+
+            verusToERC20mapping[_iaddress] = hostedToken(ethContractAddress, _iaddress, flags, name, ticker, tokenList.length);
+            tokenList.push(deployTokens(_iaddress));
+            return ethContractAddress;
+
+        }
+
     }
 
 }
