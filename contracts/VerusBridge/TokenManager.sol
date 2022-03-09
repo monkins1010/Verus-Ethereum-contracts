@@ -54,6 +54,8 @@ contract TokenManager {
             temp[i].erc20ContractAddress = verusToERC20mapping[tokenList[i]].erc20ContractAddress;
             temp[i].name = verusToERC20mapping[tokenList[i]].name;
             temp[i].ticker = verusToERC20mapping[tokenList[i]].ticker;
+            temp[i].flags = verusToERC20mapping[tokenList[i]].flags;
+            temp[i].parent = verusToERC20mapping[tokenList[i]].parent;
         }
 
         return temp;
@@ -111,7 +113,7 @@ contract TokenManager {
         token.transferFrom(msg.sender, address(this), _tokenAmount);
 
         if (verusToERC20mapping[_iaddress].flags & 
-              VerusConstants.MAPPING_VERUS_OWNED != VerusConstants.MAPPING_VERUS_OWNED) {
+              VerusConstants.MAPPING_VERUS_OWNED == VerusConstants.MAPPING_VERUS_OWNED) {
 
             require(token.balanceOf(address(this)) >= _tokenAmount,
                 "Tokens didn't transfer"
@@ -147,7 +149,7 @@ contract TokenManager {
             );
             //if the token has been created by this contract then burn the token
             if (verusToERC20mapping[_iaddress].flags & 
-              VerusConstants.MAPPING_VERUS_OWNED != VerusConstants.MAPPING_VERUS_OWNED) {
+              VerusConstants.MAPPING_VERUS_OWNED == VerusConstants.MAPPING_VERUS_OWNED) {
 
                 token.mint(address(_destination), processedTokenAmount);
 
@@ -274,7 +276,7 @@ contract TokenManager {
         address parent
     ) private returns (address) {
 
-        if (flags & VerusConstants.MAPPING_VERUS_OWNED != VerusConstants.MAPPING_VERUS_OWNED ) {
+        if (flags & VerusConstants.MAPPING_VERUS_OWNED == VerusConstants.MAPPING_VERUS_OWNED ) {
 
             Token t = new Token(name, ticker);      
             verusToERC20mapping[_iaddress] = mappedToken(address(t), flags, name, ticker, tokenList.length, parent);
