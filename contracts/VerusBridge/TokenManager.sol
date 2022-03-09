@@ -14,9 +14,7 @@ contract TokenManager {
     VerusSerializer verusSerializer;
     uint256 constant TICKER_LENGTH_MAX = 4;
 
-    //array of contracts address mapped to the token name
-    struct hostedToken {
-        address iaddress;
+    struct mappedToken {
         address erc20ContractAddress;
         uint8 flags;
         string name;
@@ -24,29 +22,37 @@ contract TokenManager {
         uint tokenIndex;
     }
 
-    struct deployTokens {
+    struct setupToken {
         address iaddress;
+        address erc20ContractAddress;
+        uint8 flags;
+        string name;
+        string ticker;
     }
 
-    mapping(address => hostedToken) public verusToERC20mapping;
-    deployTokens[] public tokenList;
+    mapping(address => mappedToken) public verusToERC20mapping;
+    address[] public tokenList;
     address verusBridgeContract;
 
     constructor(
         address verusSerializerAddress,
-        hostedToken[] memory tokensToLaunch
+        setupToken[] memory tokensToLaunch
     ) {
         verusBridgeContract = address(0);
         verusSerializer = VerusSerializer(verusSerializerAddress);
         launchTokens(tokensToLaunch);
     }
 
-    function getTokenList() public view returns(hostedToken[] memory ) {
+    function getTokenList() public view returns(setupToken[] memory ) {
 
-        hostedToken[] memory temp = new hostedToken[](tokenList.length);
+        setupToken[] memory temp = new setupToken[](tokenList.length);
 
-        for(uint i=0; i< tokenList.length; i++)
-            temp[i] = verusToERC20mapping[tokenList[i].iaddress];
+        for(uint i=0; i< tokenList.length; i++) {
+            temp[i].iaddress = tokenList[i];
+            temp[i].erc20ContractAddress = verusToERC20mapping[tokenList[i]].erc20ContractAddress;
+            temp[i].name = verusToERC20mapping[tokenList[i]].name;
+            temp[i].ticker = verusToERC20mapping[tokenList[i]].ticker;
+        }
 
         return temp;
     }
@@ -157,7 +163,7 @@ contract TokenManager {
     }
 
     function getTokenERC20(address VRSCAddress) public view returns (Token) {
-        hostedToken memory internalToken = verusToERC20mapping[VRSCAddress];
+        mappedToken memory internalToken = verusToERC20mapping[VRSCAddress];
         require(internalToken.erc20ContractAddress != address(0), "The token is not registered");
         Token token = Token(internalToken.erc20ContractAddress);
         return token;
@@ -222,7 +228,7 @@ contract TokenManager {
 
     function deployToken(bytes memory _serializedCcd) public returns (address) {
         
-        require(isVerusBridgeContract(),"Call can only be made from Verus Bridge Contract");
+        require (isVerusBridgeContract(),"Call can only be made from Verus Bridge Contract");
 
         VerusObjects.CcurrencyDefinition memory ccd = verusSerializer
             .deSerializeCurrencyDefinition(_serializedCcd);
@@ -240,9 +246,8 @@ contract TokenManager {
     }
 
     // Called from constructor to launch pre-defined currencies.
-    function launchTokens(hostedToken[] memory tokensToDeploy) private {
-        require(
-            isVerusBridgeContract(),
+    function launchTokens(setupToken[] memory tokensToDeploy) private {
+        require (isVerusBridgeContract(),
             "Call can only be made from Verus Bridge Contract"
         );
 
@@ -268,19 +273,17 @@ contract TokenManager {
         if (flags & VerusConstants.MAPPING_VERUS_OWNED != VerusConstants.MAPPING_VERUS_OWNED ) {
 
             Token t = new Token(name, ticker);      
-            verusToERC20mapping[_iaddress] = hostedToken(address(t),_iaddress, flags, name, ticker, tokenList.length);
-            tokenList.push(deployTokens(_iaddress)); 
+            verusToERC20mapping[_iaddress] = mappedToken(address(t), flags, name, ticker, tokenList.length);
+            tokenList.push(_iaddress); 
             emit TokenCreated(address(t));
             return address(t);
 
         } else {
 
-            verusToERC20mapping[_iaddress] = hostedToken(ethContractAddress, _iaddress, flags, name, ticker, tokenList.length);
-            tokenList.push(deployTokens(_iaddress));
+            verusToERC20mapping[_iaddress] = mappedToken(ethContractAddress, flags, name, ticker, tokenList.length);
+            tokenList.push(_iaddress);
             return ethContractAddress;
 
         }
-
     }
-
 }
