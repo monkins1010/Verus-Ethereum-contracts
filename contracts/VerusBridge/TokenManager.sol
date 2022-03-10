@@ -20,13 +20,13 @@ contract TokenManager {
         string name;
         string ticker;
         uint tokenIndex;
-        address parent;
+        address launchSystemID;
     }
 
     struct setupToken {
         address iaddress;
         address erc20ContractAddress;
-        address parent;
+        address launchSystemID;
         uint8 flags;
         string name;
         string ticker;
@@ -55,7 +55,7 @@ contract TokenManager {
             temp[i].name = verusToERC20mapping[tokenList[i]].name;
             temp[i].ticker = verusToERC20mapping[tokenList[i]].ticker;
             temp[i].flags = verusToERC20mapping[tokenList[i]].flags;
-            temp[i].parent = verusToERC20mapping[tokenList[i]].parent;
+            temp[i].launchSystemID = verusToERC20mapping[tokenList[i]].launchSystemID;
         }
 
         return temp;
@@ -246,7 +246,7 @@ contract TokenManager {
         if (ccd.systemID != VerusConstants.VEth) 
             currencyFlags = VerusConstants.MAPPING_VERUS_OWNED;
 
-        return recordToken(destinationCurrencyID, ccd.nativeCurrencyID, ccd.name, getSymbol(ccd.name), currencyFlags, ccd.parent);
+        return recordToken(destinationCurrencyID, ccd.nativeCurrencyID, ccd.name, getSymbol(ccd.name), currencyFlags, ccd.launchSystemID);
     }
 
     // Called from constructor to launch pre-defined currencies.
@@ -262,7 +262,7 @@ contract TokenManager {
                 tokensToDeploy[i].name,
                 tokensToDeploy[i].ticker,
                 tokensToDeploy[i].flags,
-                tokensToDeploy[i].parent
+                tokensToDeploy[i].launchSystemID
             );
         }
     }
@@ -273,20 +273,20 @@ contract TokenManager {
         string memory name,
         string memory ticker,
         uint8 flags,
-        address parent
+        address launchSystemID
     ) private returns (address) {
 
         if (flags & VerusConstants.MAPPING_VERUS_OWNED == VerusConstants.MAPPING_VERUS_OWNED ) {
 
             Token t = new Token(name, ticker);      
-            verusToERC20mapping[_iaddress] = mappedToken(address(t), flags, name, ticker, tokenList.length, parent);
+            verusToERC20mapping[_iaddress] = mappedToken(address(t), flags, name, ticker, tokenList.length, launchSystemID);
             tokenList.push(_iaddress); 
             emit TokenCreated(address(t));
             return address(t);
 
         } else {
 
-            verusToERC20mapping[_iaddress] = mappedToken(ethContractAddress, flags, name, ticker, tokenList.length, parent);
+            verusToERC20mapping[_iaddress] = mappedToken(ethContractAddress, flags, name, ticker, tokenList.length, launchSystemID);
             tokenList.push(_iaddress);
             return ethContractAddress;
 
