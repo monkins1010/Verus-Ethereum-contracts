@@ -5,8 +5,11 @@ pragma solidity >=0.6.0 < 0.9.0;
 pragma experimental ABIEncoderV2;   
 import "../Libraries/VerusObjects.sol";
 import "../Libraries/VerusObjectsNotarization.sol";
+import "../Libraries/VerusConstants.sol";
 
 contract VerusSerializer {
+
+    uint constant ETH_ADDRESS_SIZE_BYTES = 20;
 
 
 
@@ -193,7 +196,19 @@ contract VerusSerializer {
     }
     
     function serializeCTransferDestination(VerusObjectsCommon.CTransferDestination memory ctd) public pure returns(bytes memory){
-        return abi.encodePacked(serializeUint8(ctd.destinationtype),writeCompactSize(ctd.destinationaddress.length),ctd.destinationaddress);
+
+        uint256 destinationSize;
+
+        if ((ctd.destinationtype & VerusConstants.DEST_REGISTERCURRENCY) == VerusConstants.DEST_REGISTERCURRENCY) {
+
+            destinationSize = ctd.destinationaddress.length;
+
+        } else {
+
+            destinationSize = ETH_ADDRESS_SIZE_BYTES;
+        }
+
+        return abi.encodePacked(serializeUint8(ctd.destinationtype),writeCompactSize(destinationSize),ctd.destinationaddress);
     }    
 
     function serializeCCurrencyValueMap(VerusObjects.CCurrencyValueMap memory _ccvm) public pure returns(bytes memory){
@@ -221,9 +236,9 @@ contract VerusSerializer {
             serializeAddress(ct.destcurrencyid)
            );
            
-        if((ct.flags & 0x400)>0) output = abi.encodePacked(output,serializeAddress(ct.secondreserveid));           
-         //see if its got a cross_system flag
-        if((ct.flags & 0x40)>0) output = abi.encodePacked(output,serializeAddress(ct.destsystemid));
+        if((ct.flags & VerusConstants.RESERVE_TO_RESERVE )>0) output = abi.encodePacked(output,serializeAddress(ct.secondreserveid));           
+         //see if it has a cross_system flag
+        if((ct.flags & VerusConstants.CROSS_SYSTEM)>0) output = abi.encodePacked(output,serializeAddress(ct.destsystemid));
         
         return output;
     }
@@ -410,8 +425,11 @@ contract VerusSerializer {
         uint8 nameStringLength;
         address parent;
         address launchSystemID;
+        address systemID;
+        address nativeCurrencyID;
         uint32 CCC_PREFIX_TO_PARENT = 4 + 4 + 20;
-        uint32 CCC_LAUNCH_ID_LEN = 20;
+        uint32 CCC_ID_LEN = 20;
+        uint32 CCC_NATIVE_OFFSET = CCC_ID_LEN + 4 + 4;
 
         nextOffset = CCC_PREFIX_TO_PARENT;
 
@@ -430,13 +448,19 @@ contract VerusSerializer {
         }
 
         ccurrencyDefinition.name = string(name);
-        nextOffset = nextOffset + nameStringLength + CCC_LAUNCH_ID_LEN;
+        nextOffset = nextOffset + nameStringLength + CCC_ID_LEN;
 
         assembly {
             launchSystemID := mload(add(input, nextOffset)) // this should be launchsysemID
+            nextOffset := add(nextOffset, CCC_ID_LEN)
+            systemID := mload(add(input, nextOffset)) // this should be systemID 
+            nextOffset := add(nextOffset, CCC_NATIVE_OFFSET)
+            nativeCurrencyID := mload(add(input, nextOffset)) //TODO: daemon serilaization to be changed this should be nativeCurrencyID
         }
 
         ccurrencyDefinition.launchSystemID = launchSystemID;
+        ccurrencyDefinition.systemID = systemID;
+        ccurrencyDefinition.nativeCurrencyID = nativeCurrencyID;
     }
 
 }

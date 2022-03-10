@@ -13,6 +13,7 @@ import "./Token.sol";
 import "./VerusSerializer.sol";
 import "../VerusNotarizer/VerusNotarizer.sol";
 import "./VerusCrossChainExport.sol";
+import "./ExportManager.sol";
 
 contract VerusBridge {
 
@@ -25,6 +26,7 @@ contract VerusBridge {
     VerusNotarizer verusNotarizer;
     VerusCrossChainExport verusCCE;
     VerusBridgeMaster verusBridgeMaster;
+    ExportManager exportManager;
 
     // THE CONTRACT OWNER NEEDS TO BE REPLACED BY A SET OF NOTARIES
     address contractOwner;
@@ -54,6 +56,7 @@ contract VerusBridge {
 
     uint32 constant CTRX_CURRENCY_EXPORT_FLAG = 0x2000;
     uint8 constant DEST_REGISTERCURRENCY = 6;
+    event Deprecate(address newAddress);
     
     constructor(address verusBridgeMasterAddress) {
         verusBridgeMaster = VerusBridgeMaster(verusBridgeMasterAddress); 
@@ -67,38 +70,11 @@ contract VerusBridge {
         uint256 verusFees = VerusConstants.verusTransactionFee;
         tokenManager = TokenManager(verusBridgeMaster.getContractAddress(VerusBridgeMaster.ContractType.TokenManager));
 
-        //TODO: We cant mix different transfer destinations together in the CCE assert on non same fields.
-        if (readyExportsByBlock[block.number].created)
-        {
-            uint exportIndex = readyExportsByBlock[block.number].index;
+        uint256 fees;
 
-            // QUESTION: what about reserve transfers that are import to source?
-            assert( _readyExports[exportIndex][0].destcurrencyid == transfer.destcurrencyid);
-        }
+        fees = exportManager.checkExport(transfer, msg.value);
 
-        //if there is fees in the pool spend those and not the amount that
-        if (verusBridgeMaster.isPoolAvailable(transfer.fees,transfer.feecurrencyid)) {
-            verusBridgeMaster.setPoolSize(verusBridgeMaster.getPoolSize() - VerusConstants.verusTransactionFee);
-        } else {
-            //if fees are being paid in verustest we need to take it from the msg sender
-            assert(transfer.feecurrencyid == VerusConstants.VerusCurrencyId || transfer.feecurrencyid == VerusConstants.VEth);
-            if(transfer.feecurrencyid == VerusConstants.VerusCurrencyId) {
-                
-                //burn the required amount of vrsctest from the user
-                Token token = tokenManager.getTokenERC20(transfer.feecurrencyid);
-                uint256 VRSTallowedTokens = token.allowance(msg.sender, address(this));
-                assert( VRSTallowedTokens >= verusBridgeMaster.convertFromVerusNumber(verusFees,18));
-                token.transferFrom(msg.sender,address(this), verusBridgeMaster.convertFromVerusNumber(verusFees,18)); 
-                //transfer the tokens to this contract
-                token.burn(verusFees); 
-
-            } else if(transfer.feecurrencyid == VerusConstants.VEth){
-                requiredFees = requiredFees * 3;
-                assert(paidValue >= requiredFees + verusBridgeMaster.convertFromVerusNumber(transfer.fees,18));    
-            }
-            //if the fees are being paid in veth then require the user to send it
-            //fees need to be paid for verus as well
-        }
+        assert(fees != 0); 
 
         if (transfer.currencyvalue.currency != VerusConstants.VEth) {
             //check there are enough fees sent
@@ -112,12 +88,12 @@ contract VerusBridge {
             token.transferFrom(msg.sender,address(this),tokenAmount); 
             token.approve(address(tokenManager),tokenAmount);
             //give an approval for the tokenmanagerinstance to spend the tokens
-            tokenManager.exportERC20Tokens(address(token), tokenAmount);  //total amount kept as wei until export to verus
+            tokenManager.exportERC20Tokens(transfer.currencyvalue.currency, tokenAmount);  //total amount kept as wei until export to verus
         } else {
             //handle a vEth transfer
-            transfer.currencyvalue.amount = uint64(verusBridgeMaster.convertToVerusNumber(paidValue - VerusConstants.transactionFee,18));
-            verusBridgeMaster.setEthHeld(verusBridgeMaster.getEthHeld() + transfer.currencyvalue.amount);  
-            verusBridgeMaster.setFeesHeld(verusBridgeMaster.getFeesHeld() + VerusConstants.transactionFee);
+            transfer.currencyvalue.amount = uint64(convertToVerusNumber(msg.value - VerusConstants.transactionFee,18));
+            ethHeld += (msg.value - fees);  // msg.value == fees +amount in transaction checked in checkExport()
+            feesHeld += fees; //TODO: what happens if they send to much fee?
         }
         _createExports(transfer);
     }
@@ -218,25 +194,29 @@ contract VerusBridge {
             amount = verusBridgeMaster.convertFromVerusNumber(uint256(_import.transfers[i].currencyvalue.amount),18);
 
             // if the transfer does not have the EXPORT_CURRENCY flag set
-            if(_import.transfers[i].flags & CTRX_CURRENCY_EXPORT_FLAG != CTRX_CURRENCY_EXPORT_FLAG){
+            if(_import.transfers[i].flags & VerusConstants.CTRX_CURRENCY_EXPORT_FLAG != VerusConstants.CTRX_CURRENCY_EXPORT_FLAG){
 
-                if(_import.transfers[i].currencyvalue.currency == VerusConstants.VEth) {
-                    // cast the destination as an ethAddress
-                    assert(amount <= address(this).balance);
-                    verusBridgeMaster.sendEth(amount,payable(verusBridgeMaster.bytesToAddress(_import.transfers[i].destination.destinationaddress)));
-                    verusBridgeMaster.setEthHeld(verusBridgeMaster.getEthHeld() - amount);
-            
-                } else {
-                    // handle erc20 transactions  
-                    // amount conversion is handled in token manager
-                    tokenManager.importERC20Tokens(_import.transfers[i].currencyvalue.currency,
-                        _import.transfers[i].currencyvalue.amount,
-                        verusBridgeMaster.bytesToAddress(_import.transfers[i].destination.destinationaddress));
+                if(bytesToAddress(_import.transfers[i].destination.destinationaddress) != address(0)){
+
+                    if(_import.transfers[i].currencyvalue.currency == VerusConstants.VEth) {
+                        // cast the destination as an ethAddress
+                        assert(amount <= address(this).balance);
+                            sendEth(amount,payable(bytesToAddress(_import.transfers[i].destination.destinationaddress)));
+                            ethHeld -= amount;
+                            
+                
+                    } else {
+                        // handle erc20 transactions  
+                        // amount conversion is handled in token manager
+
+                        tokenManager.importERC20Tokens(_import.transfers[i].currencyvalue.currency,
+                            _import.transfers[i].currencyvalue.amount,
+                            bytesToAddress(_import.transfers[i].destination.destinationaddress));
+                    }
                 }
-            } else {
-                // If the type of address is a CCurrencyDefinition i.e. flag type DEST_REGISTERCURRENCY
-                if(_import.transfers[i].destination.destinationtype & DEST_REGISTERCURRENCY == DEST_REGISTERCURRENCY)
-                     tokenManager.deployNewToken(_import.transfers[i].destination.destinationaddress);
+            } else if(_import.transfers[i].destination.destinationtype & VerusConstants.DEST_REGISTERCURRENCY == VerusConstants.DEST_REGISTERCURRENCY) {
+                     
+                tokenManager.deployToken(_import.transfers[i].destination.destinationaddress);
                 
             }
             //handle the distributions of the fees
