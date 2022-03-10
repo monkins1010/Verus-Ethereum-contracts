@@ -56,13 +56,7 @@ contract VerusBridge {
     uint8 constant DEST_REGISTERCURRENCY = 6;
     
     constructor(address verusBridgeMasterAddress) {
-        contractOwner = msg.sender;
         verusBridgeMaster = VerusBridgeMaster(verusBridgeMasterAddress); 
-        verusProof =  VerusProof(verusBridgeMaster.getContractAddress(VerusBridgeMaster.ContractType.VerusProof));
-        tokenManager = TokenManager(verusBridgeMaster.getContractAddress(VerusBridgeMaster.ContractType.TokenManager));
-        verusSerializer = VerusSerializer(verusBridgeMaster.getContractAddress(VerusBridgeMaster.ContractType.VerusSerializer));
-        verusNotarizer = VerusNotarizer(verusBridgeMaster.getContractAddress(VerusBridgeMaster.ContractType.VerusNotarizer));
-        verusCCE = VerusCrossChainExport(verusBridgeMaster.getContractAddress(VerusBridgeMaster.ContractType.VerusCrossChainExport));
         lastimport.height = 0;
         lastimport.txid = 0x00000000000000000000000000000000;
     }
@@ -71,6 +65,7 @@ contract VerusBridge {
     function export(VerusObjects.CReserveTransfer memory transfer, uint256 paidValue) public payable {
         uint256 requiredFees =  VerusConstants.transactionFee;
         uint256 verusFees = VerusConstants.verusTransactionFee;
+        tokenManager = TokenManager(verusBridgeMaster.getContractAddress(VerusBridgeMaster.ContractType.TokenManager));
 
         //TODO: We cant mix different transfer destinations together in the CCE assert on non same fields.
         if (readyExportsByBlock[block.number].created)
@@ -131,7 +126,9 @@ contract VerusBridge {
         uint currentHeight = block.number;
         uint exportIndex;
         bool newHash;
-
+        verusSerializer = VerusSerializer(verusBridgeMaster.getContractAddress(VerusBridgeMaster.ContractType.VerusSerializer));
+        verusNotarizer = VerusNotarizer(verusBridgeMaster.getContractAddress(VerusBridgeMaster.ContractType.VerusNotarizer));
+        verusCCE = VerusCrossChainExport(verusBridgeMaster.getContractAddress(VerusBridgeMaster.ContractType.VerusCrossChainExport));
         //check if the current block height has a set of transfers associated with it if so add to the existing array
         if (readyExportsByBlock[currentHeight].created) {
             //append to an existing array of transfers
@@ -199,7 +196,7 @@ contract VerusBridge {
 
         bytes32 txidfound;
         bytes memory sliced = _import.partialtransactionproof.components[0].elVchObj;
-
+        verusProof =  VerusProof(verusBridgeMaster.getContractAddress(VerusBridgeMaster.ContractType.VerusProof));
         assembly {
             txidfound := mload(add(sliced, 32))                                 // skip memory length (ETH encoded in an efficient 32 bytes ;) )
         }

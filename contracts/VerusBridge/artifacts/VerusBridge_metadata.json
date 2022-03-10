@@ -1389,11 +1389,11 @@
 			]
 		},
 		"contracts/VerusBridge/VerusBridge.sol": {
-			"keccak256": "0x351f510860be5f4d4b6ce4776e065dbc23cbf61aa02b5ea694b1a8ac0d0c070d",
+			"keccak256": "0x7b7c67f1d6b0838a04f6c8105c10856049302ed0b2da1262a3c780185b82956e",
 			"license": "MIT",
 			"urls": [
-				"bzz-raw://ac6ebb9c47f527cd91cb37c6353d83debd579d3be0812544ef153bfc28db5772",
-				"dweb:/ipfs/QmXpm1dHhJraHFF9TQm5rSBoNXanp7QU82Yy512D1T1aFm"
+				"bzz-raw://5a7867319adc8d514a8a391dacbb8c74b33ea75f67ac73ec04509cc032b9b4fd",
+				"dweb:/ipfs/QmXh8Ad6BzKr4etqf2aNfahQo1d9kDocemNMbZP8ZufXj7"
 			]
 		},
 		"contracts/VerusBridge/VerusBridgeMaster.sol": {
