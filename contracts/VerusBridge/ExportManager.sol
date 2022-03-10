@@ -11,22 +11,19 @@ import "../VerusBridge/VerusBridge.sol";
 
 contract ExportManager {
 
-    TokenManager tokenManager;
-    VerusBridge verusBridge;
+    //VerusBridge verusBridge;
+    VerusBridgeMaster verusBridgeMaster;
 
-    constructor(
-        address tokenManagerAddress,
-        address verusBridgeAddress) public {
-        tokenManager = TokenManager(tokenManagerAddress);
-        verusBridge = VerusBridge(verusBridgeAddress);
+    constructor(address verusBridgeMasterAddress) public {
+        verusBridgeMaster = VerusBridgeMaster(verusBridgeMasterAddress); 
     }
-
 
     function checkExport(VerusObjects.CReserveTransfer memory transfer, uint256 ETHSent) public view returns (uint256 fees){
 
        // function returns 0 for low level errors, however uses requires for higher level errors.
-
-       require(tokenManager.ERC20Registered(transfer.currencyvalue.currency) && 
+    TokenManager tokenManager = TokenManager(verusBridgeMaster.getContractAddress(VerusConstants.ContractType.TokenManager));
+      
+    require(tokenManager.ERC20Registered(transfer.currencyvalue.currency) && 
                 tokenManager.ERC20Registered(transfer.feecurrencyid) &&
                 tokenManager.ERC20Registered(transfer.destcurrencyid) &&
                 (tokenManager.ERC20Registered(transfer.secondreserveid) || 
@@ -68,7 +65,7 @@ contract ExportManager {
 
         }
 
-        if (verusBridge.isPoolUnavailable(transfer.fees, transfer.feecurrencyid)) {
+        if (verusBridgeMaster.isPoolUnavailable(transfer.fees, transfer.feecurrencyid)) {
 
             if (!(transfer.destination.destinationtype == VerusConstants.DEST_PKH ||
                    transfer.destination.destinationtype == VerusConstants.DEST_ID))
@@ -138,7 +135,7 @@ contract ExportManager {
 
     function checkReadyExports() public view returns(address) {
 
-           
+        VerusBridge verusBridge = VerusBridge(verusBridgeMaster.getContractAddress(VerusConstants.ContractType.VerusBridge));
         (uint created , bool readyBlock) = verusBridge.readyExportsByBlock(block.number);
 
         if (readyBlock) {
@@ -168,7 +165,7 @@ contract ExportManager {
         return c;
     }
 
-    function checkTransferFlags(VerusObjects.CReserveTransfer memory transfer) public view returns(bool) {
+    function checkTransferFlags(VerusObjects.CReserveTransfer memory transfer) public pure returns(bool) {
 
         if (transfer.version != VerusConstants.CURRENT_VERSION || (transfer.flags & (VerusConstants.INVALID_FLAGS | VerusConstants.VALID) ) != VerusConstants.VALID)
             return false;

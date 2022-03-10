@@ -12,19 +12,11 @@ import "./VerusCrossChainExport.sol";
 import "../VerusNotarizer/VerusNotarizer.sol";
 import "./VerusBridge.sol";
 import "./VerusInfo.sol";
+import "./ExportManager.sol";
 
 contract VerusBridgeMaster {
 
     //declare the contracts and have it return the contract addresses
-    enum ContractType {
-        TokenManager,
-        VerusSerializer,
-        VerusProof,
-        VerusCrossChainExport,
-        VerusNotarizer,
-        VerusBridge,
-        VerusInfo
-    }
 
     TokenManager tokenManager;
     VerusSerializer verusSerializer;
@@ -33,6 +25,7 @@ contract VerusBridgeMaster {
     VerusNotarizer verusNotarizer;
     VerusBridge verusBridge;
     VerusInfo verusInfo;
+    ExportManager exportManager;
 
     //temporary placeholder for testing purposes
     address contractOwner;
@@ -52,52 +45,55 @@ contract VerusBridgeMaster {
     }
     
     /** get and set functions, sets to be performed by the notariser **/
-    function setContractAddress(ContractType contractTypeAddress, address _newContractAddress) public {
+    function setContractAddress(VerusConstants.ContractType contractTypeAddress, address _newContractAddress) public {
         assert(msg.sender == contractOwner);
-        if(contractTypeAddress == ContractType.TokenManager){
+        if(contractTypeAddress == VerusConstants.ContractType.TokenManager){
             tokenManager = TokenManager(_newContractAddress);
         }
-        if(contractTypeAddress == ContractType.VerusSerializer){
+        else if(contractTypeAddress == VerusConstants.ContractType.VerusSerializer){
             verusSerializer = VerusSerializer(_newContractAddress);
         } 
-        if(contractTypeAddress == ContractType.VerusProof){
+        else if(contractTypeAddress == VerusConstants.ContractType.VerusProof){
             verusProof =  VerusProof(_newContractAddress);
         } 
-        if(contractTypeAddress == ContractType.VerusCrossChainExport){
+        else if(contractTypeAddress == VerusConstants.ContractType.VerusCrossChainExport){
             verusCCE = VerusCrossChainExport(_newContractAddress);        
         }        
-        if(contractTypeAddress == ContractType.VerusNotarizer){
+        else if(contractTypeAddress == VerusConstants.ContractType.VerusNotarizer){
             verusNotarizer = VerusNotarizer(_newContractAddress);       
         }        
-        if(contractTypeAddress == ContractType.VerusBridge){
+        else if(contractTypeAddress == VerusConstants.ContractType.VerusBridge){
             verusBridge = VerusBridge(_newContractAddress);       
         }
-        if(contractTypeAddress == ContractType.VerusInfo){
+        else if(contractTypeAddress == VerusConstants.ContractType.VerusInfo){
             verusInfo = VerusInfo(_newContractAddress);       
+        }
+        else if(contractTypeAddress == VerusConstants.ContractType.ExportManager){
+            exportManager = ExportManager(_newContractAddress);       
         }
     }
     
     /** returns the address of each contract to be used by the sub contracts **/
-    function getContractAddress(ContractType contractTypeAddress) public view returns(address contractAddress){
-        if(contractTypeAddress == ContractType.TokenManager){
+    function getContractAddress(VerusConstants.ContractType contractTypeAddress) public view returns(address contractAddress){
+        if(contractTypeAddress == VerusConstants.ContractType.TokenManager){
             contractAddress = address(tokenManager);
         }
-        if(contractTypeAddress == ContractType.VerusSerializer){
+        if(contractTypeAddress == VerusConstants.ContractType.VerusSerializer){
             contractAddress = address(verusSerializer);
         } 
-        if(contractTypeAddress == ContractType.VerusProof){
+        if(contractTypeAddress == VerusConstants.ContractType.VerusProof){
             contractAddress = address(verusProof);
         } 
-        if(contractTypeAddress == ContractType.VerusCrossChainExport){
+        if(contractTypeAddress == VerusConstants.ContractType.VerusCrossChainExport){
             contractAddress = address(verusCCE);        
         }        
-        if(contractTypeAddress == ContractType.VerusNotarizer){
+        if(contractTypeAddress == VerusConstants.ContractType.VerusNotarizer){
             contractAddress = address(verusNotarizer);       
         }        
-        if(contractTypeAddress == ContractType.VerusBridge){
+        if(contractTypeAddress == VerusConstants.ContractType.VerusBridge){
             contractAddress = address(verusBridge);       
         }
-        if(contractTypeAddress == ContractType.VerusInfo){
+        if(contractTypeAddress == VerusConstants.ContractType.VerusInfo){
             contractAddress = address(verusInfo);       
         }
     }
@@ -108,6 +104,19 @@ contract VerusBridgeMaster {
     }
     function getFeesHeld() public view returns(uint256){
         return feesHeld;
+    }
+    function addToFeesHeld(uint256 _feesAmount) public {
+        require( msg.sender == address(verusBridge),"This function can only be called by Verus Bridge");
+        feesHeld += _feesAmount;
+    }
+
+    function addToEthHeld(uint256 _ethAmount) public {
+        require(msg.sender == address(verusBridge),"This function can only be called by Verus Bridge");
+        ethHeld += _ethAmount;
+    }
+    function subtractFromEthHeld(uint256 _ethAmount) public {
+        require(msg.sender == address(verusBridge),"This function can only be called by Verus Bridge");
+        ethHeld -= _ethAmount;
     }
 
     function setEthHeld(uint256 _ethAmount) public {
@@ -192,7 +201,7 @@ contract VerusBridgeMaster {
         _ethAddress.transfer(_ethAmount);
      }
 
-    function isPoolAvailable(uint256 _feesAmount,address _feeCurrencyID) public view returns(bool){
+    function isPoolUnavailable(uint256 _feesAmount,address _feeCurrencyID) public view returns(bool){
         if(0 < verusNotarizer.poolAvailable(VerusConstants.VerusBridgeAddress) &&
             verusNotarizer.poolAvailable(VerusConstants.VerusBridgeAddress) < uint32(block.number)) {
             //the bridge has been activated

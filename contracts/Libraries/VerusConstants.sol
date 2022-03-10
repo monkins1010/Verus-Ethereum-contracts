@@ -39,5 +39,16 @@ library VerusConstants {
     uint8 constant MAPPING_VERUS_OWNED = 1;
     uint8 constant MAPPING_PARTOF_BRIDGEVETH = 2;
     uint8 constant MAPPING_ISBRIDGE_CURRENCY = 4;
+
+    enum ContractType {
+        TokenManager,
+        VerusSerializer,
+        VerusProof,
+        VerusCrossChainExport,
+        VerusNotarizer,
+        VerusBridge,
+        VerusInfo,
+        ExportManager
+    }
     
 }
