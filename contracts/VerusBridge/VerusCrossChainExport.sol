@@ -13,6 +13,7 @@ contract VerusCrossChainExport{
     VerusObjects.CCurrencyValueMap[] currencies;
     VerusObjects.CCurrencyValueMap[] fees;
     VerusSerializer verusSerializer;
+    //   event test1(VerusObjects.CCrossChainExport ted);
 
     function quickSort(VerusObjects.CCurrencyValueMap[] storage currencey, int left, int right) private {
         int i = left;
@@ -59,7 +60,7 @@ contract VerusCrossChainExport{
 
         VerusObjects.CCrossChainExport memory workingCCE;
         //create a hash of the transfers and then 
-        bytes memory serializedTransfers = verusSerializer.serializeCReserveTransfers(transfers,false);
+        bytes memory serializedTransfers = verusSerializer.serializeCReserveTransfers(transfers, false);
         bytes32 hashedTransfers = keccak256(serializedTransfers);
 
         //create the Cross ChainExport to then serialize and hash
@@ -69,12 +70,15 @@ contract VerusCrossChainExport{
         workingCCE.sourceheightstart = uint32(block.number);
         workingCCE.sourceheightend = uint32(block.number);
         workingCCE.sourcesystemid = VerusConstants.VEth;
+        workingCCE.hashtransfers = hashedTransfers;
         workingCCE.destinationsystemid = VerusConstants.VerusSystemId;
-        if(bridgeReady){ 
-            workingCCE.destinationcurrencyid = VerusConstants.VerusBridgeAddress;  
-        }else{
-            workingCCE.destinationcurrencyid = VerusConstants.VEth; 
+
+        if (bridgeReady) { // RESERVETORESERVE FLAG
+            workingCCE.destinationcurrencyid = VerusConstants.VerusBridgeAddress;  //TODO:transfers are bundled by type
+        } else {
+            workingCCE.destinationcurrencyid = VerusConstants.VerusCurrencyId; //TODO:transfers are bundled by type
         }
+
         workingCCE.numinputs = uint32(transfers.length);
         //loop through the array and create totals of the amounts and fees
         
@@ -113,18 +117,18 @@ contract VerusCrossChainExport{
         workingCCE.totalamounts = currencies;
         workingCCE.totalfees = fees; 
 
-        workingCCE.hashtransfers = hashedTransfers;
         VerusObjects.CCurrencyValueMap memory totalburnedCCVM = VerusObjects.CCurrencyValueMap(0x0000000000000000000000000000000000000000,0);
-        
+
         workingCCE.totalburned = new VerusObjects.CCurrencyValueMap[](1);
         workingCCE.totalburned[0] = totalburnedCCVM;
         workingCCE.rewardaddress = VerusObjectsCommon.CTransferDestination(VerusConstants.RewardAddressType, abi.encodePacked(VerusConstants.RewardAddress));
         workingCCE.firstinput = 1;
 
-        //clear the arrays
+        // clear the arrays
         delete currencies;
         delete fees;
 
+        // emit test1(workingCCE);
         return workingCCE;
 
     }

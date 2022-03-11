@@ -5,10 +5,60 @@ pragma solidity >=0.6.0 < 0.9.0;
 pragma experimental ABIEncoderV2;   
 import "../Libraries/VerusObjects.sol";
 import "../Libraries/VerusObjectsNotarization.sol";
+import "../Libraries/VerusConstants.sol";
 
 contract VerusSerializer {
 
-    //hashing functions
+    uint constant ETH_ADDRESS_SIZE_BYTES = 20;
+
+
+
+    function readVarUintLE(bytes memory incoming, uint32 offset) public pure returns(VerusObjectsCommon.UintReader memory) {
+        uint32 retVal = 0;
+        while (true)
+        {
+            uint8 oneByte;
+            assembly {
+                oneByte := mload(add(incoming, offset))
+            }
+            retVal += (uint32)(oneByte & 0x7f) << (offset * 7);
+            offset++;
+            if (oneByte <= 0x7f)
+            {
+                break;
+            }
+        }
+        return VerusObjectsCommon.UintReader(offset, retVal);
+    }
+
+    // uses the varint encoding from Bitcoin script pushes
+    // this does not support numbers larger than uint16, and if it encounters one or any invalid data, it returns a value of 
+    // zero and the original offset
+    function readCompactSizeLE(bytes memory incoming, uint32 offset) public pure returns(VerusObjectsCommon.UintReader memory) {
+
+        uint8 oneByte;
+        assembly {
+            oneByte := mload(add(incoming, offset))
+        }
+        offset++;
+        if (oneByte < 253)
+        {
+            return VerusObjectsCommon.UintReader(offset, oneByte);
+        }
+        else if (oneByte == 253)
+        {
+            assembly {
+                oneByte := mload(add(incoming, offset))
+            }
+            uint16 twoByte = oneByte;
+            offset++;
+            assembly {
+                oneByte := mload(add(incoming, offset))
+            }
+            return VerusObjectsCommon.UintReader(offset + 1, (twoByte << 8) + oneByte);
+        }
+        return VerusObjectsCommon.UintReader(offset, 0);
+    }
 
     function writeVarInt(uint256 incoming) public pure returns(bytes memory) {
         bytes1 inProgress;
@@ -129,7 +179,6 @@ contract VerusSerializer {
     function serializeAddress(address number) public pure returns(bytes memory){
         bytes memory be = abi.encodePacked(number);
         return be;
-        
     }
     
     function serializeUint160Array(uint160[] memory numbers) public pure returns(bytes memory){
@@ -141,16 +190,25 @@ contract VerusSerializer {
         return(be);
     }
 
-
     function serializeUint256(uint256 number) public pure returns(bytes memory){
         bytes memory be = abi.encodePacked(number);
         return(flipArray(be));
     }
     
-function serializeCTransferDestination(VerusObjectsCommon.CTransferDestination memory ctd) public pure returns(bytes memory){
-        
-         return abi.encodePacked(serializeUint8(ctd.destinationtype),writeCompactSize(20),ctd.destinationaddress);
-       
+    function serializeCTransferDestination(VerusObjectsCommon.CTransferDestination memory ctd) public pure returns(bytes memory){
+
+        uint256 destinationSize;
+
+        if ((ctd.destinationtype & VerusConstants.DEST_REGISTERCURRENCY) == VerusConstants.DEST_REGISTERCURRENCY) {
+
+            destinationSize = ctd.destinationaddress.length;
+
+        } else {
+
+            destinationSize = ETH_ADDRESS_SIZE_BYTES;
+        }
+
+        return abi.encodePacked(serializeUint8(ctd.destinationtype),writeCompactSize(destinationSize),ctd.destinationaddress);
     }    
 
     function serializeCCurrencyValueMap(VerusObjects.CCurrencyValueMap memory _ccvm) public pure returns(bytes memory){
@@ -178,17 +236,17 @@ function serializeCTransferDestination(VerusObjectsCommon.CTransferDestination m
             serializeAddress(ct.destcurrencyid)
            );
            
-        if((ct.flags & 0x400)>0) output = abi.encodePacked(output,serializeAddress(ct.secondreserveid));           
-         //see if its got a cross_system flag
-        if((ct.flags & 0x40)>0) output = abi.encodePacked(output,serializeAddress(ct.destsystemid));
+        if((ct.flags & VerusConstants.RESERVE_TO_RESERVE )>0) output = abi.encodePacked(output,serializeAddress(ct.secondreserveid));           
+         //see if it has a cross_system flag
+        if((ct.flags & VerusConstants.CROSS_SYSTEM)>0) output = abi.encodePacked(output,serializeAddress(ct.destsystemid));
         
         return output;
     }
     
-    function serializeCReserveTransfers(VerusObjects.CReserveTransfer[] memory _bts,bool includeSize) public pure returns(bytes memory){
+    function serializeCReserveTransfers(VerusObjects.CReserveTransfer[] memory _bts, bool includeSize) public pure returns(bytes memory){
         bytes memory inProgress;
         
-        if(includeSize) inProgress =writeCompactSize(_bts.length);
+        if (includeSize) inProgress = writeCompactSize(_bts.length);
         
         for(uint i=0; i < _bts.length; i++){
             inProgress = abi.encodePacked(inProgress,serializeCReserveTransfer(_bts[i]));
@@ -357,6 +415,55 @@ function serializeCTransferDestination(VerusObjectsCommon.CTransferDestination m
             pos++;
         }
         return output;
+    }
+
+    function deSerializeCurrencyDefinition(bytes memory input)
+         public
+         pure
+         returns (
+             VerusObjects.CcurrencyDefinition memory ccurrencyDefinition
+         )
+    {
+        uint32 nextOffset;
+        uint8 nameStringLength;
+        address parent;
+        address launchSystemID;
+        address systemID;
+        address nativeCurrencyID;
+        uint32 CCC_PREFIX_TO_PARENT = 4 + 4 + 20;
+        uint32 CCC_ID_LEN = 20;
+        uint32 CCC_NATIVE_OFFSET = CCC_ID_LEN + 4 + 4;
+
+        nextOffset = CCC_PREFIX_TO_PARENT;
+
+        assembly {
+            parent := mload(add(input, nextOffset)) // this should be parent ID
+            nextOffset := add(nextOffset, 1) // and after that...
+            nameStringLength := mload(add(input, nextOffset)) // string length MAX 64 so will always be a byte
+        }
+
+        ccurrencyDefinition.parent = parent;
+
+        bytes memory name = new bytes(nameStringLength);
+
+        for (uint256 i = 0; i < nameStringLength; i++) {
+            name[i] = input[i + nextOffset];
+        }
+
+        ccurrencyDefinition.name = string(name);
+        nextOffset = nextOffset + nameStringLength + CCC_ID_LEN;
+
+        assembly {
+            launchSystemID := mload(add(input, nextOffset)) // this should be launchsysemID
+            nextOffset := add(nextOffset, CCC_ID_LEN)
+            systemID := mload(add(input, nextOffset)) // this should be systemID 
+            nextOffset := add(nextOffset, CCC_NATIVE_OFFSET)
+            nativeCurrencyID := mload(add(input, nextOffset)) //TODO: daemon serilaization to be changed this should be nativeCurrencyID
+        }
+
+        ccurrencyDefinition.launchSystemID = launchSystemID;
+        ccurrencyDefinition.systemID = systemID;
+        ccurrencyDefinition.nativeCurrencyID = nativeCurrencyID;
     }
 
 }

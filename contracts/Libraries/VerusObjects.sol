@@ -1,17 +1,18 @@
 // SPDX-License-Identifier: MIT
 // Bridge between ethereum and verus
 
-pragma solidity >=0.6.0 < 0.9.0;
+pragma solidity >=0.6.0 <0.9.0;
 pragma experimental ABIEncoderV2;
 
 import "./VerusObjectsCommon.sol";
 
 library VerusObjects {
-    
+
     struct blockCreated {
         uint index;
         bool created;
     }
+
     struct infoDetails {
         uint version;
         string VRSCversion;
@@ -57,8 +58,7 @@ library VerusObjects {
         address secondreserveid;
     }
 
-
-    //CReserve Transfer Set is a simplified version of a crosschain export returning only the required info
+    // CReserve Transfer Set is a simplified version of a crosschain export returning only the required info
     
     struct CReserveTransferSet {
         uint position;
@@ -69,15 +69,15 @@ library VerusObjects {
 
     struct LastImport {
         uint height;
-        bytes32 txid; //this is actually the hash of the transfers that can be used for proof
+        bytes32 txid;                                   // this is actually the hash of the transfers that can be used for proof
     }
 
     struct CReserveTransferImport {
         uint height;
-        bytes32 txid; //this is actually the hash of the transfers that can be used for proof
-        uint txoutnum; //index of the transfers in the exports array
+        bytes32 txid;                                   // when from ETH, this is hash of the serialized CCrossChainExport that can be used for proof
+        uint txoutnum;                                  // index of the transfers in the exports array
         CCrossChainExport exportinfo;
-        CPtransactionproof partialtransactionproof;  //partial transaction proof is for the 
+        CPtransactionproof partialtransactionproof;     // partial transaction proof is for the 
         CReserveTransfer[] transfers ;
     }
 
@@ -85,6 +85,7 @@ library VerusObjects {
         uint16 version;
         uint16 flags;
         address sourcesystemid;
+        bytes32 hashtransfers;                          // hashtransfers
         uint32 sourceheightstart;
         uint32 sourceheightend;
         address destinationsystemid;
@@ -92,14 +93,20 @@ library VerusObjects {
         uint32 numinputs;
         CCurrencyValueMap[] totalamounts;
         CCurrencyValueMap[] totalfees;
-        bytes32 hashtransfers; // hashtransfers
         CCurrencyValueMap[] totalburned;
         VerusObjectsCommon.CTransferDestination rewardaddress; //reward address
         int32 firstinput;
     }
 
-    struct CMerkleBranch {
+    struct CcurrencyDefinition {
+         address parent;
+         string name;
+         address launchSystemID;
+         address systemID;
+         address nativeCurrencyID;
+     }
 
+    struct CMerkleBranch {
         uint8  CMerkleBranchBase;
         uint32 nIndex;
         uint32 nSize;
@@ -116,8 +123,6 @@ library VerusObjects {
         uint8 elIdx;
         bytes elVchObj;
         CTXProof[] elProof;
-        uint32 VchObjIndex;
-
     }
     
     struct CPtransactionproof {

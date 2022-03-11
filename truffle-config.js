@@ -23,7 +23,7 @@
 //
 // const fs = require('fs');
 // const mnemonic = fs.readFileSync(".secret").toString().trim();
-const privateKeys = ["..."];
+const privateKeys = ["4..."];
 
 module.exports = {
   /**
@@ -61,13 +61,13 @@ module.exports = {
     // Useful for deploying to a public network.
     // NB: It's important to wrap the provider as a function.
      rinkeby: {
-      provider: () => {return new HDWalletProvider(privateKeys, 'https://rinkeby.infura.io/v3/........')},
+      provider: () => {return new HDWalletProvider(privateKeys, 'wss://rinkeby.infura.io/ws/v3/467899....')},
      network_id: 4,       // Ropsten's id
       // gas: 6700000,        // Ropsten has a lower block limit than mainnet
        confirmations: 0,    // # of confs to wait between deployments. (default: 0)
        timeoutBlocks: 50,  // # of blocks before a deployment times out  (minimum/default: 50)
-       skipDryRun: true     // Skip dry run before migrations? (default: false for public nets )
-       
+       skipDryRun: true ,    // Skip dry run before migrations? (default: false for public nets )
+       networkCheckTimeout: 10000, 
      },
 
     // Useful for private networks

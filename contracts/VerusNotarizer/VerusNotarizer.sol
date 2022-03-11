@@ -9,7 +9,7 @@ import "../Libraries/VerusObjectsNotarization.sol";
 import "../VerusBridge/VerusSerializer.sol";
 import "../MMR/VerusBlake2b.sol";
 
-contract VerusNotarizer{
+contract VerusNotarizer {
 
     //last notarized blockheight
     uint32 public lastBlockHeight;
@@ -17,8 +17,15 @@ contract VerusNotarizer{
     //allows for the contract to be upgradable
     bool public deprecated;
     address public upgradedAddress;
+
     //number of notaries required
     uint8 requiredNotaries = 13;
+
+    uint8 constant FLAG_FRACTIONAL = 1;
+    uint8 constant FLAG_REFUNDING = 4;
+    uint8 constant FLAG_LAUNCHCONFIRMED = 0x10;
+    uint8 constant FLAG_LAUNCHCOMPLETEMARKER = 0x20;
+
     VerusBlake2b blake2b;
     VerusSerializer verusSerializer;
     bytes20 vdxfcode = bytes20(0x367Eaadd291E1976ABc446A143f83c2D4D2C5a84);
@@ -32,13 +39,14 @@ contract VerusNotarizer{
     mapping (uint32 => bytes32) public notarizedStateRoots;
     
     mapping (address => uint32) public poolAvailable;
-    
+
     uint32[] public blockHeights;
     //used to record the number of notaries
     uint8 private notaryCount;
 
     // Notifies when the contract is deprecated
     event Deprecate(address newAddress);
+
     // Notifies when a new block hash is published
     event NewBlock(VerusObjectsNotarization.CPBaaSNotarization,uint32 notarizedDataHeight);
 
@@ -113,7 +121,7 @@ contract VerusNotarizer{
         bytes32[] memory _ss,
         uint32[] memory blockheights,
         address[] memory notaryAddress
-        ) public returns(bool output){
+        ) public returns(bool output) {
 
         require(!deprecated,"Contract has been deprecated");
         require((_rs.length == _ss.length) && (_rs.length == _vs.length),"Signature arrays must be of equal length");
@@ -146,18 +154,18 @@ contract VerusNotarizer{
                 break;
             }
         }
-        if(numberOfSignatures >= currentNotariesRequired()){
+        if (numberOfSignatures >= currentNotariesRequired()){
             //valid notarization
             //loop through the currencystates and confirm if the bridge is active
             for(uint k= 0; k < _pbaasNotarization.currencystates.length; k++){
-                // checks for launchconfrimed (flags & (FLAG_FRACTIONAL(1) + FLAG_REFUNDING(4) + FLAG_LAUNCHCONFIRMED(0x10) + FLAG_LAUNCHCOMPLETEMARKER(0x20))) 
-                //== (1 + 0x10 + 0x20)
-                if(_pbaasNotarization.currencystates[k].currencystate.flags & (1 + 4 + 0x10 + 0x20) == (1 + 0x10 + 0x20)
-                    && poolAvailable[_pbaasNotarization.currencystates[k].currencyid] == 0){
+                if (_pbaasNotarization.currencystates[k].currencystate.flags & 
+                        (FLAG_FRACTIONAL + FLAG_REFUNDING + FLAG_LAUNCHCONFIRMED + FLAG_LAUNCHCOMPLETEMARKER) == 
+                            (FLAG_FRACTIONAL + FLAG_LAUNCHCONFIRMED + FLAG_LAUNCHCOMPLETEMARKER)
+                    && poolAvailable[_pbaasNotarization.currencystates[k].currencyid] == 0) {
                     poolAvailable[_pbaasNotarization.currencystates[k].currencyid] = uint32(block.number);
                 }
             }
-            
+
             for(uint j = 0 ; j < _pbaasNotarization.proofroots.length;j++){
                 if(_pbaasNotarization.proofroots[j].systemid == VerusConstants.VerusCurrencyId){
                     notarizedStateRoots[_pbaasNotarization.notarizationheight] =  _pbaasNotarization.proofroots[j].stateroot;       
@@ -168,7 +176,7 @@ contract VerusNotarizer{
                     }
                 }
             }
-            emit NewBlock(_pbaasNotarization,lastBlockHeight);
+            emit NewBlock(_pbaasNotarization, lastBlockHeight);
             
             return true;        
         }
@@ -204,7 +212,4 @@ contract VerusNotarizer{
             Deprecate(_upgradedAddress);
         }
     }
-    
-    
-
 }
