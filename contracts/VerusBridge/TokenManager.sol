@@ -8,11 +8,13 @@ import "./Token.sol";
 import "../Libraries/VerusConstants.sol";
 import "../Libraries/VerusObjects.sol";
 import "./VerusSerializer.sol";
+import "../VerusBridge/VerusBridge.sol";
 
 contract TokenManager {
     event TokenCreated(address tokenAddress);
-    VerusSerializer verusSerializer;
+    
     uint256 constant TICKER_LENGTH_MAX = 4;
+    VerusBridgeMaster verusBridgeMaster;
 
     struct mappedToken {
         address erc20ContractAddress;
@@ -31,17 +33,16 @@ contract TokenManager {
         string name;
         string ticker;
     }
-
+    // Global variable to save external contract calls
+    address verusBridgeContract;
     mapping(address => mappedToken) public verusToERC20mapping;
     address[] public tokenList;
-    address verusBridgeContract;
 
     constructor(
-        address verusSerializerAddress,
+        address verusBridgeMasterAddress,
         setupToken[] memory tokensToLaunch
     ) {
-        verusBridgeContract = address(0);
-        verusSerializer = VerusSerializer(verusSerializerAddress);
+        verusBridgeMaster = VerusBridgeMaster(verusBridgeMasterAddress);
         launchTokens(tokensToLaunch);
     }
 
@@ -81,7 +82,7 @@ contract TokenManager {
 
     function setVerusBridgeContract(address _verusBridgeContract) public {
         require(
-            verusBridgeContract == address(0),
+            _verusBridgeContract == verusBridgeMaster.getContractAddress(VerusConstants.ContractType.VerusBridge),
             "verusBridgeContract Address has already been set."
         );
         verusBridgeContract = _verusBridgeContract;
@@ -233,7 +234,7 @@ contract TokenManager {
     function deployToken(bytes memory _serializedCcd) public returns (address) {
         
         require (isVerusBridgeContract(),"Call can only be made from Verus Bridge Contract");
-
+        VerusSerializer verusSerializer = VerusSerializer(verusBridgeMaster.getContractAddress(VerusConstants.ContractType.TokenManager));
         VerusObjects.CcurrencyDefinition memory ccd = verusSerializer
             .deSerializeCurrencyDefinition(_serializedCcd);
         address destinationCurrencyID = getIAddress(ccd);

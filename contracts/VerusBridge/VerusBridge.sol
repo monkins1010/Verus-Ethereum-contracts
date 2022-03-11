@@ -66,10 +66,9 @@ contract VerusBridge {
 
  
     function export(VerusObjects.CReserveTransfer memory transfer, uint256 paidValue) public payable {
-        uint256 requiredFees =  VerusConstants.transactionFee;
-        uint256 verusFees = VerusConstants.verusTransactionFee;
-        tokenManager = TokenManager(verusBridgeMaster.getContractAddress(VerusConstants.ContractType.TokenManager));
 
+        tokenManager = TokenManager(verusBridgeMaster.getContractAddress(VerusConstants.ContractType.TokenManager));
+        exportManager = ExportManager(verusBridgeMaster.getContractAddress(VerusConstants.ContractType.ExportManager));
         uint256 fees;
 
         fees = exportManager.checkExport(transfer, msg.value);

@@ -78,23 +78,26 @@ contract VerusBridgeMaster {
         if(contractTypeAddress == VerusConstants.ContractType.TokenManager){
             contractAddress = address(tokenManager);
         }
-        if(contractTypeAddress == VerusConstants.ContractType.VerusSerializer){
+        else if(contractTypeAddress == VerusConstants.ContractType.VerusSerializer){
             contractAddress = address(verusSerializer);
         } 
-        if(contractTypeAddress == VerusConstants.ContractType.VerusProof){
+        else if(contractTypeAddress == VerusConstants.ContractType.VerusProof){
             contractAddress = address(verusProof);
         } 
-        if(contractTypeAddress == VerusConstants.ContractType.VerusCrossChainExport){
+        else if(contractTypeAddress == VerusConstants.ContractType.VerusCrossChainExport){
             contractAddress = address(verusCCE);        
         }        
-        if(contractTypeAddress == VerusConstants.ContractType.VerusNotarizer){
+        else if(contractTypeAddress == VerusConstants.ContractType.VerusNotarizer){
             contractAddress = address(verusNotarizer);       
         }        
-        if(contractTypeAddress == VerusConstants.ContractType.VerusBridge){
+        else if(contractTypeAddress == VerusConstants.ContractType.VerusBridge){
             contractAddress = address(verusBridge);       
         }
-        if(contractTypeAddress == VerusConstants.ContractType.VerusInfo){
+        else if(contractTypeAddress == VerusConstants.ContractType.VerusInfo){
             contractAddress = address(verusInfo);       
+        }
+        else if(contractTypeAddress == VerusConstants.ContractType.ExportManager){
+            contractAddress = address(exportManager);       
         }
     }
 
