@@ -66,7 +66,7 @@ module.exports = async function (deployer) {
 
     let USDCInst = await Token.at(USDCERC20);
 
-    USDCInst.increaseAllowance(VerusBridgeInst.address, "1000000000000000000000000");
+    USDCInst.increaseAllowance(VerusBridgeInst.address,"1000000000000000000000000")
 
     const settingString = "verusbridgeaddress=" + VerusBridgeInst.address + "\n" +
     "verusnotarizeraddress=" + notarizerInst.address + "\n" +
