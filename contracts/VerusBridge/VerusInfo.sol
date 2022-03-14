@@ -5,6 +5,7 @@ import "../Libraries/VerusObjects.sol";
 import "../Libraries/VerusObjectsCommon.sol";
 import "../Libraries/VerusConstants.sol";
 import "../VerusNotarizer/VerusNotarizer.sol";
+import "../VerusBridge/VerusBridgeMaster.sol";
 
 pragma solidity >=0.6.0 <0.9.0;
 pragma experimental ABIEncoderV2;
@@ -12,7 +13,7 @@ pragma experimental ABIEncoderV2;
 contract VerusInfo {
 
     VerusNotarizer verusNotarizer;
-    
+    VerusBridgeMaster verusBridgeMaster;
     VerusObjects.infoDetails chainInfo;
     
     constructor(
@@ -20,14 +21,24 @@ contract VerusInfo {
         uint chainVersion,
         string memory chainVerusVersion,
         string memory chainName,
-        bool chainTestnet) public {
+        bool chainTestnet,
+        address verusBridgeMasterAddress) public {
         verusNotarizer = VerusNotarizer(verusNotarizerAddress);
         chainInfo.version = chainVersion;
         chainInfo.VRSCversion = chainVerusVersion;
         chainInfo.name = chainName;
         chainInfo.testnet = chainTestnet;
+        verusBridgeMaster = VerusBridgeMaster(verusBridgeMasterAddress);
     }
 
+    function updateNotarizerAddress() public returns (address) {
+
+    if (address(verusNotarizer) != verusBridgeMaster.getContractAddress(VerusConstants.ContractType.VerusNotarizer)) {
+            verusNotarizer = VerusNotarizer(verusBridgeMaster.getContractAddress(VerusConstants.ContractType.VerusNotarizer));
+            return address(verusNotarizer);
+        }
+        return address(0);
+    }
 
     function getinfo() public view returns(VerusObjects.infoDetails memory){
         //set blocks

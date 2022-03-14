@@ -1,3 +1,4 @@
+var VerusBridgeMaster = artifacts.require("./VerusBridge/VerusBridgeMaster.sol");
 var VerusTokenManager = artifacts.require("./VerusBridge/TokenManager.sol");
 var VerusBlake2b = artifacts.require("./MMR/VerusBlake2b.sol");
 var VerusSerializer = artifacts.require("./VerusBridge/VerusSerializer.sol");
@@ -28,11 +29,8 @@ const launchCurrencies = [tokenmanvrsctest, tokenmanbeth, tokenmanUSDC, vETH];
 const USDCERC20 = "0xeb8f08a975ab53e34d8a0330e0d34de942c95926";
 
 module.exports = async function (deployer) {
-
-    await deployer.deploy(Verusaddress)
-    const addressInst = await Verusaddress.deployed();
-
-    await deployer.link(Verusaddress, VerusTokenManager);
+    await deployer.deploy(VerusBridgeMaster,"5000000000000000000000");
+    const bridgeMasterInst = await VerusBridgeMaster.deployed();
     
     await deployer.deploy(VerusBlake2b);
     const blakeInst = await VerusBlake2b.deployed();
@@ -40,7 +38,7 @@ module.exports = async function (deployer) {
     await deployer.deploy(VerusSerializer);
     const serializerInst = await VerusSerializer.deployed();
 
-    await deployer.deploy(VerusTokenManager, serializerInst.address, launchCurrencies)
+    await deployer.deploy(VerusTokenManager, bridgeMasterInst.address, launchCurrencies)
     const tokenInst = await VerusTokenManager.deployed();
 
     await deployer.deploy(VerusNotarizer, blakeInst.address, serializerInst.address, verusNotariserIDS, verusNotariserSigner);
@@ -52,16 +50,13 @@ module.exports = async function (deployer) {
     await deployer.deploy(VerusCCE, serializerInst.address);
     const CCEInst = await VerusCCE.deployed();
 
-    await deployer.deploy(VerusBridge, ProofInst.address, tokenInst.address, serializerInst.address,
-        notarizerInst.address, CCEInst.address, "5000000000000000000000");
+    await deployer.deploy(VerusBridge, bridgeMasterInst.address);
     const VerusBridgeInst = await VerusBridge.deployed();
 
-    await deployer.deploy(ExportManager, tokenInst.address, VerusBridgeInst.address);
+    await deployer.deploy(ExportManager, bridgeMasterInst.address);
     const ExportManInst = await ExportManager.deployed();
 
-    await VerusBridgeInst.setExportManagerContract(ExportManInst.address);
-
-    await deployer.deploy(VerusInfo, notarizerInst.address, "2000753", "0.7.3-9-rc1", "VETH", true);
+    await deployer.deploy(VerusInfo, notarizerInst.address, "2000753", "0.7.3-9-rc1", "VETH", true, bridgeMasterInst.address);
     const INFOInst = await VerusInfo.deployed();
 
     let USDCInst = await Token.at(USDCERC20);

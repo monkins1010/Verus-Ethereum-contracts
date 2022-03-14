@@ -41,11 +41,11 @@ contract VerusBridge {
 
     // DO NOT ADD ANY VARIABLES ABOVE THIS POINT
     // used to store a list of currencies and an amount
-    VerusObjects.CReserveTransfer[] private _pendingExports;
+   // VerusObjects.CReserveTransfer[] private _pendingExports;
     
     // stores the blockheight of each pending transfer
     // the export set holds the summary of a set of exports
-    VerusObjects.CReserveTransfer[][] public _readyExports;
+    mapping (uint => VerusObjects.exportSet) public _readyExports;
     
     //stores the index corresponds to the block
     VerusObjects.LastImport public lastimport;
@@ -64,11 +64,32 @@ contract VerusBridge {
         lastimport.txid = 0x00000000000000000000000000000000;
     }
 
+    function setContracts(address[] memory contracts) public {
+
+        assert(msg.sender == address(verusBridgeMaster));
+
+        if(contracts[uint(VerusConstants.ContractType.TokenManager)] != verusBridgeMaster.getContractAddress(VerusConstants.ContractType.TokenManager))
+            tokenManager = TokenManager(contracts[uint(VerusConstants.ContractType.TokenManager)]);
+        
+        if(contracts[uint(VerusConstants.ContractType.VerusSerializer)] != verusBridgeMaster.getContractAddress(VerusConstants.ContractType.VerusSerializer))
+            verusSerializer = VerusSerializer(contracts[uint(VerusConstants.ContractType.VerusSerializer)]);
+        
+        if(contracts[uint(VerusConstants.ContractType.VerusProof)] != verusBridgeMaster.getContractAddress(VerusConstants.ContractType.VerusProof))    
+            verusProof = VerusProof(contracts[uint(VerusConstants.ContractType.VerusProof)]);
+
+        if(contracts[uint(VerusConstants.ContractType.VerusNotarizer)] != verusBridgeMaster.getContractAddress(VerusConstants.ContractType.VerusNotarizer))     
+            verusNotarizer = VerusNotarizer(contracts[uint(VerusConstants.ContractType.VerusNotarizer)]);
+
+        if(contracts[uint(VerusConstants.ContractType.VerusCrossChainExport)] != verusBridgeMaster.getContractAddress(VerusConstants.ContractType.VerusCrossChainExport))     
+            verusCCE = VerusCrossChainExport(contracts[uint(VerusConstants.ContractType.VerusCrossChainExport)]);
+
+        if(contracts[uint(VerusConstants.ContractType.ExportManager)] != verusBridgeMaster.getContractAddress(VerusConstants.ContractType.ExportManager))     
+            exportManager = ExportManager(contracts[uint(VerusConstants.ContractType.ExportManager)]);
+
+    }
  
     function export(VerusObjects.CReserveTransfer memory transfer, uint256 paidValue) public payable {
 
-        tokenManager = TokenManager(verusBridgeMaster.getContractAddress(VerusConstants.ContractType.TokenManager));
-        exportManager = ExportManager(verusBridgeMaster.getContractAddress(VerusConstants.ContractType.ExportManager));
         uint256 fees;
 
         fees = exportManager.checkExport(transfer, msg.value);
@@ -81,7 +102,7 @@ contract VerusBridge {
             //check that the token is registered
             Token token = tokenManager.getTokenERC20(transfer.currencyvalue.currency);
             uint256 allowedTokens = token.allowance(msg.sender,address(this));
-            uint256 tokenAmount = verusBridgeMaster.convertFromVerusNumber(transfer.currencyvalue.amount,token.decimals()); //convert to wei from verus satoshis
+            uint256 tokenAmount = verusCCE.convertFromVerusNumber(transfer.currencyvalue.amount,token.decimals()); //convert to wei from verus satoshis
             assert( allowedTokens >= tokenAmount);
             //transfer the tokens to this contract
             token.transferFrom(msg.sender,address(this),tokenAmount); 
@@ -90,7 +111,7 @@ contract VerusBridge {
             tokenManager.exportERC20Tokens(transfer.currencyvalue.currency, tokenAmount);  //total amount kept as wei until export to verus
         } else {
             //handle a vEth transfer
-            transfer.currencyvalue.amount = uint64(verusBridgeMaster.convertToVerusNumber(msg.value - VerusConstants.transactionFee,18));
+            transfer.currencyvalue.amount = uint64(verusCCE.convertToVerusNumber(msg.value - VerusConstants.transactionFee,18));
             verusBridgeMaster.addToEthHeld(msg.value - fees);  // msg.value == fees +amount in transaction checked in checkExport()
             verusBridgeMaster.addToFeesHeld(fees); //TODO: what happens if they send to much fee?
         }
@@ -99,44 +120,20 @@ contract VerusBridge {
 
     function _createExports(VerusObjects.CReserveTransfer memory newTransaction) private {
         uint currentHeight = block.number;
-        uint exportIndex;
-        bool newHash;
-        verusSerializer = VerusSerializer(verusBridgeMaster.getContractAddress(VerusConstants.ContractType.VerusSerializer));
-        verusNotarizer = VerusNotarizer(verusBridgeMaster.getContractAddress(VerusConstants.ContractType.VerusNotarizer));
-        verusCCE = VerusCrossChainExport(verusBridgeMaster.getContractAddress(VerusConstants.ContractType.VerusCrossChainExport));
+
         //check if the current block height has a set of transfers associated with it if so add to the existing array
-        if (readyExportsByBlock[currentHeight].created) {
-            //append to an existing array of transfers
-            exportIndex = readyExportsByBlock[currentHeight].index;
-            _readyExports[exportIndex].push(newTransaction);
-            newHash = false;
+
+        _readyExports[currentHeight].transfers.push(newTransaction);
+
+        bool bridgeReady = verusBridgeMaster.poolAvailable(VerusConstants.VerusBridgeAddress);
+
+        bytes memory serializedCCE = verusSerializer.serializeCCrossChainExport(verusCCE.generateCCE(_readyExports[currentHeight].transfers, bridgeReady));
+
+        _readyExports[currentHeight].txidhash = keccak256(abi.encodePacked(serializedCCE, _readyExports[currentHeight].txidhash));
+
+        if (firstBlock == 0) { 
+            firstBlock = currentHeight;
         }
-        else {
-            _pendingExports.push(newTransaction);
-            exportIndex = _readyExports.length;
-            _readyExports.push(_pendingExports);
-            readyExportsByBlock[currentHeight] = VerusObjects.blockCreated(exportIndex, true);
-            delete _pendingExports;
-            newHash = true;
-        }
-       
-        // QUESTION: why such a complicated test to determine destination currency on Verus?
-        // likely better would be to have a bool of bridge ready
-        bool bridgeReady = (0 < verusNotarizer.poolAvailable(VerusConstants.VerusBridgeAddress) &&
-            verusNotarizer.poolAvailable(VerusConstants.VerusBridgeAddress) < uint32(block.number));
-
-        bytes memory serializedCCE = verusSerializer.serializeCCrossChainExport(verusCCE.generateCCE(_readyExports[exportIndex], bridgeReady));
-
-        bytes32 hashedCCE;
-        bytes32 lastCCEHash = 0;
-        if (exportIndex != 0) lastCCEHash = readyExportHashes[exportIndex -1];
-        hashedCCE = keccak256(abi.encodePacked(serializedCCE, lastCCEHash));
-
-        //add the hashed value
-        if (newHash) readyExportHashes.push(hashedCCE);
-        else readyExportHashes[exportIndex] = hashedCCE;
-
-        if (firstBlock == 0) firstBlock = currentHeight;
     }
 
     function getlastimportheight() public view returns(uint) {
@@ -171,7 +168,7 @@ contract VerusBridge {
 
         bytes32 txidfound;
         bytes memory sliced = _import.partialtransactionproof.components[0].elVchObj;
-        verusProof =  VerusProof(verusBridgeMaster.getContractAddress(VerusConstants.ContractType.VerusProof));
+
         assembly {
             txidfound := mload(add(sliced, 32))                                 // skip memory length (ETH encoded in an efficient 32 bytes ;) )
         }
@@ -190,17 +187,23 @@ contract VerusBridge {
         // check the transfers were in the hash.
         for(uint i = 0; i < _import.transfers.length; i++){
             // handle eth transactions
-            amount = verusBridgeMaster.convertFromVerusNumber(uint256(_import.transfers[i].currencyvalue.amount),18);
+            amount = verusCCE.convertFromVerusNumber(uint256(_import.transfers[i].currencyvalue.amount),18);
 
             // if the transfer does not have the EXPORT_CURRENCY flag set
             if(_import.transfers[i].flags & VerusConstants.CTRX_CURRENCY_EXPORT_FLAG != VerusConstants.CTRX_CURRENCY_EXPORT_FLAG){
+                    address destinationAddress;
 
-                if(verusBridgeMaster.bytesToAddress(_import.transfers[i].destination.destinationaddress) != address(0)){
+                    bytes memory tempAddress  = _import.transfers[i].destination.destinationaddress;
 
+                    assembly {
+                    destinationAddress := mload(add(tempAddress, 20))
+                    } 
+
+                if(destinationAddress != address(0)){
                     if(_import.transfers[i].currencyvalue.currency == VerusConstants.VEth) {
                         // cast the destination as an ethAddress
                         assert(amount <= address(this).balance);
-                            verusBridgeMaster.sendEth(amount, payable(verusBridgeMaster.bytesToAddress(_import.transfers[i].destination.destinationaddress)));
+                            verusBridgeMaster.sendEth(amount, payable(destinationAddress));
                             verusBridgeMaster.subtractFromEthHeld(amount);
                             
                 
@@ -210,7 +213,7 @@ contract VerusBridge {
 
                         tokenManager.importERC20Tokens(_import.transfers[i].currencyvalue.currency,
                             _import.transfers[i].currencyvalue.amount,
-                            verusBridgeMaster.bytesToAddress(_import.transfers[i].destination.destinationaddress));
+                            destinationAddress);
                     }
                 }
             } else if(_import.transfers[i].destination.destinationtype & VerusConstants.DEST_REGISTERCURRENCY == VerusConstants.DEST_REGISTERCURRENCY) {
@@ -230,19 +233,16 @@ contract VerusBridge {
     function getReadyExportsByBlock(uint _blockNumber) public view returns(VerusObjects.CReserveTransferSet memory) {
         //need a transferset for each position not each block
         //retrieve a block get the indexes, create a transfer set for each index add those to the array
-        uint eIndex = readyExportsByBlock[_blockNumber].index;
-
         VerusObjects.CReserveTransferSet memory output = VerusObjects.CReserveTransferSet(
-            eIndex,                     // position in array
+            _blockNumber,                     // position in array
             _blockNumber,               // blockHeight
-            readyExportHashes[eIndex],  // cross chain export hash
-            _readyExports[eIndex]       // list of CReserveTransfers
+            _readyExports[_blockNumber].txidhash,  // cross chain export hash
+            _readyExports[_blockNumber].transfers       // list of CReserveTransfers
         );
-
         return output;
     }
 
-    function getReadyExportsByRange(uint _startBlock,uint _endBlock) public view returns(VerusObjects.CReserveTransferSet[] memory){
+    function getReadyExportsByRange(uint _startBlock,uint _endBlock) public view returns(VerusObjects.CReserveTransferSet[] memory returnedExports){
         //calculate the size that the return array will be to initialise it
         uint outputSize = 0;
         if(_startBlock < firstBlock) _startBlock = firstBlock;
@@ -250,20 +250,22 @@ contract VerusBridge {
             if(readyExportsByBlock[i].created) outputSize += 1;
         }
 
-        VerusObjects.CReserveTransferSet[] memory output = new VerusObjects.CReserveTransferSet[](outputSize);
         uint outputPosition = 0;
         for (uint blockNumber = _startBlock; blockNumber <= _endBlock; blockNumber++){
             if (readyExportsByBlock[blockNumber].created) {
-                output[outputPosition] = getReadyExportsByBlock(blockNumber);
+                returnedExports[outputPosition] = getReadyExportsByBlock(blockNumber);
                 outputPosition++;
             }
         }
-        return output;        
+        return returnedExports;        
     }
 
     function getCreatedExport(uint created) public view returns (address) {
 
-        return  _readyExports[created][0].destcurrencyid;
+        if (_readyExports[created].transfers.length > 0)
+            return  _readyExports[created].transfers[0].destcurrencyid;
+        else
+            return address(0);
         
     }
 

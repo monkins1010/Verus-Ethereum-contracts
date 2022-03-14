@@ -13,15 +13,21 @@ contract ExportManager {
 
     //VerusBridge verusBridge;
     VerusBridgeMaster verusBridgeMaster;
+    TokenManager tokenManager;
 
-    constructor(address verusBridgeMasterAddress) public {
+    constructor(address verusBridgeMasterAddress){
         verusBridgeMaster = VerusBridgeMaster(verusBridgeMasterAddress); 
     }
 
-    function checkExport(VerusObjects.CReserveTransfer memory transfer, uint256 ETHSent) public view returns (uint256 fees){
+    function checkExport(VerusObjects.CReserveTransfer memory transfer, uint256 ETHSent) public returns (uint256 fees){
 
-       // function returns 0 for low level errors, however uses requires for higher level errors.
-    TokenManager tokenManager = TokenManager(verusBridgeMaster.getContractAddress(VerusConstants.ContractType.TokenManager));
+    if (msg.sender != address(tokenManager)) {
+        if (msg.sender == verusBridgeMaster.getContractAddress(VerusConstants.ContractType.TokenManager)) {
+            tokenManager = TokenManager(verusBridgeMaster.getContractAddress(VerusConstants.ContractType.TokenManager));
+        } else {
+            require(false,"Can only be called from VerusBridgeMaster");
+        }
+    }
       
     require(tokenManager.ERC20Registered(transfer.currencyvalue.currency) && 
                 tokenManager.ERC20Registered(transfer.feecurrencyid) &&
@@ -65,7 +71,11 @@ contract ExportManager {
 
         }
 
-        if (verusBridgeMaster.isPoolUnavailable(transfer.fees, transfer.feecurrencyid)) {
+
+        if (!verusBridgeMaster.poolAvailable(VerusConstants.VerusBridgeAddress)) {
+
+            assert(transfer.feecurrencyid == VerusConstants.VerusCurrencyId);
+            assert(verusBridgeMaster.getPoolSize() >= convertFromVerusNumber(transfer.fees, 18));
 
             if (!(transfer.destination.destinationtype == VerusConstants.DEST_PKH ||
                    transfer.destination.destinationtype == VerusConstants.DEST_ID))
@@ -136,17 +146,8 @@ contract ExportManager {
     function checkReadyExports() public view returns(address) {
 
         VerusBridge verusBridge = VerusBridge(verusBridgeMaster.getContractAddress(VerusConstants.ContractType.VerusBridge));
-        (uint created , bool readyBlock) = verusBridge.readyExportsByBlock(block.number);
-
-        if (readyBlock) {
-    
-            return verusBridge.getCreatedExport(created);
-
-        } else {
-
-            return address(0);
-
-        }
+   
+        return verusBridge.getCreatedExport(block.number);
 
     }
 

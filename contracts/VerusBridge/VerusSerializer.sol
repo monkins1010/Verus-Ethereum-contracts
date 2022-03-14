@@ -11,8 +11,6 @@ contract VerusSerializer {
 
     uint constant ETH_ADDRESS_SIZE_BYTES = 20;
 
-
-
     function readVarUintLE(bytes memory incoming, uint32 offset) public pure returns(VerusObjectsCommon.UintReader memory) {
         uint32 retVal = 0;
         while (true)
@@ -455,7 +453,7 @@ contract VerusSerializer {
             nextOffset := add(nextOffset, CCC_ID_LEN)
             systemID := mload(add(input, nextOffset)) // this should be systemID 
             nextOffset := add(nextOffset, CCC_NATIVE_OFFSET)
-            nativeCurrencyID := mload(add(input, nextOffset)) //TODO: daemon serilaization to be changed this should be nativeCurrencyID
+            nativeCurrencyID := mload(add(input, nextOffset)) 
         }
 
         ccurrencyDefinition.launchSystemID = launchSystemID;

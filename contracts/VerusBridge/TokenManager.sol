@@ -9,12 +9,14 @@ import "../Libraries/VerusConstants.sol";
 import "../Libraries/VerusObjects.sol";
 import "./VerusSerializer.sol";
 import "../VerusBridge/VerusBridge.sol";
+import "../VerusBridge/VerusBridgeMaster.sol";
 
 contract TokenManager {
     event TokenCreated(address tokenAddress);
     
     uint256 constant TICKER_LENGTH_MAX = 4;
     VerusBridgeMaster verusBridgeMaster;
+    VerusSerializer verusSerializer;
 
     struct mappedToken {
         address erc20ContractAddress;
@@ -179,7 +181,7 @@ contract TokenManager {
         pure
         returns (string memory)
     {
-        bytes memory copy = new bytes(TICKER_LENGTH_MAX);
+        bytes memory copy = new bytes(bytes(_text).length < TICKER_LENGTH_MAX ? bytes(_text).length : TICKER_LENGTH_MAX);
         bytes memory textAsBytes = bytes(_text);
         uint256 max = (
             textAsBytes.length > TICKER_LENGTH_MAX
@@ -223,7 +225,7 @@ contract TokenManager {
 
     function getIAddress(VerusObjects.CcurrencyDefinition memory _ccd) public pure returns (address){
 
-        if(_ccd.parent == 0x0000000000000000000000000000000000000000) {
+        if(_ccd.parent == address(0)) {
             return address(ripemd160(abi.encodePacked(sha256(abi.encodePacked(sha256d(_toLower(_ccd.name)))))));
         }
         else {
@@ -234,9 +236,11 @@ contract TokenManager {
     function deployToken(bytes memory _serializedCcd) public returns (address) {
         
         require (isVerusBridgeContract(),"Call can only be made from Verus Bridge Contract");
-        VerusSerializer verusSerializer = VerusSerializer(verusBridgeMaster.getContractAddress(VerusConstants.ContractType.TokenManager));
-        VerusObjects.CcurrencyDefinition memory ccd = verusSerializer
-            .deSerializeCurrencyDefinition(_serializedCcd);
+
+        if(address(verusSerializer) != verusBridgeMaster.getContractAddress(VerusConstants.ContractType.VerusSerializer))
+            verusSerializer = VerusSerializer(verusBridgeMaster.getContractAddress(VerusConstants.ContractType.VerusSerializer));
+
+        VerusObjects.CcurrencyDefinition memory ccd = verusSerializer.deSerializeCurrencyDefinition(_serializedCcd);
         address destinationCurrencyID = getIAddress(ccd);
 
         if (verusToERC20mapping[destinationCurrencyID].erc20ContractAddress != address(0))
@@ -252,9 +256,6 @@ contract TokenManager {
 
     // Called from constructor to launch pre-defined currencies.
     function launchTokens(setupToken[] memory tokensToDeploy) private {
-        require (isVerusBridgeContract(),
-            "Call can only be made from Verus Bridge Contract"
-        );
 
         for (uint256 i = 0; i < tokensToDeploy.length; i++) {
             recordToken(
@@ -277,20 +278,23 @@ contract TokenManager {
         address launchSystemID
     ) private returns (address) {
 
+        address ERCContract;
+
         if (flags & VerusConstants.MAPPING_VERUS_OWNED == VerusConstants.MAPPING_VERUS_OWNED ) {
 
-            Token t = new Token(name, ticker);      
-            verusToERC20mapping[_iaddress] = mappedToken(address(t), flags, name, ticker, tokenList.length, launchSystemID);
+            Token t = new Token(name, ticker);   
+            ERCContract = address(t);
             tokenList.push(_iaddress); 
-            emit TokenCreated(address(t));
-            return address(t);
+            emit TokenCreated(ERCContract);
 
         } else {
 
-            verusToERC20mapping[_iaddress] = mappedToken(ethContractAddress, flags, name, ticker, tokenList.length, launchSystemID);
+            ERCContract = ethContractAddress;
             tokenList.push(_iaddress);
-            return ethContractAddress;
 
         }
+        
+        verusToERC20mapping[_iaddress] = mappedToken(ERCContract, flags, name, ticker, tokenList.length, launchSystemID);
+        return ERCContract;
     }
 }

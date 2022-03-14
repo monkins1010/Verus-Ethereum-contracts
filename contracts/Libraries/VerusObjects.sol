@@ -46,6 +46,13 @@ library VerusObjects {
         uint64 amount;
     }
 
+    struct exportSet {
+
+        CReserveTransfer[] transfers;
+        bytes32 txidhash;   
+
+    }
+
     struct CReserveTransfer {
         uint32 version;
         CCurrencyValueMap currencyvalue;

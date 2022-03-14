@@ -18,14 +18,10 @@ contract VerusBridgeMaster {
 
     //declare the contracts and have it return the contract addresses
 
-    TokenManager tokenManager;
-    VerusSerializer verusSerializer;
-    VerusProof verusProof;
-    VerusCrossChainExport verusCCE;
-    VerusNotarizer verusNotarizer;
     VerusBridge verusBridge;
+    VerusNotarizer verusNotarizer;
     VerusInfo verusInfo;
-    ExportManager exportManager;
+    address[8] contracts;
 
     //temporary placeholder for testing purposes
     address contractOwner;
@@ -36,6 +32,26 @@ contract VerusBridgeMaster {
     uint256 poolSize = 0;
 
     mapping (address => uint256) public claimableFees;
+
+    // used to prove the transfers the index of this corresponds to the index of the 
+    bytes32[] public readyExportHashes;
+
+    // DO NOT ADD ANY VARIABLES ABOVE THIS POINT
+    // used to store a list of currencies and an amount
+    // VerusObjects.CReserveTransfer[] private _pendingExports;
+    
+    // stores the blockheight of each pending transfer
+    // the export set holds the summary of a set of exports
+    mapping (uint => VerusObjects.exportSet) public _readyExports;
+    
+    //stores the index corresponds to the block
+    VerusObjects.LastImport public lastimport;
+    mapping (bytes32 => bool) public processedTxids;
+    mapping (uint => VerusObjects.blockCreated) public readyExportsByBlock;
+    
+    uint public lastTxImportHeight;
+
+
     
     //contract allows the contracts to be set and reset
     constructor(
@@ -47,19 +63,10 @@ contract VerusBridgeMaster {
     /** get and set functions, sets to be performed by the notariser **/
     function setContractAddress(VerusConstants.ContractType contractTypeAddress, address _newContractAddress) public {
         assert(msg.sender == contractOwner);
-        if(contractTypeAddress == VerusConstants.ContractType.TokenManager){
-            tokenManager = TokenManager(_newContractAddress);
-        }
-        else if(contractTypeAddress == VerusConstants.ContractType.VerusSerializer){
-            verusSerializer = VerusSerializer(_newContractAddress);
-        } 
-        else if(contractTypeAddress == VerusConstants.ContractType.VerusProof){
-            verusProof =  VerusProof(_newContractAddress);
-        } 
-        else if(contractTypeAddress == VerusConstants.ContractType.VerusCrossChainExport){
-            verusCCE = VerusCrossChainExport(_newContractAddress);        
-        }        
-        else if(contractTypeAddress == VerusConstants.ContractType.VerusNotarizer){
+
+        contracts[uint(contractTypeAddress)] = _newContractAddress;
+
+        if(contractTypeAddress == VerusConstants.ContractType.VerusNotarizer){
             verusNotarizer = VerusNotarizer(_newContractAddress);       
         }        
         else if(contractTypeAddress == VerusConstants.ContractType.VerusBridge){
@@ -68,37 +75,13 @@ contract VerusBridgeMaster {
         else if(contractTypeAddress == VerusConstants.ContractType.VerusInfo){
             verusInfo = VerusInfo(_newContractAddress);       
         }
-        else if(contractTypeAddress == VerusConstants.ContractType.ExportManager){
-            exportManager = ExportManager(_newContractAddress);       
-        }
     }
     
     /** returns the address of each contract to be used by the sub contracts **/
     function getContractAddress(VerusConstants.ContractType contractTypeAddress) public view returns(address contractAddress){
-        if(contractTypeAddress == VerusConstants.ContractType.TokenManager){
-            contractAddress = address(tokenManager);
-        }
-        else if(contractTypeAddress == VerusConstants.ContractType.VerusSerializer){
-            contractAddress = address(verusSerializer);
-        } 
-        else if(contractTypeAddress == VerusConstants.ContractType.VerusProof){
-            contractAddress = address(verusProof);
-        } 
-        else if(contractTypeAddress == VerusConstants.ContractType.VerusCrossChainExport){
-            contractAddress = address(verusCCE);        
-        }        
-        else if(contractTypeAddress == VerusConstants.ContractType.VerusNotarizer){
-            contractAddress = address(verusNotarizer);       
-        }        
-        else if(contractTypeAddress == VerusConstants.ContractType.VerusBridge){
-            contractAddress = address(verusBridge);       
-        }
-        else if(contractTypeAddress == VerusConstants.ContractType.VerusInfo){
-            contractAddress = address(verusInfo);       
-        }
-        else if(contractTypeAddress == VerusConstants.ContractType.ExportManager){
-            contractAddress = address(exportManager);       
-        }
+        
+        contractAddress = contracts[uint(contractTypeAddress)];
+
     }
 
     function setFeesHeld(uint256 _feesAmount) public {
@@ -148,7 +131,7 @@ contract VerusBridgeMaster {
     /** VerusBridge pass through functions **/
     function export(VerusObjects.CReserveTransfer memory _transfer) public payable {
         uint256 ethAmount = msg.value;
-        verusBridge.export(_transfer,ethAmount);
+        verusBridge.export(_transfer, ethAmount);
     }
 
     function checkImports(bytes32[] memory _imports) public view returns(bytes32[] memory){
@@ -164,14 +147,11 @@ contract VerusBridgeMaster {
         return verusBridge.getReadyExportsByRange(_startBlock,_endBlock);
     }
 
-    function readyExportHashes(uint _position) public view returns (bytes32) {
-        return verusBridge.readyExportHashes(_position);
-    }
-
     /** VerusNotarizer pass through functions **/
 
-    function poolAvailable(address _address) public view returns(uint32){
-        return verusNotarizer.poolAvailable(_address);
+    function poolAvailable(address _address) public view returns(bool){
+        uint32 heightAvailable = verusNotarizer.poolAvailable(_address);
+        return heightAvailable != 0 && heightAvailable < block.number;
     }
 
     function getLastProofRoot() public view returns(VerusObjectsNotarization.CProofRoot memory){
@@ -203,52 +183,6 @@ contract VerusBridgeMaster {
         require(msg.sender == address(verusBridge),"Sorry you can't call this function");
         _ethAddress.transfer(_ethAmount);
      }
-
-    function isPoolUnavailable(uint256 _feesAmount,address _feeCurrencyID) public view returns(bool){
-        if(0 < verusNotarizer.poolAvailable(VerusConstants.VerusBridgeAddress) &&
-            verusNotarizer.poolAvailable(VerusConstants.VerusBridgeAddress) < uint32(block.number)) {
-            //the bridge has been activated
-            return false;
-        } else {
-            assert(_feeCurrencyID == VerusConstants.VerusCurrencyId);
-            assert(getPoolSize() >= _feesAmount);
-            return true;
-        }
-    }
-
-
-    function convertFromVerusNumber(uint256 a,uint8 decimals) public pure returns (uint256) {
-         uint8 power = 10; //default value for 18
-         uint256 c = a;
-        if(decimals > 8 ) {
-            power = decimals - 8;// number of decimals in verus
-            c = a * (10 ** power);
-        }else if(decimals < 8){
-            power = 8 - decimals;// number of decimals in verus
-            c = a / (10 ** power);
-        }      
-        return c;
-    }
-
-    function convertToVerusNumber(uint256 a,uint8 decimals) public pure returns (uint256) {
-         uint8 power = 10; //default value for 18
-         uint256 c = a;
-        if (decimals > 8 ) {
-            power = decimals - 8;// number of decimals in verus
-            c = a / (10 ** power);
-        } else if (decimals < 8){
-            power = 8 - decimals;// number of decimals in verus
-            c = a * (10 ** power);
-        }
-
-        return c;
-    }
-
-    function bytesToAddress(bytes memory bys) public pure returns (address addr) {
-        assembly {
-        addr := mload(add(bys,20))
-        } 
-    }
 
 
 }
