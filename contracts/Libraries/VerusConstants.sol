@@ -48,7 +48,8 @@ library VerusConstants {
         VerusNotarizer,
         VerusBridge,
         VerusInfo,
-        ExportManager
+        ExportManager,
+        LastIndex
     }
     
 }

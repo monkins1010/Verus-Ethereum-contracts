@@ -5,14 +5,9 @@ pragma experimental ABIEncoderV2;
 import "../Libraries/VerusObjects.sol";
 import "../Libraries/VerusObjectsNotarization.sol";
 
-import "./TokenManager.sol";    
-import "./VerusSerializer.sol";
-import "../MMR/VerusProof.sol";
-import "./VerusCrossChainExport.sol";
 import "../VerusNotarizer/VerusNotarizer.sol";
 import "./VerusBridge.sol";
 import "./VerusInfo.sol";
-import "./ExportManager.sol";
 
 contract VerusBridgeMaster {
 
@@ -21,6 +16,8 @@ contract VerusBridgeMaster {
     VerusBridge verusBridge;
     VerusNotarizer verusNotarizer;
     VerusInfo verusInfo;
+    
+    // Total amount of contracts.
     address[8] contracts;
 
     //temporary placeholder for testing purposes
@@ -29,94 +26,77 @@ contract VerusBridgeMaster {
     //all major functions get declared here and passed through to the underlying contract
     uint256 feesHeld = 0;
     uint256 ethHeld = 0;
-    uint256 poolSize = 0;
+
+    // VRSC pool size in WEI
+    uint256 poolSize = 0;  
 
     mapping (address => uint256) public claimableFees;
-
-    // used to prove the transfers the index of this corresponds to the index of the 
-    bytes32[] public readyExportHashes;
-
-    // DO NOT ADD ANY VARIABLES ABOVE THIS POINT
-    // used to store a list of currencies and an amount
-    // VerusObjects.CReserveTransfer[] private _pendingExports;
-    
-    // stores the blockheight of each pending transfer
-    // the export set holds the summary of a set of exports
     mapping (uint => VerusObjects.exportSet) public _readyExports;
-    
-    //stores the index corresponds to the block
-    VerusObjects.LastImport public lastimport;
     mapping (bytes32 => bool) public processedTxids;
-    mapping (uint => VerusObjects.blockCreated) public readyExportsByBlock;
     
     uint public lastTxImportHeight;
-
+    uint256 public firstBlock;
 
     
     //contract allows the contracts to be set and reset
     constructor(
         uint256 _poolSize){
             contractOwner = msg.sender; 
-            poolSize = _poolSize;        
+            poolSize = _poolSize;
+            firstBlock = block.number;        
     }
     
     /** get and set functions, sets to be performed by the notariser **/
-    function setContractAddress(VerusConstants.ContractType contractTypeAddress, address _newContractAddress) public {
+    function setContractAddress(VerusConstants.ContractType contractType, address _newContractAddress) public {
+        
+        //TODO: Make updating contract a multisig check across 3 notaries.
         assert(msg.sender == contractOwner);
 
-        contracts[uint(contractTypeAddress)] = _newContractAddress;
+        contracts[uint(contractType)] = _newContractAddress;
 
-        if(contractTypeAddress == VerusConstants.ContractType.VerusNotarizer){
+        if(contractType == VerusConstants.ContractType.VerusNotarizer){
             verusNotarizer = VerusNotarizer(_newContractAddress);       
         }        
-        else if(contractTypeAddress == VerusConstants.ContractType.VerusBridge){
+        else if(contractType == VerusConstants.ContractType.VerusBridge){
             verusBridge = VerusBridge(_newContractAddress);       
         }
-        else if(contractTypeAddress == VerusConstants.ContractType.VerusInfo){
+        else if(contractType == VerusConstants.ContractType.VerusInfo){
             verusInfo = VerusInfo(_newContractAddress);       
         }
     }
     
     /** returns the address of each contract to be used by the sub contracts **/
-    function getContractAddress(VerusConstants.ContractType contractTypeAddress) public view returns(address contractAddress){
+    function getContractAddress(VerusConstants.ContractType contractType) public view returns(address contractAddress){
         
-        contractAddress = contracts[uint(contractTypeAddress)];
+        contractAddress = contracts[uint(contractType)];
 
     }
 
-    function setFeesHeld(uint256 _feesAmount) public {
-        require( msg.sender == address(verusBridge),"This function can only be called by Verus Bridge");
-        feesHeld = _feesAmount;
+    function isSenderBridgeContract(address sender) private view {
+
+        require( sender == address(verusBridge),"This function can only be called by Verus Bridge");
     }
-    function getFeesHeld() public view returns(uint256){
-        return feesHeld;
-    }
+
     function addToFeesHeld(uint256 _feesAmount) public {
-        require( msg.sender == address(verusBridge),"This function can only be called by Verus Bridge");
+        isSenderBridgeContract(msg.sender);
         feesHeld += _feesAmount;
     }
 
     function addToEthHeld(uint256 _ethAmount) public {
-        require(msg.sender == address(verusBridge),"This function can only be called by Verus Bridge");
+        isSenderBridgeContract(msg.sender);
         ethHeld += _ethAmount;
     }
+
     function subtractFromEthHeld(uint256 _ethAmount) public {
-        require(msg.sender == address(verusBridge),"This function can only be called by Verus Bridge");
+        isSenderBridgeContract(msg.sender);
         ethHeld -= _ethAmount;
     }
 
-    function setEthHeld(uint256 _ethAmount) public {
-        require(msg.sender == address(verusBridge),"This function can only be called by Verus Bridge");
-        ethHeld = _ethAmount;
-    }
-
-    function getEthHeld() public view returns(uint256){
-        return ethHeld;
-    }
-
-    function setPoolSize(uint256 _amount) public {
-        require(msg.sender == address(verusBridge),"This function can only be called by Verus Bridge");
-        ethHeld = _amount;
+    function subtractPoolSize(uint256 _amount) public returns (bool){
+        isSenderBridgeContract(msg.sender);
+        if(_amount > poolSize) return false;
+        poolSize -= _amount;
+        return true;
     }
 
     function getPoolSize() public view returns(uint256){
@@ -124,7 +104,7 @@ contract VerusBridgeMaster {
     }
 
     function setClaimableFees(address _feeRecipient,uint256 _ethAmount) public {
-        require(msg.sender == address(verusBridge),"This function can only be called by Verus Bridge");
+        isSenderBridgeContract(msg.sender);
         claimableFees[_feeRecipient] = claimableFees[_feeRecipient] + _ethAmount;
     }
 
@@ -145,6 +125,56 @@ contract VerusBridgeMaster {
     function getReadyExportsByRange(uint _startBlock, uint _endBlock) public view 
         returns(VerusObjects.CReserveTransferSet[] memory){
         return verusBridge.getReadyExportsByRange(_startBlock,_endBlock);
+    }
+
+    function getReadyExports(uint _block) public view
+        returns(VerusObjects.exportSet memory){
+        
+        VerusObjects.exportSet memory exportSet = _readyExports[_block];
+
+        return exportSet;
+    }
+
+    function setReadyExportTransfers(uint _block, VerusObjects.CReserveTransfer memory reserveTransfer) public {
+
+        isSenderBridgeContract(msg.sender);
+        
+        VerusObjects.CReserveTransfer memory reserveTX = reserveTransfer;
+
+        _readyExports[_block].transfers.push(reserveTX);
+    
+    }
+
+    function setReadyExportTxid(uint _block, bytes32 txidhash) public {
+        
+        isSenderBridgeContract(msg.sender);
+        
+        _readyExports[_block].txidhash = txidhash;
+    
+    }
+
+    function getCreatedExport(uint createdBlock) public view returns (address) {
+
+        if (_readyExports[createdBlock].transfers.length > 0)
+            return  _readyExports[createdBlock].transfers[0].destcurrencyid;
+        else
+            return address(0);
+        
+    }
+
+    function setProcessedTxids(bytes32 processedTXID) public {
+
+        isSenderBridgeContract(msg.sender);
+        processedTxids[processedTXID] = true;
+
+    }
+
+    function setlastTxImportHeight(uint importHeight) public {
+
+        isSenderBridgeContract(msg.sender);
+
+        lastTxImportHeight = importHeight;
+
     }
 
     /** VerusNotarizer pass through functions **/
@@ -180,7 +210,7 @@ contract VerusBridgeMaster {
 
      function sendEth(uint256 _ethAmount, address payable _ethAddress) public {
          //only callable by verusbridge contract
-        require(msg.sender == address(verusBridge),"Sorry you can't call this function");
+        isSenderBridgeContract(msg.sender);
         _ethAddress.transfer(_ethAmount);
      }
 

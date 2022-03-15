@@ -17,9 +17,6 @@ import "./ExportManager.sol";
 
 contract VerusBridge {
 
-    //list of erc20 tokens that can be accessed,
-    //the contract must be able to mint and burn coins on the contract
-    //defines the tokenManager which creates the erc20
     TokenManager tokenManager;
     VerusSerializer verusSerializer;
     VerusProof verusProof;
@@ -28,40 +25,10 @@ contract VerusBridge {
     VerusBridgeMaster verusBridgeMaster;
     ExportManager exportManager;
 
-    // THE CONTRACT OWNER NEEDS TO BE REPLACED BY A SET OF NOTARIES
-    address contractOwner;
+    // Global storage is located in VerusBridgeMaster contract
 
-    bool public deprecated = false;     // indicates if the contract is deprecated
-    address public upgradedAddress;     // new contract, if this is deprecated
-
-    uint public firstBlock = 0;
-
-    // used to prove the transfers the index of this corresponds to the index of the 
-    bytes32[] public readyExportHashes;
-
-    // DO NOT ADD ANY VARIABLES ABOVE THIS POINT
-    // used to store a list of currencies and an amount
-   // VerusObjects.CReserveTransfer[] private _pendingExports;
-    
-    // stores the blockheight of each pending transfer
-    // the export set holds the summary of a set of exports
-    mapping (uint => VerusObjects.exportSet) public _readyExports;
-    
-    //stores the index corresponds to the block
-    VerusObjects.LastImport public lastimport;
-    mapping (bytes32 => bool) public processedTxids;
-    mapping (uint => VerusObjects.blockCreated) public readyExportsByBlock;
-    
-    uint public lastTxImportHeight;
-
-    uint32 constant CTRX_CURRENCY_EXPORT_FLAG = 0x2000;
-    uint8 constant DEST_REGISTERCURRENCY = 6;
-    event Deprecate(address newAddress);
-    
     constructor(address verusBridgeMasterAddress) {
         verusBridgeMaster = VerusBridgeMaster(verusBridgeMasterAddress); 
-        lastimport.height = 0;
-        lastimport.txid = 0x00000000000000000000000000000000;
     }
 
     function setContracts(address[] memory contracts) public {
@@ -98,7 +65,7 @@ contract VerusBridge {
 
         if (transfer.currencyvalue.currency != VerusConstants.VEth) {
             //check there are enough fees sent
-            verusBridgeMaster.setFeesHeld(verusBridgeMaster.getFeesHeld() + paidValue);
+            verusBridgeMaster.addToFeesHeld(paidValue);
             //check that the token is registered
             Token token = tokenManager.getTokenERC20(transfer.currencyvalue.currency);
             uint256 allowedTokens = token.allowance(msg.sender,address(this));
@@ -123,21 +90,14 @@ contract VerusBridge {
 
         //check if the current block height has a set of transfers associated with it if so add to the existing array
 
-        _readyExports[currentHeight].transfers.push(newTransaction);
+        verusBridgeMaster.setReadyExportTransfers(currentHeight, newTransaction);
 
         bool bridgeReady = verusBridgeMaster.poolAvailable(VerusConstants.VerusBridgeAddress);
 
-        bytes memory serializedCCE = verusSerializer.serializeCCrossChainExport(verusCCE.generateCCE(_readyExports[currentHeight].transfers, bridgeReady));
+        bytes memory serializedCCE = verusSerializer.serializeCCrossChainExport(verusCCE.generateCCE(verusBridgeMaster.getReadyExports(currentHeight).transfers, bridgeReady));
 
-        _readyExports[currentHeight].txidhash = keccak256(abi.encodePacked(serializedCCE, _readyExports[currentHeight].txidhash));
+        verusBridgeMaster.setReadyExportTxid(currentHeight, keccak256(abi.encodePacked(serializedCCE, verusBridgeMaster.getReadyExports(currentHeight).txidhash)));
 
-        if (firstBlock == 0) { 
-            firstBlock = currentHeight;
-        }
-    }
-
-    function getlastimportheight() public view returns(uint) {
-        return lastTxImportHeight;
     }
 
     /***
@@ -148,7 +108,7 @@ contract VerusBridge {
         bytes32[] memory txidList = new bytes32[](_imports.length);
         uint iterator;
         for(uint i = 0; i < _imports.length; i++){
-            if(processedTxids[_imports[i]] != true){
+            if(verusBridgeMaster.processedTxids(_imports[i]) != true){
                 txidList[iterator] = _imports[i];
                 iterator++;
             }
@@ -172,17 +132,17 @@ contract VerusBridge {
         assembly {
             txidfound := mload(add(sliced, 32))                                 // skip memory length (ETH encoded in an efficient 32 bytes ;) )
         }
-        if (processedTxids[txidfound] == true) return false; 
+        if (verusBridgeMaster.processedTxids(txidfound) == true) return false; 
 
         bool proven = verusProof.proveImports(_import);
 
         assert(proven);
-        processedTxids[txidfound] = true;
+        verusBridgeMaster.setProcessedTxids(txidfound);
 
-        if (lastTxImportHeight < _import.height)
-            lastTxImportHeight = _import.height;
+        if (verusBridgeMaster.lastTxImportHeight() < _import.height)
+            verusBridgeMaster.setlastTxImportHeight(_import.height);
 
-        uint256 amount;
+        uint256 amount; 
 
         // check the transfers were in the hash.
         for(uint i = 0; i < _import.transfers.length; i++){
@@ -236,8 +196,8 @@ contract VerusBridge {
         VerusObjects.CReserveTransferSet memory output = VerusObjects.CReserveTransferSet(
             _blockNumber,                     // position in array
             _blockNumber,               // blockHeight
-            _readyExports[_blockNumber].txidhash,  // cross chain export hash
-            _readyExports[_blockNumber].transfers       // list of CReserveTransfers
+            verusBridgeMaster.getReadyExports(_blockNumber).txidhash,  // cross chain export hash
+            verusBridgeMaster.getReadyExports(_blockNumber).transfers       // list of CReserveTransfers
         );
         return output;
     }
@@ -245,28 +205,22 @@ contract VerusBridge {
     function getReadyExportsByRange(uint _startBlock,uint _endBlock) public view returns(VerusObjects.CReserveTransferSet[] memory returnedExports){
         //calculate the size that the return array will be to initialise it
         uint outputSize = 0;
-        if(_startBlock < firstBlock) _startBlock = firstBlock;
+        if(_startBlock < verusBridgeMaster.firstBlock()) _startBlock = verusBridgeMaster.firstBlock();
         for(uint i = _startBlock; i <= _endBlock; i++){
-            if(readyExportsByBlock[i].created) outputSize += 1;
+            if(verusBridgeMaster.getReadyExports(i).txidhash != bytes32(0))  outputSize += 1;
         }
 
+        VerusObjects.CReserveTransferSet[] memory output = new VerusObjects.CReserveTransferSet[](outputSize);
         uint outputPosition = 0;
         for (uint blockNumber = _startBlock; blockNumber <= _endBlock; blockNumber++){
-            if (readyExportsByBlock[blockNumber].created) {
-                returnedExports[outputPosition] = getReadyExportsByBlock(blockNumber);
+            if (verusBridgeMaster.getReadyExports(blockNumber).txidhash != bytes32(0)) {
+                output[outputPosition] = getReadyExportsByBlock(blockNumber);
                 outputPosition++;
             }
         }
-        return returnedExports;        
+        return output;      
     }
 
-    function getCreatedExport(uint created) public view returns (address) {
 
-        if (_readyExports[created].transfers.length > 0)
-            return  _readyExports[created].transfers[0].destcurrencyid;
-        else
-            return address(0);
-        
-    }
 
 }

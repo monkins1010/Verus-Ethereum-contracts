@@ -48,7 +48,7 @@ contract ExportManager {
         require (checkTransferFlags(transfer), "Flag Check failed");         
                                   
         //TODO: We cant mix different transfer destinations together in the CCE assert on non same fields.
-        address exportID = checkReadyExports();
+        address exportID = verusBridgeMaster.getCreatedExport(block.number);
 
         require (exportID != transfer.destcurrencyid, "checkReadyExports cannot mix types ");
         
@@ -75,7 +75,9 @@ contract ExportManager {
         if (!verusBridgeMaster.poolAvailable(VerusConstants.VerusBridgeAddress)) {
 
             assert(transfer.feecurrencyid == VerusConstants.VerusCurrencyId);
-            assert(verusBridgeMaster.getPoolSize() >= convertFromVerusNumber(transfer.fees, 18));
+            
+            //VRSC pool as WEI
+            assert(verusBridgeMaster.subtractPoolSize(convertFromVerusNumber(transfer.fees, 18)));
 
             if (!(transfer.destination.destinationtype == VerusConstants.DEST_PKH ||
                    transfer.destination.destinationtype == VerusConstants.DEST_ID))
@@ -141,14 +143,6 @@ contract ExportManager {
         }
 
         return requiredFees;
-    }
-
-    function checkReadyExports() public view returns(address) {
-
-        VerusBridge verusBridge = VerusBridge(verusBridgeMaster.getContractAddress(VerusConstants.ContractType.VerusBridge));
-   
-        return verusBridge.getCreatedExport(block.number);
-
     }
 
     function convertFromVerusNumber(uint256 a,uint8 decimals) public pure returns (uint256) {
