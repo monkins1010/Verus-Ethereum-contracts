@@ -138,4 +138,23 @@ library VerusObjects {
         CTXProof[] txproof;
         CComponents[] components;
     }
+
+    struct mappedToken {
+        address erc20ContractAddress;
+        uint8 flags;
+        string name;
+        string ticker;
+        uint tokenIndex;
+        address launchSystemID;
+    }
+
+    struct setupToken {
+        address iaddress;
+        address erc20ContractAddress;
+        address launchSystemID;
+        uint8 flags;
+        string name;
+        string ticker;
+    }
+
 }

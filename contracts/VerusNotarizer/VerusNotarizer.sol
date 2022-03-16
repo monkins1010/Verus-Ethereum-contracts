@@ -11,6 +11,8 @@ import "../MMR/VerusBlake2b.sol";
 
 contract VerusNotarizer {
 
+    // TODO:MOVE GLOBALS INTO verusStorage
+    
     //last notarized blockheight
     uint32 public lastBlockHeight;
     //CurrencyState private lastCurrencyState;
@@ -28,6 +30,7 @@ contract VerusNotarizer {
 
     VerusBlake2b blake2b;
     VerusSerializer verusSerializer;
+    address verusBridgeMaster;
     bytes20 vdxfcode = bytes20(0x367Eaadd291E1976ABc446A143f83c2D4D2C5a84);
 
     //list of all notarizers mapped to allow for quick searching
@@ -50,9 +53,10 @@ contract VerusNotarizer {
     // Notifies when a new block hash is published
     event NewBlock(VerusObjectsNotarization.CPBaaSNotarization,uint32 notarizedDataHeight);
 
-    constructor(address _verusBLAKE2bAddress,address _verusSerializerAddress,address[] memory _notaries,address[] memory _notariesEthAddress) {
+    constructor(address _verusBLAKE2bAddress,address _verusSerializerAddress, address verusBridgeMasterAddress, address[] memory _notaries,address[] memory _notariesEthAddress) {
         verusSerializer = VerusSerializer(_verusSerializerAddress);
         blake2b = VerusBlake2b(_verusBLAKE2bAddress);
+        verusBridgeMaster = verusBridgeMasterAddress;
         deprecated = false;
         notaryCount = 0;
         lastBlockHeight = 0;
@@ -64,6 +68,14 @@ contract VerusNotarizer {
             notaries.push(_notaries[i]);
             notaryCount++;
         }
+    }
+
+    function setContract(address contractAddress) public {
+
+        assert(msg.sender == verusBridgeMaster);
+
+        verusSerializer = VerusSerializer(contractAddress);
+
     }
 
     modifier onlyNotary() {

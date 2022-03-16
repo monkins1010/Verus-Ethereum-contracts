@@ -10,10 +10,10 @@ contract VerusBlake2b {
 
     function createHash(bytes memory input) public view returns (bytes32) {
       Blake2b.Instance memory instance = Blake2b.init(hex"", 32);
-      return bytesToBytes32(instance.finalize(input), 0);
+      return bytesToBytes32(instance.finalize(input));
     }
 
-    function bytesToBytes32(bytes memory b, uint256 offset)
+    function bytesToBytes32(bytes memory b)
         public
         pure
         returns (bytes32)
@@ -21,12 +21,9 @@ contract VerusBlake2b {
         bytes32 out;
 
         for (uint256 i = 0; i < 32; i++) {
-            out |= bytes32(b[offset + (i)] & 0xFF) >> (i * 8);
+            out |= bytes32(b[(i)] & 0xFF) >> (i * 8);
         }
         return out;
-    }
-    
-    function bytesToBytes32(bytes memory b) public pure returns (bytes32){
-        return bytesToBytes32(b,0);
-    }
+    }    
+
 }

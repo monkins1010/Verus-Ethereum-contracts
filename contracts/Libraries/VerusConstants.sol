@@ -16,7 +16,7 @@ library VerusConstants {
     uint8 constant public RewardAddressType = 4;
     uint256 constant public transactionFee = 3000000000000000; //0.003 eth
     string constant public currencyName = "VETH";
-    uint256 constant public verusTransactionFee = 2000000; //0.02 verus
+    uint256 constant public verusTransactionFee = 2000000; //0.02 VRSC
     uint32 constant  VALID = 1;
     uint32 constant  CONVERT = 2;
     uint32 constant  CROSS_SYSTEM = 0x40;               
@@ -39,6 +39,7 @@ library VerusConstants {
     uint8 constant MAPPING_VERUS_OWNED = 1;
     uint8 constant MAPPING_PARTOF_BRIDGEVETH = 2;
     uint8 constant MAPPING_ISBRIDGE_CURRENCY = 4;
+    uint constant TICKER_LENGTH_MAX = 4;
 
     enum ContractType {
         TokenManager,
@@ -49,6 +50,7 @@ library VerusConstants {
         VerusBridge,
         VerusInfo,
         ExportManager,
+        VerusBridgeStorage,
         LastIndex
     }
     

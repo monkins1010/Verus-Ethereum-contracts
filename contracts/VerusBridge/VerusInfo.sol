@@ -31,13 +31,12 @@ contract VerusInfo {
         verusBridgeMaster = VerusBridgeMaster(verusBridgeMasterAddress);
     }
 
-    function updateNotarizerAddress() public returns (address) {
+    function setContract(address contractAddress) public {
 
-    if (address(verusNotarizer) != verusBridgeMaster.getContractAddress(VerusConstants.ContractType.VerusNotarizer)) {
-            verusNotarizer = VerusNotarizer(verusBridgeMaster.getContractAddress(VerusConstants.ContractType.VerusNotarizer));
-            return address(verusNotarizer);
-        }
-        return address(0);
+        assert(msg.sender == address(verusBridgeMaster));
+  
+        verusNotarizer = VerusNotarizer(contractAddress);
+
     }
 
     function getinfo() public view returns(VerusObjects.infoDetails memory){

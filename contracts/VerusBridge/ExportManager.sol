@@ -8,28 +8,33 @@ import "../Libraries/VerusObjectsCommon.sol";
 import "../Libraries/VerusConstants.sol";
 import "./TokenManager.sol";
 import "../VerusBridge/VerusBridge.sol";
+import "../VerusBridge/VerusBridgeMaster.sol";
+import "../VerusBridge/VerusBridgeStorage.sol";
 
 contract ExportManager {
 
     //VerusBridge verusBridge;
     VerusBridgeMaster verusBridgeMaster;
     TokenManager tokenManager;
+    VerusBridgeStorage verusBridgeStorage;
 
-    constructor(address verusBridgeMasterAddress){
+    constructor(address verusBridgeMasterAddress, address verusBridgeStorageAddress, address tokenManagerAddress){
         verusBridgeMaster = VerusBridgeMaster(verusBridgeMasterAddress); 
+        verusBridgeStorage = VerusBridgeStorage(verusBridgeStorageAddress); 
+        tokenManager = TokenManager(tokenManagerAddress);
+    }
+
+    function setContract(address contractAddress) public {
+
+        assert(msg.sender == address(verusBridgeMaster));
+        
+        tokenManager = TokenManager(contractAddress);
+
     }
 
     function checkExport(VerusObjects.CReserveTransfer memory transfer, uint256 ETHSent) public returns (uint256 fees){
 
-    if (msg.sender != address(tokenManager)) {
-        if (msg.sender == verusBridgeMaster.getContractAddress(VerusConstants.ContractType.TokenManager)) {
-            tokenManager = TokenManager(verusBridgeMaster.getContractAddress(VerusConstants.ContractType.TokenManager));
-        } else {
-            require(false,"Can only be called from VerusBridgeMaster");
-        }
-    }
-      
-    require(tokenManager.ERC20Registered(transfer.currencyvalue.currency) && 
+        require(tokenManager.ERC20Registered(transfer.currencyvalue.currency) && 
                 tokenManager.ERC20Registered(transfer.feecurrencyid) &&
                 tokenManager.ERC20Registered(transfer.destcurrencyid) &&
                 (tokenManager.ERC20Registered(transfer.secondreserveid) || 
@@ -48,7 +53,7 @@ contract ExportManager {
         require (checkTransferFlags(transfer), "Flag Check failed");         
                                   
         //TODO: We cant mix different transfer destinations together in the CCE assert on non same fields.
-        address exportID = verusBridgeMaster.getCreatedExport(block.number);
+        address exportID = verusBridgeStorage.getCreatedExport(block.number);
 
         require (exportID != transfer.destcurrencyid, "checkReadyExports cannot mix types ");
         
@@ -67,7 +72,7 @@ contract ExportManager {
 
         if (transfer.feecurrencyid == VerusConstants.VEth) {
 
-            require (convertFromVerusNumber(transfer.fees,18) >= requiredFees, "Fee value in transfer too low");
+            require (tokenManager.convertFromVerusNumber(transfer.fees,18) >= requiredFees, "Fee value in transfer too low");
 
         }
 
@@ -77,7 +82,7 @@ contract ExportManager {
             assert(transfer.feecurrencyid == VerusConstants.VerusCurrencyId);
             
             //VRSC pool as WEI
-            assert(verusBridgeMaster.subtractPoolSize(convertFromVerusNumber(transfer.fees, 18)));
+            assert(verusBridgeStorage.subtractPoolSize(tokenManager.convertFromVerusNumber(transfer.fees, 18)));
 
             if (!(transfer.destination.destinationtype == VerusConstants.DEST_PKH ||
                    transfer.destination.destinationtype == VerusConstants.DEST_ID))
@@ -116,7 +121,7 @@ contract ExportManager {
                 }
 
                 require (gatewayID == VerusConstants.VEth, "GateswayID not VETH");
-                require (convertFromVerusNumber(bounceBackFee, 18) >= requiredFees, "Return fee not >0.003ETH");
+                require (tokenManager.convertFromVerusNumber(bounceBackFee, 18) >= requiredFees, "Return fee not >0.003ETH");
 
                 requiredFees += requiredFees;  //TODO: bounceback fees required as well as send fees
 
@@ -135,7 +140,7 @@ contract ExportManager {
        
         if (transfer.currencyvalue.currency == VerusConstants.VEth) {
 
-            require (ETHSent == (requiredFees + convertFromVerusNumber(transfer.currencyvalue.amount,18)), "ETH sent != (amount + fees)");
+            require (ETHSent == (requiredFees + tokenManager.convertFromVerusNumber(transfer.currencyvalue.amount,18)), "ETH sent != (amount + fees)");
       
         } else {
 
@@ -143,21 +148,6 @@ contract ExportManager {
         }
 
         return requiredFees;
-    }
-
-    function convertFromVerusNumber(uint256 a,uint8 decimals) public pure returns (uint256) {
-        uint8 power = 10; //default value for 18
-        uint256 c = a;
-
-        if(decimals > 8 ) {
-            power = decimals - 8;// number of decimals in verus
-            c = a * (10 ** power);
-        }else if(decimals < 8){
-            power = 8 - decimals;// number of decimals in verus
-            c = a / (10 ** power);
-        }
-      
-        return c;
     }
 
     function checkTransferFlags(VerusObjects.CReserveTransfer memory transfer) public pure returns(bool) {

@@ -8,6 +8,7 @@ import "./VerusBlake2b.sol";
 import "../VerusBridge/VerusSerializer.sol";
 import "../VerusNotarizer/VerusNotarizer.sol";
 import "../Libraries/VerusObjectsCommon.sol";
+import "../VerusBridge/VerusBridgeMaster.sol";
 
 contract VerusProof {
 
@@ -15,13 +16,8 @@ contract VerusProof {
     VerusBlake2b blake2b;
     VerusNotarizer verusNotarizer;
     VerusSerializer verusSerializer;
+    VerusBridgeMaster verusBridgeMaster;
     
-    bytes32[] public computedValues;
-    bytes32 public testHashedTransfers;
-    bytes32 public txValue;
-    bytes public testTransfers;
-    bool public testResult;
-
     // these constants should be able to reference each other, as many are relative, but Solidity does not
     // allow referencing them and still considering the result a constant. For any changes to these constants,
     // which are designed to ensure smart transaction provability, care must be take to ensure that OUTPUT_SCRIPT_OFFSET
@@ -42,10 +38,23 @@ contract VerusProof {
 
     event HashEvent(bytes32 newHash,uint8 eventType);
 
-    constructor(address notarizerAddress,address verusBLAKE2b,address verusSerializerAddress) {
-        blake2b = VerusBlake2b(verusBLAKE2b);
+    constructor(address verusBridgeMasterAddress, address verusBLAKE2bAddress, address verusSerializerAddress, address verusNotarizerAddress) {
+        verusBridgeMaster = VerusBridgeMaster(verusBridgeMasterAddress); 
         verusSerializer = VerusSerializer(verusSerializerAddress);
-        verusNotarizer = VerusNotarizer(notarizerAddress);   
+        blake2b = VerusBlake2b(verusBLAKE2bAddress);
+        verusNotarizer = VerusNotarizer(verusNotarizerAddress);
+    }
+
+    function setContracts(address[] memory contracts) public {
+
+        assert(msg.sender == address(verusBridgeMaster));
+
+        if(contracts[uint(VerusConstants.ContractType.VerusSerializer)] != address(verusSerializer))
+            verusSerializer = VerusSerializer(contracts[uint(VerusConstants.ContractType.VerusSerializer)]);
+        
+        if(contracts[uint(VerusConstants.ContractType.VerusNotarizer)] != address(verusNotarizer))     
+            verusNotarizer = VerusNotarizer(contracts[uint(VerusConstants.ContractType.VerusNotarizer)]);
+
     }
 
     function hashTransfers(VerusObjects.CReserveTransfer[] memory _transfers) public view returns (bytes32){
@@ -206,7 +215,7 @@ contract VerusProof {
 
     // roll through each proveComponents
     function proveComponents(VerusObjects.CReserveTransferImport memory _import) public view returns(bytes32 txRoot){
-        //delete computedValues
+     
         bytes32 hashInProgress;
         bytes32 testHash;
 

@@ -13,7 +13,21 @@ contract VerusCrossChainExport{
     VerusObjects.CCurrencyValueMap[] currencies;
     VerusObjects.CCurrencyValueMap[] fees;
     VerusSerializer verusSerializer;
-    //   event test1(VerusObjects.CCrossChainExport ted);
+
+    address verusBridgeMaster;
+
+    constructor(address verusSerializerAddress, address verusBridgeMasterAddress) {
+        verusSerializer = VerusSerializer(verusSerializerAddress);
+        verusBridgeMaster = verusBridgeMasterAddress;
+    }
+
+    function setContract(address contractAddress) public {
+
+        assert(msg.sender == address(verusBridgeMaster));
+
+        verusSerializer = VerusSerializer(contractAddress);
+
+    }
 
     function quickSort(VerusObjects.CCurrencyValueMap[] storage currencey, int left, int right) private {
         int i = left;
@@ -36,10 +50,6 @@ contract VerusCrossChainExport{
             quickSort(currencey, left, j);
         if (i < right)
             quickSort(currencey, i, right);
-    }
-
-    constructor(address _verusSerializerAddress) {
-        verusSerializer = VerusSerializer(_verusSerializerAddress);
     }
 
     function inCurrencies(address checkCurrency) private view returns(int64){
@@ -133,32 +143,4 @@ contract VerusCrossChainExport{
 
     }
     
-    function convertFromVerusNumber(uint256 a,uint8 decimals) public pure returns (uint256) {
-         uint8 power = 10; //default value for 18
-         uint256 c = a;
-        if(decimals > 8 ) {
-            power = decimals - 8;// number of decimals in verus
-            c = a * (10 ** power);
-        }else if(decimals < 8){
-            power = 8 - decimals;// number of decimals in verus
-            c = a / (10 ** power);
-        }
-      
-        return c;
-    }
-
-    function convertToVerusNumber(uint256 a,uint8 decimals) public pure returns (uint256) {
-         uint8 power = 10; //default value for 18
-         uint256 c = a;
-        if(decimals > 8 ) {
-            power = decimals - 8;// number of decimals in verus
-            c = a / (10 ** power);
-        }else if(decimals < 8){
-            power = 8 - decimals;// number of decimals in verus
-            c = a * (10 ** power);
-        }
-      
-        return c;
-    }
-
 }

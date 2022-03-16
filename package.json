@@ -2,6 +2,7 @@
   "dependencies": {
     "@truffle/hdwallet-provider": "^1.4.1",
     "openzeppelin-solidity": "^3.4.1",
+    "truffle-contract-size": "^2.0.1",
     "web3": "^1.4.0"
   }
 }
