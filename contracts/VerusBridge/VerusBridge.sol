@@ -15,6 +15,7 @@ import "./VerusSerializer.sol";
 import "../VerusNotarizer/VerusNotarizer.sol";
 import "./VerusCrossChainExport.sol";
 import "./ExportManager.sol";
+import "../../node_modules/openzeppelin-solidity/contracts/token/ERC721/ERC721.sol";
 
 contract VerusBridge {
 
@@ -76,11 +77,12 @@ contract VerusBridge {
 
     }
  
-    function export(VerusObjects.CReserveTransfer memory transfer, uint256 paidValue) public payable {
+    function export(VerusObjects.CReserveTransfer memory transfer, uint256 paidValue, address sender) public {
 
+        require(msg.sender == address(verusBridgeMaster), "Token:Bridgemastercallonly");
         uint256 fees;
 
-        fees = exportManager.checkExport(transfer, msg.value);
+        fees = exportManager.checkExport(transfer, paidValue);
 
         assert(fees != 0); 
 
@@ -88,35 +90,36 @@ contract VerusBridge {
 
             verusBridgeStorage.addToFeesHeld(paidValue);
             Token token = Token(verusBridgeStorage.getERCMapping(transfer.currencyvalue.currency).erc20ContractAddress); 
-            uint256 allowedTokens = token.allowance(msg.sender,address(this));
+            uint256 allowedTokens = token.allowance(sender, address(verusBridgeMaster));
             uint256 tokenAmount = tokenManager.convertFromVerusNumber(transfer.currencyvalue.amount, token.decimals()); //convert to wei from verus satoshis
             assert( allowedTokens >= tokenAmount);
             //transfer the tokens to this contract
-            token.transferFrom(msg.sender,address(this),tokenAmount); 
-            token.approve(address(tokenManager),tokenAmount);
+            token.transferFrom(sender, address(verusBridgeMaster), tokenAmount); 
+            token.approve(address(verusBridgeMaster),tokenAmount);
             //give an approval for the tokenmanagerinstance to spend the tokens
             tokenManager.exportERC20Tokens(transfer.currencyvalue.currency, tokenAmount);  //total amount kept as wei until export to verus
 
         } else if (transfer.flags & VerusConstants.CTRX_CURRENCY_EXPORT_FLAG == VerusConstants.CTRX_CURRENCY_EXPORT_FLAG){
             
-            verusBridgeStorage.addToFeesHeld(paidValue);
+           verusBridgeStorage.addToFeesHeld(paidValue);
 
            //TODO: Add handle ERC721 here
+           address NFTAddress;
+           bytes memory NFTInfo = transfer.destination.destinationaddress;
+           uint256 NFTID;
+                assembly {
+                    NFTAddress := mload(add(NFTInfo, 20))
+                    NFTID := mload(add(NFTInfo, 52))
+                 }
+            ERC721 NFT = ERC721(NFTAddress);
+            NFT.transferFrom(sender, address(verusBridgeMaster), NFTID);
 
-           /* Token token = Token(verusBridgeStorage.getERCMapping(transfer.currencyvalue.currency).erc20ContractAddress); 
-            uint256 allowedTokens = token.allowance(msg.sender,address(this));
-            uint256 tokenAmount = tokenManager.convertFromVerusNumber(transfer.currencyvalue.amount, token.decimals()); //convert to wei from verus satoshis
-            assert( allowedTokens >= tokenAmount);
-            //transfer the tokens to this contract
-            token.transferFrom(msg.sender,address(this),tokenAmount); 
-            token.approve(address(tokenManager),tokenAmount);
-            //give an approval for the tokenmanagerinstance to spend the tokens
-            tokenManager.exportERC20Tokens(transfer.currencyvalue.currency, tokenAmount);  //total amount kept as wei until export to verus */
+           /* tokenManager.exportERC20Tokens(transfer.currencyvalue.currency, tokenAmount);  //total amount kept as wei until export to verus */
 
         } else {
             //handle a vEth transfer
-            transfer.currencyvalue.amount = uint64(tokenManager.convertToVerusNumber(msg.value - VerusConstants.transactionFee,18));
-            verusBridgeStorage.addToEthHeld(msg.value - fees);  // msg.value == fees + amount in transaction checked in checkExport()
+            transfer.currencyvalue.amount = uint64(tokenManager.convertToVerusNumber(paidValue - VerusConstants.transactionFee,18));
+            verusBridgeStorage.addToEthHeld(paidValue - fees);  // msg.value == fees + amount in transaction checked in checkExport()
             verusBridgeStorage.addToFeesHeld(fees); //TODO: what happens if they send to much fee?
         } 
         _createExports(transfer);

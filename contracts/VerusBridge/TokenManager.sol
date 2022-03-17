@@ -13,6 +13,7 @@ import "../VerusBridge/VerusBridgeMaster.sol";
 import "../VerusBridge/VerusBridgeStorage.sol";
 import "../Libraries/VerusObjectsCommon.sol";
 
+
 contract TokenManager {
 
     event TokenCreated(address tokenAddress);

@@ -82,7 +82,7 @@ contract VerusBridgeMaster {
 
         //once first contract set, bulk setting no longer allowed.
         if(contracts[0] == address(0)){
-            for(uint i = 0; i < uint(VerusConstants.ContractType.LastIndex) - 1; i++ )
+            for(uint i = 0; i < uint(VerusConstants.ContractType.LastIndex); i++ )
                 contracts[i] = contractsIn[i]; 
         }
         
@@ -108,8 +108,8 @@ contract VerusBridgeMaster {
 
     /** VerusBridge pass through functions **/
     function export(VerusObjects.CReserveTransfer memory _transfer) public payable {
-        uint256 ethAmount = msg.value;
-        verusBridge.export(_transfer, ethAmount);
+      
+        verusBridge.export(_transfer, msg.value, msg.sender );
     }
 
     function checkImports(bytes32[] memory _imports) public view returns(bytes32[] memory){
