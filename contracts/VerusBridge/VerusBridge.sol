@@ -43,21 +43,30 @@ contract VerusBridge {
 
     }
 
-    function setContracts(address[] memory contracts) public {
+    function setContracts(address[10] memory contracts) public {
 
         assert(msg.sender == address(verusBridgeMaster));
 
-        if(contracts[uint(VerusConstants.ContractType.TokenManager)] != address(tokenManager))
+        if(contracts[uint(VerusConstants.ContractType.TokenManager)] != address(tokenManager)) {
             tokenManager = TokenManager(contracts[uint(VerusConstants.ContractType.TokenManager)]);
+            exportManager.setContract(contracts[uint(VerusConstants.ContractType.TokenManager)]);
+        }
         
-        if(contracts[uint(VerusConstants.ContractType.VerusSerializer)] != address(verusSerializer))
+        if(contracts[uint(VerusConstants.ContractType.VerusSerializer)] != address(verusSerializer)) {
             verusSerializer = VerusSerializer(contracts[uint(VerusConstants.ContractType.VerusSerializer)]);
+            // The verusbridge contract updates the verusCCE for the VerusBridgeMaster.
+            verusCCE.setContract(contracts[uint(VerusConstants.ContractType.VerusSerializer)]);
+            verusProof.setContracts(contracts);
+            tokenManager.setContract(contracts[uint(VerusConstants.ContractType.VerusSerializer)]);
+        }
         
-        if(contracts[uint(VerusConstants.ContractType.VerusProof)] != address(verusProof))    
-            verusProof = VerusProof(contracts[uint(VerusConstants.ContractType.VerusProof)]);
+        if(contracts[uint(VerusConstants.ContractType.VerusProof)] != address(verusProof))
+            verusProof = VerusProof(contracts[uint(VerusConstants.ContractType.VerusProof)]);    
 
-        if(contracts[uint(VerusConstants.ContractType.VerusNotarizer)] != address(verusNotarizer))     
+        if(contracts[uint(VerusConstants.ContractType.VerusNotarizer)] != address(verusNotarizer)) {     
             verusNotarizer = VerusNotarizer(contracts[uint(VerusConstants.ContractType.VerusNotarizer)]);
+            verusProof.setContracts(contracts);
+        }
 
         if(contracts[uint(VerusConstants.ContractType.VerusCrossChainExport)] != address(verusCCE))     
             verusCCE = VerusCrossChainExport(contracts[uint(VerusConstants.ContractType.VerusCrossChainExport)]);

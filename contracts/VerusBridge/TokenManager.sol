@@ -67,7 +67,7 @@ contract TokenManager {
   
     function isVerusBridgeContract(address sender) private view returns (bool) {
        
-       return sender == verusBridgeMaster.getContractAddress(VerusConstants.ContractType.TokenManager);
+       return sender == verusBridgeMaster.contracts(uint(VerusConstants.ContractType.TokenManager));
 
     }
 
@@ -225,7 +225,7 @@ contract TokenManager {
 
     function launchTokens(VerusObjects.setupToken[] memory tokensToDeploy) public  {
 
-        assert(msg.sender == address(verusBridgeMaster));
+        require(verusBridgeStorage.getERCMapping(VerusConstants.VEth).erc20ContractAddress == address(0), "Launch tokens already set");
 
         for (uint256 i = 0; i < tokensToDeploy.length; i++) {
             recordToken(

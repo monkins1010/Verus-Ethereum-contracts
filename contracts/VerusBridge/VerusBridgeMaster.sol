@@ -9,59 +9,76 @@ import "../VerusNotarizer/VerusNotarizer.sol";
 import "./VerusBridge.sol";
 import "./VerusInfo.sol";
 import "./TokenManager.sol";
+import "../MMR/VerusProof.sol";
 
 contract VerusBridgeMaster {
 
-    //declare the contracts and have it return the contract addresses
-
-    TokenManager tokenManager;
     VerusNotarizer verusNotarizer;
     VerusBridge verusBridge;
     VerusInfo verusInfo;
     VerusBridgeStorage verusBridgeStorage;
     
     // Total amount of contracts.
-    address[8] contracts;
+    address[10] public contracts;
+    bool firstSetup;
 
-    //temporary placeholder for testing purposes
+    //TODO: Contact one single owner. To upgrade to a multisig
     address contractOwner;
     
-  
-    //contract allows the contracts to be set and reset
+    // contract allows the contracts to be upgradable
     constructor(){
             contractOwner = msg.sender;      
     }
     
-    /** get and set functions, sets to be performed by the notariser **/
-    function setContractAddress(VerusConstants.ContractType contractType, address _newContractAddress) public {
+   function upgradeContract(VerusConstants.ContractType contractType, address _newContractAddress) public {
         
         //TODO: Make updating contract a multisig check across 3 notaries.
         assert(msg.sender == contractOwner);
 
         contracts[uint(contractType)] = _newContractAddress;
 
-        if(contractType == VerusConstants.ContractType.VerusNotarizer){
-            verusNotarizer = VerusNotarizer(_newContractAddress);       
-        }        
-        else if(contractType == VerusConstants.ContractType.VerusBridge){
-            verusBridge = VerusBridge(_newContractAddress);
-            verusBridgeStorage.setContractAddress(VerusConstants.ContractType.VerusBridge, _newContractAddress);       
+        if (contractType == VerusConstants.ContractType.TokenManager){
+            verusBridge.setContracts(contracts);
+            verusBridgeStorage.setContracts(contracts); 
+            verusInfo.setContracts(contracts);  
         }
-        else if(contractType == VerusConstants.ContractType.VerusInfo){
+        else if (contractType == VerusConstants.ContractType.VerusSerializer){
+            verusBridge.setContracts(contracts);
+            verusNotarizer.setContract(_newContractAddress);
+        }
+        else if (contractType == VerusConstants.ContractType.VerusProof){
+            verusBridge.setContracts(contracts);
+        }
+        else if (contractType == VerusConstants.ContractType.VerusCrossChainExport){
+            verusBridge.setContracts(contracts);
+        }
+        else if (contractType == VerusConstants.ContractType.VerusNotarizer){
+            verusNotarizer = VerusNotarizer(_newContractAddress); 
+            verusBridge = VerusBridge(_newContractAddress);
+            verusInfo.setContracts(contracts);
+        }        
+        else if (contractType == VerusConstants.ContractType.VerusBridge){
+            verusBridge = VerusBridge(_newContractAddress);
+            verusBridgeStorage.setContracts(contracts);      
+        }
+        else if (contractType == VerusConstants.ContractType.VerusInfo){
             verusInfo = VerusInfo(_newContractAddress);       
         }
-        else if(contractType == VerusConstants.ContractType.TokenManager){
-            tokenManager = TokenManager(_newContractAddress);
+        else if (contractType == VerusConstants.ContractType.ExportManager){
+            verusBridge.setContracts(contracts);
+
         }
-        else if(contractType == VerusConstants.ContractType.VerusBridgeStorage){
+        else if (contractType == VerusConstants.ContractType.VerusBridgeStorage){
             verusBridgeStorage = VerusBridgeStorage(_newContractAddress);
-            verusBridgeStorage.setContractAddress(VerusConstants.ContractType.VerusBridgeStorage, _newContractAddress);   
+            verusBridgeStorage.setContracts(contracts);   
         }
+
     }
 
-    function setAllContracts(address[] memory contractsIn) public {
+    function setAllContracts(address[] memory contractsIn, VerusObjects.setupToken[] memory tokensToDeploy) public {
 
         assert(msg.sender == contractOwner);
+        assert(!firstSetup);
 
         //once first contract set, bulk setting no longer allowed.
         if(contracts[0] == address(0)){
@@ -70,26 +87,20 @@ contract VerusBridgeMaster {
         }
         
         // First set the referenced contracts 
-        tokenManager = TokenManager(contractsIn[uint(VerusConstants.ContractType.VerusSerializer)]);
         verusNotarizer = VerusNotarizer(contractsIn[uint(VerusConstants.ContractType.VerusNotarizer)]);
         verusBridge = VerusBridge(contractsIn[uint(VerusConstants.ContractType.VerusBridge)]);
         verusInfo = VerusInfo(contractsIn[uint(VerusConstants.ContractType.VerusInfo)]);
         verusBridgeStorage = VerusBridgeStorage(contractsIn[uint(VerusConstants.ContractType.VerusBridgeStorage)]);
-        
-        // Set all contracts that are not set in their contructors.
-        verusBridgeStorage.setContractAddress(VerusConstants.ContractType.VerusBridge, contractsIn[uint(VerusConstants.ContractType.VerusInfo)]);
-        verusBridgeStorage.setContractAddress(VerusConstants.ContractType.TokenManager, contractsIn[uint(VerusConstants.ContractType.TokenManager)]);
-        
+
+        // Set contract(s) that are not set in their contructors.
+        verusBridgeStorage.setContracts(contracts);
+
+        // Launch currencey definitions that are known by the Verus contracts
+        verusInfo.launchTokens(tokensToDeploy);
+        firstSetup = true;
 
     }
     
-    /** returns the address of each contract to be used by the sub contracts **/
-    function getContractAddress(VerusConstants.ContractType contractType) public view returns(address contractAddress){
-        
-        contractAddress = contracts[uint(contractType)];
-
-    }
-
     function isSenderBridgeContract(address sender) private view {
 
         assert( sender == address(verusBridge));
@@ -152,13 +163,6 @@ contract VerusBridgeMaster {
         isSenderBridgeContract(msg.sender);
         _ethAddress.transfer(_ethAmount);
      }
-
-    function launchTokens(VerusObjects.setupToken[] memory tokensToDeploy) public  {
-            
-            assert(msg.sender == contractOwner);
-            tokenManager.launchTokens(tokensToDeploy);
-
-    }
 
 
 }

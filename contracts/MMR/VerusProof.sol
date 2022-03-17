@@ -45,7 +45,7 @@ contract VerusProof {
         verusNotarizer = VerusNotarizer(verusNotarizerAddress);
     }
 
-    function setContracts(address[] memory contracts) public {
+    function setContracts(address[10] memory contracts) public {
 
         assert(msg.sender == address(verusBridgeMaster));
 

@@ -62,11 +62,21 @@ module.exports = async function (deployer) {
         , notarizerInst.address, CCEInst.address, ExportManInst.address);
     const VerusBridgeInst = await VerusBridge.deployed();
 
-    await deployer.deploy(VerusInfo, notarizerInst.address, "2000753", "0.7.3-9-rc1", "VETH", true, bridgeMasterInst.address);
+    await deployer.deploy(VerusInfo, notarizerInst.address, "2000753", "0.7.3-9-rc1", "VETH", true, bridgeMasterInst.address, tokenInst.address);
     const INFOInst = await VerusInfo.deployed();
 
-    bridgeStorageInst.setAllContracts([tokenInst.address, serializerInst.address, ProofInst.address, CCEInst.address,
-        notarizerInst.address, VerusBridgeInst.bridge, INFOInst.address, ExportManInst.address, bridgeStorageInst.address]);
+    const allContracts = [
+        tokenInst.address, 
+        serializerInst.address, 
+        ProofInst.address, 
+        CCEInst.address,
+        notarizerInst.address, 
+        VerusBridgeInst.address, 
+        INFOInst.address, 
+        ExportManInst.address, 
+        bridgeStorageInst.address];
+
+    await bridgeMasterInst.setAllContracts(allContracts, launchCurrencies);
 
     let USDCInst = await Token.at(USDCERC20);
 
@@ -79,7 +89,8 @@ module.exports = async function (deployer) {
         "verusserializeraddress=" + serializerInst.address + "\n\n" +
         "export const BRIDGE_CONTRACT_ADD = \"" + VerusBridgeInst.address + "\";\n" +
         "export const NOTARIZER_CONTRACT_ADD = \"" + notarizerInst.address + "\";\n" +
-        "export const TOKEN_MANAGER_ERC20 = \"" + tokenInst.address + "\";\n";
+        "export const TOKEN_MANAGER_ERC20 = \"" + tokenInst.address + "\";\n\n" + 
+        "export const BRIDGE_MASTER_ADD = \"" + bridgeMasterInst.address + "\";\n";
 
     console.log("Settings to be pasted into *.conf file (except the tokenmanger, thats for the bridge website) \n\n", settingString);
 };

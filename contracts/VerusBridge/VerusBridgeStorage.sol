@@ -38,20 +38,20 @@ contract VerusBridgeStorage {
         firstBlock = block.number;    
     }
 
-    function setContractAddress(VerusConstants.ContractType contractType, address _newContractAddress) public {
+    function setContracts(address[10] memory contracts) public {
         
         //TODO: Make updating contract a multisig check across 3 notaries.
         assert(msg.sender == verusBridgeMaster);
 
-        if(contractType == VerusConstants.ContractType.VerusBridge){
+         if(contracts[uint(VerusConstants.ContractType.TokenManager)] != tokenManager){
+            tokenManager = contracts[uint(VerusConstants.ContractType.TokenManager)];
+         } 
+        
+        if(contracts[uint(VerusConstants.ContractType.VerusBridge)] != verusBridge){
+            verusBridge = contracts[uint(VerusConstants.ContractType.VerusBridge)];
+         } 
+      
 
-            verusBridge  = _newContractAddress;  
-
-        } else if(contractType == VerusConstants.ContractType.TokenManager){
-
-            tokenManager = _newContractAddress; 
-
-        }   
     }
     
     function isSenderBridgeContract(address sender) private view {

@@ -13,7 +13,6 @@ import "../VerusBridge/VerusBridgeStorage.sol";
 
 contract ExportManager {
 
-    //VerusBridge verusBridge;
     VerusBridgeMaster verusBridgeMaster;
     TokenManager tokenManager;
     VerusBridgeStorage verusBridgeStorage;

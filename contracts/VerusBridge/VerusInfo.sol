@@ -6,6 +6,7 @@ import "../Libraries/VerusObjectsCommon.sol";
 import "../Libraries/VerusConstants.sol";
 import "../VerusNotarizer/VerusNotarizer.sol";
 import "../VerusBridge/VerusBridgeMaster.sol";
+import "../VerusBridge/TokenManager.sol";
 
 pragma solidity >=0.6.0 <0.9.0;
 pragma experimental ABIEncoderV2;
@@ -15,6 +16,7 @@ contract VerusInfo {
     VerusNotarizer verusNotarizer;
     VerusBridgeMaster verusBridgeMaster;
     VerusObjects.infoDetails chainInfo;
+    TokenManager tokenManager;
     
     constructor(
         address verusNotarizerAddress,
@@ -22,21 +24,28 @@ contract VerusInfo {
         string memory chainVerusVersion,
         string memory chainName,
         bool chainTestnet,
-        address verusBridgeMasterAddress) public {
+        address verusBridgeMasterAddress,
+        address tokenManagerAddress) public {
         verusNotarizer = VerusNotarizer(verusNotarizerAddress);
         chainInfo.version = chainVersion;
         chainInfo.VRSCversion = chainVerusVersion;
         chainInfo.name = chainName;
         chainInfo.testnet = chainTestnet;
         verusBridgeMaster = VerusBridgeMaster(verusBridgeMasterAddress);
+        tokenManager = TokenManager(tokenManagerAddress);
     }
 
-    function setContract(address contractAddress) public {
+    function setContracts(address[10] memory contracts) public {
 
         assert(msg.sender == address(verusBridgeMaster));
-  
-        verusNotarizer = VerusNotarizer(contractAddress);
 
+        if(contracts[uint(VerusConstants.ContractType.TokenManager)] != address(tokenManager)) {
+            tokenManager = TokenManager(contracts[uint(VerusConstants.ContractType.TokenManager)]);
+        }
+  
+        if(contracts[uint(VerusConstants.ContractType.VerusNotarizer)] != address(verusNotarizer)) {     
+            verusNotarizer = VerusNotarizer(contracts[uint(VerusConstants.ContractType.VerusNotarizer)]);
+        }
     }
 
     function getinfo() public view returns(VerusObjects.infoDetails memory){
@@ -89,5 +98,12 @@ contract VerusInfo {
         );
 
         return returnCurrency;
+    }
+
+        function launchTokens(VerusObjects.setupToken[] memory tokensToDeploy) public  {
+
+        require(msg.sender == address(verusBridgeMaster),"INFO:VerusBridgeMasterRequired");
+
+        tokenManager.launchTokens(tokensToDeploy);
     }
 }
