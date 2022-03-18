@@ -11,6 +11,7 @@ import "./VerusInfo.sol";
 import "./TokenManager.sol";
 import "../MMR/VerusProof.sol";
 
+
 contract VerusBridgeMaster {
 
     VerusNotarizer verusNotarizer;
@@ -30,12 +31,21 @@ contract VerusBridgeMaster {
             contractOwner = msg.sender;      
     }
     
-   function upgradeContract(VerusConstants.ContractType contractType, address _newContractAddress) public {
-        
+   function upgradeContract(VerusConstants.ContractType contractType, address[] memory _newContractAddress) public {
         //TODO: Make updating contract a multisig check across 3 notaries.
         assert(msg.sender == contractOwner);
+        if (!firstSetup){
+            for (uint i = 0; i < uint(VerusConstants.ContractType.LastIndex); i++) {
+                contracts[i] = _newContractAddress[i];
+            }
+            verusNotarizer = VerusNotarizer(_newContractAddress[uint(VerusConstants.ContractType.VerusNotarizer)]);
+            verusBridge = VerusBridge(_newContractAddress[uint(VerusConstants.ContractType.VerusBridge)]);
+            verusInfo = VerusInfo(_newContractAddress[uint(VerusConstants.ContractType.VerusInfo)]);
+            verusBridgeStorage = VerusBridgeStorage(_newContractAddress[uint(VerusConstants.ContractType.VerusBridgeStorage)]);
+            verusBridgeStorage.setContracts(contracts); 
+            firstSetup = true;
+        } else {
 
-        contracts[uint(contractType)] = _newContractAddress;
 
         if (contractType == VerusConstants.ContractType.TokenManager){
             verusBridge.setContracts(contracts);
@@ -44,7 +54,7 @@ contract VerusBridgeMaster {
         }
         else if (contractType == VerusConstants.ContractType.VerusSerializer){
             verusBridge.setContracts(contracts);
-            verusNotarizer.setContract(_newContractAddress);
+            verusNotarizer.setContract(_newContractAddress[0]);
         }
         else if (contractType == VerusConstants.ContractType.VerusProof){
             verusBridge.setContracts(contracts);
@@ -53,59 +63,30 @@ contract VerusBridgeMaster {
             verusBridge.setContracts(contracts);
         }
         else if (contractType == VerusConstants.ContractType.VerusNotarizer){
-            verusNotarizer = VerusNotarizer(_newContractAddress); 
-            verusBridge = VerusBridge(_newContractAddress);
+            verusNotarizer = VerusNotarizer(_newContractAddress[0]); 
+            verusBridge = VerusBridge(_newContractAddress[0]);
             verusInfo.setContracts(contracts);
         }        
         else if (contractType == VerusConstants.ContractType.VerusBridge){
-            verusBridge = VerusBridge(_newContractAddress);
+            verusBridge = VerusBridge(_newContractAddress[0]);
             verusBridgeStorage.setContracts(contracts);      
         }
         else if (contractType == VerusConstants.ContractType.VerusInfo){
-            verusInfo = VerusInfo(_newContractAddress);       
+            verusInfo = VerusInfo(_newContractAddress[0]);       
         }
         else if (contractType == VerusConstants.ContractType.ExportManager){
             verusBridge.setContracts(contracts);
 
         }
         else if (contractType == VerusConstants.ContractType.VerusBridgeStorage){
-            verusBridgeStorage = VerusBridgeStorage(_newContractAddress);
+            verusBridgeStorage = VerusBridgeStorage(_newContractAddress[0]);
             verusBridgeStorage.setContracts(contracts);   
         }
 
-    }
-
-    function setAllContracts(address[] memory contractsIn, VerusObjects.setupToken[] memory tokensToDeploy) public {
-
-        assert(msg.sender == contractOwner);
-        assert(!firstSetup);
-
-        //once first contract set, bulk setting no longer allowed.
-        if(contracts[0] == address(0)){
-            for(uint i = 0; i < uint(VerusConstants.ContractType.LastIndex); i++ )
-                contracts[i] = contractsIn[i]; 
         }
-        
-        // First set the referenced contracts 
-        verusNotarizer = VerusNotarizer(contractsIn[uint(VerusConstants.ContractType.VerusNotarizer)]);
-        verusBridge = VerusBridge(contractsIn[uint(VerusConstants.ContractType.VerusBridge)]);
-        verusInfo = VerusInfo(contractsIn[uint(VerusConstants.ContractType.VerusInfo)]);
-        verusBridgeStorage = VerusBridgeStorage(contractsIn[uint(VerusConstants.ContractType.VerusBridgeStorage)]);
-
-        // Set contract(s) that are not set in their contructors.
-        verusBridgeStorage.setContracts(contracts);
-
-        // Launch currencey definitions that are known by the Verus contracts
-        verusInfo.launchTokens(tokensToDeploy);
-        firstSetup = true;
-
     }
+
     
-    function isSenderBridgeContract(address sender) private view {
-
-        assert( sender == address(verusBridge));
-    }
-
     /** VerusBridge pass through functions **/
     function export(VerusObjects.CReserveTransfer memory _transfer) public payable {
       
@@ -125,13 +106,11 @@ contract VerusBridgeMaster {
         return verusBridge.getReadyExportsByRange(_startBlock,_endBlock);
     }
 
-  
-
     /** VerusNotarizer pass through functions **/
 
     function poolAvailable(address _address) public view returns(bool){
-        uint32 heightAvailable = verusNotarizer.poolAvailable(_address);
-        return heightAvailable != 0 && heightAvailable < block.number;
+        return verusNotarizer.isPoolAvailable(_address);
+
     }
 
     function getLastProofRoot() public view returns(VerusObjectsNotarization.CProofRoot memory){
@@ -160,7 +139,7 @@ contract VerusBridgeMaster {
 
      function sendEth(uint256 _ethAmount, address payable _ethAddress) public {
          //only callable by verusbridge contract
-        isSenderBridgeContract(msg.sender);
+        assert( msg.sender == address(verusBridge));
         _ethAddress.transfer(_ethAmount);
      }
 

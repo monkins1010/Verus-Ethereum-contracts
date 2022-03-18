@@ -70,6 +70,12 @@ contract VerusNotarizer {
         }
     }
 
+    
+    function isPoolAvailable(address _address) public view returns(bool){
+        uint32 heightAvailable = poolAvailable[_address];
+        return heightAvailable != 0 && heightAvailable < block.number;
+    }
+
     function setContract(address contractAddress) public {
 
         assert(msg.sender == verusBridgeMaster);
@@ -221,7 +227,7 @@ contract VerusNotarizer {
         if(notarizedDeprecation(_upgradedAddress, _addressHash, _vs, _rs, _ss)){
             deprecated = true;
             upgradedAddress = _upgradedAddress;
-            Deprecate(_upgradedAddress);
+            emit Deprecate(_upgradedAddress);
         }
     }
 }

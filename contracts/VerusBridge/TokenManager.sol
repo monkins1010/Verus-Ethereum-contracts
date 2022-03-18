@@ -12,21 +12,21 @@ import "../VerusBridge/VerusBridge.sol";
 import "../VerusBridge/VerusBridgeMaster.sol";
 import "../VerusBridge/VerusBridgeStorage.sol";
 import "../Libraries/VerusObjectsCommon.sol";
-
+import "@openzeppelin/contracts/token/ERC721/ERC721.sol";
 
 contract TokenManager {
 
-    event TokenCreated(address tokenAddress);
-    
     VerusBridgeMaster verusBridgeMaster;
     VerusSerializer verusSerializer;
     VerusBridgeStorage verusBridgeStorage;
+    bool private initialized;
 
     constructor(
         address verusBridgeMasterAddress,
         address verusBridgeStorageAddress,
         address verusSerializerAddress
     ) {
+        require(!initialized, "Contract instance has already been initialized");
         verusBridgeMaster = VerusBridgeMaster(verusBridgeMasterAddress);
         verusBridgeStorage = VerusBridgeStorage(verusBridgeStorageAddress); 
         verusSerializer = VerusSerializer(verusSerializerAddress);
@@ -68,43 +68,8 @@ contract TokenManager {
   
     function isVerusBridgeContract(address sender) private view returns (bool) {
        
-       return sender == verusBridgeMaster.contracts(uint(VerusConstants.ContractType.TokenManager));
+       return sender == verusBridgeMaster.contracts(uint(VerusConstants.ContractType.VerusBridge));
 
-    }
-
-    //Tokens that are being exported from the eth blockchain are either destroyed or held until imported
-    function exportERC20Tokens(address _iaddress, uint256 _tokenAmount) public {
-        require(
-            isVerusBridgeContract(msg.sender),
-            "Call can only be made from Verus Bridge Contract"
-        );
-        //check that the erc20 token is registered with the tokenManager
-        VerusObjects.mappedToken memory mappedContract = verusToERC20mapping(_iaddress);
-
-        require(mappedContract.erc20ContractAddress != address(0), "Token has not been registered yet");
-
-        Token token = Token(mappedContract.erc20ContractAddress);
-
-        //transfer the tokens to the contract address
-        uint256 allowedTokens = token.allowance(msg.sender, address(this));
-        require(
-            allowedTokens >= _tokenAmount,              //values in wei
-            "Not enough tokens have been approved"
-        ); 
-        //if its not approved it wont work
-        token.transferFrom(msg.sender, address(this), _tokenAmount);
-
-        if (mappedContract.flags & 
-              VerusConstants.MAPPING_VERUS_OWNED == VerusConstants.MAPPING_VERUS_OWNED) {
-
-            require(token.balanceOf(address(this)) >= _tokenAmount,
-                "Tokens didn't transfer"
-            );
-            token.burn(_tokenAmount);
-
-        } else {
-            //the contract stores the token
-        }
     }
 
     function importERC20Tokens(
@@ -114,31 +79,19 @@ contract TokenManager {
     ) public {
         require(
             isVerusBridgeContract(msg.sender),
-            "Call can only be made from Verus Bridge Contract"
+            "importERC20Tokens:bridgecontractonly"
         );
-        address contractAddress;
+        
         VerusObjects.mappedToken memory mappedContract = verusToERC20mapping(_iaddress);
 
         // if token that has been sent from verus is not registered on ETH burn the tokens
         if (ERC20Registered(_iaddress)) {
-            contractAddress = mappedContract.erc20ContractAddress;
-
-            Token token = Token(contractAddress);
-            uint256 processedTokenAmount;
-             convertFromVerusNumber(
-                _tokenAmount,
-                token.decimals()
-            );
-            //if the token has been created by this contract then burn the token
-            if (mappedContract.flags & 
-              VerusConstants.MAPPING_VERUS_OWNED == VerusConstants.MAPPING_VERUS_OWNED) {
-
-                token.mint(address(_destination), processedTokenAmount);
-
-            } else {
-                //transfer from the contract
-                token.transfer(address(_destination), processedTokenAmount);
-            }
+            
+            Token token = Token(mappedContract.erc20ContractAddress);
+            
+            verusBridgeStorage.mintOrTransferToken(
+                _destination, convertFromVerusNumber(_tokenAmount, token.decimals()), mappedContract.flags, token);
+   
         }
     }
 
@@ -253,10 +206,7 @@ contract TokenManager {
 
         if (flags & VerusConstants.MAPPING_VERUS_OWNED == VerusConstants.MAPPING_VERUS_OWNED ) {
 
-            Token t = new Token(name, ticker);   
-            ERCContract = address(t);
-            verusBridgeStorage.pushTokenList(_iaddress); 
-            emit TokenCreated(ERCContract);
+            verusBridgeStorage.emitNewToken(name, ticker, _iaddress);     
 
         } else {
 

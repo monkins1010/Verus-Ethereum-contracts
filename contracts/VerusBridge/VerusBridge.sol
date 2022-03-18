@@ -15,7 +15,7 @@ import "./VerusSerializer.sol";
 import "../VerusNotarizer/VerusNotarizer.sol";
 import "./VerusCrossChainExport.sol";
 import "./ExportManager.sol";
-import "../../node_modules/openzeppelin-solidity/contracts/token/ERC721/ERC721.sol";
+import "@openzeppelin/contracts/token/ERC721/ERC721.sol";
 
 contract VerusBridge {
 
@@ -89,33 +89,31 @@ contract VerusBridge {
         if (transfer.currencyvalue.currency != VerusConstants.VEth) {
 
             verusBridgeStorage.addToFeesHeld(paidValue);
-            Token token = Token(verusBridgeStorage.getERCMapping(transfer.currencyvalue.currency).erc20ContractAddress); 
-            uint256 allowedTokens = token.allowance(sender, address(verusBridgeMaster));
+            VerusObjects.mappedToken memory mappedContract = verusBridgeStorage.getERCMapping(transfer.currencyvalue.currency);
+            Token token = Token(mappedContract.erc20ContractAddress); 
+            uint256 allowedTokens = token.allowance(sender, address(tokenManager));
             uint256 tokenAmount = tokenManager.convertFromVerusNumber(transfer.currencyvalue.amount, token.decimals()); //convert to wei from verus satoshis
             assert( allowedTokens >= tokenAmount);
-            //transfer the tokens to this contract
-            token.transferFrom(sender, address(verusBridgeMaster), tokenAmount); 
-            token.approve(address(verusBridgeMaster),tokenAmount);
-            //give an approval for the tokenmanagerinstance to spend the tokens
-            tokenManager.exportERC20Tokens(transfer.currencyvalue.currency, tokenAmount);  //total amount kept as wei until export to verus
-
+            //transfer the tokens to the verusbridgemaster contract
+            //total amount kept as wei until export to verus
+            verusBridgeStorage.exportERC20Tokens(tokenAmount, token, mappedContract.flags, sender );
+            
         } else if (transfer.flags & VerusConstants.CTRX_CURRENCY_EXPORT_FLAG == VerusConstants.CTRX_CURRENCY_EXPORT_FLAG){
             
-           verusBridgeStorage.addToFeesHeld(paidValue);
+            verusBridgeStorage.addToFeesHeld(paidValue);
+    
+            bytes memory NFTInfo = transfer.destination.destinationaddress;
+            address NFTAddress;
+            uint256 NFTID;
+            assembly {
+                        NFTAddress := mload(add(NFTInfo, 20))
+                        NFTID := mload(add(NFTInfo, 52))
+                     }
 
-           //TODO: Add handle ERC721 here
-           address NFTAddress;
-           bytes memory NFTInfo = transfer.destination.destinationaddress;
-           uint256 NFTID;
-                assembly {
-                    NFTAddress := mload(add(NFTInfo, 20))
-                    NFTID := mload(add(NFTInfo, 52))
-                 }
             ERC721 NFT = ERC721(NFTAddress);
-            NFT.transferFrom(sender, address(verusBridgeMaster), NFTID);
 
-           /* tokenManager.exportERC20Tokens(transfer.currencyvalue.currency, tokenAmount);  //total amount kept as wei until export to verus */
-
+            verusBridgeStorage.transferFromERC721(address(verusBridgeStorage), sender, NFT, NFTID );
+ 
         } else {
             //handle a vEth transfer
             transfer.currencyvalue.amount = uint64(tokenManager.convertToVerusNumber(paidValue - VerusConstants.transactionFee,18));
@@ -185,12 +183,12 @@ contract VerusBridge {
         uint256 amount; 
 
         // check the transfers were in the hash.
-        for(uint i = 0; i < _import.transfers.length; i++){
+        for (uint i = 0; i < _import.transfers.length; i++){
             // handle eth transactions
             amount = tokenManager.convertFromVerusNumber(uint256(_import.transfers[i].currencyvalue.amount),18);
 
             // if the transfer does not have the EXPORT_CURRENCY flag set
-            if(_import.transfers[i].flags & VerusConstants.CTRX_CURRENCY_EXPORT_FLAG != VerusConstants.CTRX_CURRENCY_EXPORT_FLAG){
+            if (_import.transfers[i].flags & VerusConstants.CTRX_CURRENCY_EXPORT_FLAG != VerusConstants.CTRX_CURRENCY_EXPORT_FLAG){
                     address destinationAddress;
 
                     bytes memory tempAddress  = _import.transfers[i].destination.destinationaddress;
@@ -199,31 +197,39 @@ contract VerusBridge {
                     destinationAddress := mload(add(tempAddress, 20))
                     } 
 
-                if(destinationAddress != address(0)){
-                    if(_import.transfers[i].currencyvalue.currency == VerusConstants.VEth) {
+                if (destinationAddress != address(0)) {
+
+                    if (_import.transfers[i].currencyvalue.currency == VerusConstants.VEth) {
                         // cast the destination as an ethAddress
-                        assert(amount <= address(this).balance);
+                        assert (amount <= address(this).balance);
                             verusBridgeMaster.sendEth(amount, payable(destinationAddress));
                             verusBridgeStorage.subtractFromEthHeld(amount);
                             
                 
-                    } else {
+                    } else if(verusBridgeStorage.ERC20Registered(_import.transfers[i].currencyvalue.currency)){
                         // handle erc20 transactions  
                         // amount conversion is handled in token manager
 
                         tokenManager.importERC20Tokens(_import.transfers[i].currencyvalue.currency,
                             _import.transfers[i].currencyvalue.amount,
                             destinationAddress);
+                    } else {
+                        
+                        uint256 NFTID; 
+                        ERC721 NFT;    //TODO: get the NFT contract address and ID
+                        if(NFTID != uint256(0))
+                            verusBridgeStorage.transferFromERC721(destinationAddress, address(verusBridgeStorage), NFT, NFTID );
+
                     }
                 }
-            } else if(_import.transfers[i].destination.destinationtype & VerusConstants.DEST_REGISTERCURRENCY == VerusConstants.DEST_REGISTERCURRENCY) {
+            } else if (_import.transfers[i].destination.destinationtype & VerusConstants.DEST_REGISTERCURRENCY == VerusConstants.DEST_REGISTERCURRENCY) {
                      
                 tokenManager.deployToken(_import.transfers[i].destination.destinationaddress);
                 
             }
             //handle the distributions of the fees
             //add them into the fees array to be claimed by the message sender
-            if(_import.transfers[i].fees > 0 && _import.transfers[i].feecurrencyid == VerusConstants.VEth){
+            if (_import.transfers[i].fees > 0 && _import.transfers[i].feecurrencyid == VerusConstants.VEth){
                 verusBridgeStorage.setClaimableFees(msg.sender,_import.transfers[i].fees);
             }
         }

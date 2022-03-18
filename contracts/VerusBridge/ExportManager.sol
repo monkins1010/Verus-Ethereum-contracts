@@ -33,13 +33,7 @@ contract ExportManager {
 
     function checkExport(VerusObjects.CReserveTransfer memory transfer, uint256 ETHSent) public returns (uint256 fees){
 
-        require(tokenManager.ERC20Registered(transfer.currencyvalue.currency) && 
-                tokenManager.ERC20Registered(transfer.feecurrencyid) &&
-                tokenManager.ERC20Registered(transfer.destcurrencyid) &&
-                (tokenManager.ERC20Registered(transfer.secondreserveid) || 
-                transfer.secondreserveid == address(0)) &&
-                transfer.destsystemid == address(0),
-                "One or more currencies has not been registered");
+        verusBridgeStorage.checkiaddresses(transfer);
 
         uint256 requiredFees =  VerusConstants.transactionFee;  //0.003 eth in WEI
         uint256 verusFees = VerusConstants.verusTransactionFee; //0.02 verus in SATS

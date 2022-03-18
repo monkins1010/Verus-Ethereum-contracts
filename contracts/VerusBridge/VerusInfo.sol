@@ -17,6 +17,7 @@ contract VerusInfo {
     VerusBridgeMaster verusBridgeMaster;
     VerusObjects.infoDetails chainInfo;
     TokenManager tokenManager;
+    address contractOwner;
     
     constructor(
         address verusNotarizerAddress,
@@ -25,7 +26,7 @@ contract VerusInfo {
         string memory chainName,
         bool chainTestnet,
         address verusBridgeMasterAddress,
-        address tokenManagerAddress) public {
+        address tokenManagerAddress) {
         verusNotarizer = VerusNotarizer(verusNotarizerAddress);
         chainInfo.version = chainVersion;
         chainInfo.VRSCversion = chainVerusVersion;
@@ -33,6 +34,7 @@ contract VerusInfo {
         chainInfo.testnet = chainTestnet;
         verusBridgeMaster = VerusBridgeMaster(verusBridgeMasterAddress);
         tokenManager = TokenManager(tokenManagerAddress);
+        contractOwner = msg.sender;
     }
 
     function setContracts(address[10] memory contracts) public {
@@ -100,9 +102,9 @@ contract VerusInfo {
         return returnCurrency;
     }
 
-        function launchTokens(VerusObjects.setupToken[] memory tokensToDeploy) public  {
+    function launchTokens(VerusObjects.setupToken[] memory tokensToDeploy) public  {
 
-        require(msg.sender == address(verusBridgeMaster),"INFO:VerusBridgeMasterRequired");
+        require(msg.sender == contractOwner,"INFO:contractOwnerRequired");
 
         tokenManager.launchTokens(tokensToDeploy);
     }

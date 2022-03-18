@@ -76,7 +76,14 @@ module.exports = async function (deployer) {
         ExportManInst.address, 
         bridgeStorageInst.address];
 
-    await bridgeMasterInst.setAllContracts(allContracts, launchCurrencies);
+    try {    
+        await bridgeMasterInst.upgradeContract(0, allContracts);
+        await INFOInst.launchTokens(launchCurrencies);
+    } catch (e) {
+
+        console.log(e);
+
+    }
 
     let USDCInst = await Token.at(USDCERC20);
 

@@ -2,16 +2,20 @@
 pragma solidity >=0.6.0 <0.9.0;
 pragma experimental ABIEncoderV2;
 
+import "./Token.sol";
 import "../Libraries/VerusObjects.sol";
 import "../Libraries/VerusConstants.sol";
 import "../Libraries/VerusObjectsNotarization.sol";
 import "./VerusBridgeMaster.sol";
+import "@openzeppelin/contracts/token/ERC721/ERC721.sol";
 
 contract VerusBridgeStorage {
 
     address verusBridgeMaster;
     address verusBridge;
     address tokenManager;
+
+    event TokenCreated(address tokenAddress);
 
     //all major functions get declared here and passed through to the underlying contract
     uint256 feesHeld = 0;
@@ -160,5 +164,67 @@ contract VerusBridgeStorage {
         return tokenList.push(iaddress);
 
     }
+
+    function ERC20Registered(address _iaddress) public view returns (bool) {
+
+        return verusToERC20mapping[_iaddress].erc20ContractAddress != address(0);
+        
+    }
+
+    function checkiaddresses(VerusObjects.CReserveTransfer memory transfer) public view {
+
+        require(ERC20Registered(transfer.currencyvalue.currency) && 
+        ERC20Registered(transfer.feecurrencyid) &&
+        ERC20Registered(transfer.destcurrencyid) &&
+        (ERC20Registered(transfer.secondreserveid) || 
+        transfer.secondreserveid == address(0)) &&
+        transfer.destsystemid == address(0),
+        "One or more currencies has not been registered");
+    }
+
+
+    function emitNewToken(string memory name, string memory ticker, address _iaddress) public {
+
+        require(msg.sender == tokenManager, "Only tokenmanager allowed to mint");
+        Token t = new Token(name, ticker);   
+        tokenList.push(_iaddress); 
+        emit TokenCreated(address(t));
+
+    }
+
+    function mintOrTransferToken(address _destination, uint256 processedTokenAmount, uint32 flags, Token token ) public {
+
+        if (flags & VerusConstants.MAPPING_VERUS_OWNED == VerusConstants.MAPPING_VERUS_OWNED) {
+
+                token.mint(_destination, processedTokenAmount);
+
+            } else {
+               
+                token.transfer(_destination, processedTokenAmount);
+            }
+
+    }
+
+    function transferFromERC721(address sender, address receiver, ERC721 token, uint256 NFTID ) public {
+        
+        require(msg.sender == verusBridge, "transferFromERC721:bridgeonlycall");
+
+        token.transferFrom(sender, receiver, NFTID);
+
+    }
+    
+    function exportERC20Tokens(uint256 _tokenAmount, Token token, uint32 flags, address sender ) public {
+        
+      require(msg.sender == verusBridge, "exporterc20token:bridgeonlycall");
+
+        token.transferFrom(sender, address(this), _tokenAmount);
+
+        if (flags & VerusConstants.MAPPING_VERUS_OWNED == VerusConstants.MAPPING_VERUS_OWNED) {
+
+            token.burn(_tokenAmount);
+        }
+    }
+
+
 
 }

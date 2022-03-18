@@ -308,9 +308,9 @@ contract VerusSerializer {
             serializeUint160Array(_cccs.currencies),
             serializeInt32Array(_cccs.weights),
             serializeInt64Array(_cccs.reserves),
-            writeVarInt(uint256(_cccs.initialsupply)),
-            writeVarInt(uint256(_cccs.emitted)),
-            writeVarInt(uint256(_cccs.supply))
+            writeVarInt(uint256(int256(_cccs.initialsupply))),
+            writeVarInt(uint256(int256(_cccs.emitted))),
+            writeVarInt(uint256(int256(_cccs.supply)))
         );
         bytes memory part2 = abi.encodePacked(
             serializeInt64(_cccs.primarycurrencyout),
