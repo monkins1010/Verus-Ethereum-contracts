@@ -14,6 +14,7 @@ contract VerusBridgeStorage {
     address verusBridgeMaster;
     address verusBridge;
     address tokenManager;
+    address verusNotarizer;
 
     event TokenCreated(address tokenAddress);
 
@@ -29,9 +30,12 @@ contract VerusBridgeStorage {
     mapping (bytes32 => bool) public processedTxids;
     mapping (address => VerusObjects.mappedToken) public verusToERC20mapping;
     address[] public tokenList;
+    mapping (uint32 => VerusObjectsNotarization.CPBaaSNotarization) public PBaaSNotarization;
+    mapping (address => uint32) public poolAvailable;
     
     uint public lastTxImportHeight;
     uint256 public firstBlock;
+    uint32 public lastBlockHeight;
 
     
     //contract allows the contracts to be set and reset
@@ -44,7 +48,7 @@ contract VerusBridgeStorage {
 
     function setContracts(address[10] memory contracts) public {
         
-        //TODO: Make updating contract a multisig check across 3 notaries.
+        //TODO: Make updating contract a multisig check across 3 notaries.(change in VerusBridgeMaster.)
         assert(msg.sender == verusBridgeMaster);
 
          if(contracts[uint(VerusConstants.ContractType.TokenManager)] != tokenManager){
@@ -54,11 +58,47 @@ contract VerusBridgeStorage {
         if(contracts[uint(VerusConstants.ContractType.VerusBridge)] != verusBridge){
             verusBridge = contracts[uint(VerusConstants.ContractType.VerusBridge)];
          } 
-      
+
+        if(contracts[uint(VerusConstants.ContractType.VerusNotarizer)] != verusNotarizer){
+            verusNotarizer = contracts[uint(VerusConstants.ContractType.VerusNotarizer)];
+         } 
 
     }
-    
-    function isSenderBridgeContract(address sender) private view {
+
+    function setPoolAvailable(uint32 height, address currency) public {
+
+        require( msg.sender == verusNotarizer,"setNotarizedProof:callfromNotarizeronly");
+        poolAvailable[currency] = height; 
+
+    }
+
+    function getNotarization(uint32 height) public view returns (VerusObjectsNotarization.CPBaaSNotarization memory){
+
+        return PBaaSNotarization[height];
+
+    }
+
+    function setNotarization(VerusObjectsNotarization.CPBaaSNotarization memory _notarization, uint32 height) public {
+
+        require( msg.sender == verusNotarizer,"setNotarizedProof:callfromNotarizeronly");
+        PBaaSNotarization[height] = _notarization; 
+        lastBlockHeight = height;
+
+    }
+
+    function getLastProofRoot() public view returns(VerusObjectsNotarization.CProofRoot memory){
+
+        VerusObjectsNotarization.CProofRoot[] memory proofRoot = PBaaSNotarization[lastBlockHeight].proofroots;
+
+        for(uint i=0; i< proofRoot.length; i++) {
+
+                if(proofRoot[i].systemid == VerusConstants.VEth){
+                    return proofRoot[i];
+                 }
+        }
+    }
+
+     function isSenderBridgeContract(address sender) private view {
 
         require( sender == verusBridge,"Storage requires Bridge");
     }

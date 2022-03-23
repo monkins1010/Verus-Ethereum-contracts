@@ -114,11 +114,11 @@ contract VerusBridgeMaster {
     }
 
     function getLastProofRoot() public view returns(VerusObjectsNotarization.CProofRoot memory){
-        return verusNotarizer.getLastProofRoot();
+        return verusBridgeStorage.getLastProofRoot();
     }
 
     function lastBlockHeight() public view returns(uint32){
-        return verusNotarizer.lastBlockHeight();
+        return verusBridgeStorage.lastBlockHeight();
     }
 
     function setLatestData(VerusObjectsNotarization.CPBaaSNotarization memory _pbaasNotarization,

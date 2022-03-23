@@ -9,6 +9,7 @@ import "../VerusBridge/VerusSerializer.sol";
 import "../VerusNotarizer/VerusNotarizer.sol";
 import "../Libraries/VerusObjectsCommon.sol";
 import "../VerusBridge/VerusBridgeMaster.sol";
+import "../VerusBridge/VerusBridgeStorage.sol";
 
 contract VerusProof {
 
@@ -17,6 +18,7 @@ contract VerusProof {
     VerusNotarizer verusNotarizer;
     VerusSerializer verusSerializer;
     VerusBridgeMaster verusBridgeMaster;
+    VerusBridgeStorage verusBridgeStorage;
     
     // these constants should be able to reference each other, as many are relative, but Solidity does not
     // allow referencing them and still considering the result a constant. For any changes to these constants,
@@ -38,11 +40,13 @@ contract VerusProof {
 
     event HashEvent(bytes32 newHash,uint8 eventType);
 
-    constructor(address verusBridgeMasterAddress, address verusBLAKE2bAddress, address verusSerializerAddress, address verusNotarizerAddress) {
+    constructor(address verusBridgeMasterAddress, address verusBLAKE2bAddress, address verusSerializerAddress, 
+    address verusNotarizerAddress, address verusBridgeStorageAddress) {
         verusBridgeMaster = VerusBridgeMaster(verusBridgeMasterAddress); 
         verusSerializer = VerusSerializer(verusSerializerAddress);
         blake2b = VerusBlake2b(verusBLAKE2bAddress);
         verusNotarizer = VerusNotarizer(verusNotarizerAddress);
+        verusBridgeStorage = VerusBridgeStorage(verusBridgeStorageAddress); 
     }
 
     function setContracts(address[10] memory contracts) public {
@@ -256,10 +260,9 @@ contract VerusProof {
         bytes32 predictedRootHash;
         predictedRootHash = proveTransaction(_import);
         uint32 lastBlockHeight = verusNotarizer.lastBlockHeight();
-        bytes32 predictedStateRoot = flipBytes32(verusNotarizer.notarizedStateRoots(lastBlockHeight));
-        if(predictedRootHash == predictedStateRoot) {
-            return true;
-        } else return false;
+        bytes32 predictedStateRoot = flipBytes32(verusBridgeStorage.getNotarizedProof(lastBlockHeight).stateroot);
+        return predictedRootHash == predictedStateRoot;
+   
     }
 
     /*
