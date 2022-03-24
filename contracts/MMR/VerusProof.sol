@@ -27,7 +27,7 @@ contract VerusProof {
     // which are designed to ensure smart transaction provability, care must be take to ensure that OUTPUT_SCRIPT_OFFSET
     // is present and substituted for all equivalent values (currently (32 + 8))
     uint8 constant CCE_EVAL_EXPORT = 0xc;
-    uint32 constant CCE_COPTP_HEADERSIZE = 24;
+    uint32 constant CCE_COPTP_HEADERSIZE = 24 + 1; //  + 1 min varint size
     uint32 constant CCE_COPTP_EVALOFFSET = 2;
     uint32 constant CCE_SOURCE_SYSTEM_OFFSET = 24;
     uint32 constant CCE_HASH_TRANSFERS_DELTA = 32;
@@ -177,23 +177,18 @@ contract VerusProof {
                     return false;
                 }
 
-                nextOffset = nextOffset + CCE_SOURCE_SYSTEM_OFFSET;
+                nextOffset += CCE_SOURCE_SYSTEM_OFFSET;
 
                 assembly {
                     opCode2 := mload(add(firstObj, nextOffset))         // should be OP_PUSHDATA1 or OP_PUSHDATA2
                 }
 
-                if (opCode2 == SCRIPT_OP_PUSHDATA1)
+                nextOffset += CCE_COPTP_HEADERSIZE;
+                if (opCode2 == SCRIPT_OP_PUSHDATA2)
                 {
-                      nextOffset += 1; // one byte taken for varint
+                      nextOffset += 1; // one extra byte taken for varint
                 } 
-                else 
-                {
-                    nextOffset += 2;  // two bytes taken for varint
-                }
-
-                nextOffset = nextOffset + CCE_COPTP_HEADERSIZE;
-
+     
                 bytes32 incomingValue;
                 address systemSourceID;
                 address destSystemID;
