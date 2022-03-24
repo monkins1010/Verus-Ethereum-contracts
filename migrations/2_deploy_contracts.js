@@ -95,15 +95,8 @@ module.exports = async function (deployer) {
 
     USDCInst.increaseAllowance(VerusBridgeInst.address, "1000000000000000000000000");
 
-    const settingString = "verusbridgeaddress=" + VerusBridgeInst.address + "\n" +
-        "verusnotarizeraddress=" + notarizerInst.address + "\n" +
-        "verusproofaddress=" + ProofInst.address + "\n" +
-        "verusinfoaddress=" + INFOInst.address + "\n" +
-        "verusserializeraddress=" + serializerInst.address + "\n\n" +
-        "export const BRIDGE_CONTRACT_ADD = \"" + VerusBridgeInst.address + "\";\n" +
-        "export const NOTARIZER_CONTRACT_ADD = \"" + notarizerInst.address + "\";\n" +
-        "export const TOKEN_MANAGER_ERC20 = \"" + tokenInst.address + "\";\n\n" + 
+    const settingString = "\nverusbridgemasteraddress=" + VerusBridgeInst.address + "\n\n" +
         "export const BRIDGE_MASTER_ADD = \"" + bridgeMasterInst.address + "\";\n";
 
-    console.log("Settings to be pasted into *.conf file (except the tokenmanger, thats for the bridge website) \n\n", settingString);
+    console.log("Settings to be pasted into *.conf file and website \n\n", settingString);
 };
