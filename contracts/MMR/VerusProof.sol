@@ -10,6 +10,7 @@ import "../VerusNotarizer/VerusNotarizer.sol";
 import "../Libraries/VerusObjectsCommon.sol";
 import "../VerusBridge/VerusBridgeMaster.sol";
 import "../VerusBridge/VerusBridgeStorage.sol";
+import "../VerusNotarizer/VerusNotarizerStorage.sol";
 
 contract VerusProof {
 
@@ -19,6 +20,7 @@ contract VerusProof {
     VerusSerializer verusSerializer;
     VerusBridgeMaster verusBridgeMaster;
     VerusBridgeStorage verusBridgeStorage;
+    VerusNotarizerStorage verusNotarizerStorage;
     
     // these constants should be able to reference each other, as many are relative, but Solidity does not
     // allow referencing them and still considering the result a constant. For any changes to these constants,
@@ -49,7 +51,7 @@ contract VerusProof {
         verusBridgeStorage = VerusBridgeStorage(verusBridgeStorageAddress); 
     }
 
-    function setContracts(address[10] memory contracts) public {
+    function setContracts(address[11] memory contracts) public {
 
         assert(msg.sender == address(verusBridgeMaster));
 
@@ -272,12 +274,9 @@ contract VerusProof {
     }
     
     function proveImports(VerusObjects.CReserveTransferImport memory _import) public view returns(bool){
-        bytes32 predictedRootHash;
-        predictedRootHash = proveTransaction(_import);
-        uint32 lastBlockHeight = verusNotarizer.lastBlockHeight();
-        bytes32 predictedStateRoot = flipBytes32(verusBridgeStorage.getNotarizedProof(lastBlockHeight).stateroot);
-        return predictedRootHash == predictedStateRoot;
-   
+       
+        return (proveTransaction(_import) == flipBytes32(verusNotarizerStorage.getLastProofRoot().stateroot));
+ 
     }
 
     /*

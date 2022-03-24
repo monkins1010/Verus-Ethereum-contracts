@@ -1,5 +1,6 @@
 var VerusBridgeMaster = artifacts.require("./VerusBridge/VerusBridgeMaster.sol");
 var VerusBridgeStorage = artifacts.require("./VerusBridge/VerusBridgeStorage.sol");
+var VerusNotarizerStorage = artifacts.require("./VerusNotarizer/VerusNotarizerStorage.sol");
 var VerusTokenManager = artifacts.require("./VerusBridge/TokenManager.sol");
 var VerusBlake2b = artifacts.require("./MMR/VerusBlake2b.sol");
 var VerusSerializer = artifacts.require("./VerusBridge/VerusSerializer.sol");
@@ -37,6 +38,9 @@ module.exports = async function (deployer) {
     await deployer.deploy(VerusBridgeStorage, bridgeMasterInst.address, "5000000000000000000000");
     const bridgeStorageInst = await VerusBridgeStorage.deployed();
 
+    await deployer.deploy(VerusNotarizerStorage, bridgeMasterInst.address);
+    const NotarizerStorageInst = await VerusNotarizerStorage.deployed();
+
     await deployer.deploy(VerusBlake2b);
     const blakeInst = await VerusBlake2b.deployed();
 
@@ -46,7 +50,7 @@ module.exports = async function (deployer) {
     await deployer.deploy(VerusTokenManager, bridgeMasterInst.address, bridgeStorageInst.address, serializerInst.address)
     const tokenInst = await VerusTokenManager.deployed();
 
-    await deployer.deploy(VerusNotarizer, blakeInst.address, serializerInst.address, bridgeMasterInst.address, verusNotariserIDS, verusNotariserSigner, bridgeStorageInst.address);
+    await deployer.deploy(VerusNotarizer, blakeInst.address, serializerInst.address, bridgeMasterInst.address, verusNotariserIDS, verusNotariserSigner, NotarizerStorageInst.address);
     const notarizerInst = await VerusNotarizer.deployed();
 
     await deployer.deploy(VerusProof, bridgeMasterInst.address, blakeInst.address, serializerInst.address, notarizerInst.address);
@@ -74,7 +78,8 @@ module.exports = async function (deployer) {
         VerusBridgeInst.address, 
         INFOInst.address, 
         ExportManInst.address, 
-        bridgeStorageInst.address];
+        bridgeStorageInst.address,
+        NotarizerStorageInst.address];
 
     try {    
         await bridgeMasterInst.upgradeContract(0, allContracts);

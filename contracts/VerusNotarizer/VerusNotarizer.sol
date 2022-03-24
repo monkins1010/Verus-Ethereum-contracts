@@ -8,7 +8,7 @@ import "../Libraries/VerusConstants.sol";
 import "../Libraries/VerusObjectsNotarization.sol";
 import "../VerusBridge/VerusSerializer.sol";
 import "../MMR/VerusBlake2b.sol";
-import "../VerusBridge/VerusBridgeStorage.sol";
+import "../VerusNotarizer/VerusNotarizerStorage.sol";
 
 contract VerusNotarizer {
 
@@ -31,7 +31,7 @@ contract VerusNotarizer {
 
     VerusBlake2b blake2b;
     VerusSerializer verusSerializer;
-    VerusBridgeStorage verusBridgeStorage;
+    VerusNotarizerStorage verusNotarizerStorage;
     address verusBridgeMaster;
     // notarization vdxf key
 
@@ -43,21 +43,19 @@ contract VerusNotarizer {
     uint8 private notaryCount;
     bool poolAvailable;
 
-
-
     // Notifies when a new block hash is published
     event NewBlock(VerusObjectsNotarization.CPBaaSNotarization,uint32 notarizedDataHeight);
 
     constructor(address _verusBLAKE2bAddress,address _verusSerializerAddress, address verusBridgeMasterAddress, 
-    address[] memory _notaries, address[] memory _notariesEthAddress, address verusBridgeStorageAddress) {
+    address[] memory _notaries, address[] memory _notariesEthAddress, address verusNotarizerStorageAddress) {
         verusSerializer = VerusSerializer(_verusSerializerAddress);
         blake2b = VerusBlake2b(_verusBLAKE2bAddress);
         verusBridgeMaster = verusBridgeMasterAddress;
         notaryCount = uint8(_notaries.length);
-        verusBridgeStorage = VerusBridgeStorage(verusBridgeStorageAddress); 
+        verusNotarizerStorage = VerusNotarizerStorage(verusNotarizerStorageAddress); 
 
-        // when contract is lauanching/upgrading copy in to global bool pool available.
-        if(verusBridgeStorage.poolAvailable(VerusConstants.VerusBridgeAddress) > 0 )
+        // when contract is launching/upgrading copy in to global bool pool available.
+        if(verusNotarizerStorage.poolAvailable(VerusConstants.VerusBridgeAddress) > 0 )
             poolAvailable = true;
 
         for(uint i =0; i < _notaries.length; i++){
@@ -69,7 +67,7 @@ contract VerusNotarizer {
 
     
     function isPoolAvailable(address _address) public view returns(bool){
-        uint32 heightAvailable = verusBridgeStorage.poolAvailable(_address);
+        uint32 heightAvailable = verusNotarizerStorage.poolAvailable(_address);
         return heightAvailable != 0 && heightAvailable < block.number;
     }
 
@@ -140,7 +138,7 @@ contract VerusNotarizer {
 
         require(msg.sender == verusBridgeMaster, "setLatestData:fromverusbridgemaster only");
         require((_rs.length == _ss.length) && (_rs.length == _vs.length),"Signature arrays must be of equal length");
-        require(_pbaasNotarization.notarizationheight > verusBridgeStorage.lastBlockHeight(),"Block Height must be greater than current block height");
+        require(_pbaasNotarization.notarizationheight > verusNotarizerStorage.lastBlockHeight(),"Block Height must be greater than current block height");
 
         bytes memory serializedNotarisation = verusSerializer.serializeCPBaaSNotarization(_pbaasNotarization);
         
@@ -174,15 +172,15 @@ contract VerusNotarizer {
                         if (_pbaasNotarization.currencystates[k].currencystate.flags & 
                                 (FLAG_FRACTIONAL + FLAG_REFUNDING + FLAG_LAUNCHCONFIRMED + FLAG_LAUNCHCOMPLETEMARKER) == 
                                     (FLAG_FRACTIONAL + FLAG_LAUNCHCONFIRMED + FLAG_LAUNCHCOMPLETEMARKER) &&
-                                    verusBridgeStorage.poolAvailable(_pbaasNotarization.currencystates[k].currencyid) == 0) 
+                                    verusNotarizerStorage.poolAvailable(_pbaasNotarization.currencystates[k].currencyid) == 0) 
                             {
-                                poolAvailable[_pbaasNotarization.currencystates[k].currencyid] = uint32(block.number);
+                                verusNotarizerStorage.setPoolAvailable(uint32(block.number), _pbaasNotarization.currencystates[k].currencyid);
                                 poolAvailable = true;
                             }
                     }
                 }
 
-                verusBridgeStorage.setNotarization(_pbaasNotarization, _pbaasNotarization.notarizationheight);
+                verusNotarizerStorage.setNotarization(_pbaasNotarization, _pbaasNotarization.notarizationheight);
               
                 return true;        
             }

@@ -44,7 +44,7 @@ contract VerusBridge {
 
     }
 
-    function setContracts(address[10] memory contracts) public {
+    function setContracts(address[11] memory contracts) public {
 
         assert(msg.sender == address(verusBridgeMaster));
 

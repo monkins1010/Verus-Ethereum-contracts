@@ -10,7 +10,7 @@ import "./VerusBridge.sol";
 import "./VerusInfo.sol";
 import "./TokenManager.sol";
 import "../MMR/VerusProof.sol";
-
+import "../VerusNotarizer/VerusNotarizerStorage.sol";
 
 contract VerusBridgeMaster {
 
@@ -18,9 +18,10 @@ contract VerusBridgeMaster {
     VerusBridge verusBridge;
     VerusInfo verusInfo;
     VerusBridgeStorage verusBridgeStorage;
+    VerusNotarizerStorage verusNotarizerStorage;
     
     // Total amount of contracts.
-    address[10] public contracts;
+    address[11] public contracts;
     bool firstSetup;
 
     //TODO: Contact one single owner. To upgrade to a multisig
@@ -42,6 +43,7 @@ contract VerusBridgeMaster {
             verusBridge = VerusBridge(_newContractAddress[uint(VerusConstants.ContractType.VerusBridge)]);
             verusInfo = VerusInfo(_newContractAddress[uint(VerusConstants.ContractType.VerusInfo)]);
             verusBridgeStorage = VerusBridgeStorage(_newContractAddress[uint(VerusConstants.ContractType.VerusBridgeStorage)]);
+            verusNotarizerStorage = VerusNotarizerStorage(_newContractAddress[uint(VerusConstants.ContractType.VerusNotarizerStorage)]);
             verusBridgeStorage.setContracts(contracts); 
             firstSetup = true;
         } else {
@@ -114,11 +116,11 @@ contract VerusBridgeMaster {
     }
 
     function getLastProofRoot() public view returns(VerusObjectsNotarization.CProofRoot memory){
-        return verusBridgeStorage.getLastProofRoot();
+        return verusNotarizerStorage.getLastProofRoot();
     }
 
     function lastBlockHeight() public view returns(uint32){
-        return verusBridgeStorage.lastBlockHeight();
+        return verusNotarizerStorage.lastBlockHeight();
     }
 
     function setLatestData(VerusObjectsNotarization.CPBaaSNotarization memory _pbaasNotarization,
