@@ -53,7 +53,7 @@ module.exports = async function (deployer) {
     await deployer.deploy(VerusNotarizer, blakeInst.address, serializerInst.address, bridgeMasterInst.address, verusNotariserIDS, verusNotariserSigner, NotarizerStorageInst.address);
     const notarizerInst = await VerusNotarizer.deployed();
 
-    await deployer.deploy(VerusProof, bridgeMasterInst.address, blakeInst.address, serializerInst.address, notarizerInst.address);
+    await deployer.deploy(VerusProof, bridgeMasterInst.address, blakeInst.address, serializerInst.address, notarizerInst.address, bridgeStorageInst.address);
     const ProofInst = await VerusProof.deployed();
 
     await deployer.deploy(VerusCCE, serializerInst.address, bridgeMasterInst.address);
@@ -84,6 +84,7 @@ module.exports = async function (deployer) {
     try {    
         await bridgeMasterInst.upgradeContract(0, allContracts);
         await INFOInst.launchTokens(launchCurrencies);
+        
     } catch (e) {
 
         console.log(e);

@@ -22,7 +22,6 @@ contract VerusBridgeMaster {
     
     // Total amount of contracts.
     address[11] public contracts;
-    bool firstSetup;
 
     //TODO: Contact one single owner. To upgrade to a multisig
     address contractOwner;
@@ -35,7 +34,7 @@ contract VerusBridgeMaster {
    function upgradeContract(VerusConstants.ContractType contractType, address[] memory _newContractAddress) public {
         //TODO: Make updating contract a multisig check across 3 notaries.
         assert(msg.sender == contractOwner);
-        if (!firstSetup){
+        if (contracts[0] == address(0)){
             for (uint i = 0; i < uint(VerusConstants.ContractType.LastIndex); i++) {
                 contracts[i] = _newContractAddress[i];
             }
@@ -45,7 +44,8 @@ contract VerusBridgeMaster {
             verusBridgeStorage = VerusBridgeStorage(_newContractAddress[uint(VerusConstants.ContractType.VerusBridgeStorage)]);
             verusNotarizerStorage = VerusNotarizerStorage(_newContractAddress[uint(VerusConstants.ContractType.VerusNotarizerStorage)]);
             verusBridgeStorage.setContracts(contracts); 
-            firstSetup = true;
+            verusNotarizerStorage.setContracts(contracts); 
+
         } else {
 
 
@@ -95,8 +95,8 @@ contract VerusBridgeMaster {
         verusBridge.export(_transfer, msg.value, msg.sender );
     }
 
-    function checkImports(bytes32[] memory _imports) public view returns(bytes32[] memory){
-        return verusBridge.checkImports(_imports);
+    function checkImport(bytes32 _imports) public view returns(bool){
+        return verusBridgeStorage.processedTxids(_imports);
     }
 
     function submitImports(VerusObjects.CReserveTransferImport[] memory _imports) public {
