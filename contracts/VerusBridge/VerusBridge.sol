@@ -98,7 +98,7 @@ contract VerusBridge {
             //total amount kept as wei until export to verus
             verusBridgeStorage.exportERC20Tokens(tokenAmount, token, mappedContract.flags, sender );
             
-        } else if (transfer.flags & VerusConstants.CTRX_CURRENCY_EXPORT_FLAG == VerusConstants.CTRX_CURRENCY_EXPORT_FLAG){
+        } else if (transfer.flags == VerusConstants.CURRENCY_EXPORT){
             
             verusBridgeStorage.addToFeesHeld(paidValue);
     
@@ -114,12 +114,15 @@ contract VerusBridge {
 
             verusBridgeStorage.transferFromERC721(address(verusBridgeStorage), sender, NFT, NFTID );
  
-        } else {
+        } else if (transfer.currencyvalue.currency == VerusConstants.VEth){
             //handle a vEth transfer
             transfer.currencyvalue.amount = uint64(tokenManager.convertToVerusNumber(paidValue - VerusConstants.transactionFee,18));
             verusBridgeStorage.addToEthHeld(paidValue - fees);  // msg.value == fees + amount in transaction checked in checkExport()
             verusBridgeStorage.addToFeesHeld(fees); //TODO: what happens if they send to much fee?
-        } 
+        } else {
+
+            require(false, "InvalidExport");
+        }
         _createExports(transfer);
     }
 
@@ -188,7 +191,7 @@ contract VerusBridge {
             amount = tokenManager.convertFromVerusNumber(uint256(_import.transfers[i].currencyvalue.amount),18);
 
             // if the transfer does not have the EXPORT_CURRENCY flag set
-            if (_import.transfers[i].flags & VerusConstants.CTRX_CURRENCY_EXPORT_FLAG != VerusConstants.CTRX_CURRENCY_EXPORT_FLAG){
+            if (_import.transfers[i].flags & VerusConstants.CURRENCY_EXPORT != VerusConstants.CURRENCY_EXPORT){
                     address destinationAddress;
 
                     bytes memory tempAddress  = _import.transfers[i].destination.destinationaddress;
@@ -226,6 +229,10 @@ contract VerusBridge {
                      
                 tokenManager.deployToken(_import.transfers[i].destination.destinationaddress);
                 
+            } else if (_import.transfers[i].destination.destinationtype == 0) {
+
+                    //TODO: Handle NFTS
+
             }
             //handle the distributions of the fees
             //add them into the fees array to be claimed by the message sender

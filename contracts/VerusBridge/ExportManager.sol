@@ -38,7 +38,7 @@ contract ExportManager {
         uint256 requiredFees =  VerusConstants.transactionFee;  //0.003 eth in WEI
         uint256 verusFees = VerusConstants.verusTransactionFee; //0.02 verus in SATS
         uint64 bounceBackFee;
-        uint8  FEE_OFFSET = 20 + 20 + 20 + 8;
+        uint8  FEE_OFFSET = 20 + 20 + 20 + 8; // 3 x 20bytes address + 64bit uint
         bytes memory serializedDest;
         address gatewayID;
         address destAddressID;
@@ -46,9 +46,9 @@ contract ExportManager {
         require (checkTransferFlags(transfer), "Flag Check failed");         
                                   
         //TODO: We cant mix different transfer destinations together in the CCE assert on non same fields.
-        address exportID = verusBridgeStorage.getCreatedExport(block.number);
+        address destCurrencyexportID = verusBridgeStorage.getCreatedExport(block.number);
 
-        require (exportID != transfer.destcurrencyid, "checkReadyExports cannot mix types ");
+        require (destCurrencyexportID == address(0) || destCurrencyexportID == transfer.destcurrencyid, "checkReadyExports cannot mix types ");
         
         // Check destination address is not zero
         serializedDest = transfer.destination.destinationaddress;  
@@ -57,7 +57,7 @@ contract ExportManager {
                     destAddressID := mload(add(serializedDest, 20))
                  }
 
-        require (destAddressID != address(0), "Destination Address null");
+        require (destAddressID != address(0), "Destination Address null");// Destination can be currency definition
 
         // Check fees are correct, if pool unavailble vrsctest only fees, TODO:if pool availble vETH fees only for now
 
@@ -78,38 +78,27 @@ contract ExportManager {
             assert(verusBridgeStorage.subtractPoolSize(tokenManager.convertFromVerusNumber(transfer.fees, 18)));
 
             if (!(transfer.destination.destinationtype == VerusConstants.DEST_PKH ||
-                   transfer.destination.destinationtype == VerusConstants.DEST_ID))
+                   transfer.destination.destinationtype == VerusConstants.DEST_ID  ||
+                   transfer.destination.destinationtype == VerusConstants.DEST_SH))
                     return 0;
 
             if (!(transfer.secondreserveid == address(0) && transfer.destcurrencyid == VerusConstants.VerusCurrencyId))
                 return 0;
 
-            if (transfer.feecurrencyid == VerusConstants.VerusCurrencyId) {
+            require (transfer.fees == verusFees, "VRSC fees not 0.02");
+            require (transfer.destination.destinationaddress.length == 20, "destination address not 20 bytes");
 
-                require (transfer.fees == verusFees, "VRSC fees not 0.02");
-                require (transfer.destination.destinationaddress.length == 20, "destination address not 20 bytes");
-
-            } else {
-
-                require (false,"Fees must be in VRSC before pool is launched");
-
-            }
 
         } else {
 
             require(transfer.feecurrencyid == VerusConstants.VEth, "Fee Currency not vETH"); //TODO:Accept more fee currencies
 
-            if (transfer.destination.destinationtype & VerusConstants.FLAG_DEST_GATEWAY == VerusConstants.FLAG_DEST_GATEWAY) {
-
-                if (!(transfer.destination.destinationtype == (VerusConstants.FLAG_DEST_GATEWAY | VerusConstants.DEST_PKH )  ||
-                   transfer.destination.destinationtype == (VerusConstants.FLAG_DEST_GATEWAY | VerusConstants.DEST_ID )     ||
-                   transfer.destination.destinationtype == (VerusConstants.FLAG_DEST_GATEWAY | VerusConstants.DEST_ETH )))
-                    return 0;
+            if (transfer.destination.destinationtype == (VerusConstants.FLAG_DEST_GATEWAY | VerusConstants.DEST_ETH )) {
 
                 require (transfer.destination.destinationaddress.length == (20 + 20 + 20 + 8), "destination address not 68 bytes");
 
                 assembly {
-                    gatewayID := mload(add(serializedDest, 40))
+                    gatewayID := mload(add(serializedDest, 40)) // second 20bytes in bytes array
                     bounceBackFee := mload(add(serializedDest, FEE_OFFSET))
                 }
 
@@ -121,9 +110,9 @@ contract ExportManager {
                  require (ETHSent >= requiredFees, "ETH fees to low"); //TODO:ETH fees always required for now
 
             } else if (!(transfer.destination.destinationtype == VerusConstants.DEST_PKH || transfer.destination.destinationtype == VerusConstants.DEST_ID 
-                        || transfer.destination.destinationtype == VerusConstants.DEST_ETH )) {
+                        || transfer.destination.destinationtype == VerusConstants.DEST_SH )) {
 
-                return 0;
+                return 0;  
 
             } 
 
@@ -133,11 +122,11 @@ contract ExportManager {
        
         if (transfer.currencyvalue.currency == VerusConstants.VEth) {
 
-            require (ETHSent == (requiredFees + tokenManager.convertFromVerusNumber(transfer.currencyvalue.amount,18)), "ETH sent != (amount + fees)");
+            require (ETHSent >= (requiredFees + tokenManager.convertFromVerusNumber(transfer.currencyvalue.amount,18)), "ETH sent < (amount + fees)");
       
         } else {
 
-            require (ETHSent == requiredFees, "ETH fee sent != (amount + fees)");
+            require (ETHSent >= requiredFees, "ETH fee sent < (amount + fees)");
         }
 
         return requiredFees;
@@ -149,7 +138,13 @@ contract ExportManager {
             return false;
 
         uint8 transferType = transfer.destination.destinationtype & ~VerusConstants.FLAG_DEST_GATEWAY;
-        if (transfer.destination.destinationtype == (VerusConstants.DEST_ETH + VerusConstants.FLAG_DEST_GATEWAY))
+        //TODO: Hardening CertainCReserveTransfer flag combinations are still invalid. 
+        if (transfer.destination.destinationtype == (VerusConstants.DEST_ETH + VerusConstants.FLAG_DEST_GATEWAY)
+                && (transfer.flags & VerusConstants.CURRENCY_EXPORT  != VerusConstants.CURRENCY_EXPORT))
+        {
+            return true;
+        }
+        else if (transfer.flags == VerusConstants.CURRENCY_EXPORT && transferType == VerusConstants.DEST_REGISTERCURRENCY)
         {
             return true;
         }
