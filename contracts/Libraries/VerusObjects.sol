@@ -48,8 +48,8 @@ library VerusObjects {
 
     struct exportSet {
 
-        CReserveTransfer[] transfers;
         bytes32 txidhash;   
+        CReserveTransfer[] transfers;
 
     }
 

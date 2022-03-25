@@ -234,10 +234,23 @@ contract VerusBridge {
                     //TODO: Handle NFTS
 
             }
-            //handle the distributions of the fees
+            //TODO:handle the distributions of the fees
+            //     30% to all the Notaries
+            //     50% to liquidity pool
+            //     10% exporter
+            //     10% to proposer
+
             //add them into the fees array to be claimed by the message sender
             if (_import.transfers[i].fees > 0 && _import.transfers[i].feecurrencyid == VerusConstants.VEth){
-                verusBridgeStorage.setClaimableFees(msg.sender,_import.transfers[i].fees);
+
+                address destination;
+                bytes memory destHex = _import.exportinfo.rewardaddress.destinationaddress;
+                assembly {
+                    destination := mload(add(destHex , 20))
+
+                 }
+
+                verusBridgeStorage.setClaimableFees(destination ,_import.transfers[i].fees);
             }
         }
         return true;
