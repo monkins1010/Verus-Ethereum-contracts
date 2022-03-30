@@ -110,9 +110,8 @@ contract VerusBridgeMaster {
 
     /** VerusNotarizer pass through functions **/
 
-    function poolAvailable(address _address) public view returns(bool){
-        return verusNotarizer.isPoolAvailable(_address);
-
+    function isPoolAvailable() public view returns(bool){
+        return verusNotarizer.poolAvailable();
     }
 
     function getLastProofRoot() public view returns(VerusObjectsNotarization.CProofRoot memory){

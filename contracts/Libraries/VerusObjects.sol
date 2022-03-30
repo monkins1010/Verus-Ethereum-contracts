@@ -46,13 +46,6 @@ library VerusObjects {
         uint64 amount;
     }
 
-    struct exportSet {
-
-        bytes32 txidhash;   
-        CReserveTransfer[] transfers;
-
-    }
-
     struct CReserveTransfer {
         uint32 version;
         CCurrencyValueMap currencyvalue;
@@ -68,8 +61,8 @@ library VerusObjects {
     // CReserve Transfer Set is a simplified version of a crosschain export returning only the required info
     
     struct CReserveTransferSet {
-        uint position;
         uint blockHeight;
+        bytes32 prevExportHash;
         bytes32 exportHash;
         CReserveTransfer[] transfers;
     }

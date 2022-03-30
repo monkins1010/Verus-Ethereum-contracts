@@ -79,19 +79,24 @@ contract VerusBridge {
  
     function export(VerusObjects.CReserveTransfer memory transfer, uint256 paidValue, address sender) public {
 
-        require(msg.sender == address(verusBridgeMaster), "Token:Bridgemastercallonly");
+        assert(msg.sender == address(verusBridgeMaster));
         uint256 fees;
 
         fees = exportManager.checkExport(transfer, paidValue);
 
         assert(fees != 0); 
 
+        if(!verusBridgeMaster.isPoolAvailable())
+        {
+            assert (verusBridgeStorage.subtractPoolSize(tokenManager.convertFromVerusNumber(transfer.fees, 18)));
+        }
+
         if (transfer.currencyvalue.currency != VerusConstants.VEth) {
 
             verusBridgeStorage.addToFeesHeld(paidValue);
             VerusObjects.mappedToken memory mappedContract = verusBridgeStorage.getERCMapping(transfer.currencyvalue.currency);
             Token token = Token(mappedContract.erc20ContractAddress); 
-            uint256 allowedTokens = token.allowance(sender, address(tokenManager));
+            uint256 allowedTokens = token.allowance(sender, address(verusBridgeStorage));
             uint256 tokenAmount = tokenManager.convertFromVerusNumber(transfer.currencyvalue.amount, token.decimals()); //convert to wei from verus satoshis
             assert( allowedTokens >= tokenAmount);
             //transfer the tokens to the verusbridgemaster contract
@@ -119,9 +124,6 @@ contract VerusBridge {
             transfer.currencyvalue.amount = uint64(tokenManager.convertToVerusNumber(paidValue - VerusConstants.transactionFee,18));
             verusBridgeStorage.addToEthHeld(paidValue - fees);  // msg.value == fees + amount in transaction checked in checkExport()
             verusBridgeStorage.addToFeesHeld(fees); //TODO: what happens if they send to much fee?
-        } else {
-
-            require(false, "InvalidExport");
         }
         _createExports(transfer);
     }
@@ -133,11 +135,17 @@ contract VerusBridge {
 
         verusBridgeStorage.setReadyExportTransfers(currentHeight, newTransaction);
 
-        bool bridgeReady = verusBridgeMaster.poolAvailable(VerusConstants.VerusBridgeAddress);
+        bool bridgeReady = verusBridgeMaster.isPoolAvailable();
 
         bytes memory serializedCCE = verusSerializer.serializeCCrossChainExport(verusCCE.generateCCE(verusBridgeStorage.getReadyExports(currentHeight).transfers, bridgeReady));
 
-        verusBridgeStorage.setReadyExportTxid(currentHeight, keccak256(abi.encodePacked(serializedCCE, verusBridgeStorage.getReadyExports(currentHeight).txidhash)));
+        bytes32 prevHash;
+        uint32  prevHeight;
+
+        prevHeight = verusBridgeStorage.lastCCEExportHeight();
+        prevHash = prevHeight == uint32(0) ? bytes32(0) : verusBridgeStorage.getReadyExports(prevHeight).exportHash;
+          
+        verusBridgeStorage.setReadyExportTxid(currentHeight, keccak256(abi.encodePacked(serializedCCE, prevHash)), prevHash);
 
     }
 
@@ -256,31 +264,20 @@ contract VerusBridge {
         return true;
     }
     
-    function getReadyExportsByBlock(uint _blockNumber) public view returns(VerusObjects.CReserveTransferSet memory) {
-        //need a transferset for each position not each block
-        //retrieve a block get the indexes, create a transfer set for each index add those to the array
-        VerusObjects.CReserveTransferSet memory output = VerusObjects.CReserveTransferSet(
-            _blockNumber,                     // position in array
-            _blockNumber,               // blockHeight
-            verusBridgeStorage.getReadyExports(_blockNumber).txidhash,  // cross chain export hash
-            verusBridgeStorage.getReadyExports(_blockNumber).transfers       // list of CReserveTransfers
-        );
-        return output;
-    }
 
     function getReadyExportsByRange(uint _startBlock,uint _endBlock) public view returns(VerusObjects.CReserveTransferSet[] memory returnedExports){
         //calculate the size that the return array will be to initialise it
         uint outputSize = 0;
         if(_startBlock < verusBridgeStorage.firstBlock()) _startBlock = verusBridgeStorage.firstBlock();
         for(uint i = _startBlock; i <= _endBlock; i++){
-            if(verusBridgeStorage.getReadyExports(i).txidhash != bytes32(0))  outputSize += 1;
+            if(verusBridgeStorage.getReadyExports(i).exportHash != bytes32(0))  outputSize += 1;
         }
 
         VerusObjects.CReserveTransferSet[] memory output = new VerusObjects.CReserveTransferSet[](outputSize);
         uint outputPosition = 0;
         for (uint blockNumber = _startBlock; blockNumber <= _endBlock; blockNumber++){
-            if (verusBridgeStorage.getReadyExports(blockNumber).txidhash != bytes32(0)) {
-                output[outputPosition] = getReadyExportsByBlock(blockNumber);
+            if (verusBridgeStorage.getReadyExports(blockNumber).exportHash != bytes32(0)) {
+                output[outputPosition] = verusBridgeStorage.getReadyExports(blockNumber);
                 outputPosition++;
             }
         }

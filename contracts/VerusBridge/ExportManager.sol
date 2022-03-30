@@ -31,7 +31,7 @@ contract ExportManager {
 
     }
 
-    function checkExport(VerusObjects.CReserveTransfer memory transfer, uint256 ETHSent) public returns (uint256 fees){
+    function checkExport(VerusObjects.CReserveTransfer memory transfer, uint256 ETHSent) public view  returns (uint256 fees){
 
         verusBridgeStorage.checkiaddresses(transfer);
 
@@ -70,13 +70,11 @@ contract ExportManager {
         }
 
 
-        if (!verusBridgeMaster.poolAvailable(VerusConstants.VerusBridgeAddress)) {
+        if (!verusBridgeMaster.isPoolAvailable()) {
 
-            assert(transfer.feecurrencyid == VerusConstants.VerusCurrencyId);
+            require (transfer.feecurrencyid == VerusConstants.VerusCurrencyId, "feecurrencyid != vrsc");
             
             //VRSC pool as WEI
-            assert(verusBridgeStorage.subtractPoolSize(tokenManager.convertFromVerusNumber(transfer.fees, 18)));
-
             if (!(transfer.destination.destinationtype == VerusConstants.DEST_PKH ||
                    transfer.destination.destinationtype == VerusConstants.DEST_ID  ||
                    transfer.destination.destinationtype == VerusConstants.DEST_SH))

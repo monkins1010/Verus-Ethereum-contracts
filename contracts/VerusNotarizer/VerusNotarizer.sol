@@ -41,7 +41,7 @@ contract VerusNotarizer {
     address[] private notaries;
 
     uint8 private notaryCount;
-    bool poolAvailable;
+    bool public poolAvailable;
 
     // Notifies when a new block hash is published
     event NewBlock(VerusObjectsNotarization.CPBaaSNotarization,uint32 notarizedDataHeight);
@@ -63,12 +63,6 @@ contract VerusNotarizer {
             notaryAddressMapping[_notaries[i]] = _notariesEthAddress[i];
             notaries.push(_notaries[i]);
         }
-    }
-
-    
-    function isPoolAvailable(address _address) public view returns(bool){
-        uint32 heightAvailable = verusNotarizerStorage.poolAvailable(_address);
-        return heightAvailable != 0 && heightAvailable < block.number;
     }
 
     function setContract(address contractAddress) public {

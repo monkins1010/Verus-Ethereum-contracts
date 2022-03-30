@@ -26,20 +26,21 @@ contract VerusBridgeStorage {
     uint256 poolSize = 0;  
 
     mapping (address => uint256) public claimableFees;
-    mapping (uint => VerusObjects.exportSet) public _readyExports;
+    mapping (uint => VerusObjects.CReserveTransferSet) public _readyExports;
     mapping (bytes32 => bool) public processedTxids;
     mapping (address => VerusObjects.mappedToken) public verusToERC20mapping;
     address[] public tokenList;
     
     uint public lastTxImportHeight;
-    uint256 public firstBlock;
+    uint32 public firstBlock;
+    uint32 public lastCCEExportHeight;
    
     //contract allows the contracts to be set and reset
     constructor(
         address bridgeMasterAddress, uint256 _poolSize){
         verusBridgeMaster = bridgeMasterAddress;   
         poolSize = _poolSize;   
-        firstBlock = block.number; 
+        firstBlock = uint32(block.number); 
     }
 
     function setContracts(address[11] memory contracts) public {
@@ -94,7 +95,7 @@ contract VerusBridgeStorage {
         claimableFees[_feeRecipient] = claimableFees[_feeRecipient] + _ethAmount;
     }
 
-     function setReadyExportTransfers(uint _block, VerusObjects.CReserveTransfer memory reserveTransfer) public {
+    function setReadyExportTransfers(uint _block, VerusObjects.CReserveTransfer memory reserveTransfer) public {
 
         isSenderBridgeContract(msg.sender);
         
@@ -104,11 +105,19 @@ contract VerusBridgeStorage {
     
     }
 
-    function setReadyExportTxid(uint _block, bytes32 txidhash) public {
+    function setReadyExportTxid(uint _block, bytes32 txidhash, bytes32 prevTxidHash) public {
         
         isSenderBridgeContract(msg.sender);
         
-        _readyExports[_block].txidhash = txidhash;
+        _readyExports[_block].exportHash = txidhash;
+
+        // only update the last ETH CCE export height when a new block passes
+        if(_block != lastCCEExportHeight)
+        {
+            lastCCEExportHeight = uint32(_block);
+            _readyExports[_block].prevExportHash = prevTxidHash;
+            _readyExports[_block].blockHeight = _block;
+        }
     
     }
 
@@ -148,9 +157,9 @@ contract VerusBridgeStorage {
     }
 
     function getReadyExports(uint _block) public view
-        returns(VerusObjects.exportSet memory){
+        returns(VerusObjects.CReserveTransferSet memory){
         
-        VerusObjects.exportSet memory exportSet = _readyExports[_block];
+        VerusObjects.CReserveTransferSet memory exportSet = _readyExports[_block];
 
         return exportSet;
     }
@@ -171,7 +180,7 @@ contract VerusBridgeStorage {
 
     function ERC20Registered(address _iaddress) public view returns (bool) {
 
-        return verusToERC20mapping[_iaddress].erc20ContractAddress != address(0);
+        return verusToERC20mapping[_iaddress].flags > 0;
         
     }
 
@@ -189,7 +198,7 @@ contract VerusBridgeStorage {
 
     function emitNewToken(string memory name, string memory ticker, address _iaddress) public {
 
-        require(msg.sender == tokenManager, "Only tokenmanager allowed to mint");
+        require(msg.sender == tokenManager, "Only tokenmanager allowed to emit");
         Token t = new Token(name, ticker);   
         tokenList.push(_iaddress); 
         emit TokenCreated(address(t));
@@ -197,6 +206,8 @@ contract VerusBridgeStorage {
     }
 
     function mintOrTransferToken(address _destination, uint256 processedTokenAmount, uint32 flags, Token token ) public {
+
+        require(msg.sender == tokenManager, "Only tokenmanager allowed to mintOrTransferToken");
 
         if (flags & VerusConstants.MAPPING_VERUS_OWNED == VerusConstants.MAPPING_VERUS_OWNED) {
 

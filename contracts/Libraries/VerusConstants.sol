@@ -35,10 +35,10 @@ library VerusConstants {
     uint8 constant CURRENT_VERSION = 1;
 
     // deployTokens flags 
-    uint8 constant MAPPING_ETHEREUM_OWNED = 0;
-    uint8 constant MAPPING_VERUS_OWNED = 1;
-    uint8 constant MAPPING_PARTOF_BRIDGEVETH = 2;
-    uint8 constant MAPPING_ISBRIDGE_CURRENCY = 4;
+    uint8 constant MAPPING_ETHEREUM_OWNED = 1;
+    uint8 constant MAPPING_VERUS_OWNED = 2;
+    uint8 constant MAPPING_PARTOF_BRIDGEVETH = 4;
+    uint8 constant MAPPING_ISBRIDGE_CURRENCY = 8;
     uint constant TICKER_LENGTH_MAX = 4;
 
     enum ContractType {

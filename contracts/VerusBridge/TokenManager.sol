@@ -170,8 +170,14 @@ contract TokenManager {
 
         uint8 currencyFlags;
 
-        if (ccd.systemID != VerusConstants.VEth) 
+        if (ccd.systemID == VerusConstants.VEth)
+        {
+            currencyFlags = VerusConstants.MAPPING_ETHEREUM_OWNED;
+        }
+        else 
+        {
             currencyFlags = VerusConstants.MAPPING_VERUS_OWNED;
+        }
 
         recordToken(destinationCurrencyID, ccd.nativeCurrencyID, ccd.name, getSymbol(ccd.name), currencyFlags, ccd.launchSystemID);
     }
