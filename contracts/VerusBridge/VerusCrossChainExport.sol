@@ -14,16 +14,16 @@ contract VerusCrossChainExport{
     VerusObjects.CCurrencyValueMap[] fees;
     VerusSerializer verusSerializer;
 
-    address verusBridgeMaster;
+    address upgradeContract;
 
-    constructor(address verusSerializerAddress, address verusBridgeMasterAddress) {
+    constructor(address verusSerializerAddress, address upgradeAddress) {
         verusSerializer = VerusSerializer(verusSerializerAddress);
-        verusBridgeMaster = verusBridgeMasterAddress;
+        upgradeContract = upgradeAddress;
     }
 
     function setContract(address contractAddress) public {
 
-        assert(msg.sender == address(verusBridgeMaster));
+        assert(msg.sender == upgradeContract);
 
         verusSerializer = VerusSerializer(contractAddress);
 

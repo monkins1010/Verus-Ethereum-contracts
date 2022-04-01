@@ -11,27 +11,23 @@ import "@openzeppelin/contracts/token/ERC721/ERC721.sol";
 
 contract VerusNotarizerStorage {
 
-    address verusBridgeMaster;
+    address upgradeContract;
     address verusBridge;
     address verusNotarizer;
 
     mapping (uint32 => VerusObjectsNotarization.CPBaaSNotarization) public PBaaSNotarization;
     mapping (address => uint32) public poolAvailable;
-    
-
+  
     uint32 public lastBlockHeight;
     
-    //contract allows the contracts to be set and reset
-    constructor(
-        address bridgeMasterAddress){
-        verusBridgeMaster = bridgeMasterAddress;   
-
+    constructor(address upgradeContractAddress)
+    {
+        upgradeContract = upgradeContractAddress;     
     }
 
-    function setContracts(address[11] memory contracts) public {
+    function setContracts(address[12] memory contracts) public {
         
-        //TODO: Make updating contract a multisig check across 3 notaries.(change in VerusBridgeMaster.)
-        assert(msg.sender == verusBridgeMaster);
+        assert(msg.sender == upgradeContract);
         
         if(contracts[uint(VerusConstants.ContractType.VerusBridge)] != verusBridge){
             verusBridge = contracts[uint(VerusConstants.ContractType.VerusBridge)];

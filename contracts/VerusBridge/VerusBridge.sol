@@ -12,7 +12,6 @@ import "./VerusBridgeStorage.sol";
 import "../MMR/VerusProof.sol";
 import "./Token.sol";
 import "./VerusSerializer.sol";
-import "../VerusNotarizer/VerusNotarizer.sol";
 import "./VerusCrossChainExport.sol";
 import "./ExportManager.sol";
 import "@openzeppelin/contracts/token/ERC721/ERC721.sol";
@@ -22,52 +21,42 @@ contract VerusBridge {
     TokenManager tokenManager;
     VerusSerializer verusSerializer;
     VerusProof verusProof;
-    VerusNotarizer verusNotarizer;
     VerusCrossChainExport verusCCE;
     VerusBridgeMaster verusBridgeMaster;
     ExportManager exportManager;
     VerusBridgeStorage verusBridgeStorage;
+    address verusUpgradeContract;
 
     // Global storage is located in VerusBridgeStorage contract
 
     constructor(address verusBridgeMasterAddress, address verusBridgeStorageAddress,
                 address tokenManagerAddress, address verusSerializerAddress, address verusProofAddress,
-                address verusNotarizerAddress, address verusCCEAddress, address exportManagerAddress) {
+                address verusCCEAddress, address exportManagerAddress, address verusUpgradeAddress) {
         verusBridgeMaster = VerusBridgeMaster(verusBridgeMasterAddress); 
         verusBridgeStorage = VerusBridgeStorage(verusBridgeStorageAddress); 
         tokenManager = TokenManager(tokenManagerAddress);
         verusSerializer = VerusSerializer(verusSerializerAddress);
         verusProof = VerusProof(verusProofAddress);
-        verusNotarizer = VerusNotarizer(verusNotarizerAddress);
         verusCCE = VerusCrossChainExport(verusCCEAddress);
         exportManager = ExportManager(exportManagerAddress);
+        verusUpgradeContract = verusUpgradeAddress;
 
     }
 
-    function setContracts(address[11] memory contracts) public {
+    function setContracts(address[12] memory contracts) public {
 
-        assert(msg.sender == address(verusBridgeMaster));
+        assert(msg.sender == verusUpgradeContract);
 
         if(contracts[uint(VerusConstants.ContractType.TokenManager)] != address(tokenManager)) {
             tokenManager = TokenManager(contracts[uint(VerusConstants.ContractType.TokenManager)]);
-            exportManager.setContract(contracts[uint(VerusConstants.ContractType.TokenManager)]);
         }
         
         if(contracts[uint(VerusConstants.ContractType.VerusSerializer)] != address(verusSerializer)) {
             verusSerializer = VerusSerializer(contracts[uint(VerusConstants.ContractType.VerusSerializer)]);
-            // The verusbridge contract updates the verusCCE for the VerusBridgeMaster.
-            verusCCE.setContract(contracts[uint(VerusConstants.ContractType.VerusSerializer)]);
-            verusProof.setContracts(contracts);
-            tokenManager.setContract(contracts[uint(VerusConstants.ContractType.VerusSerializer)]);
         }
         
         if(contracts[uint(VerusConstants.ContractType.VerusProof)] != address(verusProof))
             verusProof = VerusProof(contracts[uint(VerusConstants.ContractType.VerusProof)]);    
-
-        if(contracts[uint(VerusConstants.ContractType.VerusNotarizer)] != address(verusNotarizer)) {     
-            verusNotarizer = VerusNotarizer(contracts[uint(VerusConstants.ContractType.VerusNotarizer)]);
-            verusProof.setContracts(contracts);
-        }
 
         if(contracts[uint(VerusConstants.ContractType.VerusCrossChainExport)] != address(verusCCE))     
             verusCCE = VerusCrossChainExport(contracts[uint(VerusConstants.ContractType.VerusCrossChainExport)]);
@@ -81,12 +70,14 @@ contract VerusBridge {
 
         assert(msg.sender == address(verusBridgeMaster));
         uint256 fees;
+        bool poolAvailable;
+        poolAvailable = verusBridgeMaster.isPoolAvailable();
 
-        fees = exportManager.checkExport(transfer, paidValue);
+        fees = exportManager.checkExport(transfer, paidValue, poolAvailable);
 
         assert(fees != 0); 
 
-        if(!verusBridgeMaster.isPoolAvailable())
+        if(!poolAvailable)
         {
             assert (verusBridgeStorage.subtractPoolSize(tokenManager.convertFromVerusNumber(transfer.fees, 18)));
         }
@@ -125,27 +116,30 @@ contract VerusBridge {
             verusBridgeStorage.addToEthHeld(paidValue - fees);  // msg.value == fees + amount in transaction checked in checkExport()
             verusBridgeStorage.addToFeesHeld(fees); //TODO: what happens if they send to much fee?
         }
-        _createExports(transfer);
+        _createExports(transfer, poolAvailable);
     }
 
-    function _createExports(VerusObjects.CReserveTransfer memory newTransaction) private {
+    function _createExports(VerusObjects.CReserveTransfer memory newTransaction, bool poolAvailable) private {
         uint currentHeight = block.number;
 
         //check if the current block height has a set of transfers associated with it if so add to the existing array
+        bool newBlock;
+        newBlock = verusBridgeStorage.setReadyExportTransfers(currentHeight, newTransaction);
 
-        verusBridgeStorage.setReadyExportTransfers(currentHeight, newTransaction);
-
-        bool bridgeReady = verusBridgeMaster.isPoolAvailable();
-
-        bytes memory serializedCCE = verusSerializer.serializeCCrossChainExport(verusCCE.generateCCE(verusBridgeStorage.getReadyExports(currentHeight).transfers, bridgeReady));
+        bytes memory serializedCCE = verusSerializer.serializeCCrossChainExport(verusCCE.generateCCE(verusBridgeStorage.getReadyExports(currentHeight).transfers, poolAvailable));
 
         bytes32 prevHash;
-        uint32  prevHeight;
-
-        prevHeight = verusBridgeStorage.lastCCEExportHeight();
-        prevHash = prevHeight == uint32(0) ? bytes32(0) : verusBridgeStorage.getReadyExports(prevHeight).exportHash;
+ 
+        if(newBlock)
+        {
+            prevHash = verusBridgeStorage.getReadyExports(verusBridgeStorage.lastCCEExportHeight()).exportHash;
+        } 
+        else 
+        {
+            prevHash = verusBridgeStorage.getReadyExports(currentHeight).prevExportHash;
+        }
           
-        verusBridgeStorage.setReadyExportTxid(currentHeight, keccak256(abi.encodePacked(serializedCCE, prevHash)), prevHash);
+        verusBridgeStorage.setReadyExportTxid(keccak256(abi.encodePacked(serializedCCE, prevHash)), prevHash);
 
     }
 

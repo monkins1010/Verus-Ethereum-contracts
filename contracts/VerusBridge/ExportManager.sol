@@ -7,31 +7,33 @@ import "../Libraries/VerusObjects.sol";
 import "../Libraries/VerusObjectsCommon.sol";
 import "../Libraries/VerusConstants.sol";
 import "./TokenManager.sol";
-import "../VerusBridge/VerusBridge.sol";
-import "../VerusBridge/VerusBridgeMaster.sol";
 import "../VerusBridge/VerusBridgeStorage.sol";
 
 contract ExportManager {
 
-    VerusBridgeMaster verusBridgeMaster;
     TokenManager tokenManager;
     VerusBridgeStorage verusBridgeStorage;
+    address verusUpgradeContract;
 
-    constructor(address verusBridgeMasterAddress, address verusBridgeStorageAddress, address tokenManagerAddress){
-        verusBridgeMaster = VerusBridgeMaster(verusBridgeMasterAddress); 
+    constructor(address verusBridgeStorageAddress, address tokenManagerAddress, address verusUpgradeAddress)
+    {
         verusBridgeStorage = VerusBridgeStorage(verusBridgeStorageAddress); 
         tokenManager = TokenManager(tokenManagerAddress);
+        verusUpgradeContract = verusUpgradeAddress;
     }
 
-    function setContract(address contractAddress) public {
+    function setContract(address _contract) public {
 
-        assert(msg.sender == address(verusBridgeMaster));
+        assert(msg.sender == verusUpgradeContract);
         
-        tokenManager = TokenManager(contractAddress);
+        if(_contract != address(tokenManager)) 
+        {
+            tokenManager = TokenManager(_contract);
+        }
 
     }
 
-    function checkExport(VerusObjects.CReserveTransfer memory transfer, uint256 ETHSent) public view  returns (uint256 fees){
+    function checkExport(VerusObjects.CReserveTransfer memory transfer, uint256 ETHSent, bool poolAvailable) public view  returns (uint256 fees){
 
         verusBridgeStorage.checkiaddresses(transfer);
 
@@ -70,7 +72,7 @@ contract ExportManager {
         }
 
 
-        if (!verusBridgeMaster.isPoolAvailable()) {
+        if (!poolAvailable) {
 
             require (transfer.feecurrencyid == VerusConstants.VerusCurrencyId, "feecurrencyid != vrsc");
             

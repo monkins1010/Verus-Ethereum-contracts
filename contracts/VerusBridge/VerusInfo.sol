@@ -14,9 +14,9 @@ pragma experimental ABIEncoderV2;
 contract VerusInfo {
 
     VerusNotarizer verusNotarizer;
-    VerusBridgeMaster verusBridgeMaster;
     VerusObjects.infoDetails chainInfo;
     TokenManager tokenManager;
+    address upgradeContract;
     address contractOwner;
     
     constructor(
@@ -25,21 +25,21 @@ contract VerusInfo {
         string memory chainVerusVersion,
         string memory chainName,
         bool chainTestnet,
-        address verusBridgeMasterAddress,
+        address upgradeContractAddress,
         address tokenManagerAddress) {
         verusNotarizer = VerusNotarizer(verusNotarizerAddress);
         chainInfo.version = chainVersion;
         chainInfo.VRSCversion = chainVerusVersion;
         chainInfo.name = chainName;
         chainInfo.testnet = chainTestnet;
-        verusBridgeMaster = VerusBridgeMaster(verusBridgeMasterAddress);
+        upgradeContract = upgradeContractAddress;
         tokenManager = TokenManager(tokenManagerAddress);
         contractOwner = msg.sender;
     }
 
-    function setContracts(address[11] memory contracts) public {
+    function setContracts(address[12] memory contracts) public {
 
-        assert(msg.sender == address(verusBridgeMaster));
+        assert(msg.sender == upgradeContract);
 
         if(contracts[uint(VerusConstants.ContractType.TokenManager)] != address(tokenManager)) {
             tokenManager = TokenManager(contracts[uint(VerusConstants.ContractType.TokenManager)]);
@@ -50,7 +50,7 @@ contract VerusInfo {
         }
     }
 
-    function getinfo() public view returns(VerusObjects.infoDetails memory){
+    function getinfo() public view returns(bytes memory){
         //set blocks
         VerusObjects.infoDetails memory returnInfo;
         returnInfo.version = chainInfo.version;
@@ -59,10 +59,10 @@ contract VerusInfo {
         returnInfo.tiptime = block.timestamp;
         returnInfo.name = chainInfo.name;
         returnInfo.testnet = chainInfo.testnet;
-        return returnInfo;
+        return abi.encode(returnInfo);
     }
 
-    function getcurrency(address _currencyid) public view returns(VerusObjects.currencyDetail memory){
+    function getcurrency(address _currencyid) public view returns(bytes memory){
         VerusObjects.currencyDetail memory returnCurrency;
         returnCurrency.version = chainInfo.version;
         //if the _currencyid is null then return VEth
@@ -99,7 +99,7 @@ contract VerusInfo {
                 minnotaries
         );
 
-        return returnCurrency;
+        return abi.encode(returnCurrency);
     }
 
     function launchTokens(VerusObjects.setupToken[] memory tokensToDeploy) public  {
@@ -107,5 +107,8 @@ contract VerusInfo {
         require(msg.sender == contractOwner,"INFO:contractOwnerRequired");
 
         tokenManager.launchTokens(tokensToDeploy);
+
+        //blow the fuse
+        contractOwner = address(0);
     }
 }

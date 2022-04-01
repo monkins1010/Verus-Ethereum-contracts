@@ -11,10 +11,10 @@ import "@openzeppelin/contracts/token/ERC721/ERC721.sol";
 
 contract VerusBridgeStorage {
 
-    address verusBridgeMaster;
+    mapping (uint => VerusObjects.CReserveTransferSet) public _readyExports;
+    address upgradeContract;
     address verusBridge;
     address tokenManager;
-    address verusNotarizer;
 
     event TokenCreated(address tokenAddress);
 
@@ -26,7 +26,6 @@ contract VerusBridgeStorage {
     uint256 poolSize = 0;  
 
     mapping (address => uint256) public claimableFees;
-    mapping (uint => VerusObjects.CReserveTransferSet) public _readyExports;
     mapping (bytes32 => bool) public processedTxids;
     mapping (address => VerusObjects.mappedToken) public verusToERC20mapping;
     address[] public tokenList;
@@ -37,16 +36,16 @@ contract VerusBridgeStorage {
    
     //contract allows the contracts to be set and reset
     constructor(
-        address bridgeMasterAddress, uint256 _poolSize){
-        verusBridgeMaster = bridgeMasterAddress;   
+        address upgradeContractAddress, uint256 _poolSize){
+        upgradeContract = upgradeContractAddress;     
         poolSize = _poolSize;   
-        firstBlock = uint32(block.number); 
+        firstBlock = uint32(block.number);
     }
 
-    function setContracts(address[11] memory contracts) public {
+    function setContracts(address[12] memory contracts) public {
         
         //TODO: Make updating contract a multisig check across 3 notaries.(change in VerusBridgeMaster.)
-        assert(msg.sender == verusBridgeMaster);
+        assert(msg.sender == upgradeContract);
 
          if(contracts[uint(VerusConstants.ContractType.TokenManager)] != tokenManager){
             tokenManager = contracts[uint(VerusConstants.ContractType.TokenManager)];
@@ -54,10 +53,6 @@ contract VerusBridgeStorage {
         
         if(contracts[uint(VerusConstants.ContractType.VerusBridge)] != verusBridge){
             verusBridge = contracts[uint(VerusConstants.ContractType.VerusBridge)];
-         } 
-
-        if(contracts[uint(VerusConstants.ContractType.VerusNotarizer)] != verusNotarizer){
-            verusNotarizer = contracts[uint(VerusConstants.ContractType.VerusNotarizer)];
          } 
 
     }
@@ -95,28 +90,29 @@ contract VerusBridgeStorage {
         claimableFees[_feeRecipient] = claimableFees[_feeRecipient] + _ethAmount;
     }
 
-    function setReadyExportTransfers(uint _block, VerusObjects.CReserveTransfer memory reserveTransfer) public {
+    function setReadyExportTransfers(uint _block, VerusObjects.CReserveTransfer memory reserveTransfer) public returns (bool){
 
         isSenderBridgeContract(msg.sender);
         
         VerusObjects.CReserveTransfer memory reserveTX = reserveTransfer;
-
+        _readyExports[_block].blockHeight = uint32(_block);
         _readyExports[_block].transfers.push(reserveTX);
+
+        return (_readyExports[_block].transfers.length == 1);
     
     }
 
-    function setReadyExportTxid(uint _block, bytes32 txidhash, bytes32 prevTxidHash) public {
+    function setReadyExportTxid(bytes32 txidhash, bytes32 prevTxidHash) public {
         
         isSenderBridgeContract(msg.sender);
+        uint _block = block.number;
         
         _readyExports[_block].exportHash = txidhash;
 
-        // only update the last ETH CCE export height when a new block passes
-        if(_block != lastCCEExportHeight)
+        if (_readyExports[_block].transfers.length == 1)
         {
-            lastCCEExportHeight = uint32(_block);
             _readyExports[_block].prevExportHash = prevTxidHash;
-            _readyExports[_block].blockHeight = _block;
+            lastCCEExportHeight = uint32(_block);
         }
     
     }
@@ -196,12 +192,13 @@ contract VerusBridgeStorage {
     }
 
 
-    function emitNewToken(string memory name, string memory ticker, address _iaddress) public {
+    function emitNewToken(string memory name, string memory ticker, address _iaddress) public returns (address){
 
         require(msg.sender == tokenManager, "Only tokenmanager allowed to emit");
         Token t = new Token(name, ticker);   
         tokenList.push(_iaddress); 
         emit TokenCreated(address(t));
+        return address(t);
 
     }
 
@@ -239,7 +236,5 @@ contract VerusBridgeStorage {
             token.burn(_tokenAmount);
         }
     }
-
-
 
 }

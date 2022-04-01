@@ -61,9 +61,9 @@ library VerusObjects {
     // CReserve Transfer Set is a simplified version of a crosschain export returning only the required info
     
     struct CReserveTransferSet {
-        uint blockHeight;
-        bytes32 prevExportHash;
         bytes32 exportHash;
+        bytes32 prevExportHash;
+        uint32 blockHeight;
         CReserveTransfer[] transfers;
     }
 
@@ -148,6 +148,16 @@ library VerusObjects {
         uint8 flags;
         string name;
         string ticker;
+    }
+
+    struct upgradeContracts {
+
+        uint8 _vs;
+        bytes32 _rs;
+        bytes32  _ss;
+        address[] contracts;
+        address notaryAddress;
+
     }
 
 }

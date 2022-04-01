@@ -52,6 +52,7 @@ library VerusConstants {
         ExportManager,
         VerusBridgeStorage,
         VerusNotarizerStorage,
+        VerusBridgeMaster,
         LastIndex
     }
     

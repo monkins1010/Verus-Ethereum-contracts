@@ -11,30 +11,30 @@ import "./VerusSerializer.sol";
 import "../VerusBridge/VerusBridge.sol";
 import "../VerusBridge/VerusBridgeMaster.sol";
 import "../VerusBridge/VerusBridgeStorage.sol";
+import "../VerusBridge/UpgradeManager.sol";
 import "../Libraries/VerusObjectsCommon.sol";
 import "@openzeppelin/contracts/token/ERC721/ERC721.sol";
 
 contract TokenManager {
 
-    VerusBridgeMaster verusBridgeMaster;
     VerusSerializer verusSerializer;
     VerusBridgeStorage verusBridgeStorage;
-    bool private initialized;
+    UpgradeManager upgradeManager ;
 
     constructor(
-        address verusBridgeMasterAddress,
+        address verusUpgradeAddress,
         address verusBridgeStorageAddress,
         address verusSerializerAddress
     ) {
-        require(!initialized, "Contract instance has already been initialized");
-        verusBridgeMaster = VerusBridgeMaster(verusBridgeMasterAddress);
+        
         verusBridgeStorage = VerusBridgeStorage(verusBridgeStorageAddress); 
         verusSerializer = VerusSerializer(verusSerializerAddress);
+        upgradeManager = UpgradeManager(verusUpgradeAddress);
     }
     
     function setContract(address contractAddress) public {
 
-        assert(msg.sender == address(verusBridgeMaster));
+        assert(msg.sender == address(upgradeManager));
         verusSerializer = VerusSerializer(contractAddress);
     }
 
@@ -68,7 +68,7 @@ contract TokenManager {
   
     function isVerusBridgeContract(address sender) private view returns (bool) {
        
-       return sender == verusBridgeMaster.contracts(uint(VerusConstants.ContractType.VerusBridge));
+       return (sender == upgradeManager.getBridgeAddress());
 
     }
 
@@ -97,7 +97,7 @@ contract TokenManager {
 
     function ERC20Registered(address _iaddress) public view returns (bool) {
 
-        return verusToERC20mapping(_iaddress).erc20ContractAddress != address(0);
+        return verusToERC20mapping(_iaddress).flags > 0;
         
     }
 
@@ -212,7 +212,7 @@ contract TokenManager {
 
         if (flags & VerusConstants.MAPPING_VERUS_OWNED == VerusConstants.MAPPING_VERUS_OWNED ) {
 
-            verusBridgeStorage.emitNewToken(name, ticker, _iaddress);     
+            ERCContract = verusBridgeStorage.emitNewToken(name, ticker, _iaddress);     
 
         } else {
 

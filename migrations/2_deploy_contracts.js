@@ -1,3 +1,4 @@
+var UpgradeManager = artifacts.require("./VerusBridge/UpgradeManager.sol");
 var VerusBridgeMaster = artifacts.require("./VerusBridge/VerusBridgeMaster.sol");
 var VerusBridgeStorage = artifacts.require("./VerusBridge/VerusBridgeStorage.sol");
 var VerusNotarizerStorage = artifacts.require("./VerusNotarizer/VerusNotarizerStorage.sol");
@@ -32,13 +33,16 @@ const USDCERC20 = "0xeb8f08a975ab53e34d8a0330e0d34de942c95926";
 
 module.exports = async function(deployer) {
 
-    await deployer.deploy(VerusBridgeMaster);
+    await deployer.deploy(UpgradeManager);
+    const UpgradeInst = await UpgradeManager.deployed();
+
+    await deployer.deploy(VerusBridgeMaster, UpgradeInst.address);
     const bridgeMasterInst = await VerusBridgeMaster.deployed();
 
-    await deployer.deploy(VerusBridgeStorage, bridgeMasterInst.address, "5000000000000000000000");
+    await deployer.deploy(VerusBridgeStorage, UpgradeInst.address, "5000000000000000000000");
     const bridgeStorageInst = await VerusBridgeStorage.deployed();
 
-    await deployer.deploy(VerusNotarizerStorage, bridgeMasterInst.address);
+    await deployer.deploy(VerusNotarizerStorage, UpgradeInst.address);
     const NotarizerStorageInst = await VerusNotarizerStorage.deployed();
 
     await deployer.deploy(VerusBlake2b);
@@ -47,25 +51,25 @@ module.exports = async function(deployer) {
     await deployer.deploy(VerusSerializer);
     const serializerInst = await VerusSerializer.deployed();
 
-    await deployer.deploy(VerusTokenManager, bridgeMasterInst.address, bridgeStorageInst.address, serializerInst.address)
+    await deployer.deploy(VerusTokenManager, UpgradeInst.address, bridgeStorageInst.address, serializerInst.address)
     const tokenInst = await VerusTokenManager.deployed();
 
-    await deployer.deploy(VerusNotarizer, blakeInst.address, serializerInst.address, bridgeMasterInst.address, verusNotariserIDS, verusNotariserSigner, NotarizerStorageInst.address);
+    await deployer.deploy(VerusNotarizer, blakeInst.address, serializerInst.address, UpgradeInst.address, verusNotariserIDS, verusNotariserSigner, NotarizerStorageInst.address);
     const notarizerInst = await VerusNotarizer.deployed();
 
-    await deployer.deploy(VerusProof, bridgeMasterInst.address, blakeInst.address, serializerInst.address, notarizerInst.address, bridgeStorageInst.address);
+    await deployer.deploy(VerusProof, UpgradeInst.address, blakeInst.address, serializerInst.address, NotarizerStorageInst.address);
     const ProofInst = await VerusProof.deployed();
 
-    await deployer.deploy(VerusCCE, serializerInst.address, bridgeMasterInst.address);
+    await deployer.deploy(VerusCCE, serializerInst.address, UpgradeInst.address);
     const CCEInst = await VerusCCE.deployed();
 
-    await deployer.deploy(ExportManager, bridgeMasterInst.address, bridgeStorageInst.address, tokenInst.address);
+    await deployer.deploy(ExportManager, bridgeStorageInst.address, tokenInst.address, UpgradeInst.address);
     const ExportManInst = await ExportManager.deployed();
 
-    await deployer.deploy(VerusBridge, bridgeMasterInst.address, bridgeStorageInst.address, tokenInst.address, serializerInst.address, ProofInst.address, notarizerInst.address, CCEInst.address, ExportManInst.address);
+    await deployer.deploy(VerusBridge, bridgeMasterInst.address, bridgeStorageInst.address, tokenInst.address, serializerInst.address, ProofInst.address, CCEInst.address, ExportManInst.address, UpgradeInst.address);
     const VerusBridgeInst = await VerusBridge.deployed();
 
-    await deployer.deploy(VerusInfo, notarizerInst.address, "2000753", "0.7.3-9-rc1", "VETH", true, bridgeMasterInst.address, tokenInst.address);
+    await deployer.deploy(VerusInfo, notarizerInst.address, "2000753", "0.7.3-9-rc1", "VETH", true, UpgradeInst.address, tokenInst.address);
     const INFOInst = await VerusInfo.deployed();
 
     const allContracts = [
@@ -78,11 +82,13 @@ module.exports = async function(deployer) {
         INFOInst.address,
         ExportManInst.address,
         bridgeStorageInst.address,
-        NotarizerStorageInst.address
+        NotarizerStorageInst.address,
+        bridgeMasterInst.address
+
     ];
 
     try {
-        await bridgeMasterInst.upgradeContract(0, allContracts);
+        await UpgradeInst.setInitialContracts(allContracts);
         await INFOInst.launchTokens(launchCurrencies);
 
     } catch (e) {

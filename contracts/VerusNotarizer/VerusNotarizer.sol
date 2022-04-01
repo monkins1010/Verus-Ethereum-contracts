@@ -32,7 +32,7 @@ contract VerusNotarizer {
     VerusBlake2b blake2b;
     VerusSerializer verusSerializer;
     VerusNotarizerStorage verusNotarizerStorage;
-    address verusBridgeMaster;
+    address upgradeContract;
     // notarization vdxf key
 
     //list of all notarizers mapped to allow for quick searching
@@ -40,18 +40,18 @@ contract VerusNotarizer {
     mapping (address => address) public notaryAddressMapping;
     address[] private notaries;
 
-    uint8 private notaryCount;
+    uint32 public notaryCount;
     bool public poolAvailable;
 
     // Notifies when a new block hash is published
     event NewBlock(VerusObjectsNotarization.CPBaaSNotarization,uint32 notarizedDataHeight);
 
-    constructor(address _verusBLAKE2bAddress,address _verusSerializerAddress, address verusBridgeMasterAddress, 
+    constructor(address _verusBLAKE2bAddress,address _verusSerializerAddress, address upgradeContractAddress, 
     address[] memory _notaries, address[] memory _notariesEthAddress, address verusNotarizerStorageAddress) {
         verusSerializer = VerusSerializer(_verusSerializerAddress);
         blake2b = VerusBlake2b(_verusBLAKE2bAddress);
-        verusBridgeMaster = verusBridgeMasterAddress;
-        notaryCount = uint8(_notaries.length);
+        upgradeContract = upgradeContractAddress;
+        notaryCount = uint32(_notaries.length);
         verusNotarizerStorage = VerusNotarizerStorage(verusNotarizerStorageAddress); 
 
         // when contract is launching/upgrading copy in to global bool pool available.
@@ -67,7 +67,7 @@ contract VerusNotarizer {
 
     function setContract(address contractAddress) public {
 
-        assert(msg.sender == verusBridgeMaster);
+        assert(msg.sender == upgradeContract);
 
         verusSerializer = VerusSerializer(contractAddress);
 
@@ -130,7 +130,6 @@ contract VerusNotarizer {
         address[] memory notaryAddress
         ) public returns(bool output) {
 
-        require(msg.sender == verusBridgeMaster, "setLatestData:fromverusbridgemaster only");
         require((_rs.length == _ss.length) && (_rs.length == _vs.length),"Signature arrays must be of equal length");
         require(_pbaasNotarization.notarizationheight > verusNotarizerStorage.lastBlockHeight(),"Block Height must be greater than current block height");
 

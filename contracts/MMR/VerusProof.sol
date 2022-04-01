@@ -6,20 +6,14 @@ pragma experimental ABIEncoderV2;
 import "../Libraries/VerusObjects.sol";
 import "./VerusBlake2b.sol";
 import "../VerusBridge/VerusSerializer.sol";
-import "../VerusNotarizer/VerusNotarizer.sol";
 import "../Libraries/VerusObjectsCommon.sol";
-import "../VerusBridge/VerusBridgeMaster.sol";
-import "../VerusBridge/VerusBridgeStorage.sol";
 import "../VerusNotarizer/VerusNotarizerStorage.sol";
 
 contract VerusProof {
 
     uint256 mmrRoot;
     VerusBlake2b blake2b;
-    VerusNotarizer verusNotarizer;
     VerusSerializer verusSerializer;
-    VerusBridgeMaster verusBridgeMaster;
-    VerusBridgeStorage verusBridgeStorage;
     VerusNotarizerStorage verusNotarizerStorage;
     
     // these constants should be able to reference each other, as many are relative, but Solidity does not
@@ -39,28 +33,26 @@ contract VerusProof {
     uint32 constant SCRIPT_OP_PUSHDATA1 = 0x4c;
     uint32 constant SCRIPT_OP_PUSHDATA2 = 0x4d;
     uint32 constant TYPE_TX_OUTPUT = 4;
+    address verusUpgradeContract;
 
     event HashEvent(bytes32 newHash,uint8 eventType);
 
-    constructor(address verusBridgeMasterAddress, address verusBLAKE2bAddress, address verusSerializerAddress, 
-    address verusNotarizerAddress, address verusBridgeStorageAddress) {
-        verusBridgeMaster = VerusBridgeMaster(verusBridgeMasterAddress); 
+    constructor(address verusUpgradeAddress, address verusBLAKE2bAddress, address verusSerializerAddress, 
+    address verusNotarizerStorageAddress) 
+    {
+        verusUpgradeContract = verusUpgradeAddress;
         verusSerializer = VerusSerializer(verusSerializerAddress);
         blake2b = VerusBlake2b(verusBLAKE2bAddress);
-        verusNotarizer = VerusNotarizer(verusNotarizerAddress);
-        verusBridgeStorage = VerusBridgeStorage(verusBridgeStorageAddress); 
+        verusNotarizerStorage = VerusNotarizerStorage(verusNotarizerStorageAddress);
     }
 
-    function setContracts(address[11] memory contracts) public {
+    function setContract(address _contract) public {
 
-        assert(msg.sender == address(verusBridgeMaster));
+        assert(msg.sender == verusUpgradeContract);
 
-        if(contracts[uint(VerusConstants.ContractType.VerusSerializer)] != address(verusSerializer))
-            verusSerializer = VerusSerializer(contracts[uint(VerusConstants.ContractType.VerusSerializer)]);
+        if ( _contract != address(verusSerializer))
+            verusSerializer = VerusSerializer(_contract);
         
-        if(contracts[uint(VerusConstants.ContractType.VerusNotarizer)] != address(verusNotarizer))     
-            verusNotarizer = VerusNotarizer(contracts[uint(VerusConstants.ContractType.VerusNotarizer)]);
-
     }
 
     function hashTransfers(VerusObjects.CReserveTransfer[] memory _transfers) public view returns (bytes32){
