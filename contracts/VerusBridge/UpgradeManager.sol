@@ -133,7 +133,7 @@ contract UpgradeManager {
         
     }
 
-    function checkMultiSig(VerusObjects.upgradeContracts[] memory _newContractPackage) private returns(bool)
+    function checkMultiSig(VerusObjects.upgradeContracts[] memory _newContractPackage) private view returns(bool)
     {
         require(_newContractPackage.length >= uint256(verusNotarizer.notaryCount()), "Not enough notary signatures provided");
         

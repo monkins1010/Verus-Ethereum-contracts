@@ -104,7 +104,8 @@ module.exports = async function(deployer) {
     const settingString = "\nverusbridgeaddress=" + bridgeMasterInst.address + "\n" +
         "storageaddress=" + bridgeStorageInst.address + "\n\n" +
         "export const BRIDGE_MASTER_ADD = \"" + bridgeMasterInst.address + "\";\n" +
-        "export const BRIDGE_STORAGE_ADD = \"" + bridgeStorageInst.address + "\";\n";
+        "export const BRIDGE_STORAGE_ADD = \"" + bridgeStorageInst.address + "\";\n" +
+        "export const UPGRADE_ADD = \"" + UpgradeInst.address + "\";\n";
 
     console.log("Settings to be pasted into *.conf file and website \n\n", settingString);
 };
