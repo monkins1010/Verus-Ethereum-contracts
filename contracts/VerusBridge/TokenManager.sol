@@ -225,7 +225,7 @@ contract TokenManager {
         return ERCContract;
     }
 
-        function convertFromVerusNumber(uint256 a,uint8 decimals) public pure returns (uint256) {
+    function convertFromVerusNumber(uint256 a,uint8 decimals) public pure returns (uint256) {
         uint8 power = 10; //default value for 18
         uint256 c = a;
 

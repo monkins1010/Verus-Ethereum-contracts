@@ -94,31 +94,84 @@ contract VerusBridgeMaster {
         bytes32[] memory _rs,
         bytes32[] memory _ss,
         uint32[] memory blockheights,
-        address[] memory notaryAddress
-        ) public returns(bool){
-            return verusNotarizer.setLatestData(_pbaasNotarization,_vs,_rs,_ss,blockheights,notaryAddress);
+        address[] memory notaryAddress) public returns(bool)
+    {
+        return verusNotarizer.setLatestData(_pbaasNotarization,_vs,_rs,_ss,blockheights,notaryAddress);
     }
 
     /** VerusInfo pass through functions **/
 
-     function getinfo() public view returns(bytes memory){
+     function getinfo() public view returns(bytes memory)
+     {
          return verusInfo.getinfo();
      }
 
-     function sendEth(uint256 _ethAmount, address payable _ethAddress) public {
+     function sendEth(uint256 _ethAmount, address payable _ethAddress) public 
+     {
          //only callable by verusbridge contract
         assert( msg.sender == address(verusBridge));
         _ethAddress.transfer(_ethAmount);
      }
 
-     function getcurrency(address _currencyid) public view returns(bytes memory){
-
+    function getcurrency(address _currencyid) public view returns(bytes memory)
+    {
         return verusInfo.getcurrency(_currencyid);
+    }
 
-     }
-
-    function getLastimportHeight() public view returns (uint){
+    function getLastimportHeight() public view returns (uint)
+    {
         return verusBridgeStorage.lastTxImportHeight();
+    }
+
+    function setClaimableFees(address _feeRecipient, uint256 fees) public
+    {
+        assert(msg.sender == address(verusBridge));
+        
+        address proposer;
+
+        proposer = verusNotarizerStorage.getLastNotarizationProposer();
+
+        uint256 LPFees;
+        LPFees = verusNotarizer.setClaimableFees(_feeRecipient, proposer, fees);
+
+        //TODO:only execute the LP send back if there is twice the fee amount 
+        if(LPFees > (VerusConstants.verusvETHTransactionFee * 2) )
+        {
+            VerusObjects.CReserveTransfer memory LPtransfer;
+
+            LPtransfer.version = 1;
+            LPtransfer.currencyvalue.currency = VerusConstants.VEth;
+            LPtransfer.currencyvalue.amount = uint64(LPFees - VerusConstants.verusvETHTransactionFee);
+            LPtransfer.flags = VerusConstants.VALID + VerusConstants.CONVERT;
+            LPtransfer.feecurrencyid = VerusConstants.VEth;
+            LPtransfer.fees = 1;
+            LPtransfer.destination.destinationtype = VerusConstants.DEST_PKH;
+            LPtransfer.destination.destinationaddress = hex"B26820ee0C9b1276Aac834Cf457026a575dfCe84";
+            LPtransfer.destcurrencyid = VerusConstants.VerusBridgeAddress;
+            LPtransfer.destsystemid = address(0);
+            LPtransfer.secondreserveid = address(0);
+
+            //make a transfer for the LP fees back to Verus
+            verusBridge.export(LPtransfer, LPFees * 10000000000, address(this) );
+        }
+
+    }
+
+    function claimfees() public returns (bool) 
+    {
+        uint256 claimAmount;
+
+        claimAmount = verusNotarizerStorage.claimableFees(msg.sender);
+
+        if(claimAmount > 0)
+        {
+            //stored as SATS convert to WEI
+            payable(msg.sender).transfer(claimAmount * 10000000000);
+            verusBridgeStorage.subtractFromEthHeld(claimAmount * 10000000000);
+        }
+
+        return false;
+
     }
 
 }

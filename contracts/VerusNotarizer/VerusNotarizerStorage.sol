@@ -8,17 +8,21 @@ import "../Libraries/VerusConstants.sol";
 import "../Libraries/VerusObjectsNotarization.sol";
 import "../VerusBridge/VerusBridgeMaster.sol";
 import "@openzeppelin/contracts/token/ERC721/ERC721.sol";
+import "../VerusNotarizer/VerusNotarizer.sol";
+import "@openzeppelin/contracts/utils/math/SafeMath.sol";
 
 contract VerusNotarizerStorage {
 
     address upgradeContract;
     address verusBridge;
     address verusNotarizer;
+    using SafeMath for uint;
 
     mapping (uint32 => VerusObjectsNotarization.CPBaaSNotarization) public PBaaSNotarization;
     mapping (address => uint32) public poolAvailable;
   
     uint32 public lastBlockHeight;
+    mapping (address => uint256) public claimableFees;
     
     constructor(address upgradeContractAddress)
     {
@@ -99,4 +103,25 @@ contract VerusNotarizerStorage {
         return proofRoot[0];
     }
 
+    function getLastNotarizationProposer() public view returns (address){
+
+        address proposer;
+        bytes memory proposerBytes = PBaaSNotarization[lastBlockHeight].proposer.destinationaddress;
+
+        assembly {
+            proposer := mload(add(proposerBytes,20))
+        } 
+
+        return proposer;
+
+    }
+    
+    function setClaimedFees(address _address, uint256 fees)public returns (uint256)
+    {
+        assert(msg.sender == verusNotarizer);
+
+        claimableFees[_address] += fees;
+
+        return claimableFees[_address];
+    }
 }

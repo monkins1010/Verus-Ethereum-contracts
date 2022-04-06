@@ -14,9 +14,10 @@ library VerusConstants {
     address constant public RewardAddress = 0xB26820ee0C9b1276Aac834Cf457026a575dfCe84;
     address constant public VerusBridgeAddress = 0xffEce948b8A38bBcC813411D2597f7f8485a0689;
     uint8 constant public RewardAddressType = 4;
-    uint256 constant public transactionFee = 3000000000000000; //0.003 eth
+    uint256 constant public transactionFee = 3000000000000000; //0.003 ETH 18 decimals
     string constant public currencyName = "VETH";
     uint256 constant public verusTransactionFee = 2000000; //0.02 VRSC
+    uint256 constant public verusvETHTransactionFee = 300000; //0.003 vETH 10 decimasls
     uint32 constant  VALID = 1;
     uint32 constant  CONVERT = 2;
     uint32 constant  CROSS_SYSTEM = 0x40;               
@@ -55,5 +56,5 @@ library VerusConstants {
         VerusBridgeMaster,
         LastIndex
     }
-    
+        
 }

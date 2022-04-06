@@ -84,18 +84,19 @@ contract VerusBridge {
 
         if (transfer.currencyvalue.currency != VerusConstants.VEth) {
 
-            verusBridgeStorage.addToFeesHeld(paidValue);
             VerusObjects.mappedToken memory mappedContract = verusBridgeStorage.getERCMapping(transfer.currencyvalue.currency);
             Token token = Token(mappedContract.erc20ContractAddress); 
+            //Check user has allowed the verusBridgeStorage contract to spend on their behalf
             uint256 allowedTokens = token.allowance(sender, address(verusBridgeStorage));
             uint256 tokenAmount = tokenManager.convertFromVerusNumber(transfer.currencyvalue.amount, token.decimals()); //convert to wei from verus satoshis
             assert( allowedTokens >= tokenAmount);
             //transfer the tokens to the verusbridgemaster contract
             //total amount kept as wei until export to verus
             verusBridgeStorage.exportERC20Tokens(tokenAmount, token, mappedContract.flags, sender );
+            verusBridgeStorage.addToFeesHeld(paidValue);
             
         } else if (transfer.flags == VerusConstants.CURRENCY_EXPORT){
-            
+            //handle a NFT Import
             verusBridgeStorage.addToFeesHeld(paidValue);
     
             bytes memory NFTInfo = transfer.destination.destinationaddress;
@@ -112,9 +113,9 @@ contract VerusBridge {
  
         } else if (transfer.currencyvalue.currency == VerusConstants.VEth){
             //handle a vEth transfer
-            transfer.currencyvalue.amount = uint64(tokenManager.convertToVerusNumber(paidValue - VerusConstants.transactionFee,18));
+            transfer.currencyvalue.amount = uint64(tokenManager.convertToVerusNumber(paidValue - fees,18));
             verusBridgeStorage.addToEthHeld(paidValue - fees);  // msg.value == fees + amount in transaction checked in checkExport()
-            verusBridgeStorage.addToFeesHeld(fees); //TODO: what happens if they send to much fee?
+            verusBridgeStorage.addToFeesHeld(fees); 
         }
         _createExports(transfer, poolAvailable);
     }
@@ -205,8 +206,8 @@ contract VerusBridge {
                 if (destinationAddress != address(0)) {
 
                     if (_import.transfers[i].currencyvalue.currency == VerusConstants.VEth) {
-                        // cast the destination as an ethAddress
-                        assert (amount <= address(this).balance);
+                        // ETH is held in VerusBridgemaster
+                        assert (amount <= address(verusBridgeMaster).balance);
                             verusBridgeMaster.sendEth(amount, payable(destinationAddress));
                             verusBridgeStorage.subtractFromEthHeld(amount);
                             
@@ -233,27 +234,28 @@ contract VerusBridge {
                 
             } else if (_import.transfers[i].destination.destinationtype == 0) {
 
-                    //TODO: Handle NFTS
+            //TODO: Handle NFTS
 
             }
-            //TODO:handle the distributions of the fees
-            //     30% to all the Notaries
-            //     50% to liquidity pool
-            //     10% exporter
-            //     10% to proposer
 
-            //add them into the fees array to be claimed by the message sender
-            if (_import.transfers[i].fees > 0 && _import.transfers[i].feecurrencyid == VerusConstants.VEth){
+            if (_import.transfers[i].fees > 0 && _import.transfers[i].feecurrencyid == VerusConstants.VEth)
+            {
 
-                address destination;
-                bytes memory destHex = _import.exportinfo.rewardaddress.destinationaddress;
-                assembly {
-                    destination := mload(add(destHex , 20))
 
-                 }
 
-                verusBridgeStorage.setClaimableFees(destination ,_import.transfers[i].fees);
             }
+        }
+
+        address rewardDestination;
+        bytes memory destHex = _import.exportinfo.rewardaddress.destinationaddress;
+        assembly 
+        {
+            rewardDestination := mload(add(destHex , 20))
+        }
+
+        if(_import.exportinfo.totalfees[0].currency == VerusConstants.VEth)
+        {
+            verusBridgeMaster.setClaimableFees(rewardDestination, _import.exportinfo.totalfees[0].amount);
         }
         return true;
     }

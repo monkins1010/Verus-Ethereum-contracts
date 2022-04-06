@@ -9,16 +9,11 @@ import "../Libraries/VerusObjectsNotarization.sol";
 import "../VerusBridge/VerusSerializer.sol";
 import "../MMR/VerusBlake2b.sol";
 import "../VerusNotarizer/VerusNotarizerStorage.sol";
+import "@openzeppelin/contracts/utils/math/SafeMath.sol";
 
 contract VerusNotarizer {
-
-    // TODO:MOVE GLOBALS INTO verusStorage
-    
-    //last notarized blockheight
- //   uint32 public lastBlockHeight;
-    //CurrencyState private lastCurrencyState;
-    //allows for the contract to be upgradable
-
+        
+    using SafeMath for uint;
 
     //number of notaries required
     uint8 requiredNotaries = 13;
@@ -33,6 +28,7 @@ contract VerusNotarizer {
     VerusSerializer verusSerializer;
     VerusNotarizerStorage verusNotarizerStorage;
     address upgradeContract;
+    address verusBridgeMaster;
     // notarization vdxf key
 
     //list of all notarizers mapped to allow for quick searching
@@ -42,17 +38,19 @@ contract VerusNotarizer {
 
     uint32 public notaryCount;
     bool public poolAvailable;
+    uint32 public notaryTurn = 100;
 
     // Notifies when a new block hash is published
     event NewBlock(VerusObjectsNotarization.CPBaaSNotarization,uint32 notarizedDataHeight);
 
     constructor(address _verusBLAKE2bAddress,address _verusSerializerAddress, address upgradeContractAddress, 
-    address[] memory _notaries, address[] memory _notariesEthAddress, address verusNotarizerStorageAddress) {
+    address[] memory _notaries, address[] memory _notariesEthAddress, address verusNotarizerStorageAddress, address verusBridgeMasterAddress) {
         verusSerializer = VerusSerializer(_verusSerializerAddress);
         blake2b = VerusBlake2b(_verusBLAKE2bAddress);
         upgradeContract = upgradeContractAddress;
         notaryCount = uint32(_notaries.length);
         verusNotarizerStorage = VerusNotarizerStorage(verusNotarizerStorageAddress); 
+        verusBridgeMaster = verusBridgeMasterAddress;
 
         // when contract is launching/upgrading copy in to global bool pool available.
         if(verusNotarizerStorage.poolAvailable(VerusConstants.VerusBridgeAddress) > 0 )
@@ -186,6 +184,56 @@ contract VerusNotarizer {
 
         return ecrecover(_h, _v, _r, _s);
     }
-  
+
+    function setClaimableFees(address _feeRecipient, address _proposer, uint256 _ethAmount) public returns (uint256){
+
+        assert(msg.sender == verusBridgeMaster); 
+        
+        uint256 notaryFees;
+        uint256 LPFees;
+        uint256 exporterFees;
+        uint256 proposerFees;                
+
+        notaryFees = _ethAmount.div(10).mul(3); 
+
+        exporterFees = _ethAmount.div(10);
+        proposerFees = _ethAmount.div(10);
+        LPFees = _ethAmount - (LPFees + exporterFees + proposerFees);
+
+        setNotaryFees(notaryFees);
+        verusNotarizerStorage.setClaimedFees(_feeRecipient, exporterFees);
+        verusNotarizerStorage.setClaimedFees(_proposer, proposerFees);
+
+        //return total amount of unclaimed LP Fees accrued.
+        return verusNotarizerStorage.setClaimedFees(address(this), LPFees);
+              
+    }
+
+    function setNotaryFees(uint256 fees) private {
+        
+        uint256 feeRemainder;
+        uint256 feeMinusRemainder;
+        uint256 feeAllocation;
+
+        feeRemainder = fees % (notaries.length );
+
+        feeMinusRemainder = fees - feeRemainder;
+
+        feeAllocation = feeMinusRemainder.div(notaries.length);
+
+        for(uint i = 0; i< notaries.length; i++)
+        {
+            verusNotarizerStorage.setClaimedFees(notaries[i], feeAllocation);
+        }
+
+        //cycle through notaries each notarization to pay them the remainding dust.
+        if(feeMinusRemainder !=0)
+        {
+            verusNotarizerStorage.setClaimedFees(notaries[notaryTurn % notaries.length], feeRemainder);
+        }
+        
+        notaryTurn++;
+    
+    }
 
 }

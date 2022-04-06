@@ -9,12 +9,15 @@ import "../Libraries/VerusObjectsNotarization.sol";
 import "./VerusBridgeMaster.sol";
 import "@openzeppelin/contracts/token/ERC721/ERC721.sol";
 
+
 contract VerusBridgeStorage {
 
     mapping (uint => VerusObjects.CReserveTransferSet) public _readyExports;
+
     address upgradeContract;
     address verusBridge;
     address tokenManager;
+    address verusBridgeMaster;
 
     event TokenCreated(address tokenAddress);
 
@@ -25,7 +28,6 @@ contract VerusBridgeStorage {
     // VRSC pool size in WEI
     uint256 poolSize = 0;  
 
-    mapping (address => uint256) public claimableFees;
     mapping (bytes32 => bool) public processedTxids;
     mapping (address => VerusObjects.mappedToken) public verusToERC20mapping;
     address[] public tokenList;
@@ -47,16 +49,17 @@ contract VerusBridgeStorage {
         //TODO: Make updating contract a multisig check across 3 notaries.(change in VerusBridgeMaster.)
         assert(msg.sender == upgradeContract);
 
-         if(contracts[uint(VerusConstants.ContractType.TokenManager)] != tokenManager){
+        if(contracts[uint(VerusConstants.ContractType.TokenManager)] != tokenManager)
+        {
             tokenManager = contracts[uint(VerusConstants.ContractType.TokenManager)];
-         } 
+        } 
         
-        if(contracts[uint(VerusConstants.ContractType.VerusBridge)] != verusBridge){
+        if(contracts[uint(VerusConstants.ContractType.VerusBridge)] != verusBridge)
+        {
             verusBridge = contracts[uint(VerusConstants.ContractType.VerusBridge)];
-         } 
+        } 
 
     }
-
 
     function isSenderBridgeContract(address sender) private view {
 
@@ -83,11 +86,6 @@ contract VerusBridgeStorage {
         if(_amount > poolSize) return false;
         poolSize -= _amount;
         return true;
-    }
-
-    function setClaimableFees(address _feeRecipient,uint256 _ethAmount) public {
-        isSenderBridgeContract(msg.sender);
-        claimableFees[_feeRecipient] = claimableFees[_feeRecipient] + _ethAmount;
     }
 
     function setReadyExportTransfers(uint _block, VerusObjects.CReserveTransfer memory reserveTransfer) public returns (bool){
