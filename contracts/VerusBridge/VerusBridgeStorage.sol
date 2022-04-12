@@ -22,7 +22,7 @@ contract VerusBridgeStorage {
     event TokenCreated(address tokenAddress);
 
     //all major functions get declared here and passed through to the underlying contract
-    uint256 feesHeld = 0;
+    //uint256 feesHeld = 0;
     uint256 ethHeld = 0;
 
     // VRSC pool size in WEI
@@ -66,10 +66,10 @@ contract VerusBridgeStorage {
         require( sender == verusBridge,"Storage requires Bridge");
     }
 
-    function addToFeesHeld(uint256 _feesAmount) public {
+    /* function addToFeesHeld(uint256 _feesAmount) public {
         isSenderBridgeContract(msg.sender);
         feesHeld += _feesAmount;
-    }
+    } */
 
     function addToEthHeld(uint256 _ethAmount) public {
         isSenderBridgeContract(msg.sender);
@@ -145,7 +145,7 @@ contract VerusBridgeStorage {
     }
     function RecordverusToERC20mapping(address iaddress, VerusObjects.mappedToken memory mappedToken) public {
 
-        assert( msg.sender == tokenManager);
+      //REMOVE:  assert( msg.sender == tokenManager);
         verusToERC20mapping[iaddress] = mappedToken;
 
     }
@@ -204,14 +204,14 @@ contract VerusBridgeStorage {
 
         require(msg.sender == tokenManager, "Only tokenmanager allowed to mintOrTransferToken");
 
-        if (flags & VerusConstants.MAPPING_VERUS_OWNED == VerusConstants.MAPPING_VERUS_OWNED) {
-
-                token.mint(_destination, processedTokenAmount);
-
-            } else {
-               
-                token.transfer(_destination, processedTokenAmount);
-            }
+        if (flags & VerusConstants.MAPPING_VERUS_OWNED == VerusConstants.MAPPING_VERUS_OWNED) 
+        {
+            token.mint(_destination, processedTokenAmount);
+        } 
+        else 
+        {
+            token.transfer(_destination, processedTokenAmount);
+        }
 
     }
 

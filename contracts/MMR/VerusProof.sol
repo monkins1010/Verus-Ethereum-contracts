@@ -241,8 +241,9 @@ contract VerusProof {
             hashInProgress = blake2b.createHash(_import.partialtransactionproof.components[i].elVchObj);
             testHash = checkProof(hashInProgress,_import.partialtransactionproof.components[i].elProof);
         
-            if (txRoot != testHash) {
-                txRoot = 0x0000000000000000000000000000000000000000000000000000000000000000;
+            if (txRoot != testHash) 
+            {
+                txRoot = bytes32(0);
                 break;
             }
         }
@@ -251,19 +252,30 @@ contract VerusProof {
     }
     
     function proveTransaction(VerusObjects.CReserveTransferImport memory _import) public view returns(bytes32 stateRoot){
-        stateRoot = 0x000000000000000000000000000000000000000000000000000000000000000;
-        if(!checkTransfers(_import)) return stateRoot;
+
+        stateRoot = bytes32(0);
+
+        if(!checkTransfers(_import))
+        {
+            return stateRoot;  
+        } 
         
         bytes32 txRoot = proveComponents(_import);
-        if(txRoot == 0x0000000000000000000000000000000000000000000000000000000000000000) return stateRoot;
-        
+
+        if(txRoot == bytes32(0))
+        { 
+            return stateRoot;
+        }
+
         stateRoot = checkProof(txRoot,_import.partialtransactionproof.txproof);
         return stateRoot;
     }
     
     function proveImports(VerusObjects.CReserveTransferImport memory _import) public view returns(bool){
-       
-        return (proveTransaction(_import) == flipBytes32(verusNotarizerStorage.getLastProofRoot().stateroot));
+        bytes32 retStateRoot;
+        retStateRoot = proveTransaction(_import);
+
+        return (retStateRoot != bytes32(0) && retStateRoot == flipBytes32(verusNotarizerStorage.getLastProofRoot().stateroot));
  
     }
 

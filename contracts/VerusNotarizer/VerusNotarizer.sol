@@ -148,7 +148,7 @@ contract VerusNotarizer {
 
             if (recoverSigner(hashedNotarization, _vs[i]-4, _rs[i], _ss[i]) != notaryAddressMapping[notaryAddress[i]])
             {
-                   require(false, "Invalid notary signer");  
+                   revert("Invalid notary signer");  
             }
 
             if((i + 1) >= currentNotariesRequired())

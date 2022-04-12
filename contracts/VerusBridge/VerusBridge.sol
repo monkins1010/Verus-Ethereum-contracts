@@ -93,12 +93,12 @@ contract VerusBridge {
             //transfer the tokens to the verusbridgemaster contract
             //total amount kept as wei until export to verus
             verusBridgeStorage.exportERC20Tokens(tokenAmount, token, mappedContract.flags, sender );
-            verusBridgeStorage.addToFeesHeld(paidValue);
+            verusBridgeStorage.addToEthHeld(paidValue);
+            //verusBridgeStorage.addToFeesHeld(paidValue);
             
         } else if (transfer.flags == VerusConstants.CURRENCY_EXPORT){
             //handle a NFT Import
-            verusBridgeStorage.addToFeesHeld(paidValue);
-    
+                
             bytes memory NFTInfo = transfer.destination.destinationaddress;
             address NFTAddress;
             uint256 NFTID;
@@ -110,12 +110,12 @@ contract VerusBridge {
             ERC721 NFT = ERC721(NFTAddress);
 
             verusBridgeStorage.transferFromERC721(address(verusBridgeStorage), sender, NFT, NFTID );
+            verusBridgeStorage.addToEthHeld(paidValue);
  
         } else if (transfer.currencyvalue.currency == VerusConstants.VEth){
             //handle a vEth transfer
-            transfer.currencyvalue.amount = uint64(tokenManager.convertToVerusNumber(paidValue - fees,18));
-            verusBridgeStorage.addToEthHeld(paidValue - fees);  // msg.value == fees + amount in transaction checked in checkExport()
-            verusBridgeStorage.addToFeesHeld(fees); 
+            verusBridgeStorage.addToEthHeld(paidValue);  // msg.value == fees + amount in transaction checked in checkExport()
+            //verusBridgeStorage.addToFeesHeld(fees); 
         }
         _createExports(transfer, poolAvailable);
     }
@@ -220,11 +220,11 @@ contract VerusBridge {
                             _import.transfers[i].currencyvalue.amount,
                             destinationAddress);
                     } else {
-                        
-                        uint256 NFTID; 
-                        ERC721 NFT;    //TODO: get the NFT contract address and ID
-                        if(NFTID != uint256(0))
-                            verusBridgeStorage.transferFromERC721(destinationAddress, address(verusBridgeStorage), NFT, NFTID );
+                        //REMOVE: comments
+                     //   uint256 NFTID; 
+                     //   ERC721 NFT;    //TODO: get the NFT contract address and ID
+                     //   if(NFTID != uint256(0))
+                     //       verusBridgeStorage.transferFromERC721(destinationAddress, address(verusBridgeStorage), NFT, NFTID );
 
                     }
                 }
@@ -255,7 +255,7 @@ contract VerusBridge {
 
         if(_import.exportinfo.totalfees[0].currency == VerusConstants.VEth)
         {
-            verusBridgeMaster.setClaimableFees(rewardDestination, _import.exportinfo.totalfees[0].amount);
+           // verusBridgeMaster.setClaimableFees(rewardDestination, _import.exportinfo.totalfees[0].amount);
         }
         return true;
     }

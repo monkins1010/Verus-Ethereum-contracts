@@ -40,6 +40,7 @@ contract ExportManager {
         uint256 requiredFees =  VerusConstants.transactionFee;  //0.003 eth in WEI
         uint256 verusFees = VerusConstants.verusTransactionFee; //0.02 verus in SATS
         uint64 bounceBackFee;
+        uint64 transferFee;
         uint8  FEE_OFFSET = 20 + 20 + 20 + 8; // 3 x 20bytes address + 64bit uint
         bytes memory serializedDest;
         address gatewayID;
@@ -55,22 +56,14 @@ contract ExportManager {
         // Check destination address is not zero
         serializedDest = transfer.destination.destinationaddress;  
 
-        assembly {
-                    destAddressID := mload(add(serializedDest, 20))
-                 }
+        assembly 
+        {
+            destAddressID := mload(add(serializedDest, 20))
+        }
 
         require (destAddressID != address(0), "Destination Address null");// Destination can be currency definition
 
         // Check fees are correct, if pool unavailble vrsctest only fees, TODO:if pool availble vETH fees only for now
-
-        require (ETHSent >= requiredFees, "ETH msg fees to low"); //TODO:ETH fees always required for now
-
-        if (transfer.feecurrencyid == VerusConstants.VEth) {
-
-            require (tokenManager.convertFromVerusNumber(transfer.fees,18) >= requiredFees, "Fee value in transfer too low");
-
-        }
-
 
         if (!poolAvailable) {
 
@@ -85,11 +78,12 @@ contract ExportManager {
             if (!(transfer.secondreserveid == address(0) && transfer.destcurrencyid == VerusConstants.VerusCurrencyId))
                 return 0;
 
-            require (transfer.fees == verusFees, "VRSC fees not 0.02");
             require (transfer.destination.destinationaddress.length == 20, "destination address not 20 bytes");
 
 
         } else {
+            
+            transferFee = uint64(transfer.fees);
 
             require(transfer.feecurrencyid == VerusConstants.VEth, "Fee Currency not vETH"); //TODO:Accept more fee currencies
 
@@ -97,17 +91,19 @@ contract ExportManager {
 
                 require (transfer.destination.destinationaddress.length == (20 + 20 + 20 + 8), "destination address not 68 bytes");
 
-                assembly {
+                assembly 
+                {
                     gatewayID := mload(add(serializedDest, 40)) // second 20bytes in bytes array
                     bounceBackFee := mload(add(serializedDest, FEE_OFFSET))
                 }
 
                 require (gatewayID == VerusConstants.VEth, "GateswayID not VETH");
-                require (tokenManager.convertFromVerusNumber(bounceBackFee, 18) >= requiredFees, "Return fee not >0.003ETH");
 
-                requiredFees += requiredFees;  //TODO: bounceback fees required as well as send fees
+                //DEBUG:Can be removed
+                require (tokenManager.convertFromVerusNumber(bounceBackFee, 18) >= requiredFees, "Return fee not >=0.003ETH");
 
-                 require (ETHSent >= requiredFees, "ETH fees to low"); //TODO:ETH fees always required for now
+                transferFee += bounceBackFee;
+                requiredFees += requiredFees;  //bounceback fees required as well as send fees
 
             } else if (!(transfer.destination.destinationtype == VerusConstants.DEST_PKH || transfer.destination.destinationtype == VerusConstants.DEST_ID 
                         || transfer.destination.destinationtype == VerusConstants.DEST_SH )) {
@@ -119,17 +115,47 @@ contract ExportManager {
         }
 
         // Check fees are included in the ETH value if sending ETH, or are equal to the fee value for tokens.
-       
-        if (transfer.currencyvalue.currency == VerusConstants.VEth) {
+        uint amount;
+        amount = transfer.currencyvalue.amount;
+        if (poolAvailable)
+        { 
+            if (tokenManager.convertFromVerusNumber(transferFee, 18) < requiredFees)
+            {
+                revert ("ETH Fees to Low");
+            }            
+            else if (transfer.currencyvalue.currency == VerusConstants.VEth && 
+                (tokenManager.convertFromVerusNumber(amount + transferFee, 18) != ETHSent) )
+            {
+                revert ("ETH sent != (amount + fees)");
+            } 
+            else if (transfer.currencyvalue.currency != VerusConstants.VEth &&
+                     tokenManager.convertFromVerusNumber(transferFee, 18) != ETHSent)
+            {
+                revert ("ETH fee sent < fees for token");
+            } 
 
-            require (ETHSent >= (requiredFees + tokenManager.convertFromVerusNumber(transfer.currencyvalue.amount,18)), "ETH sent < (amount + fees)");
-      
-        } else {
-
-            require (ETHSent >= requiredFees, "ETH fee sent < (amount + fees)");
+            return transferFee;
         }
+        else 
+        {
+            if (transfer.fees != verusFees)
+            {
+                revert ("Invalid VRSC fee");
+            }
+            else if (transfer.currencyvalue.currency == VerusConstants.VEth &&
+                     (tokenManager.convertFromVerusNumber(amount, 18) + requiredFees) != ETHSent)
+            {
+                revert ("ETH Fee to low");
+            }
+            else if(transfer.currencyvalue.currency != VerusConstants.VEth && requiredFees != ETHSent)
+            {
+                revert ("ETH Fee to low (token)");
+            }
 
+        
+        } 
         return requiredFees;
+
     }
 
     function checkTransferFlags(VerusObjects.CReserveTransfer memory transfer) public pure returns(bool) {

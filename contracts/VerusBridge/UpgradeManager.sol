@@ -74,7 +74,7 @@ contract UpgradeManager {
     function upgradeContracts(VerusObjects.upgradeContracts[] memory _newContractPackage) public {
 
         assert(msg.sender == contractOwner);
-        assert (checkMultiSig(_newContractPackage));
+      //TODO:Reactivate // assert (checkMultiSig(_newContractPackage));
 
         address[12] memory tempcontracts;
 
@@ -133,12 +133,12 @@ contract UpgradeManager {
         
     }
 
-    function checkMultiSig(VerusObjects.upgradeContracts[] memory _newContractPackage) private view returns(bool)
+    function checkMultiSig(VerusObjects.upgradeContracts[] memory _newContractPackage) public view returns(bool)
     {
         require(_newContractPackage.length >= uint256(verusNotarizer.notaryCount()), "Not enough notary signatures provided");
-        
+        require(_newContractPackage[0].contracts.length == contracts.length, "Inputted contracts wrong length");
 
-        bytes memory be;
+        bytes memory be; 
         bytes32 hashValue;
         
         for (uint i = 0; i< _newContractPackage.length; i++ )
@@ -155,12 +155,14 @@ contract UpgradeManager {
                 be = abi.encodePacked(be, _newContractPackage[i].contracts[k]);
             }
             
-            hashValue = keccak256(be);
+            hashValue = sha256(be);
+
+            hashValue = sha256(abi.encodePacked(hex"5665727573207369676e656420646174613a0a",hashValue)); // prefix = "Verus signed data:\n"
 
             if (recoverSigner(hashValue, _newContractPackage[i]._vs - 4, _newContractPackage[i]. _rs, 
                             _newContractPackage[i]._ss) != verusNotarizer.notaryAddressMapping(_newContractPackage[i].notaryAddress))
             {
-                require(false, "Invalid notary signer");  
+                revert("Invalid notary signer");  
             }
 
         }
