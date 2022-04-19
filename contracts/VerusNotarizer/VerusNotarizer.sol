@@ -65,7 +65,7 @@ contract VerusNotarizer {
 
     function setContract(address contractAddress) public {
 
-        assert(msg.sender == upgradeContract);
+        require(msg.sender == upgradeContract);
 
         verusSerializer = VerusSerializer(contractAddress);
 
@@ -187,7 +187,7 @@ contract VerusNotarizer {
 
     function setClaimableFees(address _feeRecipient, address _proposer, uint256 _ethAmount) public returns (uint256){
 
-        assert(msg.sender == verusBridgeMaster); 
+        require(msg.sender == verusBridgeMaster); 
         
         uint256 notaryFees;
         uint256 LPFees;

@@ -23,7 +23,7 @@ contract VerusCrossChainExport{
 
     function setContract(address contractAddress) public {
 
-        assert(msg.sender == upgradeContract);
+        require(msg.sender == upgradeContract);
 
         verusSerializer = VerusSerializer(contractAddress);
 

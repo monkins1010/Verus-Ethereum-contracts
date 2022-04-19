@@ -31,7 +31,7 @@ contract VerusNotarizerStorage {
 
     function setContracts(address[12] memory contracts) public {
         
-        assert(msg.sender == upgradeContract);
+        require(msg.sender == upgradeContract);
         
         if(contracts[uint(VerusConstants.ContractType.VerusBridge)] != verusBridge){
             verusBridge = contracts[uint(VerusConstants.ContractType.VerusBridge)];
@@ -118,7 +118,7 @@ contract VerusNotarizerStorage {
     
     function setClaimedFees(address _address, uint256 fees)public returns (uint256)
     {
-        assert(msg.sender == verusNotarizer);
+        require(msg.sender == verusNotarizer);
 
         claimableFees[_address] += fees;
 

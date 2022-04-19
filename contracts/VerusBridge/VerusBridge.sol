@@ -45,7 +45,7 @@ contract VerusBridge {
 
     function setContracts(address[12] memory contracts) public {
 
-        assert(msg.sender == verusUpgradeContract);
+        require(msg.sender == verusUpgradeContract);
 
         if(contracts[uint(VerusConstants.ContractType.TokenManager)] != address(tokenManager)) {
             tokenManager = TokenManager(contracts[uint(VerusConstants.ContractType.TokenManager)]);
@@ -68,18 +68,18 @@ contract VerusBridge {
  
     function export(VerusObjects.CReserveTransfer memory transfer, uint256 paidValue, address sender) public {
 
-        assert(msg.sender == address(verusBridgeMaster));
+        require(msg.sender == address(verusBridgeMaster));
         uint256 fees;
         bool poolAvailable;
         poolAvailable = verusBridgeMaster.isPoolAvailable();
 
         fees = exportManager.checkExport(transfer, paidValue, poolAvailable);
 
-        assert(fees != 0); 
+        require(fees != 0); 
 
         if(!poolAvailable)
         {
-            assert (verusBridgeStorage.subtractPoolSize(tokenManager.convertFromVerusNumber(transfer.fees, 18)));
+            require (verusBridgeStorage.subtractPoolSize(tokenManager.convertFromVerusNumber(transfer.fees, 18)));
         }
 
         if (transfer.currencyvalue.currency != VerusConstants.VEth) {
@@ -89,10 +89,10 @@ contract VerusBridge {
             //Check user has allowed the verusBridgeStorage contract to spend on their behalf
             uint256 allowedTokens = token.allowance(sender, address(verusBridgeStorage));
             uint256 tokenAmount = tokenManager.convertFromVerusNumber(transfer.currencyvalue.amount, token.decimals()); //convert to wei from verus satoshis
-            assert( allowedTokens >= tokenAmount);
+            require( allowedTokens >= tokenAmount);
             //transfer the tokens to the verusbridgemaster contract
             //total amount kept as wei until export to verus
-            verusBridgeStorage.exportERC20Tokens(tokenAmount, token, mappedContract.flags, sender );
+            verusBridgeStorage.exportERC20Tokens(tokenAmount, token, mappedContract.flags & VerusConstants.MAPPING_VERUS_OWNED == VerusConstants.MAPPING_VERUS_OWNED, sender );
             verusBridgeStorage.addToEthHeld(paidValue);
             //verusBridgeStorage.addToFeesHeld(paidValue);
             
@@ -107,9 +107,9 @@ contract VerusBridge {
                         NFTID := mload(add(NFTInfo, 52))
                      }
 
-            ERC721 NFT = ERC721(NFTAddress);
+          //  ERC721 NFT = ERC721(NFTAddress);
 
-            verusBridgeStorage.transferFromERC721(address(verusBridgeStorage), sender, NFT, NFTID );
+           //TODO: add verusBridgeStorage.transferFromERC721(address(verusBridgeStorage), sender, NFT, NFTID );
             verusBridgeStorage.addToEthHeld(paidValue);
  
         } else if (transfer.currencyvalue.currency == VerusConstants.VEth){
@@ -160,7 +160,7 @@ contract VerusBridge {
         return txidList;
     }
 
-    function submitImports(VerusObjects.CReserveTransferImport[] memory _imports) public {
+    function submitImports(VerusObjects.CReserveTransferImport[] calldata _imports) public {
         //loop through the transfers and process
         for(uint i = 0; i < _imports.length; i++){
            _createImports(_imports[i]);
@@ -168,83 +168,34 @@ contract VerusBridge {
     }
 
 
-    function _createImports(VerusObjects.CReserveTransferImport memory _import) public returns(bool) {
-
+    function _createImports(VerusObjects.CReserveTransferImport calldata _import) public returns(bool) {
+        
+        // prove MMR
         bytes32 txidfound;
         bytes memory sliced = _import.partialtransactionproof.components[0].elVchObj;
 
         assembly {
-            txidfound := mload(add(sliced, 32))                                 // skip memory length (ETH encoded in an efficient 32 bytes ;) )
+            txidfound := mload(add(sliced, 32)) 
         }
-        if (verusBridgeStorage.processedTxids(txidfound) == true) return false; 
+       //REMOVE COMMENT if (verusBridgeStorage.processedTxids(txidfound) == true) {return false}; 
 
         bool proven = verusProof.proveImports(_import);
 
-        assert(proven);
+        //require(proven);
         verusBridgeStorage.setProcessedTxids(txidfound);
 
         if (verusBridgeStorage.lastTxImportHeight() < _import.height)
             verusBridgeStorage.setlastTxImportHeight(_import.height);
+       
+        // Deserialize transfers and pack into send arrays
+        
+        VerusObjects.DeserializedObject memory tempTransfers; 
+        tempTransfers = verusSerializer.deserializeTransfers(_import.serializedTransfers);
 
-        uint256 amount; 
+        VerusObjects.ETHPayments[] memory payments = tokenManager.processTransactions(tempTransfers);
 
-        // check the transfers were in the hash.
-        for (uint i = 0; i < _import.transfers.length; i++){
-            // handle eth transactions
-            amount = tokenManager.convertFromVerusNumber(uint256(_import.transfers[i].currencyvalue.amount),18);
-
-            // if the transfer does not have the EXPORT_CURRENCY flag set
-            if (_import.transfers[i].flags & VerusConstants.CURRENCY_EXPORT != VerusConstants.CURRENCY_EXPORT){
-                    address destinationAddress;
-
-                    bytes memory tempAddress  = _import.transfers[i].destination.destinationaddress;
-
-                    assembly {
-                    destinationAddress := mload(add(tempAddress, 20))
-                    } 
-
-                if (destinationAddress != address(0)) {
-
-                    if (_import.transfers[i].currencyvalue.currency == VerusConstants.VEth) {
-                        // ETH is held in VerusBridgemaster
-                        assert (amount <= address(verusBridgeMaster).balance);
-                            verusBridgeMaster.sendEth(amount, payable(destinationAddress));
-                            verusBridgeStorage.subtractFromEthHeld(amount);
-                            
-                
-                    } else if(verusBridgeStorage.ERC20Registered(_import.transfers[i].currencyvalue.currency)){
-                        // handle erc20 transactions  
-                        // amount conversion is handled in token manager
-
-                        tokenManager.importERC20Tokens(_import.transfers[i].currencyvalue.currency,
-                            _import.transfers[i].currencyvalue.amount,
-                            destinationAddress);
-                    } else {
-                        //REMOVE: comments
-                     //   uint256 NFTID; 
-                     //   ERC721 NFT;    //TODO: get the NFT contract address and ID
-                     //   if(NFTID != uint256(0))
-                     //       verusBridgeStorage.transferFromERC721(destinationAddress, address(verusBridgeStorage), NFT, NFTID );
-
-                    }
-                }
-            } else if (_import.transfers[i].destination.destinationtype & VerusConstants.DEST_REGISTERCURRENCY == VerusConstants.DEST_REGISTERCURRENCY) {
-                     
-                tokenManager.deployToken(_import.transfers[i].destination.destinationaddress);
-                
-            } else if (_import.transfers[i].destination.destinationtype == 0) {
-
-            //TODO: Handle NFTS
-
-            }
-
-            if (_import.transfers[i].fees > 0 && _import.transfers[i].feecurrencyid == VerusConstants.VEth)
-            {
-
-
-
-            }
-        }
+        if(payments.length > 0)
+            verusBridgeMaster.sendEth(payments);
 
         address rewardDestination;
         bytes memory destHex = _import.exportinfo.rewardaddress.destinationaddress;
@@ -260,7 +211,6 @@ contract VerusBridge {
         return true;
     }
     
-
     function getReadyExportsByRange(uint _startBlock,uint _endBlock) public view returns(VerusObjects.CReserveTransferSet[] memory returnedExports){
         //calculate the size that the return array will be to initialise it
         uint outputSize = 0;
@@ -279,7 +229,6 @@ contract VerusBridge {
         }
         return output;      
     }
-
 
 
 }

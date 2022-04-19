@@ -39,7 +39,7 @@ contract VerusInfo {
 
     function setContracts(address[12] memory contracts) public {
 
-        assert(msg.sender == upgradeContract);
+        require(msg.sender == upgradeContract);
 
         if(contracts[uint(VerusConstants.ContractType.TokenManager)] != address(tokenManager)) {
             tokenManager = TokenManager(contracts[uint(VerusConstants.ContractType.TokenManager)]);

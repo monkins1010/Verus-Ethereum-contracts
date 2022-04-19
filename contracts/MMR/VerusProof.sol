@@ -48,7 +48,7 @@ contract VerusProof {
 
     function setContract(address _contract) public {
 
-        assert(msg.sender == verusUpgradeContract);
+        require(msg.sender == verusUpgradeContract);
 
         if ( _contract != address(verusSerializer))
             verusSerializer = VerusSerializer(_contract);
@@ -98,7 +98,7 @@ contract VerusProof {
     function checkTransfers(VerusObjects.CReserveTransferImport memory _import) public view returns (bool) {
 
         // ensure that the hashed transfers are in the export
-        bytes32 hashedTransfers = hashTransfers(_import.transfers);
+        bytes32 hashedTransfers = keccak256(_import.serializedTransfers);
 
         // the first component of the import partial transaction proof is the transaction header, for each version of
         // transaction header, we have a specific offset for the hash of transfers. if we change this, we must

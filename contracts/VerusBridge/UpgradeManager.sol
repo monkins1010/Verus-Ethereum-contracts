@@ -42,7 +42,7 @@ contract UpgradeManager {
    function setInitialContracts(address[] memory _newContractAddress) public {
     
         //One time set of contracts for all       
-        assert(msg.sender == contractOwner);
+        require(msg.sender == contractOwner);
         if (contracts[0] == address(0)){
 
             for (uint i = 0; i < uint(VerusConstants.ContractType.LastIndex); i++) 
@@ -73,8 +73,8 @@ contract UpgradeManager {
 
     function upgradeContracts(VerusObjects.upgradeContracts[] memory _newContractPackage) public {
 
-        assert(msg.sender == contractOwner);
-      //TODO:Reactivate // assert (checkMultiSig(_newContractPackage));
+        require(msg.sender == contractOwner);
+      //TODO:Reactivate // require (checkMultiSig(_newContractPackage));
 
         address[12] memory tempcontracts;
 

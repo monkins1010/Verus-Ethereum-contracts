@@ -51,7 +51,7 @@ module.exports = async function(deployer) {
     await deployer.deploy(VerusSerializer);
     const serializerInst = await VerusSerializer.deployed();
 
-    await deployer.deploy(VerusTokenManager, UpgradeInst.address, bridgeStorageInst.address, serializerInst.address)
+    await deployer.deploy(VerusTokenManager, UpgradeInst.address, bridgeStorageInst.address, serializerInst.address, bridgeMasterInst.address)
     const tokenInst = await VerusTokenManager.deployed();
 
     await deployer.deploy(VerusNotarizer, blakeInst.address, serializerInst.address, UpgradeInst.address, verusNotariserIDS, verusNotariserSigner, NotarizerStorageInst.address, bridgeMasterInst.address);

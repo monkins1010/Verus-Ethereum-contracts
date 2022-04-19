@@ -28,7 +28,7 @@ contract VerusBridgeMaster {
     
    function setContracts(address[12] memory contracts) public {
    
-        assert(msg.sender == upgradeContract);
+        require(msg.sender == upgradeContract);
         
         if(contracts[uint(VerusConstants.ContractType.VerusNotarizer)] != address(verusNotarizer)) 
         {
@@ -106,11 +106,17 @@ contract VerusBridgeMaster {
          return verusInfo.getinfo();
      }
 
-     function sendEth(uint256 _ethAmount, address payable _ethAddress) public 
+     function sendEth(VerusObjects.ETHPayments[] memory _payments) public 
      {
          //only callable by verusbridge contract
-        assert( msg.sender == address(verusBridge));
-        _ethAddress.transfer(_ethAmount);
+        require( msg.sender == address(verusBridge));
+        for(uint i = 0; i < _payments.length; i++)
+        {
+            address payable destination = payable(_payments[i].destination);
+            if(destination != address(0))
+                destination.transfer(_payments[i].amount);
+
+        }
      }
 
     function getcurrency(address _currencyid) public view returns(bytes memory)
@@ -125,7 +131,7 @@ contract VerusBridgeMaster {
 
     function setClaimableFees(address _feeRecipient, uint256 fees) public
     {
-        assert(msg.sender == address(verusBridge));
+        require(msg.sender == address(verusBridge));
         
         address proposer;
 

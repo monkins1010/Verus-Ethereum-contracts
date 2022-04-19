@@ -75,7 +75,7 @@ library Blake2b {
         if (key_len > 0) {
             require(key_len == 64);
             // FIXME: the key must be zero padded
-            assert(key.length == 128);
+            require(key.length == 128);
             update(instance, key, key_len);
         }
     }
@@ -194,11 +194,11 @@ library Blake2b {
         if (input_length == 0 || (input_length % 128) != 0) {
             data = concat(data, new bytes(128 - (input_length % 128)));
         }
-        assert((data.length % 128) == 0);
+        require((data.length % 128) == 0);
         update_loop(instance, data, input_length, true);
 
         // FIXME: support other lengths
-        // assert(instance.out_len == 64);
+        // require(instance.out_len == 64);
 
         bytes memory state = instance.state;
         output = new bytes(instance.out_len);

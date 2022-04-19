@@ -42,6 +42,12 @@ library VerusConstants {
     uint8 constant MAPPING_ISBRIDGE_CURRENCY = 8;
     uint constant TICKER_LENGTH_MAX = 4;
 
+    //deploy currency flags
+    uint8 constant TOKEN_SEND = 1;
+    uint8 constant TOKEN_LAUNCH = 2;
+    uint8 constant TOKEN_MAPPED_ERC20 = 4;
+    uint8 constant TOKEN_ETH_SEND = 8;
+
     enum ContractType {
         TokenManager,
         VerusSerializer,

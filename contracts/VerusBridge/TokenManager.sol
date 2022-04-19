@@ -19,22 +19,25 @@ contract TokenManager {
 
     VerusSerializer verusSerializer;
     VerusBridgeStorage verusBridgeStorage;
-    UpgradeManager upgradeManager ;
+    UpgradeManager upgradeManager;
+    address verusBridgeMaster;
 
     constructor(
         address verusUpgradeAddress,
         address verusBridgeStorageAddress,
-        address verusSerializerAddress
+        address verusSerializerAddress,
+        address verusBridgeMasterAddress
     ) {
         
         verusBridgeStorage = VerusBridgeStorage(verusBridgeStorageAddress); 
         verusSerializer = VerusSerializer(verusSerializerAddress);
         upgradeManager = UpgradeManager(verusUpgradeAddress);
+        verusBridgeMaster = verusBridgeMasterAddress;
     }
     
     function setContract(address contractAddress) public {
 
-        assert(msg.sender == address(upgradeManager));
+        require(msg.sender == address(upgradeManager));
         verusSerializer = VerusSerializer(contractAddress);
     }
 
@@ -53,14 +56,14 @@ contract TokenManager {
         for(uint i=0; i< tokenListLength; i++) {
 
             address tokenAddress;
+            Token token = Token(verusToERC20mapping(tokenAddress).erc20ContractAddress);
             tokenAddress = verusBridgeStorage.tokenList(i);
 
             temp[i].iaddress = tokenAddress;
             temp[i].erc20ContractAddress = verusToERC20mapping(tokenAddress).erc20ContractAddress;
-            temp[i].name = verusToERC20mapping(tokenAddress).name;
-            temp[i].ticker = verusToERC20mapping(tokenAddress).ticker;
+            temp[i].name = token.name();
+            temp[i].ticker = token.symbol();
             temp[i].flags = verusToERC20mapping(tokenAddress).flags;
-            temp[i].launchSystemID = verusToERC20mapping(tokenAddress).launchSystemID;
         }
 
         return temp;
@@ -70,29 +73,6 @@ contract TokenManager {
        
        return (sender == upgradeManager.getBridgeAddress());
 
-    }
-
-    function importERC20Tokens(
-        address _iaddress,
-        uint64 _tokenAmount,
-        address _destination
-    ) public {
-      //REMOVE:  require(
-     //       isVerusBridgeContract(msg.sender),
-     //       "importERC20Tokens:bridgecontractonly"
-    //    );
-        
-        VerusObjects.mappedToken memory mappedContract = verusToERC20mapping(_iaddress);
-
-        // if token that has been sent from verus is not registered on ETH burn the tokens
-        
-            
-        Token token = Token(mappedContract.erc20ContractAddress);
-        
-        verusBridgeStorage.mintOrTransferToken(
-            _destination, convertFromVerusNumber(_tokenAmount, token.decimals()), mappedContract.flags, token);
-
-        
     }
 
     function ERC20Registered(address _iaddress) public view returns (bool) {
@@ -158,19 +138,28 @@ contract TokenManager {
         }
     }
 
-    function deployToken(bytes memory _serializedCcd) public  {
+    function deployToken(VerusObjects.PackedSend memory _tx) public  { //TODO: Make private
         
-        require (isVerusBridgeContract(msg.sender),"Call can only be made from Verus Bridge Contract");
+     //   require (isVerusBridgeContract(msg.sender) || address(this) == msg.sender,"Call can only be made from Verus Bridge Contract");
 
-        VerusObjects.CcurrencyDefinition memory ccd = verusSerializer.deSerializeCurrencyDefinition(_serializedCcd);
-        address destinationCurrencyID = getIAddress(ccd);
+       // VerusObjects.CcurrencyDefinition memory ccd = verusSerializer.deSerializeCurrencyDefinition(_tx.destination);
+        address destinationCurrencyID = address(uint160(_tx.currencyAndAmount));
 
         if (ERC20Registered(destinationCurrencyID))
             return;
 
+        uint8 nameLen;
+        nameLen = uint8(_tx.destinationAndFlags & 0xff);
+        bytes memory name = new bytes(nameLen);
+
+        for (uint i = 0; i< nameLen;i++)
+        {
+            name[i] = bytes1(uint8(_tx.destinationAndFlags >> ((i+1) * 8)));
+        }
+
         uint8 currencyFlags;
 
-        if (ccd.systemID == VerusConstants.VEth)
+        if (_tx.nativeCurrency != address(0))
         {
             currencyFlags = VerusConstants.MAPPING_ETHEREUM_OWNED;
         }
@@ -179,7 +168,7 @@ contract TokenManager {
             currencyFlags = VerusConstants.MAPPING_VERUS_OWNED;
         }
 
-        recordToken(destinationCurrencyID, ccd.nativeCurrencyID, ccd.name, getSymbol(ccd.name), currencyFlags, ccd.launchSystemID);
+        recordToken(destinationCurrencyID, _tx.nativeCurrency, string(name), getSymbol(string(name)), currencyFlags);
     }
 
 
@@ -193,8 +182,8 @@ contract TokenManager {
                 tokensToDeploy[i].erc20ContractAddress,
                 tokensToDeploy[i].name,
                 tokensToDeploy[i].ticker,
-                tokensToDeploy[i].flags,
-                tokensToDeploy[i].launchSystemID
+                tokensToDeploy[i].flags
+
             );
         }
     }
@@ -204,8 +193,7 @@ contract TokenManager {
         address ethContractAddress,
         string memory name,
         string memory ticker,
-        uint8 flags,
-        address launchSystemID
+        uint8 flags
     ) public returns (address) { //REMOVE: make private
 
         address ERCContract;
@@ -221,7 +209,7 @@ contract TokenManager {
 
         }
         
-        verusBridgeStorage.RecordverusToERC20mapping(_iaddress, VerusObjects.mappedToken(ERCContract, flags, name, ticker, verusBridgeStorage.getTokenListLength(), launchSystemID));
+        verusBridgeStorage.RecordverusToERC20mapping(_iaddress, VerusObjects.mappedToken(ERCContract, flags, verusBridgeStorage.getTokenListLength()));
         return ERCContract;
     }
 
@@ -252,5 +240,82 @@ contract TokenManager {
         }
       
         return c;
+    }
+
+    function processTransactions(VerusObjects.DeserializedObject memory transfers) 
+                public returns (VerusObjects.ETHPayments[] memory)
+    {
+        //require(msg.sender == verusBridgeMaster);
+        //counter: 16bit packed 32bit number for efficency
+        uint8 ETHPaymentCounter = uint8((transfers.counter >> 16) & 0xff);
+        uint8 currencyCounter = uint8((transfers.counter >> 24) & 0xff);
+        uint8 transferCounter = uint8((transfers.counter & 0xff) - currencyCounter - (ETHPaymentCounter - 1));
+        uint8[] memory transferLocations = new uint8[](transferCounter); 
+        VerusObjects.ETHPayments[] memory payments = new VerusObjects.ETHPayments[](ETHPaymentCounter); //Avoid empty
+        uint8[] memory currencyLocations = new uint8[](currencyCounter);
+
+        ETHPaymentCounter = 0;
+        currencyCounter = 0;
+        transferCounter = 0;
+        for (uint8 i = 0; i< transfers.transfers.length; i++) {
+
+            uint8 flags = uint8((transfers.transfers[i].destinationAndFlags >> 160) & 0xff);
+            
+            // Handle ETH Send
+            if (flags & VerusConstants.TOKEN_ETH_SEND == VerusConstants.TOKEN_ETH_SEND) 
+            {
+
+                uint256 amount; 
+                amount = (transfers.transfers[i].currencyAndAmount >> 160) * 10000000000;//SATS to WEI (only for ETH)
+                // ETH is held in VerusBridgemaster, create array to bundle payments
+                payments[ETHPaymentCounter] = VerusObjects.ETHPayments(
+                    address(uint160(transfers.transfers[i].destinationAndFlags)), amount);
+                ETHPaymentCounter++;                        
+        
+            } 
+            else if(flags & VerusConstants.TOKEN_SEND == VerusConstants.TOKEN_SEND)
+            { 
+                transferLocations[transferCounter] = i;
+                transferCounter++;
+                
+            } 
+            else if (flags & VerusConstants.TOKEN_LAUNCH == VerusConstants.TOKEN_LAUNCH) 
+            {                     
+                currencyLocations[currencyCounter] = i;
+                currencyCounter++;            
+            }
+            else
+            {
+                //REMOVE: comments and make NFT WORK
+                //   uint256 NFTID; 
+                //   ERC721 NFT;    
+                //   if(NFTID != uint256(0))
+                //       verusBridgeStorage.transferFromERC721(destinationAddress, address(verusBridgeStorage), NFT, NFTID );
+            }
+                
+        }
+
+        //send tokens
+        if(transferCounter > 0)
+            verusBridgeStorage.importTransactions(transfers.transfers, transferLocations);
+
+        for(uint i = 0; i < currencyLocations.length; i++)
+        {
+            deployToken(transfers.transfers[currencyLocations[i]]);
+        }
+
+        uint256 totalPayments;
+        if(ETHPaymentCounter > 0)
+        {
+            for(uint i = 0; i < ETHPaymentCounter; i++)
+            {
+                totalPayments += payments[i].amount;
+            }
+            
+            verusBridgeStorage.subtractFromEthHeld(totalPayments);
+        }
+        //return ETH and addresses to be sent to 
+        return payments;
+
     }
 }

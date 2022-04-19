@@ -24,7 +24,7 @@ contract ExportManager {
 
     function setContract(address _contract) public {
 
-        assert(msg.sender == verusUpgradeContract);
+        require(msg.sender == verusUpgradeContract);
         
         if(_contract != address(tokenManager)) 
         {
@@ -48,7 +48,7 @@ contract ExportManager {
         
         require (checkTransferFlags(transfer), "Flag Check failed");         
                                   
-        //TODO: We cant mix different transfer destinations together in the CCE assert on non same fields.
+        //TODO: We cant mix different transfer destinations together in the CCE require on non same fields.
         address destCurrencyexportID = verusBridgeStorage.getCreatedExport(block.number);
 
         require (destCurrencyexportID == address(0) || destCurrencyexportID == transfer.destcurrencyid, "checkReadyExports cannot mix types ");
