@@ -181,18 +181,16 @@ contract VerusBridge {
 
         bool proven = verusProof.proveImports(_import);
 
-        //require(proven);
+        require(!proven);
         verusBridgeStorage.setProcessedTxids(txidfound);
 
         if (verusBridgeStorage.lastTxImportHeight() < _import.height)
             verusBridgeStorage.setlastTxImportHeight(_import.height);
        
         // Deserialize transfers and pack into send arrays
-        
-        VerusObjects.DeserializedObject memory tempTransfers; 
-        tempTransfers = verusSerializer.deserializeTransfers(_import.serializedTransfers);
 
-        VerusObjects.ETHPayments[] memory payments = tokenManager.processTransactions(tempTransfers);
+        VerusObjects.ETHPayments[] memory payments = 
+        tokenManager.processTransactions(verusSerializer.deserializeTransfers(_import.serializedTransfers));
 
         if(payments.length > 0)
             verusBridgeMaster.sendEth(payments);

@@ -43,8 +43,8 @@ contract TokenManager {
 
     function verusToERC20mapping(address iaddress) public view returns (VerusObjects.mappedToken memory) {
 
-        VerusObjects.mappedToken memory mappingData = verusBridgeStorage.getERCMapping(iaddress);
-        return mappingData;
+        return verusBridgeStorage.getERCMapping(iaddress);
+      
     }
 
     function getTokenList() public view returns(VerusObjects.setupToken[] memory ) {
@@ -56,11 +56,11 @@ contract TokenManager {
         for(uint i=0; i< tokenListLength; i++) {
 
             address tokenAddress;
-            Token token = Token(verusToERC20mapping(tokenAddress).erc20ContractAddress);
             tokenAddress = verusBridgeStorage.tokenList(i);
+            Token token = Token(verusToERC20mapping(tokenAddress).erc20ContractAddress);
 
             temp[i].iaddress = tokenAddress;
-            temp[i].erc20ContractAddress = verusToERC20mapping(tokenAddress).erc20ContractAddress;
+            temp[i].erc20ContractAddress = address(token);
             temp[i].name = token.name();
             temp[i].ticker = token.symbol();
             temp[i].flags = verusToERC20mapping(tokenAddress).flags;
@@ -250,6 +250,7 @@ contract TokenManager {
         uint8 ETHPaymentCounter = uint8((transfers.counter >> 16) & 0xff);
         uint8 currencyCounter = uint8((transfers.counter >> 24) & 0xff);
         uint8 transferCounter = uint8((transfers.counter & 0xff) - currencyCounter - (ETHPaymentCounter - 1));
+
         uint8[] memory transferLocations = new uint8[](transferCounter); 
         VerusObjects.ETHPayments[] memory payments = new VerusObjects.ETHPayments[](ETHPaymentCounter); //Avoid empty
         uint8[] memory currencyLocations = new uint8[](currencyCounter);
@@ -264,7 +265,6 @@ contract TokenManager {
             // Handle ETH Send
             if (flags & VerusConstants.TOKEN_ETH_SEND == VerusConstants.TOKEN_ETH_SEND) 
             {
-
                 uint256 amount; 
                 amount = (transfers.transfers[i].currencyAndAmount >> 160) * 10000000000;//SATS to WEI (only for ETH)
                 // ETH is held in VerusBridgemaster, create array to bundle payments
