@@ -101,8 +101,8 @@ module.exports = async function(deployer) {
 
     USDCInst.increaseAllowance(VerusBridgeInst.address, "1000000000000000000000000");
 
-    const settingString = "\nverusbridgeaddress=" + bridgeMasterInst.address + "\n" +
-        "storageaddress=" + bridgeStorageInst.address + "\n\n" +
+    const settingString = "\nbridgemasteraddress=" + bridgeMasterInst.address + "\n" +
+        "bridgestorageaddress=" + bridgeStorageInst.address + "\n\n" +
         "export const BRIDGE_MASTER_ADD = \"" + bridgeMasterInst.address + "\";\n" +
         "export const BRIDGE_STORAGE_ADD = \"" + bridgeStorageInst.address + "\";\n" +
         "export const UPGRADE_ADD = \"" + UpgradeInst.address + "\";\n";
