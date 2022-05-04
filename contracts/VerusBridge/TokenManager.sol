@@ -57,12 +57,20 @@ contract TokenManager {
 
             address tokenAddress;
             tokenAddress = verusBridgeStorage.tokenList(i);
-            Token token = Token(verusToERC20mapping(tokenAddress).erc20ContractAddress);
-
+            if(tokenAddress != VerusConstants.VEth )
+            {
+                Token token = Token(verusToERC20mapping(tokenAddress).erc20ContractAddress);
+                temp[i].erc20ContractAddress = address(token);
+                temp[i].name = token.name();
+                temp[i].ticker = token.symbol();
+            }
+            else
+            {
+                temp[i].erc20ContractAddress = address(0);
+                temp[i].name = "Rinkeby ETH";
+                temp[i].ticker = "ETH";
+            }
             temp[i].iaddress = tokenAddress;
-            temp[i].erc20ContractAddress = address(token);
-            temp[i].name = token.name();
-            temp[i].ticker = token.symbol();
             temp[i].flags = verusToERC20mapping(tokenAddress).flags;
         }
 
