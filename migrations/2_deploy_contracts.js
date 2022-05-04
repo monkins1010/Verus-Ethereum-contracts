@@ -105,7 +105,8 @@ module.exports = async function(deployer) {
         "bridgestorageaddress=" + bridgeStorageInst.address + "\n\n" +
         "export const BRIDGE_MASTER_ADD = \"" + bridgeMasterInst.address + "\";\n" +
         "export const BRIDGE_STORAGE_ADD = \"" + bridgeStorageInst.address + "\";\n" +
-        "export const UPGRADE_ADD = \"" + UpgradeInst.address + "\";\n";
+        "export const UPGRADE_ADD = \"" + UpgradeInst.address + "\";\n" +
+        "export const TOKEN_MANAGER_ADD = \"" + tokenInst.address + "\";\n";
 
     console.log("Settings to be pasted into *.conf file and website \n\n", settingString);
 };
