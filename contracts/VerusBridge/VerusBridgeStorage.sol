@@ -6,7 +6,6 @@ import "./Token.sol";
 import "../Libraries/VerusObjects.sol";
 import "../Libraries/VerusConstants.sol";
 import "../Libraries/VerusObjectsNotarization.sol";
-import "./VerusBridgeMaster.sol";
 import "@openzeppelin/contracts/token/ERC721/ERC721.sol";
 import "./TokenManager.sol";
 
@@ -18,12 +17,11 @@ contract VerusBridgeStorage {
     address upgradeContract;
     address verusBridge;
     TokenManager tokenManager;
-    address verusBridgeMaster;
 
-  //  event TokenCreated(address tokenAddress);
+    // event TokenCreated(address tokenAddress);
 
-    //all major functions get declared here and passed through to the underlying contract
-    //uint256 feesHeld = 0;
+    // all major functions get declared here and passed through to the underlying contract
+    // uint256 feesHeld = 0;
     uint256 ethHeld = 0;
 
     // VRSC pool size in WEI
@@ -37,7 +35,7 @@ contract VerusBridgeStorage {
     uint32 public firstBlock;
     uint32 public lastCCEExportHeight;
    
-    //contract allows the contracts to be set and reset
+    //  contract allows the contracts to be set and reset
     constructor(
         address upgradeContractAddress, uint256 _poolSize){
         upgradeContract = upgradeContractAddress;     
@@ -93,7 +91,6 @@ contract VerusBridgeStorage {
 
         isSenderBridgeContract(msg.sender);
         
-      //  VerusObjects.CReserveTransfer memory reserveTX = reserveTransfer;
         _readyExports[_block].blockHeight = uint32(_block);
         _readyExports[_block].transfers.push(reserveTransfer);
 
@@ -195,27 +192,11 @@ contract VerusBridgeStorage {
         require(msg.sender == address(tokenManager));
         Token t = new Token(name, ticker);   
         tokenList.push(_iaddress); 
-      //  emit TokenCreated(address(t));
+        // emit TokenCreated(address(t));
         return address(t);
 
     }
-/*
-    function mintOrTransferToken(address _destination, uint256 processedTokenAmount, uint32 flags, Token token ) public {
 
-        require(msg.sender == tokenManager, "Only tokenmanager allowed to mintOrTransferToken");
-        if(_destination != address(0))
-        {
-            if (flags & VerusConstants.MAPPING_VERUS_OWNED == VerusConstants.MAPPING_VERUS_OWNED) 
-            {   
-                token.mint(_destination, processedTokenAmount);
-            } 
-            else 
-            {
-                token.transfer(_destination, processedTokenAmount);
-            }
-        }
-    }
-*/
     function importTransactions(
         VerusObjects.PackedSend[] calldata trans,
         uint8[] memory transferLocations
@@ -254,12 +235,10 @@ contract VerusBridgeStorage {
                     token.transfer(destinationAddress, converted);
                 }
             }
-            
-           
+                  
         }
             
     }
-
     
     function exportERC20Tokens(uint256 _tokenAmount, Token token, bool burn, address sender ) public {
         

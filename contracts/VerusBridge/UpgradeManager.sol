@@ -28,12 +28,11 @@ contract UpgradeManager {
     VerusBridgeMaster verusBridgeMaster;
     VerusCrossChainExport verusCrossChainExport;
             
-     // Total amount of contracts.
+    // Total amount of contracts.
     address[12] public contracts;
 
-     address contractOwner;
+    address contractOwner;
     
-
     constructor()
     {
         contractOwner = msg.sender;      
@@ -68,7 +67,7 @@ contract UpgradeManager {
 
         } 
         //Blow the fuse
-        contractOwner = address(0);
+        //TODO:Reactivate when multisig active contractOwner = address(0);
     }
 
     function upgradeContracts(VerusObjects.upgradeContracts[] memory _newContractPackage) public {
