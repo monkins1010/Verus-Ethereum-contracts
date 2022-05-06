@@ -174,27 +174,35 @@ contract VerusBridge {
         bytes32 txidfound;
         bytes memory sliced = _import.partialtransactionproof.components[0].elVchObj;
 
-        assembly {
+        assembly 
+        {
             txidfound := mload(add(sliced, 32)) 
         }
-       //REMOVE COMMENT if (verusBridgeStorage.processedTxids(txidfound) == true) {return false}; 
+
+        if (verusBridgeStorage.processedTxids(txidfound)) 
+        {
+            return false;
+        } 
 
         bool proven = verusProof.proveImports(_import);
 
-        require(!proven);
+        require(proven);
         verusBridgeStorage.setProcessedTxids(txidfound);
 
         if (verusBridgeStorage.lastTxImportHeight() < _import.height)
+        {
             verusBridgeStorage.setlastTxImportHeight(_import.height);
-       
+        }       
         // Deserialize transfers and pack into send arrays
 
         VerusObjects.ETHPayments[] memory payments = 
         tokenManager.processTransactions(verusSerializer.deserializeTransfers(_import.serializedTransfers));
 
         if(payments.length > 0)
+        {
             verusBridgeMaster.sendEth(payments);
-
+        }
+        
         address rewardDestination;
         bytes memory destHex = _import.exportinfo.rewardaddress.destinationaddress;
         assembly 

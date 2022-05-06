@@ -146,7 +146,7 @@ contract VerusBridgeStorage {
     }
     function RecordverusToERC20mapping(address iaddress, VerusObjects.mappedToken memory mappedToken) public {
 
-      //REMOVE:  require( msg.sender == tokenManager);
+        require( msg.sender == address(tokenManager));
         verusToERC20mapping[iaddress] = mappedToken;
 
     }
@@ -219,10 +219,10 @@ contract VerusBridgeStorage {
     function importTransactions(
         VerusObjects.PackedSend[] calldata trans,
         uint8[] memory transferLocations
-    ) public  {
-      //REMOVE:  require(
-     //       tokenManager == msg.sender,
-     //       "importERC20Tokens:bridgecontractonly");
+    ) public  
+    {
+      
+        require(address(tokenManager) == msg.sender,"importERC20Tokens:bridgecontractonly");
 
         uint32 flags;
         address ERC20Address;

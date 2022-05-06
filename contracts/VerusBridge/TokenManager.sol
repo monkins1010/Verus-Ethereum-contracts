@@ -148,9 +148,8 @@ contract TokenManager {
 
     function deployToken(VerusObjects.PackedSend memory _tx) public  { //TODO: Make private
         
-     //   require (isVerusBridgeContract(msg.sender) || address(this) == msg.sender,"Call can only be made from Verus Bridge Contract");
+        require (isVerusBridgeContract(msg.sender) || address(this) == msg.sender,"Call can only be made from Verus Bridge Contract");
 
-       // VerusObjects.CcurrencyDefinition memory ccd = verusSerializer.deSerializeCurrencyDefinition(_tx.destination);
         address destinationCurrencyID = address(uint160(_tx.currencyAndAmount));
 
         if (ERC20Registered(destinationCurrencyID))
@@ -202,7 +201,9 @@ contract TokenManager {
         string memory name,
         string memory ticker,
         uint8 flags
-    ) public returns (address) { //REMOVE: make private
+    ) public returns (address) {
+
+        require(msg.sender == address(this));
 
         address ERCContract;
 
