@@ -9,7 +9,7 @@ import "../Libraries/VerusConstants.sol";
 import "../Libraries/VerusObjects.sol";
 import "./VerusSerializer.sol";
 import "../VerusBridge/VerusBridge.sol";
-import "../VerusBridge/VerusBridgeMaster.sol";
+
 import "../VerusBridge/VerusBridgeStorage.sol";
 import "../VerusBridge/UpgradeManager.sol";
 import "../Libraries/VerusObjectsCommon.sol";
@@ -20,25 +20,28 @@ contract TokenManager {
     VerusSerializer verusSerializer;
     VerusBridgeStorage verusBridgeStorage;
     UpgradeManager upgradeManager;
-    address verusBridgeMaster;
+    address verusBridge;
 
     constructor(
         address verusUpgradeAddress,
         address verusBridgeStorageAddress,
-        address verusSerializerAddress,
-        address verusBridgeMasterAddress
+        address verusSerializerAddress
     ) {
         
         verusBridgeStorage = VerusBridgeStorage(verusBridgeStorageAddress); 
         verusSerializer = VerusSerializer(verusSerializerAddress);
         upgradeManager = UpgradeManager(verusUpgradeAddress);
-        verusBridgeMaster = verusBridgeMasterAddress;
+        
     }
     
-    function setContract(address contractAddress) public {
+    function setContract(address serializerAddress, address verusBridgeAddress) public {
 
         require(msg.sender == address(upgradeManager));
-        verusSerializer = VerusSerializer(contractAddress);
+
+        if(serializerAddress != address(verusSerializer))
+            verusSerializer = VerusSerializer(serializerAddress);
+        if(serializerAddress != address(verusSerializer))
+            verusBridge = verusBridgeAddress;
     }
 
     function verusToERC20mapping(address iaddress) public view returns (VerusObjects.mappedToken memory) {
@@ -250,18 +253,24 @@ contract TokenManager {
     function processTransactions(VerusObjects.DeserializedObject memory transfers) 
                 public returns (VerusObjects.ETHPayments[] memory)
     {
-        //require(msg.sender == verusBridgeMaster);
-        //counter: 16bit packed 32bit number for efficency
+        
+        require(msg.sender == verusBridge);
+        // counter: 16bit packed 32bit number for efficency
         uint8 ETHPaymentCounter = uint8((transfers.counter >> 16) & 0xff);
         uint8 currencyCounter = uint8((transfers.counter >> 24) & 0xff);
-        uint8 transferCounter = uint8((transfers.counter & 0xff) - currencyCounter - (ETHPaymentCounter - 1));
+        uint8 transferCounter = uint8((transfers.counter & 0xff) - currencyCounter - ETHPaymentCounter);
 
         uint8[] memory transferLocations = new uint8[](transferCounter); 
-        VerusObjects.ETHPayments[] memory payments = new VerusObjects.ETHPayments[](ETHPaymentCounter); //Avoid empty
-        uint8[] memory currencyLocations = new uint8[](currencyCounter);
+        VerusObjects.ETHPayments[] memory payments;
+
+        if(ETHPaymentCounter > 0 )
+            payments = new VerusObjects.ETHPayments[](ETHPaymentCounter); //Avoid empty
+
+        uint8[] memory currencyLocations;
+        
+        if(currencyCounter > 0 ) currencyLocations = new uint8[](currencyCounter);
 
         ETHPaymentCounter = 0;
-        currencyCounter = 0;
         transferCounter = 0;
         for (uint8 i = 0; i< transfers.transfers.length; i++) {
 
@@ -304,7 +313,7 @@ contract TokenManager {
         if(transferCounter > 0)
             verusBridgeStorage.importTransactions(transfers.transfers, transferLocations);
 
-        for(uint i = 0; i < currencyLocations.length; i++)
+        for(uint i = 0; i < currencyCounter; i++)
         {
             deployToken(transfers.transfers[currencyLocations[i]]);
         }

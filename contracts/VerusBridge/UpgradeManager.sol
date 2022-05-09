@@ -64,7 +64,8 @@ contract UpgradeManager {
             verusBridgeStorage.setContracts(contracts); 
             verusNotarizerStorage.setContracts(contracts); 
             verusBridgeMaster.setContracts(contracts); 
-
+            tokenManager.setContract(_newContractAddress[uint(VerusConstants.ContractType.VerusSerializer)], 
+                                     _newContractAddress[uint(VerusConstants.ContractType.VerusBridge)]);
         } 
         //Blow the fuse
         //TODO:Reactivate when multisig active contractOwner = address(0);
@@ -106,7 +107,9 @@ contract UpgradeManager {
         if(tempcontracts[uint(VerusConstants.ContractType.VerusBridge)] != address(verusBridge)) {
             verusBridgeMaster.setContracts(tempcontracts);
             verusBridgeStorage.setContracts(tempcontracts);
-            verusNotarizerStorage.setContracts(tempcontracts);   
+            verusNotarizerStorage.setContracts(tempcontracts);  
+            tokenManager.setContract(tempcontracts[uint(VerusConstants.ContractType.VerusSerializer)], 
+                        tempcontracts[uint(VerusConstants.ContractType.VerusBridge)]); 
         }
 
         if(tempcontracts[uint(VerusConstants.ContractType.VerusInfo)] != address(verusInfo)) {
@@ -119,7 +122,8 @@ contract UpgradeManager {
 
         if(tempcontracts[uint(VerusConstants.ContractType.VerusSerializer)] != contracts[uint(VerusConstants.ContractType.VerusSerializer)])  {   
            verusCrossChainExport.setContract(tempcontracts[uint(VerusConstants.ContractType.VerusSerializer)]);
-           tokenManager.setContract(tempcontracts[uint(VerusConstants.ContractType.VerusSerializer)]);
+           tokenManager.setContract(tempcontracts[uint(VerusConstants.ContractType.VerusSerializer)], 
+                                    tempcontracts[uint(VerusConstants.ContractType.VerusBridge)]);
            verusBridge.setContracts(tempcontracts);  
 
         }

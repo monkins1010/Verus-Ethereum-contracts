@@ -534,7 +534,7 @@ contract VerusSerializer {
         uint64 flags;
         uint8 destinationType;
         uint64 readerLen;
-        uint8 ETHCounter = 1; 
+        uint8 ETHCounter; 
         uint8 currencyCounter;
         uint32 counter;
         uint256 nextOffset = 21;
@@ -606,7 +606,6 @@ contract VerusSerializer {
                  nextOffset += 20; 
             }
 
-            counter++;
 
             if (address(uint160(tempTransfers[counter].currencyAndAmount)) == VerusConstants.VEth)
             {
@@ -617,6 +616,7 @@ contract VerusSerializer {
             {
                 currencyCounter++;
             }
+            counter++;
             nextOffset += 20; //offsetready for next read (skip )
 
         }
