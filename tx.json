@@ -1,0 +1,54 @@
+{
+    "nobridgeUSDCSend": {
+        "version": "1",
+        "currencyvalue": {
+            "currency": "0xf0a1263056c30e221f0f851c36b767fff2544f7f",
+            "amount": "1000000000"
+        },
+        "flags": "1",
+        "feecurrencyid": "0xA6ef9ea235635E328124Ff3429dB9F9E91b64e2d",
+        "fees": "20000000",
+        "destination": {
+            "destinationtype": "2",
+            "destinationaddress": "0x55f51a22c79018a00ced41e758560f5df7d4d35d"
+        },
+        "destcurrencyid": "0xA6ef9ea235635E328124Ff3429dB9F9E91b64e2d",
+        "destsystemid": "0x0000000000000000000000000000000000000000",
+        "secondreserveid": "0x0000000000000000000000000000000000000000"
+    },
+    "nobridgeETHSend": {
+        "version": 1,
+        "currencyvalue": {
+            "currency": "0x67460C2f56774eD27EeB8685f29f6CEC0B090B00",
+            "amount": "1000000"
+        },
+        "flags": 1,
+        "feecurrencyid": "0xA6ef9ea235635E328124Ff3429dB9F9E91b64e2d",
+        "fees": "20000000",
+        "destination": {
+            "destinationtype": 2,
+            "destinationaddress": "0x55f51a22c79018a00ced41e758560f5df7d4d35d"
+        },
+        "destcurrencyid": "0xffece948b8a38bbcc813411d2597f7f8485a0689",
+        "destsystemid": "0x0000000000000000000000000000000000000000",
+        "secondreserveid": "0x0000000000000000000000000000000000000000"
+    },
+    "USDCBounceToBridgeVeth": {
+        "version": "1",
+        "currencyvalue": {
+            "currency": "0xf0a1263056c30e221f0f851c36b767fff2544f7f",
+            "amount": "100000000000"
+        },
+        "flags": "1091",
+        "feecurrencyid": "0x67460C2f56774eD27EeB8685f29f6CEC0B090B00",
+        "fees": "60000",
+        "destination": {
+            "destinationtype": "137",
+            "destinationaddress": "0x8c7d6364f1bf43248f2b26060dbd29da01d7dd3167460C2f56774eD27EeB8685f29f6CEC0B090B000000000000000000000000000000000000000000e093040000000000"
+        },
+        "destcurrencyid": "0xffece948b8a38bbcc813411d2597f7f8485a0689",
+        "destsystemid": "0x0000000000000000000000000000000000000000",
+        "secondreserveid": "0xA6ef9ea235635E328124Ff3429dB9F9E91b64e2d"
+    }
+
+}

@@ -34,13 +34,13 @@ contract TokenManager {
         
     }
     
-    function setContract(address serializerAddress, address verusBridgeAddress) public {
+    function setContracts(address serializerAddress, address verusBridgeAddress) public {
 
         require(msg.sender == address(upgradeManager));
 
         if(serializerAddress != address(verusSerializer))
             verusSerializer = VerusSerializer(serializerAddress);
-        if(serializerAddress != address(verusSerializer))
+        if(verusBridgeAddress != verusBridge)
             verusBridge = verusBridgeAddress;
     }
 
@@ -254,7 +254,7 @@ contract TokenManager {
                 public returns (VerusObjects.ETHPayments[] memory)
     {
         
-        require(msg.sender == verusBridge);
+        require(msg.sender == verusBridge,"proctx's:vb_only");
         // counter: 16bit packed 32bit number for efficency
         uint8 ETHPaymentCounter = uint8((transfers.counter >> 16) & 0xff);
         uint8 currencyCounter = uint8((transfers.counter >> 24) & 0xff);
@@ -270,6 +270,7 @@ contract TokenManager {
         
         if(currencyCounter > 0 ) currencyLocations = new uint8[](currencyCounter);
 
+        currencyCounter = 0;
         ETHPaymentCounter = 0;
         transferCounter = 0;
         for (uint8 i = 0; i< transfers.transfers.length; i++) {

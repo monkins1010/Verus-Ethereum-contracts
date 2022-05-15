@@ -60,7 +60,7 @@ contract VerusNotarizerStorage {
 
         require( msg.sender == verusNotarizer,"setNotarizedProof:callfromNotarizeronly");
         
-        // copying from memeory to storage cannot be done directly
+        // copying from memory to storage cannot be done directly
         PBaaSNotarization[verusHeight].version = _notarization.version; 
         PBaaSNotarization[verusHeight].flags = _notarization.flags;
         PBaaSNotarization[verusHeight].proposer = _notarization.proposer;

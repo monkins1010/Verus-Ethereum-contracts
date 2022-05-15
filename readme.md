@@ -12,7 +12,7 @@ To compile all run:
 
 ```shell
 npm install
-npm install -g truffle
+npm install -g truffle@5.3.14
 truffle compile
 truffle deploy --network rinkeby   
 ```
@@ -35,3 +35,8 @@ to get a list of the contract addresses:
 goto your `/Verustest/pbaas/veth/veth.conf` file and copy in the contract addresses from the above list into the appropriate fields.
 
 Also copy the VerusBridge Contract address into the index.js of the VerusWebsite Dapp, to update that address.
+
+## Update 11th May 2022
+
+- Truffle version must be no newer than 5.3.14
+- Set contracts TokenManger.sol must be initialized with setContracts() after its updated.
