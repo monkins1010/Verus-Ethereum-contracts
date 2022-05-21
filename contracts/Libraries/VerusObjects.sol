@@ -167,6 +167,7 @@ library VerusObjects {
         address erc20ContractAddress;
         uint8 flags;
         uint tokenIndex;
+        string name;
     }
 
     struct setupToken {

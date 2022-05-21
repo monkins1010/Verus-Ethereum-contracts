@@ -55,26 +55,29 @@ contract TokenManager {
         uint tokenListLength;
         tokenListLength = verusBridgeStorage.getTokenListLength();
         VerusObjects.setupToken[] memory temp = new VerusObjects.setupToken[](tokenListLength);
+        VerusObjects.mappedToken memory recordedToken;
 
         for(uint i=0; i< tokenListLength; i++) {
 
-            address tokenAddress;
-            tokenAddress = verusBridgeStorage.tokenList(i);
-            if(tokenAddress != VerusConstants.VEth )
+            address iAddress;
+            iAddress = verusBridgeStorage.tokenList(i);
+            recordedToken = verusBridgeStorage.getERCMapping(iAddress);
+
+            if(iAddress != VerusConstants.VEth )
             {
-                Token token = Token(verusToERC20mapping(tokenAddress).erc20ContractAddress);
+                Token token = Token(recordedToken.erc20ContractAddress);
                 temp[i].erc20ContractAddress = address(token);
-                temp[i].name = token.name();
+                temp[i].name = recordedToken.name;
                 temp[i].ticker = token.symbol();
             }
             else
             {
                 temp[i].erc20ContractAddress = address(0);
-                temp[i].name = "Rinkeby ETH";
+                temp[i].name = "Testnet ETH";
                 temp[i].ticker = "ETH";
             }
-            temp[i].iaddress = tokenAddress;
-            temp[i].flags = verusToERC20mapping(tokenAddress).flags;
+            temp[i].iaddress = iAddress;
+            temp[i].flags = recordedToken.flags;
         }
 
         return temp;
@@ -159,6 +162,7 @@ contract TokenManager {
         uint8 nameLen;
         nameLen = uint8(_tx.destinationAndFlags & 0xff);
         bytes memory name = new bytes(nameLen);
+        string memory outputName;
 
         for (uint i = 0; i< nameLen;i++)
         {
@@ -170,13 +174,16 @@ contract TokenManager {
         if (_tx.nativeCurrency != address(0))
         {
             currencyFlags = VerusConstants.MAPPING_ETHEREUM_OWNED;
+            Token token = Token(_tx.nativeCurrency);
+            outputName = string(abi.encodePacked(token.name(), " as ",name));
         }
         else 
         {
             currencyFlags = VerusConstants.MAPPING_VERUS_OWNED;
+            outputName = string(name);
         }
 
-        recordToken(destinationCurrencyID, _tx.nativeCurrency, string(name), getSymbol(string(name)), currencyFlags);
+        recordToken(destinationCurrencyID, _tx.nativeCurrency, outputName, getSymbol(string(name)), currencyFlags);
     }
 
 
@@ -217,7 +224,7 @@ contract TokenManager {
 
         }
         
-        verusBridgeStorage.RecordverusToERC20mapping(_iaddress, VerusObjects.mappedToken(ERCContract, flags, verusBridgeStorage.getTokenListLength()));
+        verusBridgeStorage.RecordverusToERC20mapping(_iaddress, VerusObjects.mappedToken(ERCContract, flags, verusBridgeStorage.getTokenListLength(), name));
         return ERCContract;
     }
 

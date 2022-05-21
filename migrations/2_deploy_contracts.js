@@ -27,9 +27,8 @@ const tokenmanbeth = ["0xffEce948b8A38bBcC813411D2597f7f8485a0689", "0x000000000
 const tokenmanUSDC = ["0xf0a1263056c30e221f0f851c36b767fff2544f7f", "0xeb8f08a975ab53e34d8a0330e0d34de942c95926", "0xA6ef9ea235635E328124Ff3429dB9F9E91b64e2d", MAPPING_ETHEREUM_OWNED + MAPPING_PARTOF_BRIDGEVETH, "Rinkeby USDC", "USDC"];
 const vETH = ["0x67460C2f56774eD27EeB8685f29f6CEC0B090B00", "0x06012c8cf97bead5deae237070f9587f8e7a266d", "0xA6ef9ea235635E328124Ff3429dB9F9E91b64e2d", MAPPING_ETHEREUM_OWNED + MAPPING_PARTOF_BRIDGEVETH, "Rinkeby ETH", "ETH"];
 
-const launchCurrencies = [tokenmanvrsctest, tokenmanbeth, tokenmanUSDC, vETH];
-
-const USDCERC20 = "0xeb8f08a975ab53e34d8a0330e0d34de942c95926";
+const USDCERC20RINKEBY = "0xeb8f08a975ab53e34d8a0330e0d34de942c95926";
+const USDCERC20GOERLI = "0x98339D8C260052B7ad81c28c16C0b98420f2B46a";
 
 module.exports = async function(deployer) {
 
@@ -89,6 +88,10 @@ module.exports = async function(deployer) {
 
     try {
         await UpgradeInst.setInitialContracts(allContracts);
+        let launchCurrencies = [tokenmanvrsctest, tokenmanbeth, tokenmanUSDC, vETH];
+        if (deployer.network_id === 5) { // 5 is Goerli so replace the USDC contract.
+            launchCurrencies[2][1] = USDCERC20GOERLI;
+        }
         await INFOInst.launchTokens(launchCurrencies);
 
     } catch (e) {
@@ -96,10 +99,6 @@ module.exports = async function(deployer) {
         console.log(e);
 
     }
-
-    let USDCInst = await Token.at(USDCERC20);
-
-    USDCInst.increaseAllowance(VerusBridgeInst.address, "1000000000000000000000000");
 
     const settingString = "\nbridgemasteraddress=" + bridgeMasterInst.address + "\n" +
         "bridgestorageaddress=" + bridgeStorageInst.address + "\n\n" +
