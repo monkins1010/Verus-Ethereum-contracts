@@ -152,6 +152,11 @@ contract TokenManager {
         }
     }
 
+    function getName(address cont) public view returns (string memory)
+    {
+        return ERC20(cont).name();
+    }
+
     function deployToken(VerusObjects.PackedSend memory _tx) private {
         
         address destinationCurrencyID = address(uint160(_tx.currencyAndAmount));
@@ -173,9 +178,17 @@ contract TokenManager {
 
         if (_tx.nativeCurrency != address(0))
         {
+            address erc20address = _tx.nativeCurrency;
             currencyFlags = VerusConstants.MAPPING_ETHEREUM_OWNED;
-            Token token = Token(_tx.nativeCurrency);
-            outputName = string(abi.encodePacked(token.name(), " as ",name));
+
+            try (this).getName(erc20address) returns (string memory retval) 
+            {
+                outputName = string(abi.encodePacked(retval, " as ", name));
+            } 
+            catch 
+            {
+                return;
+            }
         }
         else 
         {
@@ -185,7 +198,6 @@ contract TokenManager {
 
         recordToken(destinationCurrencyID, _tx.nativeCurrency, outputName, getSymbol(string(name)), currencyFlags);
     }
-
 
     function launchTokens(VerusObjects.setupToken[] memory tokensToDeploy) public  {
 
