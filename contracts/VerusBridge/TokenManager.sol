@@ -183,7 +183,7 @@ contract TokenManager {
 
             try (this).getName(erc20address) returns (string memory retval) 
             {
-                outputName = string(abi.encodePacked(retval, " as ", name));
+                outputName = string(abi.encodePacked("[", retval, "] as ", name));
             } 
             catch 
             {
