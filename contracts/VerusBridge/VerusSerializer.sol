@@ -590,6 +590,16 @@ contract VerusSerializer {
 
             nextOffset += readerLen ;
 
+            if(destinationType & VerusConstants.FLAG_DEST_AUX == VerusConstants.FLAG_DEST_AUX )
+            {
+                 (readerLen, nextOffset) = readCompactSizeLE2(tempSerialized, nextOffset);    // get the length of the auxDest
+                 for (uint i = 0; i < readerLen; i++)
+                 {
+                     (readerLen, nextOffset) = readCompactSizeLE2(tempSerialized, nextOffset);    // get the length of the auxDest sub array
+                     nextOffset += readerLen;
+                 }
+            }
+
             if(destinationType & VerusConstants.FLAG_DEST_GATEWAY == VerusConstants.FLAG_DEST_GATEWAY )
             {
                  nextOffset += 56; //skip gatewayid, gatewaycode + fees
