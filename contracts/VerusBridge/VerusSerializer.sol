@@ -593,7 +593,8 @@ contract VerusSerializer {
             if(destinationType & VerusConstants.FLAG_DEST_AUX == VerusConstants.FLAG_DEST_AUX )
             {
                  (readerLen, nextOffset) = readCompactSizeLE2(tempSerialized, nextOffset);    // get the length of the auxDest
-                 for (uint i = 0; i < readerLen; i++)
+                 uint arraySize = readerLen;
+                 for (uint i = 0; i < arraySize; i++)
                  {
                      (readerLen, nextOffset) = readCompactSizeLE2(tempSerialized, nextOffset);    // get the length of the auxDest sub array
                      nextOffset += readerLen;
