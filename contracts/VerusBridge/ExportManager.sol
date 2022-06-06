@@ -87,6 +87,11 @@ contract ExportManager {
 
             require(transfer.feecurrencyid == VerusConstants.VEth, "Fee Currency not vETH"); //TODO:Accept more fee currencies
 
+            if (transfer.flags == VerusConstants.VALID)
+            {
+                require(transfer.destcurrencyid == VerusConstants.VerusBridgeAddress);
+            }
+
             if (transfer.destination.destinationtype == (VerusConstants.FLAG_DEST_GATEWAY | VerusConstants.DEST_ETH )) {
 
                 require (transfer.destination.destinationaddress.length == (20 + 20 + 20 + 8), "destination address not 68 bytes");
@@ -97,7 +102,7 @@ contract ExportManager {
                     bounceBackFee := mload(add(serializedDest, FEE_OFFSET))
                 }
 
-                require (gatewayID == VerusConstants.VEth, "GateswayID not VETH");
+                require (gatewayID == VerusConstants.VEth, "GatewayID not VETH");
 
                 //DEBUG:Can be removed
                 require (tokenManager.convertFromVerusNumber(bounceBackFee, 18) >= requiredFees, "Return fee not >=0.003ETH");
