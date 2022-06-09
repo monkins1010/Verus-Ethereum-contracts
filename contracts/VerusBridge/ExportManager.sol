@@ -128,10 +128,10 @@ contract ExportManager {
             {
                 revert ("ETH Fees to Low");
             }            
-            else if (transfer.currencyvalue.currency != VerusConstants.VEth &&
-                     tokenManager.convertFromVerusNumber(transferFee, 18) <= ETHSent)
+            else if (transfer.currencyvalue.currency == VerusConstants.VEth && 
+                (tokenManager.convertFromVerusNumber(amount, 18) <= ETHSent) )
             {
-                revert (string(abi.encodePacked("ETH fee sent < fees for token ",transferFee)));
+                revert (string(abi.encodePacked("ETH sent != (amount + fees) ", amount )));
             } 
 
             return transferFee;
