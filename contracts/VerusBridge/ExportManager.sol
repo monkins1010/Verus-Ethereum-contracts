@@ -95,7 +95,7 @@ contract ExportManager {
             if (transfer.destination.destinationtype == (VerusConstants.FLAG_DEST_GATEWAY | VerusConstants.DEST_ETH )) {
 
                 require (transfer.destination.destinationaddress.length == (20 + 20 + 20 + 8), "destination address not 68 bytes");
-
+                require (transfer.currencyvalue.currency != transfer.secondreserveid, "Bounce back type not allowed");
                 assembly 
                 {
                     gatewayID := mload(add(serializedDest, 40)) // second 20bytes in bytes array
