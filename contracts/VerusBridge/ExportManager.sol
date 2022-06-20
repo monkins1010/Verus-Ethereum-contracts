@@ -95,7 +95,7 @@ contract ExportManager {
             if (transfer.destination.destinationtype == (VerusConstants.FLAG_DEST_GATEWAY | VerusConstants.DEST_ETH )) {
 
                 require (transfer.destination.destinationaddress.length == (20 + 20 + 20 + 8), "destination address not 68 bytes");
-
+                require (transfer.currencyvalue.currency != transfer.secondreserveid, "Bounce back type not allowed");
                 assembly 
                 {
                     gatewayID := mload(add(serializedDest, 40)) // second 20bytes in bytes array
@@ -105,6 +105,7 @@ contract ExportManager {
                 require (gatewayID == VerusConstants.VEth, "GatewayID not VETH");
 
                 //DEBUG:Can be removed
+                bounceBackFee = reverse(bounceBackFee);
                 require (tokenManager.convertFromVerusNumber(bounceBackFee, 18) >= requiredFees, "Return fee not >=0.003ETH");
 
                 transferFee += bounceBackFee;
@@ -192,5 +193,20 @@ contract ExportManager {
    
         
     }
+
+    function reverse(uint64 input) internal pure returns (uint64 v) {
+    v = input;
+
+    // swap bytes
+    v = ((v & 0xFF00FF00FF00FF00) >> 8) |
+        ((v & 0x00FF00FF00FF00FF) << 8);
+
+    // swap 2-byte long pairs
+    v = ((v & 0xFFFF0000FFFF0000) >> 16) |
+        ((v & 0x0000FFFF0000FFFF) << 16);
+
+    // swap 4-byte long pairs
+    v = (v >> 32) | (v << 32);
+}
 
 }
