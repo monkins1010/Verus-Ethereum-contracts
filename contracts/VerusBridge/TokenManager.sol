@@ -287,7 +287,8 @@ contract TokenManager {
 
         uint8[] memory currencyLocations;
         
-        if(currencyCounter > 0 ) currencyLocations = new uint8[](currencyCounter);
+        if(currencyCounter > 0 ) 
+            currencyLocations = new uint8[](currencyCounter);
 
         currencyCounter = 0;
         ETHPaymentCounter = 0;

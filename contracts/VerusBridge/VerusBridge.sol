@@ -207,11 +207,12 @@ contract VerusBridge {
         bytes memory destHex = _import.exportinfo.rewardaddress.destinationaddress;
         assembly 
         {
-            rewardDestination := mload(add(destHex , 20))
+            rewardDestination := mload(add(destHex, 20))
         }
 
         if(_import.exportinfo.totalfees[0].currency == VerusConstants.VEth)
         {
+           // TODO: Fees
            // verusBridgeMaster.setClaimableFees(rewardDestination, _import.exportinfo.totalfees[0].amount);
         }
         return true;

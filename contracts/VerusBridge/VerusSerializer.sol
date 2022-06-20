@@ -612,11 +612,11 @@ contract VerusSerializer {
             {
                  nextOffset += 20; 
             }
+
             if(flags & VerusConstants.CROSS_SYSTEM == VerusConstants.CROSS_SYSTEM )
             {
                  nextOffset += 20; 
             }
-
 
             if (address(uint160(tempTransfers[counter].currencyAndAmount)) == VerusConstants.VEth)
             {
