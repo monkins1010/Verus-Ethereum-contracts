@@ -102,14 +102,16 @@ contract VerusBridge {
             bytes memory NFTInfo = transfer.destination.destinationaddress;
             address NFTAddress;
             uint256 NFTID;
+
+            // 20bytes destinationaddres + 20bytes NFT address + 32bytes NFTTokenID
             assembly {
-                        NFTAddress := mload(add(NFTInfo, 20))
-                        NFTID := mload(add(NFTInfo, 52))
+                        NFTAddress := mload(add(NFTInfo, 40))
+                        NFTID := mload(add(NFTInfo, 72))
                      }
 
-          //  ERC721 NFT = ERC721(NFTAddress);
+            // ERC721 NFT = ERC721(NFTAddress);
 
-           //TODO: add verusBridgeStorage.transferFromERC721(address(verusBridgeStorage), sender, NFT, NFTID );
+            //TODO: add verusBridgeStorage.transferFromERC721(address(verusBridgeStorage), sender, NFT, NFTID );
             verusBridgeStorage.addToEthHeld(paidValue);
  
         } else if (transfer.currencyvalue.currency == VerusConstants.VEth){

@@ -100,8 +100,7 @@ module.exports = async function(deployer) {
 
     }
 
-    const settingString = "\nbridgemasteraddress=" + bridgeMasterInst.address + "\n" +
-        "bridgestorageaddress=" + bridgeStorageInst.address + "\n\n" +
+    const settingString = "\nupgrademanageraddress=" + UpgradeInst.address + "\n\n" +
         "export const BRIDGE_MASTER_ADD = \"" + bridgeMasterInst.address + "\";\n" +
         "export const BRIDGE_STORAGE_ADD = \"" + bridgeStorageInst.address + "\";\n" +
         "export const UPGRADE_ADD = \"" + UpgradeInst.address + "\";\n" +

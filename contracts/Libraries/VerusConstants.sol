@@ -49,6 +49,8 @@ library VerusConstants {
     uint8 constant TOKEN_MAPPED_ERC20 = 4;
     uint8 constant TOKEN_ETH_SEND = 8;
 
+    uint8 constant DESTINATION_PLUS_GATEWAY = 68;
+
     enum ContractType {
         TokenManager,
         VerusSerializer,
