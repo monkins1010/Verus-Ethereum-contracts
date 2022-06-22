@@ -23,6 +23,7 @@ contract VerusNotarizerStorage {
   
     uint32 public lastBlockHeight;
     mapping (address => uint256) public claimableFees;
+    mapping (address => uint256) public storageGlobal;
     
     constructor(address upgradeContractAddress)
     {
@@ -47,6 +48,14 @@ contract VerusNotarizerStorage {
 
         require( msg.sender == verusNotarizer,"setNotarizedProof:callfromNotarizeronly");
         poolAvailable[currency] = height; 
+
+    }
+
+    function pushStorageGlobal(address iaddress,uint256 data) public {
+
+        require(msg.sender == address(verusBridge));
+
+        storageGlobal[iaddress] = data;
 
     }
 

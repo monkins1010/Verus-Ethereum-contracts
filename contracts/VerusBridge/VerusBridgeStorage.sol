@@ -30,7 +30,7 @@ contract VerusBridgeStorage {
     mapping (bytes32 => bool) public processedTxids;
     mapping (address => VerusObjects.mappedToken) public verusToERC20mapping;
     address[] public tokenList;
-    mapping (address => uint256[]) public storageGlobal;
+
     
     uint public lastTxImportHeight;
     uint32 public firstBlock;
@@ -71,19 +71,7 @@ contract VerusBridgeStorage {
         feesHeld += _feesAmount;
     } */
 
-    function pushStorageGlobal(address iaddress,uint256[] memory data) public {
 
-        require(msg.sender == address(tokenManager));
-
-        storageGlobal[iaddress] = data;
-
-    }
-
-    function getStorageGlobal(address iaddress) public view returns (uint256[] memory){
-
-        return storageGlobal[iaddress];
-
-    }
 
     function addToEthHeld(uint256 _ethAmount) public {
         isSenderBridgeContract(msg.sender);
@@ -218,7 +206,7 @@ contract VerusBridgeStorage {
     ) public  
     {
       
-        require(address(tokenManager) == msg.sender,"importERC20Tokens:bridgecontractonly");
+        require(address(tokenManager) == msg.sender);
 
         uint32 flags;
         address ERC20Address;
