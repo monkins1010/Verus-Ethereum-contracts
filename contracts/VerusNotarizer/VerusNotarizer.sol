@@ -172,7 +172,7 @@ contract VerusNotarizer {
                 }
 
                 verusNotarizerStorage.setNotarization(_pbaasNotarization, _pbaasNotarization.notarizationheight);
-              
+                emit NewBlock(_pbaasNotarization, _pbaasNotarization.notarizationheight);
                 return true;        
             }
         }
