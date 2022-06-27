@@ -1,0 +1,147 @@
+{
+  "manifestVersion": "3.2",
+  "admin": {
+    "address": "0x6b6b582BA6628B312E7f71C0DfE46CD415471452",
+    "txHash": "0x5ab0a587a8e068311eca2fefb7ad749e56077efff864e208fc3978abeec416d7"
+  },
+  "proxies": [
+    {
+      "address": "0xeAfDB4b4D4594567037af77A415Ee010F555b1C4",
+      "txHash": "0xe5400d0578a188b92609627bc772a6d31cb6755c2bd407d549db9e4f525fd63d",
+      "kind": "transparent"
+    },
+    {
+      "address": "0xC95b10D5aECe88441bF4e431bD6851c0f83330bB",
+      "txHash": "0x6ff939ee21b74861ab9adaf5b9709cf319f37cb23a3043021c56fc6c1ff94ca5",
+      "kind": "transparent"
+    },
+    {
+      "address": "0xef803B4B70a38230270f6575c1e205709cD17C5e",
+      "txHash": "0xab8e6200aa10b2be8957565dd57f80fe4acef39517f5bb16d4c0942bafa7e29e",
+      "kind": "transparent"
+    },
+    {
+      "address": "0x34c8f1aCfD8660439a76bd7E02417254FcC01ccD",
+      "txHash": "0x26e26e7d1ce41d10311e104378bf3351562bdf5ddc6dd428b92fc9f525afa473",
+      "kind": "transparent"
+    }
+  ],
+  "impls": {
+    "8e3e44129d3cb1f0dfb90c2c6ff61289ac43fc9c820f389906af1d48c906682b": {
+      "address": "0x921BDf931C142aCCEE3357c4eFB7e6E2D5A4f3c5",
+      "txHash": "0xf9d33e495c2003e76b2b06ca0f56c2687e1e12afaa2f1ae35964abd9b1397e96",
+      "layout": {
+        "storage": [
+          {
+            "contract": "Initializable",
+            "label": "_initialized",
+            "type": "t_bool",
+            "src": "../@openzeppelin/contracts-upgradeable/proxy/utils/Initializable.sol:39"
+          },
+          {
+            "contract": "Initializable",
+            "label": "_initializing",
+            "type": "t_bool",
+            "src": "../@openzeppelin/contracts-upgradeable/proxy/utils/Initializable.sol:44"
+          },
+          {
+            "contract": "TokenManager",
+            "label": "verusBridgeMaster",
+            "type": "t_contract(VerusBridgeMaster)8099",
+            "src": "../project:/contracts/VerusBridge/TokenManager.sol:21"
+          },
+          {
+            "contract": "TokenManager",
+            "label": "verusSerializer",
+            "type": "t_contract(VerusSerializer)11261",
+            "src": "../project:/contracts/VerusBridge/TokenManager.sol:22"
+          },
+          {
+            "contract": "TokenManager",
+            "label": "verusBridgeStorage",
+            "type": "t_contract(VerusBridgeStorage)8527",
+            "src": "../project:/contracts/VerusBridge/TokenManager.sol:23"
+          },
+          {
+            "contract": "TokenManager",
+            "label": "initialized",
+            "type": "t_bool",
+            "src": "../project:/contracts/VerusBridge/TokenManager.sol:24"
+          }
+        ],
+        "types": {
+          "t_contract(VerusBridgeMaster)8099": {
+            "label": "contract VerusBridgeMaster"
+          },
+          "t_contract(VerusSerializer)11261": {
+            "label": "contract VerusSerializer"
+          },
+          "t_contract(VerusBridgeStorage)8527": {
+            "label": "contract VerusBridgeStorage"
+          },
+          "t_bool": {
+            "label": "bool"
+          }
+        }
+      }
+    },
+    "8b52ab13a0e37943d1d84c963ba14f97447cc4170bc3a751b51d596041c9834d": {
+      "address": "0xf47D31D34F2bB2b9d7605d048f0F166fC1703004",
+      "txHash": "0x5cc6cb944f5cf2b0043d494dc4bad0b6fd7c32acfe8d1d31180cea0c0f88eb9e",
+      "layout": {
+        "storage": [
+          {
+            "contract": "Initializable",
+            "label": "_initialized",
+            "type": "t_bool",
+            "src": "../@openzeppelin/contracts-upgradeable/proxy/utils/Initializable.sol:39"
+          },
+          {
+            "contract": "Initializable",
+            "label": "_initializing",
+            "type": "t_bool",
+            "src": "../@openzeppelin/contracts-upgradeable/proxy/utils/Initializable.sol:44"
+          },
+          {
+            "contract": "TokenManager",
+            "label": "verusBridgeMaster",
+            "type": "t_contract(VerusBridgeMaster)8099",
+            "src": "../project:/contracts/VerusBridge/TokenManager.sol:21"
+          },
+          {
+            "contract": "TokenManager",
+            "label": "verusSerializer",
+            "type": "t_contract(VerusSerializer)11261",
+            "src": "../project:/contracts/VerusBridge/TokenManager.sol:22"
+          },
+          {
+            "contract": "TokenManager",
+            "label": "verusBridgeStorage",
+            "type": "t_contract(VerusBridgeStorage)8527",
+            "src": "../project:/contracts/VerusBridge/TokenManager.sol:23"
+          },
+          {
+            "contract": "TokenManager",
+            "label": "initialized",
+            "type": "t_bool",
+            "src": "../project:/contracts/VerusBridge/TokenManager.sol:24"
+          }
+        ],
+        "types": {
+          "t_contract(VerusBridgeMaster)8099": {
+            "label": "contract VerusBridgeMaster"
+          },
+          "t_contract(VerusSerializer)11261": {
+            "label": "contract VerusSerializer"
+          },
+          "t_contract(VerusBridgeStorage)8527": {
+            "label": "contract VerusBridgeStorage"
+          },
+          "t_bool": {
+            "label": "bool"
+          }
+        }
+      }
+    }
+  }
+}

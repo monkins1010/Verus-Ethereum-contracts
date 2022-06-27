@@ -11,8 +11,6 @@ contract VerusSerializer {
 
     uint constant ETH_ADDRESS_SIZE_BYTES = 20;
 
-
-
     function readVarUintLE(bytes memory incoming, uint32 offset) public pure returns(VerusObjectsCommon.UintReader memory) {
         uint32 retVal = 0;
         while (true)
@@ -31,7 +29,7 @@ contract VerusSerializer {
         return VerusObjectsCommon.UintReader(offset, retVal);
     }
 
-    // uses the varint encoding from Bitcoin script pushes
+    // uses the encoding from Bitcoin script pushes
     // this does not support numbers larger than uint16, and if it encounters one or any invalid data, it returns a value of 
     // zero and the original offset
     function readCompactSizeLE(bytes memory incoming, uint32 offset) public pure returns(VerusObjectsCommon.UintReader memory) {
@@ -73,7 +71,8 @@ contract VerusSerializer {
         }
         return flipArray(output);
     }
-    
+
+   
     function writeCompactSize(uint newNumber) public pure returns(bytes memory) {
         bytes memory output;
         if (newNumber < uint8(253))
@@ -310,9 +309,9 @@ contract VerusSerializer {
             serializeUint160Array(_cccs.currencies),
             serializeInt32Array(_cccs.weights),
             serializeInt64Array(_cccs.reserves),
-            writeVarInt(uint256(_cccs.initialsupply)),
-            writeVarInt(uint256(_cccs.emitted)),
-            writeVarInt(uint256(_cccs.supply))
+            writeVarInt(uint256(int256(_cccs.initialsupply))),
+            writeVarInt(uint256(int256(_cccs.emitted))),
+            writeVarInt(uint256(int256(_cccs.supply)))
         );
         bytes memory part2 = abi.encodePacked(
             serializeInt64(_cccs.primarycurrencyout),
@@ -458,12 +457,232 @@ contract VerusSerializer {
             nextOffset := add(nextOffset, CCC_ID_LEN)
             systemID := mload(add(input, nextOffset)) // this should be systemID 
             nextOffset := add(nextOffset, CCC_NATIVE_OFFSET)
-            nativeCurrencyID := mload(add(input, nextOffset)) //TODO: daemon serilaization to be changed this should be nativeCurrencyID
+            nativeCurrencyID := mload(add(input, nextOffset)) //TODO:When example available to test, fix this
         }
 
         ccurrencyDefinition.launchSystemID = launchSystemID;
         ccurrencyDefinition.systemID = systemID;
         ccurrencyDefinition.nativeCurrencyID = nativeCurrencyID;
+    }
+
+    function simpleCurrencyDef(bytes memory input) public pure
+                    returns (uint256, address)
+    {
+        uint32 nextOffset;
+        uint8 nameStringLength;
+        address systemID;
+        address nativeCurrencyID;
+        uint32 CCC_PREFIX_TO_PARENT = 4 + 4 + 20 + 1;
+        uint32 CCC_ID_LEN = 20;
+        uint32 CCC_NATIVE_OFFSET = CCC_ID_LEN + 4 + 4;
+
+        uint256 destinationAndFlags;
+
+        nextOffset = CCC_PREFIX_TO_PARENT;
+
+        assembly {
+            nameStringLength := mload(add(input, nextOffset)) // string length MAX 64 so will always be a byte
+        }
+
+        destinationAndFlags = nameStringLength > 19 ? 19 : nameStringLength; //first byte is length 
+
+        for (uint32 i = 0; i < nameStringLength; i++) { //pack a max of 19 bytes of the id name into token name
+            destinationAndFlags |= uint256(uint8(input[i + nextOffset])) << ((i+1)*8);
+        }
+        
+        nextOffset = nextOffset + nameStringLength + CCC_ID_LEN;
+
+        assembly {
+            //   launchSystemID := mload(add(input, nextOffset)) // this should be launchsysemID
+            nextOffset := add(nextOffset, CCC_ID_LEN)
+            systemID := mload(add(input, nextOffset)) // this should be systemID 
+            nextOffset := add(nextOffset, CCC_NATIVE_OFFSET)
+            nativeCurrencyID := mload(add(input, nextOffset)) 
+        }
+
+        //if first 2 bytes blank then nativecurrency is empty
+        if ((uint160(nativeCurrencyID) >> 144) & 0xffff == 0)
+        {
+            nativeCurrencyID = address(0);
+        }
+        else 
+        {
+            assembly {
+                nativeCurrencyID := mload(add(add(input, nextOffset), 2) )
+            }
+
+        }
+
+        destinationAndFlags |= uint256(VerusConstants.TOKEN_LAUNCH) << 160;
+
+        if(systemID == VerusConstants.VEth)
+        {
+            destinationAndFlags |= uint256(VerusConstants.TOKEN_MAPPED_ERC20) << 160;
+        }
+
+        return (destinationAndFlags, nativeCurrencyID);
+
+    }
+
+        function deserializeTransfers(bytes calldata serializedData) public pure
+        returns (VerusObjects.DeserializedObject memory)
+    {
+        
+
+        bytes memory tempSerialized;
+        VerusObjects.PackedSend[] memory tempTransfers = new VerusObjects.PackedSend[]((serializedData.length / 111) +1); //min size of transfer 222 bytes
+        tempSerialized = serializedData;
+        address tempaddress;
+        uint64 amount;
+        uint64 flags;
+        uint8 destinationType;
+        uint64 readerLen;
+        uint8 ETHCounter; 
+        uint8 currencyCounter;
+        uint32 counter;
+        uint256 nextOffset = 21;
+
+        while (nextOffset <= tempSerialized.length) {
+            
+            assembly {
+                tempaddress := mload(add(tempSerialized, nextOffset)) // skip version 0x01 (1 byte)
+            }
+
+            (amount, nextOffset)  = readVarint(tempSerialized, nextOffset);  //readvarint returns next idx position
+            (flags , nextOffset) = readVarint(tempSerialized, nextOffset);
+
+            tempTransfers[counter].currencyAndAmount = uint256(amount) << 160; //shift amount and pack
+            tempTransfers[counter].currencyAndAmount |= uint256(uint160(tempaddress));
+
+            nextOffset += 20; //skip feecurrency id always vETH, variint already 1 byte in so 19
+
+            (amount, nextOffset) = readVarint(tempSerialized, nextOffset); //fees read into 'amount' but not used
+
+            assembly {
+                nextOffset := add(nextOffset, 1) 
+                destinationType := mload(add(tempSerialized, nextOffset))
+                nextOffset := add(nextOffset, 1) //skip feecurrency id always vETH
+            }
+
+            (readerLen, nextOffset) = readCompactSizeLE2(tempSerialized, nextOffset);    // get the length of the destination
+
+            // if destination an address read 
+            if(readerLen == 20)
+            {
+                if (tempaddress == VerusConstants.VEth)
+                {
+                    tempTransfers[counter].destinationAndFlags = uint256(VerusConstants.TOKEN_ETH_SEND) << 160;
+                }
+                else
+                {
+                    tempTransfers[counter].destinationAndFlags = uint256(VerusConstants.TOKEN_SEND) << 160;
+                }
+
+                assembly {
+                    tempaddress := mload(sub(add(add(tempSerialized, nextOffset), readerLen), 1))
+                }
+                tempTransfers[counter].destinationAndFlags |= uint256(uint160(tempaddress));
+            }
+            else
+            {
+                bytes memory tempCurrency = serializedData[nextOffset - 1 : nextOffset + readerLen - 1];
+                
+                (tempTransfers[counter].destinationAndFlags, tempTransfers[counter].nativeCurrency) = 
+                simpleCurrencyDef(tempCurrency);
+            }
+
+            nextOffset += readerLen ;
+
+            if(destinationType & VerusConstants.FLAG_DEST_AUX == VerusConstants.FLAG_DEST_AUX )
+            {
+                 (readerLen, nextOffset) = readCompactSizeLE2(tempSerialized, nextOffset);    // get the length of the auxDest
+                 uint arraySize = readerLen;
+                 for (uint i = 0; i < arraySize; i++)
+                 {
+                     (readerLen, nextOffset) = readCompactSizeLE2(tempSerialized, nextOffset);    // get the length of the auxDest sub array
+                     nextOffset += readerLen;
+                 }
+            }
+
+            if(destinationType & VerusConstants.FLAG_DEST_GATEWAY == VerusConstants.FLAG_DEST_GATEWAY )
+            {
+                 nextOffset += 56; //skip gatewayid, gatewaycode + fees
+            }
+
+            nextOffset += 20; //skip destCurrencyID
+
+            if(destinationType & VerusConstants.RESERVE_TO_RESERVE == VerusConstants.RESERVE_TO_RESERVE)
+            {
+                 nextOffset += 20; 
+            }
+
+            if(flags & VerusConstants.CROSS_SYSTEM == VerusConstants.CROSS_SYSTEM )
+            {
+                 nextOffset += 20; 
+            }
+
+            if (address(uint160(tempTransfers[counter].currencyAndAmount)) == VerusConstants.VEth)
+            {
+                ETHCounter++;
+            }
+
+            if (destinationType  == VerusConstants.DEST_REGISTERCURRENCY)
+            {
+                currencyCounter++;
+            }
+            counter++;
+            nextOffset += 20; //offsetready for next read (skip )
+
+        }
+        //pack 32Bit counter with 1 16bit and two 8bit numbers
+        
+        counter |= (uint32(ETHCounter) << 16);
+        counter |= (uint32(currencyCounter) << 24);
+
+        
+        return VerusObjects.DeserializedObject(tempTransfers, counter);
+
+    }
+        
+    function readVarint(bytes memory buf, uint idx) public pure returns (uint64 v, uint retidx) {
+
+        uint8 b; // store current byte content
+
+        for (uint i=0; i<10; i++) {
+            b = uint8(buf[i+idx]);
+            v = (v << 7) | b & 0x7F;
+            if (b & 0x80 == 0x80)
+                v++;
+            else
+            return (v, idx + i + 1);
+        }
+        revert(); // i=10, invalid varint stream
+    }
+
+   function readCompactSizeLE2(bytes memory incoming, uint256 offset) public pure returns(uint64 v, uint retidx) {
+
+        uint8 oneByte;
+        assembly {
+            oneByte := mload(add(incoming, offset))
+        }
+        offset++;
+        if (oneByte < 253)
+        {
+            return (uint64(oneByte), offset);
+        }
+        else if (oneByte == 253)
+        {
+            assembly {
+                oneByte := mload(add(incoming, offset))
+            }
+            uint16 twoByte = oneByte;
+            offset++;
+            assembly {
+                oneByte := mload(add(incoming, offset))
+            }
+            return ((twoByte << 8) + oneByte, offset + 1);
+        }
+        return (0, offset);
     }
 
 }

@@ -61,9 +61,9 @@ library VerusObjects {
     // CReserve Transfer Set is a simplified version of a crosschain export returning only the required info
     
     struct CReserveTransferSet {
-        uint position;
-        uint blockHeight;
         bytes32 exportHash;
+        bytes32 prevExportHash;
+        uint32 blockHeight;
         CReserveTransfer[] transfers;
     }
 
@@ -72,13 +72,44 @@ library VerusObjects {
         bytes32 txid;                                   // this is actually the hash of the transfers that can be used for proof
     }
 
+    struct SimpleTransfer {
+        address currency;
+        uint64 currencyvalue;
+        uint32 flags;
+        uint256 fees;
+        bytes destination;
+        uint8 destinationType;
+
+    }
+
+    struct PackedSend {
+        uint256 currencyAndAmount;
+        uint256 destinationAndFlags;
+        address nativeCurrency;
+    }
+
+    struct DeserializedObject {
+        PackedSend[] transfers;
+        uint32 counter;
+    }
+
+    struct Buffer {
+        uint256 idx;  // the start index of next read. when idx=b.length, we're done
+        bytes b;   // hold serialized data readonly
+    }
+
+    struct ETHPayments {
+        address destination;  // the start index of next read. when idx=b.length, we're done
+        uint256 amount;   // hold serialized data readonly
+    }
+
     struct CReserveTransferImport {
         uint height;
         bytes32 txid;                                   // when from ETH, this is hash of the serialized CCrossChainExport that can be used for proof
         uint txoutnum;                                  // index of the transfers in the exports array
         CCrossChainExport exportinfo;
         CPtransactionproof partialtransactionproof;     // partial transaction proof is for the 
-        CReserveTransfer[] transfers ;
+        bytes serializedTransfers;
     }
 
     struct CCrossChainExport {
@@ -131,4 +162,31 @@ library VerusObjects {
         CTXProof[] txproof;
         CComponents[] components;
     }
-}
+
+    struct mappedToken {
+        address erc20ContractAddress;
+        uint8 flags;
+        uint tokenIndex;
+        string name;
+    }
+
+    struct setupToken {
+        address iaddress;
+        address erc20ContractAddress;
+        address launchSystemID;
+        uint8 flags;
+        string name;
+        string ticker;
+    }
+
+    struct upgradeContracts {
+
+        uint8 _vs;
+        bytes32 _rs;
+        bytes32  _ss;
+        address[] contracts;
+        address notaryAddress;
+
+    }
+
+ }

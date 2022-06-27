@@ -14,30 +14,56 @@ library VerusConstants {
     address constant public RewardAddress = 0xB26820ee0C9b1276Aac834Cf457026a575dfCe84;
     address constant public VerusBridgeAddress = 0xffEce948b8A38bBcC813411D2597f7f8485a0689;
     uint8 constant public RewardAddressType = 4;
-    uint256 constant public transactionFee = 3000000000000000; //0.003 eth
+    uint256 constant public transactionFee = 3000000000000000; //0.003 ETH 18 decimals
     string constant public currencyName = "VETH";
-    uint256 constant public verusTransactionFee = 2000000; //0.02 verus
+    uint256 constant public verusTransactionFee = 2000000; //0.02 VRSC
+    uint256 constant public verusvETHTransactionFee = 300000; //0.003 vETH 10 decimasls
     uint32 constant  VALID = 1;
     uint32 constant  CONVERT = 2;
     uint32 constant  CROSS_SYSTEM = 0x40;               
     uint32 constant  IMPORT_TO_SOURCE = 0x200;          
     uint32 constant  RESERVE_TO_RESERVE = 0x400; 
+    uint32 constant  CURRENCY_EXPORT = 0x2000;
 
-    uint32 constant INVALID_FLAGS = 0xffffffff - (VALID + CONVERT + RESERVE_TO_RESERVE + IMPORT_TO_SOURCE);
+    uint32 constant INVALID_FLAGS = 0xffffffff - (VALID + CONVERT + RESERVE_TO_RESERVE + IMPORT_TO_SOURCE + CURRENCY_EXPORT);
 
     uint8 constant DEST_PKH = 2;
     uint8 constant DEST_SH = 3;
     uint8 constant DEST_ID = 4;
     uint8 constant DEST_REGISTERCURRENCY = 6;
     uint8 constant DEST_ETH = 9;
+    uint8 constant FLAG_DEST_AUX = 64;
     uint8 constant FLAG_DEST_GATEWAY = 128;
     uint8 constant CURRENT_VERSION = 1;
-    uint32 constant CTRX_CURRENCY_EXPORT_FLAG = 0x2000;
 
     // deployTokens flags 
-    uint8 constant MAPPING_ETHEREUM_OWNED = 0;
-    uint8 constant MAPPING_VERUS_OWNED = 1;
-    uint8 constant MAPPING_PARTOF_BRIDGEVETH = 2;
-    uint8 constant MAPPING_ISBRIDGE_CURRENCY = 4;
-    
+    uint8 constant MAPPING_ETHEREUM_OWNED = 1;
+    uint8 constant MAPPING_VERUS_OWNED = 2;
+    uint8 constant MAPPING_PARTOF_BRIDGEVETH = 4;
+    uint8 constant MAPPING_ISBRIDGE_CURRENCY = 8;
+    uint constant TICKER_LENGTH_MAX = 4;
+
+    //deploy currency flags
+    uint8 constant TOKEN_SEND = 1;
+    uint8 constant TOKEN_LAUNCH = 2;
+    uint8 constant TOKEN_MAPPED_ERC20 = 4;
+    uint8 constant TOKEN_ETH_SEND = 8;
+
+    uint8 constant DESTINATION_PLUS_GATEWAY = 68;
+
+    enum ContractType {
+        TokenManager,
+        VerusSerializer,
+        VerusProof,
+        VerusCrossChainExport,
+        VerusNotarizer,
+        VerusBridge,
+        VerusInfo,
+        ExportManager,
+        VerusBridgeStorage,
+        VerusNotarizerStorage,
+        VerusBridgeMaster,
+        LastIndex
+    }
+        
 }
