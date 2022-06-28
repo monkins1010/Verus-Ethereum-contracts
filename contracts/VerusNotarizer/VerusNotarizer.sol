@@ -31,7 +31,7 @@ contract VerusNotarizer {
     address verusBridgeMaster;
     // notarization vdxf key
 
-    //list of all notarizers mapped to allow for quick searching
+    // list of all notarizers mapped to allow for quick searching
     mapping (address => bool) public komodoNotaries;
     mapping (address => address) public notaryAddressMapping;
     address[] private notaries;
@@ -41,7 +41,7 @@ contract VerusNotarizer {
     uint32 public notaryTurn = 100;
 
     // Notifies when a new block hash is published
-    event NewBlock(VerusObjectsNotarization.CPBaaSNotarization,uint32 notarizedDataHeight);
+    event NewBlock(VerusObjectsNotarization.CPBaaSNotarization, uint32 notarizedDataHeight);
 
     constructor(address _verusBLAKE2bAddress,address _verusSerializerAddress, address upgradeContractAddress, 
     address[] memory _notaries, address[] memory _notariesEthAddress, address verusNotarizerStorageAddress, address verusBridgeMasterAddress) {
@@ -129,6 +129,7 @@ contract VerusNotarizer {
         ) public returns(bool output) {
 
         require((_rs.length == _ss.length) && (_rs.length == _vs.length),"Signature arrays must be of equal length");
+        require(verusNotarizerStorage.lastBlockHeight() != uint32(0xffffffff), "Notarizer Revoked");
         require(_pbaasNotarization.notarizationheight > verusNotarizerStorage.lastBlockHeight(),"Block Height must be greater than current block height");
 
         bytes memory serializedNotarisation = verusSerializer.serializeCPBaaSNotarization(_pbaasNotarization);

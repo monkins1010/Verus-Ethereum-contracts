@@ -133,4 +133,11 @@ contract VerusNotarizerStorage {
 
         return claimableFees[_address];
     }
+
+    function setLastNotarizationHeight(uint32 height) public
+    {
+        require(msg.sender == upgradeContract);
+        lastBlockHeight = height;
+
+    }
 }

@@ -179,14 +179,23 @@ library VerusObjects {
         string ticker;
     }
 
-    struct upgradeContracts {
+    struct upgradeInfo {
 
         uint8 _vs;
         bytes32 _rs;
         bytes32  _ss;
         address[] contracts;
         address notaryAddress;
+        uint8 upgradeType;
+        uint32 recoverHeight;
+        bytes32 salt;
 
+    }
+
+    struct pendingUpgradetype {
+        
+        address notaryID;
+        uint8 upgradeType;
     }
 
  }

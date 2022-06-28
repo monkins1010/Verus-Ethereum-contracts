@@ -65,21 +65,6 @@ contract VerusBridge {
             exportManager = ExportManager(contracts[uint(VerusConstants.ContractType.ExportManager)]);
 
     }
-
-    function setExportManagerContract(address newAddress) public payable returns (address) {
-
-        assert(contractOwner == msg.sender);
-                exportManager = ExportManager(newAddress);
-        
-        return newAddress;
-
-    }
-
-    function getCreatedExport(uint created) public view returns (address) {
-
-        return  _readyExports[created][0].destcurrencyid;
-        
-    }
  
     function export(VerusObjects.CReserveTransfer memory transfer, uint256 paidValue, address sender) public {
 
