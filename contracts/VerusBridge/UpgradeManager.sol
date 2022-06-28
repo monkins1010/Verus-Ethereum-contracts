@@ -152,7 +152,7 @@ contract UpgradeManager {
 
         if (!checkMultiSigContracts(_newContractPackage)) return; 
         verusNotarizerStorage.setLastNotarizationHeight(uint32(0xffffffff));
-        delete pendingContracts;
+        delete pendingContractsSignatures;
     
     }
 
@@ -160,7 +160,7 @@ contract UpgradeManager {
 
         if (!checkMultiSigContracts(_newContractPackage)) return; 
         verusNotarizerStorage.setLastNotarizationHeight(_newContractPackage.recoverHeight);
-        delete pendingContracts;
+        delete pendingContractsSignatures;
     
     }
 
