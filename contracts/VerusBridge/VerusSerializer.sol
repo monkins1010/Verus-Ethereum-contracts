@@ -81,15 +81,15 @@ contract VerusSerializer {
         }
         else if (newNumber <= 0xFFFF)
         {   
-            output = abi.encodePacked(uint8(253),uint16(newNumber));
+            output = abi.encodePacked(uint8(253),uint8(newNumber & 0xff),uint8(newNumber >> 8));
         }
         else if (newNumber <= 0xFFFFFFFF)
         {   
-            output = abi.encodePacked(uint8(254),uint32(newNumber));
+            output = abi.encodePacked(uint8(254),uint8(newNumber & 0xff),uint8(newNumber >> 8),uint8(newNumber >> 16),uint8(newNumber >> 24));
         }
-        else
-        {
-            output = abi.encodePacked(uint8(255),uint64(newNumber));
+        else 
+        {   
+            output = abi.encodePacked(uint8(254),uint8(newNumber & 0xff),uint8(newNumber >> 8),uint8(newNumber >> 16),uint8(newNumber >> 24),uint8(newNumber >> 32),uint8(newNumber >> 40),uint8(newNumber >> 48),uint8(newNumber >> 56));
         }
         return output;
     }

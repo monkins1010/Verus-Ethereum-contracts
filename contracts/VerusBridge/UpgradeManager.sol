@@ -14,6 +14,7 @@ import "../MMR/VerusProof.sol";
 import "../VerusNotarizer/VerusNotarizerStorage.sol";
 import "./ExportManager.sol";
 import "../VerusBridge/VerusCrossChainExport.sol";
+import "../VerusBridge/VerusSerializer.sol";
 
 contract UpgradeManager {
 
@@ -200,14 +201,17 @@ contract UpgradeManager {
         }
         else if (_newContractPackage.upgradeType == TYPE_REVOKE || _newContractPackage.upgradeType == TYPE_REVOKE)
         {
-            be = abi.encodePacked(_newContractPackage.upgradeType, _newContractPackage.salt);
+            be = abi.encodePacked(uint8(_newContractPackage.upgradeType), _newContractPackage.salt);
         }
         else 
         {
             revert("Invalid upgrade type");
         }
-        hashValue = sha256(be);
-        hashValue = sha256(abi.encodePacked(hex"5665727573207369676e656420646174613a0a", hashValue)); // prefix = "Verus signed data:\n"
+
+        VerusSerializer verusSerializer = VerusSerializer(contracts[uint(VerusConstants.ContractType.VerusSerializer)]);
+
+        hashValue = sha256(abi.encodePacked(verusSerializer.writeCompactSize(be.length),be));
+        hashValue = sha256(abi.encodePacked(uint8(19),hex"5665727573207369676e656420646174613a0a", hashValue)); // prefix = 19(len) + "Verus signed data:\n"
 
         if (recoverSigner(hashValue, _newContractPackage._vs - 4, _newContractPackage._rs, 
                         _newContractPackage._ss) != verusNotarizer.notaryAddressMapping(_newContractPackage.notaryAddress))
