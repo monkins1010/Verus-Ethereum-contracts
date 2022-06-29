@@ -213,13 +213,13 @@ contract UpgradeManager {
         hashValue = sha256(abi.encodePacked(verusSerializer.writeCompactSize(be.length),be));
         hashValue = sha256(abi.encodePacked(uint8(19),hex"5665727573207369676e656420646174613a0a", hashValue)); // prefix = 19(len) + "Verus signed data:\n"
 
-        if (recoverSigner(hashValue, _newContractPackage._vs - 4, _newContractPackage._rs, 
-                        _newContractPackage._ss) != verusNotarizer.notaryAddressMapping(_newContractPackage.notaryAddress))
+        address signer = recoverSigner(hashValue, _newContractPackage._vs - 4, _newContractPackage._rs, _newContractPackage._ss);
+        if (!verusNotarizer.notaryAddressColdStoreMapping(signer))
         {
             revert("Invalid notary signer");  
         }
         
-        return setPendingUpgrade(_newContractPackage.notaryAddress, _newContractPackage.upgradeType);
+        return setPendingUpgrade(signer, _newContractPackage.upgradeType);
  
     }
 

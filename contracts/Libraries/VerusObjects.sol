@@ -185,7 +185,6 @@ library VerusObjects {
         bytes32 _rs;
         bytes32  _ss;
         address[] contracts;
-        address notaryAddress;
         uint8 upgradeType;
         uint32 recoverHeight;
         bytes32 salt;

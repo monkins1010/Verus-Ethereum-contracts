@@ -34,6 +34,7 @@ contract VerusNotarizer {
     // list of all notarizers mapped to allow for quick searching
     mapping (address => bool) public komodoNotaries;
     mapping (address => address) public notaryAddressMapping;
+    mapping (address => bool) public notaryAddressColdStoreMapping;
     address[] private notaries;
 
     uint32 public notaryCount;
@@ -44,7 +45,7 @@ contract VerusNotarizer {
     event NewBlock(VerusObjectsNotarization.CPBaaSNotarization, uint32 notarizedDataHeight);
 
     constructor(address _verusBLAKE2bAddress,address _verusSerializerAddress, address upgradeContractAddress, 
-    address[] memory _notaries, address[] memory _notariesEthAddress, address verusNotarizerStorageAddress, address verusBridgeMasterAddress) {
+    address[] memory _notaries, address[] memory _notariesEthAddress, address[] memory _notariesColdStoreEthAddress, address verusNotarizerStorageAddress, address verusBridgeMasterAddress) {
         verusSerializer = VerusSerializer(_verusSerializerAddress);
         blake2b = VerusBlake2b(_verusBLAKE2bAddress);
         upgradeContract = upgradeContractAddress;
@@ -60,6 +61,9 @@ contract VerusNotarizer {
             komodoNotaries[_notaries[i]] = true;
             notaryAddressMapping[_notaries[i]] = _notariesEthAddress[i];
             notaries.push(_notaries[i]);
+        }
+        for(uint i =0; i < _notariesColdStoreEthAddress.length; i++){
+            notaryAddressColdStoreMapping[_notariesColdStoreEthAddress[i]] = true;
         }
     }
 
