@@ -34,7 +34,7 @@ contract UpgradeManager {
     address[] public pendingContracts;
 
     address contractOwner;
-    VerusObjects.pendingUpgradetype[] pendingContractsSignatures;
+    VerusObjects.pendingUpgradetype[] public pendingContractsSignatures;
     uint8 constant TYPE_CONTRACT = 1;
     uint8 constant TYPE_REVOKE = 2;
     uint8 constant TYPE_RECOVER = 3;
@@ -80,10 +80,10 @@ contract UpgradeManager {
         // TODO: Reactivate when multisig active contractOwner = address(0);  //Blow the fuse i.e. make it one time only.
     }
 
-    function upgradeContracts(VerusObjects.upgradeInfo memory _newContractPackage) public {
+    function upgradeContracts(VerusObjects.upgradeInfo memory _newContractPackage) public returns (uint8) {
 
         require(msg.sender == contractOwner);
-        // TODO: Reactivate // if (!checkMultiSigContracts(_newContractPackage)) return; 
+        // TODO: Reactivate // if (!checkMultiSigContracts(_newContractPackage)) return 1; 
 
         address[12] memory tempcontracts;
 
@@ -146,22 +146,25 @@ contract UpgradeManager {
         }
 
         delete pendingContracts;
+        return 2;
         
     }
 
-    function revoke(VerusObjects.upgradeInfo memory _newContractPackage) public {
+    function revoke(VerusObjects.upgradeInfo memory _newContractPackage) public returns (uint8){
 
-        if (!checkMultiSigContracts(_newContractPackage)) return; 
+        if (!checkMultiSigContracts(_newContractPackage)) return 1; 
         verusNotarizerStorage.setLastNotarizationHeight(uint32(0xffffffff));
         delete pendingContractsSignatures;
+        return 2;
     
     }
 
-    function recover(VerusObjects.upgradeInfo memory _newContractPackage) public {
+    function recover(VerusObjects.upgradeInfo memory _newContractPackage) public returns (uint8) {
 
-        if (!checkMultiSigContracts(_newContractPackage)) return; 
+        if (!checkMultiSigContracts(_newContractPackage)) return 1; 
         verusNotarizerStorage.setLastNotarizationHeight(_newContractPackage.recoverHeight);
         delete pendingContractsSignatures;
+        return 2;
     
     }
 
@@ -198,10 +201,12 @@ contract UpgradeManager {
             }
 
             be = abi.encodePacked(be, _newContractPackage.salt);
+            be = bytesToString(be);
+
         }
         else if (_newContractPackage.upgradeType == TYPE_REVOKE || _newContractPackage.upgradeType == TYPE_REVOKE)
         {
-            be = abi.encodePacked(uint8(_newContractPackage.upgradeType), _newContractPackage.salt);
+            be = bytesToString(abi.encodePacked(uint8(_newContractPackage.upgradeType), _newContractPackage.salt));
         }
         else 
         {
@@ -221,6 +226,19 @@ contract UpgradeManager {
         
         return setPendingUpgrade(signer, _newContractPackage.upgradeType);
  
+    }
+
+    function bytesToString (bytes memory input) public pure returns (bytes memory output)
+    {
+        bytes memory _string = new bytes(input.length * 2);
+        bytes memory HEX = "0123456789abcdef";
+
+        for(uint i = 0; i < input.length; i++) 
+        {
+            _string[i*2] = HEX[uint8(input[i] >> 4)];
+            _string[1+i*2] = HEX[uint8(input[i] & 0x0f)];
+        }
+        return _string;
     }
 
     function setPendingUpgrade(address notaryAddress, uint8 upgradeType) private returns (bool) {
