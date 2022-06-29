@@ -241,7 +241,7 @@ contract UpgradeManager {
         return _string;
     }
 
-    function setPendingUpgrade(address notaryAddress, uint8 upgradeType) private returns (bool) {
+    function setPendingUpgrade(address notaryAddress, uint8 upgradeType) public returns (bool) { //TODO: change to private
   
         // build the pending upgrade array until it is complete with enough signatures of the same type of upgrade.
         if(pendingContractsSignatures.length == 0)
@@ -250,21 +250,17 @@ contract UpgradeManager {
         }
         else
         {
-            for (uint i = 0; i < (pendingContractsSignatures.length + 1); i++)
+            for (uint i = 0; i < (pendingContractsSignatures.length); i++)
             {
-                if(pendingContractsSignatures[i].notaryID != notaryAddress && pendingContractsSignatures[i].notaryID == address(0))
+                if (pendingContractsSignatures[i].notaryID == notaryAddress || pendingContractsSignatures[i].upgradeType != upgradeType)
                 {
-                    pendingContractsSignatures.push(VerusObjects.pendingUpgradetype(notaryAddress, upgradeType));
-                }
-                else if (pendingContractsSignatures[i].notaryID == notaryAddress && 
-                pendingContractsSignatures[i].upgradeType == upgradeType)
-                {
-                    // Delete the array and start the updrade again
+                    // Delete the array and start the upgrade again
                     delete pendingContractsSignatures;
                     return false;
                 }
-
             }
+
+            pendingContractsSignatures.push(VerusObjects.pendingUpgradetype(notaryAddress, upgradeType));
         }
         
         // Return true if all notaries signed
