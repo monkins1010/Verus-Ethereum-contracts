@@ -69,7 +69,7 @@ contract VerusNotarizerStorage {
 
         require( msg.sender == verusNotarizer,"setNotarizedProof:callfromNotarizeronly");
         
-        // copying from memory to storage cannot be done directly
+        // copying from memory to storage cannot be done directly NOTE: this costs a lot of GAS
         PBaaSNotarization[verusHeight].version = _notarization.version; 
         PBaaSNotarization[verusHeight].flags = _notarization.flags;
         PBaaSNotarization[verusHeight].proposer = _notarization.proposer;
@@ -134,10 +134,4 @@ contract VerusNotarizerStorage {
         return claimableFees[_address];
     }
 
-    function setLastNotarizationHeight(uint32 height) public
-    {
-        require(msg.sender == upgradeContract);
-        lastBlockHeight = height;
-
-    }
 }

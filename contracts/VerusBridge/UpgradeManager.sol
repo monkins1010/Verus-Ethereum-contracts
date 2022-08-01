@@ -109,13 +109,14 @@ contract UpgradeManager {
         }
 
         if(tempcontracts[uint(VerusConstants.ContractType.VerusNotarizer)] != address(verusNotarizer)) {
-            verusProof = VerusProof(contracts[uint(VerusConstants.ContractType.VerusProof)]);
+            verusNotarizer = VerusNotarizer(tempcontracts[uint(VerusConstants.ContractType.VerusNotarizer)]);
             verusBridgeMaster.setContracts(tempcontracts);
             verusInfo.setContracts(tempcontracts);
             verusNotarizerStorage.setContracts(tempcontracts);
         }
 
         if(tempcontracts[uint(VerusConstants.ContractType.VerusBridge)] != address(verusBridge)) {
+            verusBridge = VerusBridge(tempcontracts[uint(VerusConstants.ContractType.VerusBridge)]);
             verusBridgeMaster.setContracts(tempcontracts);
             verusBridgeStorage.setContracts(tempcontracts);
             verusNotarizerStorage.setContracts(tempcontracts);  
@@ -125,9 +126,11 @@ contract UpgradeManager {
 
         if(tempcontracts[uint(VerusConstants.ContractType.VerusInfo)] != address(verusInfo)) {
             verusBridgeMaster.setContracts(tempcontracts);
+            verusInfo = VerusInfo(tempcontracts[uint(VerusConstants.ContractType.VerusInfo)]);
         }
         
         if(tempcontracts[uint(VerusConstants.ContractType.ExportManager)] != address(exportManager))  {    
+            exportManager = ExportManager(tempcontracts[uint(VerusConstants.ContractType.ExportManager)]);
             verusBridge.setContracts(tempcontracts);   
         }
 
@@ -150,19 +153,20 @@ contract UpgradeManager {
         
     }
 
-    function revoke(VerusObjects.upgradeInfo memory _newContractPackage) public returns (uint8){
+    function revoke(VerusObjects.upgradeInfo memory _newContractPackage) public returns (uint8) {
 
         if (!checkMultiSigContracts(_newContractPackage)) return 1; 
-        verusNotarizerStorage.setLastNotarizationHeight(uint32(0xffffffff));
+        verusNotarizer.updateNotarizer(_newContractPackage.contracts[0], _newContractPackage.contracts[1], 
+        _newContractPackage.contracts[2], VerusConstants.NOTARY_REVOKED);
         delete pendingContractsSignatures;
         return 2;
     
     }
-
     function recover(VerusObjects.upgradeInfo memory _newContractPackage) public returns (uint8) {
 
         if (!checkMultiSigContracts(_newContractPackage)) return 1; 
-        verusNotarizerStorage.setLastNotarizationHeight(_newContractPackage.recoverHeight);
+        verusNotarizer.updateNotarizer(_newContractPackage.contracts[0], _newContractPackage.contracts[1], 
+        _newContractPackage.contracts[2], VerusConstants.NOTARY_VALID);
         delete pendingContractsSignatures;
         return 2;
     
@@ -174,39 +178,45 @@ contract UpgradeManager {
         bytes memory be; 
         bytes32 hashValue;
 
-
         require(saltsUsed[_newContractPackage.salt] == false, "salt Already used");
         saltsUsed[_newContractPackage.salt] = true;
 
+        uint contractArrayLen;
+        contractArrayLen = contracts.length;
+
         if(_newContractPackage.upgradeType == TYPE_CONTRACT)
         {
-            require(_newContractPackage.contracts.length == contracts.length, "Inputted contracts wrong length");
+            require(contractArrayLen == contracts.length, "Inputted contracts wrong length");
             //concatenate the old contract values
-            for (uint j = 0; j < contracts.length; j++)
+            for (uint j = 0; j < contractArrayLen; j++)
             {
                 be = abi.encodePacked(be, contracts[j]);
 
-                // If 
-                if(pendingContracts.length < 11)
+                if(pendingContracts.length < contractArrayLen)
                 {
-                    pendingContracts[j] = contracts[j];
+                    pendingContracts[j] = _newContractPackage.contracts[j];
                 }
             }
+        }
 
-            //concatenate the old contract values + new valeus
-            for (uint k = 0; k < _newContractPackage.contracts.length; k++ )
+        for (uint k = 0; k < contractArrayLen; k++ )
+        {
+            be = abi.encodePacked(be, _newContractPackage.contracts[k]);
+            require(pendingContracts[k] == _newContractPackage.contracts[k],"Upgrade contracts do not match");
+        }
+
+        be = abi.encodePacked(be, _newContractPackage.salt);
+        be = bytesToString(be);
+
+        if (_newContractPackage.upgradeType == TYPE_REVOKE || _newContractPackage.upgradeType == TYPE_RECOVER)
+        {
+            for (uint k = 0; k < 3; k++ ) // [0]iaddress, [1] main sign address, [2] Recovery address
             {
                 be = abi.encodePacked(be, _newContractPackage.contracts[k]);
-                require(pendingContracts[k] == contracts[k],"Upgrade contracts do not match");
+                require(pendingContracts[k] == _newContractPackage.contracts[k],"Upgrade contracts do not match");
             }
-
-            be = abi.encodePacked(be, _newContractPackage.salt);
-            be = bytesToString(be);
-
-        }
-        else if (_newContractPackage.upgradeType == TYPE_REVOKE || _newContractPackage.upgradeType == TYPE_REVOKE)
-        {
             be = bytesToString(abi.encodePacked(uint8(_newContractPackage.upgradeType), _newContractPackage.salt));
+
         }
         else 
         {
@@ -219,7 +229,11 @@ contract UpgradeManager {
         hashValue = sha256(abi.encodePacked(uint8(19),hex"5665727573207369676e656420646174613a0a", hashValue)); // prefix = 19(len) + "Verus signed data:\n"
 
         address signer = recoverSigner(hashValue, _newContractPackage._vs - 4, _newContractPackage._rs, _newContractPackage._ss);
-        if (!verusNotarizer.notaryAddressColdStoreMapping(signer))
+
+        VerusObjects.notarizer memory notary;
+        (notary.main, notary.recovery, notary.state) = verusNotarizer.notaryAddressMapping(_newContractPackage.notarizerID);
+
+        if (notary.state != VerusConstants.NOTARY_VALID || notary.recovery != signer)
         {
             revert("Invalid notary signer");  
         }

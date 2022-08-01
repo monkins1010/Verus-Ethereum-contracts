@@ -24,7 +24,6 @@ contract VerusNotarizer {
     uint8 constant FLAG_LAUNCHCOMPLETEMARKER = 0x20;
     bytes20 constant vdxfcode = bytes20(0x367Eaadd291E1976ABc446A143f83c2D4D2C5a84);
 
-    VerusBlake2b blake2b;
     VerusSerializer verusSerializer;
     VerusNotarizerStorage verusNotarizerStorage;
     address upgradeContract;
@@ -32,9 +31,8 @@ contract VerusNotarizer {
     // notarization vdxf key
 
     // list of all notarizers mapped to allow for quick searching
-    mapping (address => bool) public komodoNotaries;
-    mapping (address => address) public notaryAddressMapping;
-    mapping (address => bool) public notaryAddressColdStoreMapping;
+    mapping (address => VerusObjects.notarizer ) public notaryAddressMapping;
+
     address[] private notaries;
 
     uint32 public notaryCount;
@@ -44,10 +42,10 @@ contract VerusNotarizer {
     // Notifies when a new block hash is published
     event NewBlock(VerusObjectsNotarization.CPBaaSNotarization, uint32 notarizedDataHeight);
 
-    constructor(address _verusBLAKE2bAddress,address _verusSerializerAddress, address upgradeContractAddress, 
-    address[] memory _notaries, address[] memory _notariesEthAddress, address[] memory _notariesColdStoreEthAddress, address verusNotarizerStorageAddress, address verusBridgeMasterAddress) {
+    constructor(address _verusSerializerAddress, address upgradeContractAddress, 
+    address[] memory _notaries, address[] memory _notariesEthAddress, address[] memory _notariesColdStoreEthAddress, 
+    address verusNotarizerStorageAddress, address verusBridgeMasterAddress) {
         verusSerializer = VerusSerializer(_verusSerializerAddress);
-        blake2b = VerusBlake2b(_verusBLAKE2bAddress);
         upgradeContract = upgradeContractAddress;
         notaryCount = uint32(_notaries.length);
         verusNotarizerStorage = VerusNotarizerStorage(verusNotarizerStorageAddress); 
@@ -58,12 +56,8 @@ contract VerusNotarizer {
             poolAvailable = true;
 
         for(uint i =0; i < _notaries.length; i++){
-            komodoNotaries[_notaries[i]] = true;
-            notaryAddressMapping[_notaries[i]] = _notariesEthAddress[i];
+            notaryAddressMapping[_notaries[i]] = VerusObjects.notarizer(_notariesEthAddress[i], _notariesColdStoreEthAddress[i], VerusConstants.NOTARY_VALID);
             notaries.push(_notaries[i]);
-        }
-        for(uint i =0; i < _notariesColdStoreEthAddress.length; i++){
-            notaryAddressColdStoreMapping[_notariesColdStoreEthAddress[i]] = true;
         }
     }
 
@@ -79,7 +73,7 @@ contract VerusNotarizer {
     modifier onlyNotary() {
         address msgSender = msg.sender;
         bytes memory errorMessage = abi.encodePacked("Caller is not a notary",msgSender);
-        require(komodoNotaries[msgSender] == true, string(errorMessage));
+        require(notaryAddressMapping[msgSender].state == VerusConstants.NOTARY_VALID, string(errorMessage));
         _;
     }
     
@@ -88,14 +82,13 @@ contract VerusNotarizer {
     }
         
     function isNotary(address _notary) public view returns(bool) {
-        if(komodoNotaries[_notary] == true) return true;
-        else return false;
+       return (notaryAddressMapping[_notary].state == VerusConstants.NOTARY_VALID);  
     }
 
     //this function allows for intially expanding out the number of notaries
     function currentNotariesRequired() public view returns(uint8){
 
-        if(notaryCount == 1 || notaryCount == 2) return 1;
+        if(notaryCount < 3 ) return 1;
         uint halfNotaryCount = (notaryCount/2) + 1;
         if(halfNotaryCount > requiredNotaries) return requiredNotaries;
         else return uint8(halfNotaryCount);
@@ -115,7 +108,7 @@ contract VerusNotarizer {
         for(uint i = 0; i < _rs.length; i++){
             //if the address is in the notary array increment the number of signatures
             signingAddress = recoverSigner(_notarizedDataHash, _vs[i], _rs[i], _ss[i]);
-            if(komodoNotaries[signingAddress]) {
+            if(notaryAddressMapping[signingAddress].state == VerusConstants.NOTARY_VALID) {
                 numberOfSignatures++;
             }
         }
@@ -132,45 +125,62 @@ contract VerusNotarizer {
         address[] memory notaryAddress
         ) public returns(bool output) {
 
+        uint32 lastNotarizationHeight = verusNotarizerStorage.lastBlockHeight();
+
         require((_rs.length == _ss.length) && (_rs.length == _vs.length),"Signature arrays must be of equal length");
-        require(verusNotarizerStorage.lastBlockHeight() != uint32(0xffffffff), "Notarizer Revoked");
-        require(_pbaasNotarization.notarizationheight > verusNotarizerStorage.lastBlockHeight(),"Block Height must be greater than current block height");
+        require(lastNotarizationHeight != uint32(0xffffffff), "Notarizer Revoked");
+        require(_pbaasNotarization.notarizationheight > lastNotarizationHeight,"Block Height must be greater than current block height");
 
         bytes memory serializedNotarisation = verusSerializer.serializeCPBaaSNotarization(_pbaasNotarization);
         
         //add in the extra fields for the hashing
         //add in the other pieces for encoding
         bytes32 hashedNotarization;
+        uint validSignatures;
 
         for(uint i=0; i < blockheights.length;i++)
         {
             //build the hashing sequence
             hashedNotarization = keccak256(abi.encodePacked(uint8(1),
-                vdxfcode,VerusConstants.VerusSystemId,
+                vdxfcode,
+                VerusConstants.VerusSystemId,
                 verusSerializer.serializeUint32(blockheights[i]),
                 notaryAddress[i],
                 abi.encodePacked(keccak256(serializedNotarisation))));
 
-            if (recoverSigner(hashedNotarization, _vs[i]-4, _rs[i], _ss[i]) != notaryAddressMapping[notaryAddress[i]])
+            if (recoverSigner(hashedNotarization, _vs[i]-4, _rs[i], _ss[i]) != notaryAddressMapping[notaryAddress[i]].main ||
+                notaryAddressMapping[notaryAddress[i]].state != VerusConstants.NOTARY_VALID)
             {
                    revert("Invalid notary signer");  
             }
 
-            if((i + 1) >= currentNotariesRequired())
+            if (lastNotarizationHeight != 0)
             {
-
+                bytes32 prevNotarizationHash = verusNotarizerStorage.getNotarization(lastNotarizationHeight).hashprevnotarization;
+                if(reversebytes32(prevNotarizationHash) != hashedNotarization)
+                {
+                    notaryAddressMapping[notaryAddress[i]].state = VerusConstants.NOTARY_REVOKED;
+                    continue;
+                }
+            }
+            validSignatures++;
+            
+            if(validSignatures >= currentNotariesRequired())
+            {
                 //valid amount of notarizations achieved
                 //loop through the currencystates and confirm if the bridge is active
                 if(!poolAvailable)
                 {
                     for(uint k= 0; k < _pbaasNotarization.currencystates.length; k++)
                     {
-                        if (_pbaasNotarization.currencystates[k].currencystate.flags & 
-                                (FLAG_FRACTIONAL + FLAG_REFUNDING + FLAG_LAUNCHCONFIRMED + FLAG_LAUNCHCOMPLETEMARKER) == 
-                                    (FLAG_FRACTIONAL + FLAG_LAUNCHCONFIRMED + FLAG_LAUNCHCOMPLETEMARKER) &&
-                                    verusNotarizerStorage.poolAvailable(_pbaasNotarization.currencystates[k].currencyid) == 0) 
+                        address currencyId = _pbaasNotarization.currencystates[k].currencyid;
+
+                        if (_pbaasNotarization.currencystates[k].currencystate.flags & (FLAG_FRACTIONAL + FLAG_REFUNDING + FLAG_LAUNCHCONFIRMED + FLAG_LAUNCHCOMPLETEMARKER) == 
+                                    (FLAG_FRACTIONAL + FLAG_LAUNCHCONFIRMED + FLAG_LAUNCHCOMPLETEMARKER) 
+                                    && verusNotarizerStorage.poolAvailable(currencyId) == 0 
+                                    && currencyId == VerusConstants.VerusBridgeAddress) 
                             {
-                                verusNotarizerStorage.setPoolAvailable(uint32(block.number), _pbaasNotarization.currencystates[k].currencyid);
+                                verusNotarizerStorage.setPoolAvailable(uint32(block.number), currencyId);
                                 poolAvailable = true;
                             }
                     }
@@ -203,7 +213,7 @@ contract VerusNotarizer {
 
         exporterFees = _ethAmount.div(10);
         proposerFees = _ethAmount.div(10);
-        LPFees = _ethAmount - (LPFees + exporterFees + proposerFees);
+        LPFees = _ethAmount - (notaryFees + exporterFees + proposerFees);
 
         setNotaryFees(notaryFees);
         verusNotarizerStorage.setClaimedFees(_feeRecipient, exporterFees);
@@ -239,6 +249,40 @@ contract VerusNotarizer {
         
         notaryTurn++;
     
+    }
+
+    function updateNotarizer(address notarizer, address mainAddress, address revokeAddress, uint8 state) public
+    {
+        require(msg.sender == upgradeContract);
+        notaryAddressMapping[notarizer] = VerusObjects.notarizer(mainAddress, revokeAddress, state);
+
+    }
+
+    function reversebytes32(bytes32 input) internal pure returns (bytes32) {
+
+        uint256 v;
+        v = uint256(input);
+    
+        // swap bytes
+        v = ((v & 0xFF00FF00FF00FF00FF00FF00FF00FF00FF00FF00FF00FF00FF00FF00FF00FF00) >> 8) |
+            ((v & 0x00FF00FF00FF00FF00FF00FF00FF00FF00FF00FF00FF00FF00FF00FF00FF00FF) << 8);
+    
+        // swap 2-byte long pairs
+        v = ((v & 0xFFFF0000FFFF0000FFFF0000FFFF0000FFFF0000FFFF0000FFFF0000FFFF0000) >> 16) |
+            ((v & 0x0000FFFF0000FFFF0000FFFF0000FFFF0000FFFF0000FFFF0000FFFF0000FFFF) << 16);
+    
+        // swap 4-byte long pairs
+        v = ((v & 0xFFFFFFFF00000000FFFFFFFF00000000FFFFFFFF00000000FFFFFFFF00000000) >> 32) |
+            ((v & 0x00000000FFFFFFFF00000000FFFFFFFF00000000FFFFFFFF00000000FFFFFFFF) << 32);
+    
+        // swap 8-byte long pairs
+        v = ((v & 0xFFFFFFFFFFFFFFFF0000000000000000FFFFFFFFFFFFFFFF0000000000000000) >> 64) |
+            ((v & 0x0000000000000000FFFFFFFFFFFFFFFF0000000000000000FFFFFFFFFFFFFFFF) << 64);
+    
+        // swap 16-byte long pairs
+        v = (v >> 128) | (v << 128);
+        
+        return bytes32(v);
     }
 
 }

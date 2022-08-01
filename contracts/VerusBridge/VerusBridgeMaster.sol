@@ -135,7 +135,8 @@ contract VerusBridgeMaster {
         
         address proposer;
 
-        proposer = verusNotarizerStorage.getLastNotarizationProposer();
+        proposer = verusNotarizerStorage.getLastNotarizationProposer(); //miner and staker 10%, 
+        //exporter 10%
 
         uint256 LPFees;
         LPFees = verusNotarizer.setClaimableFees(_feeRecipient, proposer, fees);
@@ -144,13 +145,13 @@ contract VerusBridgeMaster {
         if(LPFees > (VerusConstants.verusvETHTransactionFee * 2) )
         {
             VerusObjects.CReserveTransfer memory LPtransfer;
-
+            //set burn flag
             LPtransfer.version = 1;
             LPtransfer.currencyvalue.currency = VerusConstants.VEth;
             LPtransfer.currencyvalue.amount = uint64(LPFees - VerusConstants.verusvETHTransactionFee);
-            LPtransfer.flags = VerusConstants.VALID + VerusConstants.CONVERT;
+            LPtransfer.flags = VerusConstants.VALID + VerusConstants.CONVERT; //TODO: add burn flag  BURN_CHANGE_PRICE or BURN_CHANGE_WEIGHT???
             LPtransfer.feecurrencyid = VerusConstants.VEth;
-            LPtransfer.fees = 1;
+            LPtransfer.fees = VerusConstants.verusvETHTransactionFee;
             LPtransfer.destination.destinationtype = VerusConstants.DEST_PKH;
             LPtransfer.destination.destinationaddress = hex"B26820ee0C9b1276Aac834Cf457026a575dfCe84";
             LPtransfer.destcurrencyid = VerusConstants.VerusBridgeAddress;

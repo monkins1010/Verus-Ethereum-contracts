@@ -180,21 +180,24 @@ library VerusObjects {
     }
 
     struct upgradeInfo {
-
         uint8 _vs;
         bytes32 _rs;
         bytes32  _ss;
         address[] contracts;
         uint8 upgradeType;
-        uint32 recoverHeight;
         bytes32 salt;
+        address notarizerID;
 
     }
 
     struct pendingUpgradetype {
-        
         address notaryID;
         uint8 upgradeType;
     }
 
+    struct notarizer {
+        address main;
+        address recovery;
+        uint8 state;
+    }
  }

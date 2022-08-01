@@ -51,6 +51,10 @@ library VerusConstants {
 
     uint8 constant DESTINATION_PLUS_GATEWAY = 68;
 
+    //notary flags
+    uint8 constant NOTARY_VALID = 1;
+    uint8 constant NOTARY_REVOKED = 2;
+
     enum ContractType {
         TokenManager,
         VerusSerializer,
