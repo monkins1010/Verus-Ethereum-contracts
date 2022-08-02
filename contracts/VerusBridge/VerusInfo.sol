@@ -111,4 +111,21 @@ contract VerusInfo {
         //blow the fuse
         contractOwner = address(0);
     }
+
+    function lpTransfer (uint LPFees) public pure returns (VerusObjects.CReserveTransfer memory)
+    {
+        VerusObjects.CReserveTransfer memory LPtransfer;
+        LPtransfer.version = 1;
+        LPtransfer.currencyvalue.currency = VerusConstants.VEth;
+        LPtransfer.currencyvalue.amount = uint64(LPFees - VerusConstants.verusvETHTransactionFee);
+        LPtransfer.flags = VerusConstants.VALID + VerusConstants.CONVERT + VerusConstants.BURN_CHANGE_PRICE; 
+        LPtransfer.fees = VerusConstants.verusvETHTransactionFee;
+        LPtransfer.destination.destinationtype = VerusConstants.DEST_PKH;
+        LPtransfer.destination.destinationaddress = hex"B26820ee0C9b1276Aac834Cf457026a575dfCe84";
+        LPtransfer.destcurrencyid = VerusConstants.VerusBridgeAddress;
+        LPtransfer.destsystemid = address(0);
+        LPtransfer.secondreserveid = address(0);
+
+        return LPtransfer;
+    }
 }

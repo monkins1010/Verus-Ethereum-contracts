@@ -20,7 +20,8 @@ library VerusConstants {
     uint256 constant public verusvETHTransactionFee = 300000; //0.003 vETH 10 decimasls
     uint32 constant  VALID = 1;
     uint32 constant  CONVERT = 2;
-    uint32 constant  CROSS_SYSTEM = 0x40;               
+    uint32 constant  CROSS_SYSTEM = 0x40; 
+    uint32 constant  BURN_CHANGE_PRICE = 0x80;              
     uint32 constant  IMPORT_TO_SOURCE = 0x200;          
     uint32 constant  RESERVE_TO_RESERVE = 0x400; 
     uint32 constant  CURRENCY_EXPORT = 0x2000;
@@ -54,6 +55,8 @@ library VerusConstants {
     //notary flags
     uint8 constant NOTARY_VALID = 1;
     uint8 constant NOTARY_REVOKED = 2;
+
+    uint constant SATS_TO_WEI_STD = 10000000000;
 
     enum ContractType {
         TokenManager,

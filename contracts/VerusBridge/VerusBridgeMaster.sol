@@ -141,25 +141,15 @@ contract VerusBridgeMaster {
         uint256 LPFees;
         LPFees = verusNotarizer.setClaimableFees(_feeRecipient, proposer, fees);
 
-        //TODO:only execute the LP send back if there is twice the fee amount 
+        //NOTE:only execute the LP transfer if there is twice the fee amount 
         if(LPFees > (VerusConstants.verusvETHTransactionFee * 2) )
         {
             VerusObjects.CReserveTransfer memory LPtransfer;
             //set burn flag
-            LPtransfer.version = 1;
-            LPtransfer.currencyvalue.currency = VerusConstants.VEth;
-            LPtransfer.currencyvalue.amount = uint64(LPFees - VerusConstants.verusvETHTransactionFee);
-            LPtransfer.flags = VerusConstants.VALID + VerusConstants.CONVERT; //TODO: add burn flag  BURN_CHANGE_PRICE or BURN_CHANGE_WEIGHT???
-            LPtransfer.feecurrencyid = VerusConstants.VEth;
-            LPtransfer.fees = VerusConstants.verusvETHTransactionFee;
-            LPtransfer.destination.destinationtype = VerusConstants.DEST_PKH;
-            LPtransfer.destination.destinationaddress = hex"B26820ee0C9b1276Aac834Cf457026a575dfCe84";
-            LPtransfer.destcurrencyid = VerusConstants.VerusBridgeAddress;
-            LPtransfer.destsystemid = address(0);
-            LPtransfer.secondreserveid = address(0);
+            LPtransfer = verusInfo.lpTransfer(LPFees);
 
             //make a transfer for the LP fees back to Verus
-            verusBridge.export(LPtransfer, LPFees * 10000000000, address(this) );
+            verusBridge.export(LPtransfer, LPFees * VerusConstants.SATS_TO_WEI_STD, address(this) );
         }
 
     }
@@ -167,14 +157,13 @@ contract VerusBridgeMaster {
     function claimfees() public returns (bool) 
     {
         uint256 claimAmount;
-
         claimAmount = verusNotarizerStorage.claimableFees(msg.sender);
 
         if(claimAmount > 0)
         {
             //stored as SATS convert to WEI
-            payable(msg.sender).transfer(claimAmount * 10000000000);
-            verusBridgeStorage.subtractFromEthHeld(claimAmount * 10000000000);
+            payable(msg.sender).transfer(claimAmount * VerusConstants.SATS_TO_WEI_STD);
+            verusBridgeStorage.subtractFromEthHeld(claimAmount * VerusConstants.SATS_TO_WEI_STD);
         }
 
         return false;

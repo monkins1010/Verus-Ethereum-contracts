@@ -301,7 +301,7 @@ contract TokenManager {
             if (flags & VerusConstants.TOKEN_ETH_SEND == VerusConstants.TOKEN_ETH_SEND) 
             {
                 uint256 amount; 
-                amount = (transfers.transfers[i].currencyAndAmount >> 160) * 10000000000;//SATS to WEI (only for ETH)
+                amount = (transfers.transfers[i].currencyAndAmount >> 160) * VerusConstants.SATS_TO_WEI_STD;//SATS to WEI (only for ETH)
                 // ETH is held in VerusBridgemaster, create array to bundle payments
                 payments[ETHPaymentCounter] = VerusObjects.ETHPayments(
                     address(uint160(transfers.transfers[i].destinationAndFlags)), amount);

@@ -187,7 +187,14 @@ library VerusObjects {
         uint8 upgradeType;
         bytes32 salt;
         address notarizerID;
+    }
 
+    struct revokeInfo {
+        uint8 _vs;
+        bytes32 _rs;
+        bytes32  _ss;
+        address notaryID;
+        bytes32 salt;
     }
 
     struct pendingUpgradetype {
