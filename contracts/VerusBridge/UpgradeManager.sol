@@ -32,17 +32,18 @@ contract UpgradeManager {
     // Total amount of contracts.
     address[12] public contracts;
     address[] public pendingContracts;
-    address[] public pendingRevokeArray;
 
     address contractOwner;
     VerusObjects.pendingUpgradetype[] public pendingContractsSignatures;
     uint8 constant TYPE_CONTRACT = 1;
     uint8 constant TYPE_REVOKE = 2;
     uint8 constant TYPE_RECOVER = 3;
-    uint8 constant NO_ADDRESSES_FOR_REVOKE = 3;
+    uint8 constant NUM_ADDRESSES_FOR_REVOKE = 3;
 
     //global store of salts to stop a repeat attack
     mapping (bytes32 => bool) saltsUsed;
+
+    event contractUpdated(bool);
     
     constructor()
     {
@@ -84,8 +85,8 @@ contract UpgradeManager {
 
     function upgradeContracts(VerusObjects.upgradeInfo memory _newContractPackage) public returns (uint8) {
 
-        require(msg.sender == contractOwner);
-        // TODO: Reactivate // if (!checkMultiSigContracts(_newContractPackage)) return 1; 
+        //require(msg.sender == contractOwner);
+        if (!checkMultiSigContracts(_newContractPackage)) return 1; 
 
         address[12] memory tempcontracts;
 
@@ -152,10 +153,55 @@ contract UpgradeManager {
 
         delete pendingContracts;
         delete pendingContractsSignatures;
+        emit contractUpdated(true);
         return 2;
         
     }
 
+    function recoverString(bytes memory be, uint8 vs, bytes32 rs, bytes32 ss) public view returns (address)
+    {
+        bytes32 hashValue;
+
+        VerusSerializer verusSerializer = VerusSerializer(contracts[uint(VerusConstants.ContractType.VerusSerializer)]);
+
+        hashValue = sha256(abi.encodePacked(verusSerializer.writeCompactSize(be.length),be)); //NOTE: This maybe always 64 bytes, check!
+        hashValue = sha256(abi.encodePacked(uint8(19),hex"5665727573207369676e656420646174613a0a", hashValue)); // prefix = 19(len) + "Verus signed data:\n"
+
+        return recoverSigner(hashValue, vs - 4, rs, ss);
+
+    }
+
+    function revoke(VerusObjects.revokeInfo memory _revokePacket) public returns (bool) {
+
+        bytes memory be; 
+
+        require(saltsUsed[_revokePacket.salt] == false, "salt Already used");
+        saltsUsed[_revokePacket.salt] = true;
+
+        be = bytesToString(abi.encodePacked(_revokePacket.salt));
+
+        address signer = recoverString(be, _revokePacket._vs, _revokePacket._rs, _revokePacket._ss);
+        
+        VerusObjects.notarizer memory notary;
+        // get the notarys status from the mapping using its Notary i-address to check if it is valid.
+        (notary.main, notary.recovery, notary.state) = verusNotarizer.notaryAddressMapping(_revokePacket.notaryID);
+
+        if (notary.main != signer || notary.state == VerusConstants.NOTARY_REVOKED)
+        {
+            emit contractUpdated(false);
+            return false;  
+        }
+
+        verusNotarizer.updateNotarizer(_revokePacket.notaryID, address(0), notary.recovery, VerusConstants.NOTARY_REVOKED);
+        emit contractUpdated(true);
+
+        //Incase of Notary trying upgrade
+        delete pendingContracts;
+        delete pendingContractsSignatures;
+
+        return true;
+    
+    }
     function recover(VerusObjects.upgradeInfo memory _newContractPackage) public returns (uint8) {
 
         if (!checkMultiSigContracts(_newContractPackage)) return 1; 
@@ -167,67 +213,10 @@ contract UpgradeManager {
     
     }
 
-    function RevokeNotary(VerusObjects.revokeInfo[] memory _newContractPackage, address revokee) public returns (uint8) {
-
-        bytes memory be; 
-        bytes32 hashValue;
-
-        if(_newContractPackage.length < verusNotarizer.currentNotariesRequired())
-        {
-            revert("Not enough signatures");
-        }
-
-        for (uint j = 0; j < _newContractPackage.length; j++)
-        {
-            require(saltsUsed[_newContractPackage[j].salt] == false, "salt Already used");
-            saltsUsed[_newContractPackage[j].salt] = true;
-
-            be = bytesToString(abi.encodePacked(_newContractPackage[j].salt));
-
-            VerusSerializer verusSerializer = VerusSerializer(contracts[uint(VerusConstants.ContractType.VerusSerializer)]);
-
-            hashValue = sha256(abi.encodePacked(verusSerializer.writeCompactSize(be.length),be)); //NOTE: This maybe always 64 bytes, check!
-            hashValue = sha256(abi.encodePacked(uint8(19),hex"5665727573207369676e656420646174613a0a", hashValue)); // prefix = 19(len) + "Verus signed data:\n"
-
-            address signer = recoverSigner(hashValue, _newContractPackage[j]._vs - 4, _newContractPackage[j]._rs, _newContractPackage[j]._ss);
-            
-            VerusObjects.notarizer memory notary;
-            // get the notarys status from the mapping using its Notary i-address to check if it is valid.
-            (notary.main, notary.recovery, notary.state) = verusNotarizer.notaryAddressMapping(_newContractPackage[j].notaryID);
-
-            if (notary.state != VerusConstants.NOTARY_VALID || notary.recovery != signer || _newContractPackage[j].notaryID == revokee)
-            {
-                revert("Invalid notary signer");  
-            }
-
-            if(pendingRevokeArray.length > 0)
-            {
-                for (uint k = 0; k < pendingRevokeArray.length; k++ )
-                {
-                    if(pendingRevokeArray[k] == _newContractPackage[j].notaryID)
-                    {
-                        revert("Notary already used");
-                    }
-                }
-
-            }
-            pendingRevokeArray.push(_newContractPackage[j].notaryID);
-
-        }
-
-        verusNotarizer.updateNotarizer(revokee,address(0),address(0), VerusConstants.NOTARY_REVOKED);
-        delete pendingContracts;
-        delete pendingContractsSignatures;
-        delete pendingRevokeArray;
-        return 2;
-    
-    }
-
     // TODO: change function to be only callable from notaries
     function checkMultiSigContracts(VerusObjects.upgradeInfo memory _newContractPackage) public returns(bool)
     {
         bytes memory be; 
-        bytes32 hashValue;
 
         require(saltsUsed[_newContractPackage.salt] == false, "salt Already used");
         saltsUsed[_newContractPackage.salt] = true;
@@ -240,37 +229,30 @@ contract UpgradeManager {
         }
         else if(_newContractPackage.upgradeType == TYPE_REVOKE || _newContractPackage.upgradeType == TYPE_RECOVER)
         {
-            contractArrayLen = NO_ADDRESSES_FOR_REVOKE;
+            contractArrayLen = NUM_ADDRESSES_FOR_REVOKE;
         }
         
         require(contractArrayLen == _newContractPackage.contracts.length, "Input contracts wrong length");
         
         // if start of a new upgrade then set the pending contracts to either upgrade contracts, or Notary modifcation
-        if(pendingContracts.length < contractArrayLen)
+
+        for (uint j = 0; j < contractArrayLen; j++)
         {
-            for (uint j = 0; j < contractArrayLen; j++)
+            be = abi.encodePacked(be, _newContractPackage.contracts[j]);
+            
+            if(pendingContracts.length < contractArrayLen)
             {
-                pendingContracts[j] = _newContractPackage.contracts[j];
+                pendingContracts.push(_newContractPackage.contracts[j]);
             }
-        }
-        else
-        {
-            // check that pending contracts equal incoming package
-            for (uint k = 0; k < contractArrayLen; k++ )
+            else
             {
-                be = abi.encodePacked(be, _newContractPackage.contracts[k]);
-                require(pendingContracts[k] == _newContractPackage.contracts[k],"Upgrade contracts do not match");
+                require(pendingContracts[j] == _newContractPackage.contracts[j],"Upgrade contracts do not match");
             }
         }
 
         be = bytesToString(abi.encodePacked(be, uint8(_newContractPackage.upgradeType), _newContractPackage.salt));
 
-        VerusSerializer verusSerializer = VerusSerializer(contracts[uint(VerusConstants.ContractType.VerusSerializer)]);
-
-        hashValue = sha256(abi.encodePacked(verusSerializer.writeCompactSize(be.length),be));
-        hashValue = sha256(abi.encodePacked(uint8(19),hex"5665727573207369676e656420646174613a0a", hashValue)); // prefix = 19(len) + "Verus signed data:\n"
-
-        address signer = recoverSigner(hashValue, _newContractPackage._vs - 4, _newContractPackage._rs, _newContractPackage._ss);
+        address signer = recoverString(be, _newContractPackage._vs, _newContractPackage._rs, _newContractPackage._ss);
 
         VerusObjects.notarizer memory notary;
         // get the notarys status from the mapping using its Notary i-address to check if it is valid.
@@ -300,7 +282,7 @@ contract UpgradeManager {
 
     function setPendingUpgrade(address notaryAddress, uint8 upgradeType) public returns (bool) { //TODO: change to private
   
-        // build the pending upgrade array until it is complete with enough signatures of the same type of upgrade.
+        // build the pending upgrade array until it is complete with enough signatures.
         if(pendingContractsSignatures.length == 0)
         {
             pendingContractsSignatures.push(VerusObjects.pendingUpgradetype(notaryAddress, upgradeType));
@@ -313,11 +295,24 @@ contract UpgradeManager {
                 {
                     revert("Notary invalid or mixed upgrade type"); 
                 }
+                VerusObjects.notarizer memory notary;
+
+                (notary.main, notary.recovery, notary.state) = verusNotarizer.notaryAddressMapping(pendingContractsSignatures[i].notaryID);
+
+                // If any notary has become invalid, invalidate pending upgrade and start again
+                if (notary.state != VerusConstants.NOTARY_VALID)
+                {
+                    delete pendingContracts;
+                    delete pendingContractsSignatures;
+                    return false;
+                }
             }
 
             pendingContractsSignatures.push(VerusObjects.pendingUpgradetype(notaryAddress, upgradeType));
+
         }
-        // Return true if all notaries signed
+
+        // Return true if majority of notarized have transacted.
         return pendingContractsSignatures.length >= verusNotarizer.currentNotariesRequired();
 
     }

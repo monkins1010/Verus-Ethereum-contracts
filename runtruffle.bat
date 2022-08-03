@@ -1,1 +1,1 @@
-truffle deploy --network rinkeby --reset
+truffle deploy --network goerli --reset

@@ -23,7 +23,7 @@ const HDWalletProvider = require('@truffle/hdwallet-provider');
 //
 // const fs = require('fs');
 // const mnemonic = fs.readFileSync(".secret").toString().trim();
-const privateKeys = ["4.."];
+const privateKeys = ["4d"];
 
 module.exports = {
     /**
@@ -60,8 +60,8 @@ module.exports = {
 
         // Useful for deploying to a public network.
         // NB: It's important to wrap the provider as a function.
-        rinkeby: {
-            provider: () => { return new HDWalletProvider(privateKeys, 'wss://goerli.infura.io/ws/v3/0') },
+        goerli: {
+            provider: () => { return new HDWalletProvider(privateKeys, 'wss://goerli.infura.io/ws/v3/') },
             network_id: 5, // 4= rinkeby 5 = goerli
             confirmations: 0, // # of confs to wait between deployments. (default: 0)
             timeoutBlocks: 50, // # of blocks before a deployment times out  (minimum/default: 50)
