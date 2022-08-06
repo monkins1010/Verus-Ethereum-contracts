@@ -207,4 +207,10 @@ library VerusObjects {
         address recovery;
         uint8 state;
     }
+
+    struct lastImportInfo {
+        bytes32 hashOfTransfers;
+        bytes32 exporttxid;
+        uint32 exporttxoutnum;
+    }
  }

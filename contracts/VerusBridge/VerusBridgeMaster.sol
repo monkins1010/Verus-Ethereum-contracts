@@ -19,8 +19,7 @@ contract VerusBridgeMaster {
     VerusNotarizerStorage verusNotarizerStorage;
 
     address upgradeContract;
-    
-  
+     
     constructor(address upgradeContractAddress)
     {
         upgradeContract = upgradeContractAddress;      
@@ -30,30 +29,12 @@ contract VerusBridgeMaster {
    
         require(msg.sender == upgradeContract);
         
-        if(contracts[uint(VerusConstants.ContractType.VerusNotarizer)] != address(verusNotarizer)) 
-        {
-            verusNotarizer = VerusNotarizer(contracts[uint(VerusConstants.ContractType.VerusNotarizer)]);
-        }
-         
-        if(contracts[uint(VerusConstants.ContractType.VerusBridge)] != address(verusBridge)) 
-        {       
-            verusBridge = VerusBridge(contracts[uint(VerusConstants.ContractType.VerusBridge)]);
-        }
+        verusNotarizer = VerusNotarizer(contracts[uint(VerusConstants.ContractType.VerusNotarizer)]);
+        verusBridge = VerusBridge(contracts[uint(VerusConstants.ContractType.VerusBridge)]);
+        verusInfo = VerusInfo(contracts[uint(VerusConstants.ContractType.VerusInfo)]);
+        verusBridgeStorage = VerusBridgeStorage(contracts[uint(VerusConstants.ContractType.VerusBridgeStorage)]);
+        verusNotarizerStorage = VerusNotarizerStorage(contracts[uint(VerusConstants.ContractType.VerusNotarizerStorage)]);
 
-        if(contracts[uint(VerusConstants.ContractType.VerusInfo)] != address(verusInfo)) 
-        { 
-            verusInfo = VerusInfo(contracts[uint(VerusConstants.ContractType.VerusInfo)]);
-        }
-
-        if(contracts[uint(VerusConstants.ContractType.VerusBridgeStorage)] != address(verusBridgeStorage)) 
-        {         
-            verusBridgeStorage = VerusBridgeStorage(contracts[uint(VerusConstants.ContractType.VerusBridgeStorage)]);
-        }
-                
-        if(contracts[uint(VerusConstants.ContractType.VerusNotarizerStorage)] != address(verusNotarizerStorage)) 
-        { 
-            verusNotarizerStorage = VerusNotarizerStorage(contracts[uint(VerusConstants.ContractType.VerusNotarizerStorage)]);
-        }
     }
     
     /** VerusBridge pass through functions **/
@@ -81,33 +62,31 @@ contract VerusBridgeMaster {
         return verusNotarizer.poolAvailable();
     }
 
-    function getLastProofRoot() public view returns(VerusObjectsNotarization.CProofRoot memory){
-        return verusNotarizerStorage.getLastProofRoot();
+    function getLastProofRoot() public view returns(bytes memory){
+
+       return abi.encode(verusNotarizerStorage.getNotarization(verusNotarizerStorage.lastAcceptedBlockHeight()).proofroots);
+
     }
 
     function lastBlockHeight() public view returns(uint32){
-        return verusNotarizerStorage.lastBlockHeight();
+        return verusNotarizerStorage.lastAcceptedBlockHeight();
     }
 
-    function setLatestData(VerusObjectsNotarization.CPBaaSNotarization memory _pbaasNotarization,
-        uint8[] memory _vs,
-        bytes32[] memory _rs,
-        bytes32[] memory _ss,
-        uint32[] memory blockheights,
-        address[] memory notaryAddress) public returns(bool)
+    function setLatestData(VerusObjectsNotarization.CPBaaSNotarization memory _pbaasNotarization, bytes memory data) public returns(bool)
     {
-        return verusNotarizer.setLatestData(_pbaasNotarization,_vs,_rs,_ss,blockheights,notaryAddress);
+
+        return verusNotarizer.setLatestData(_pbaasNotarization, data);
     }
 
     /** VerusInfo pass through functions **/
 
-     function getinfo() public view returns(bytes memory)
-     {
-         return verusInfo.getinfo();
-     }
-
-     function sendEth(VerusObjects.ETHPayments[] memory _payments) public 
-     {
+    function getinfo() public view returns(bytes memory)
+    {
+        return verusInfo.getinfo();
+    }
+    
+    function sendEth(VerusObjects.ETHPayments[] memory _payments) public 
+    {
          //only callable by verusbridge contract
         require( msg.sender == address(verusBridge));
         for(uint i = 0; i < _payments.length; i++)
@@ -117,7 +96,7 @@ contract VerusBridgeMaster {
                 destination.transfer(_payments[i].amount);
 
         }
-     }
+    }
 
     function getcurrency(address _currencyid) public view returns(bytes memory)
     {

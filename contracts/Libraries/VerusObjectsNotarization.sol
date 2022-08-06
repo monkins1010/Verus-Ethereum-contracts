@@ -75,6 +75,7 @@ library VerusObjectsNotarization {
         CurrencyStates[] currencystates;
         CProofRoot[] proofroots;
         CNodeData[] nodes;
+        bytes32 hashnotarization;
     }
 
     //represents the output from the pbaas rpc

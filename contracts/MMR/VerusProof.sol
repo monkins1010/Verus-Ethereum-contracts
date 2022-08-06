@@ -95,10 +95,10 @@ contract VerusProof {
 
     }
     
-    function checkTransfers(VerusObjects.CReserveTransferImport memory _import) public view returns (bool) {
+    function checkTransfers(VerusObjects.CReserveTransferImport memory _import, bytes32 hashOfTransfers) public view returns (bool) {
 
         // ensure that the hashed transfers are in the export
-        bytes32 hashedTransfers = keccak256(_import.serializedTransfers);
+        bytes32 hashedTransfers = hashOfTransfers;
 
         // the first component of the import partial transaction proof is the transaction header, for each version of
         // transaction header, we have a specific offset for the hash of transfers. if we change this, we must
@@ -250,11 +250,11 @@ contract VerusProof {
         return txRoot;
     }
     
-    function proveTransaction(VerusObjects.CReserveTransferImport memory _import) public view returns(bytes32 stateRoot){
+    function proveTransaction(VerusObjects.CReserveTransferImport memory _import, bytes32 hashOfTransfers) public view returns(bytes32 stateRoot){
 
         stateRoot = bytes32(0);
 
-        if(!checkTransfers(_import))
+        if(!checkTransfers(_import, hashOfTransfers))
         {
             return stateRoot;  
         } 
@@ -270,51 +270,14 @@ contract VerusProof {
         return stateRoot;
     }
     
-    function proveImports(VerusObjects.CReserveTransferImport memory _import) public view returns(bool){
+    function proveImports(VerusObjects.CReserveTransferImport memory _import, bytes32 hashOfTransfers) public view returns(bool){
         bytes32 retStateRoot;
-        retStateRoot = proveTransaction(_import);
+        retStateRoot = proveTransaction(_import, hashOfTransfers);
 
-        return (retStateRoot != bytes32(0) && retStateRoot == flipBytes32(verusNotarizerStorage.getLastProofRoot().stateroot));
+        return (retStateRoot != bytes32(0) && retStateRoot == flipBytes32(verusNotarizerStorage.verusStateRoot(verusNotarizerStorage.lastAcceptedBlockHeight())));
  
     }
 
-    /*
-    function proveTransaction(bytes32 mmrRootHash,bytes32 notarisationHash,bytes32[] memory _transfersProof,uint32 _hashIndex) public view returns(bool){
-        if (mmrRootHash == predictedRootHash(notarisationHash,_hashIndex,_transfersProof)) return true;
-        else return false;
-    }
-
-    function predictedRootHash(bytes32 _hashToCheck,uint _hashIndex,bytes32[] memory _branch) public view returns(bytes32){
-        
-        require(_hashIndex >= 0,"Index cannot be less than 0");
-        require(_branch.length > 0,"Branch must be longer than 0");
-        uint branchLength = _branch.length;
-        bytes32 hashInProgress;
-        bytes memory joined;
-        hashInProgress = blake2b.bytesToBytes32(abi.encodePacked(_hashToCheck));
-
-       for(uint i = 0;i < branchLength; i++){
-            if(_hashIndex & 1 > 0){
-                require(_branch[i] != _hashToCheck,"Value can be equal to node but never on the right");
-                //join the two arrays and pass to blake2b
-                joined = abi.encodePacked(_branch[i],hashInProgress);
-            } else {
-                joined = abi.encodePacked(hashInProgress,_branch[i]);
-            }
-            hashInProgress = blake2b.createHash(joined);
-            _hashIndex >>= 1;
-        }
-
-        return hashInProgress;
-
-    }
-
-    function checkHashInRoot(bytes32 _mmrRoot,bytes32 _hashToCheck,uint _hashIndex,bytes32[] memory _branch) public view returns(bool){
-        bytes32 calculatedHash = predictedRootHash(_hashToCheck,_hashIndex,_branch);
-        if(_mmrRoot == calculatedHash) return true;
-        else return false;
-    }*/
-    
     function flipBytes32(bytes32 input) public pure returns (bytes32){
         return bytes32(reverseuint256(uint256(input)));
     }

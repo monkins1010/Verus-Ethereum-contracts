@@ -21,9 +21,11 @@ contract VerusNotarizerStorage {
     mapping (uint32 => VerusObjectsNotarization.CPBaaSNotarization) public PBaaSNotarization;
     mapping (address => uint32) public poolAvailable;
   
-    uint32 public lastBlockHeight;
+    uint32 public lastAcceptedBlockHeight;
+    uint32 public lastReceivedBlockHeight;
     mapping (address => uint256) public claimableFees;
     mapping (address => uint256) public storageGlobal;
+    mapping (uint32 => bytes32) public verusStateRoot;
     
     constructor(address upgradeContractAddress)
     {
@@ -44,10 +46,10 @@ contract VerusNotarizerStorage {
 
     }
 
-    function setPoolAvailable(uint32 height, address currency) public {
+    function setPoolAvailable() public {
 
         require( msg.sender == verusNotarizer,"setNotarizedProof:callfromNotarizeronly");
-        poolAvailable[currency] = height; 
+        poolAvailable[VerusConstants.VerusBridgeAddress] = uint32(block.number); 
 
     }
 
@@ -65,11 +67,14 @@ contract VerusNotarizerStorage {
 
     }
 
-    function setNotarization(VerusObjectsNotarization.CPBaaSNotarization memory _notarization, uint32 verusHeight) public {
+    function setNotarization(VerusObjectsNotarization.CPBaaSNotarization memory _notarization) public {
 
         require( msg.sender == verusNotarizer,"setNotarizedProof:callfromNotarizeronly");
         
-        // copying from memory to storage cannot be done directly NOTE: this costs a lot of GAS
+        // copying from memory to storage cannot be done directly
+
+        uint32 verusHeight = lastReceivedBlockHeight = _notarization.notarizationheight;
+
         PBaaSNotarization[verusHeight].version = _notarization.version; 
         PBaaSNotarization[verusHeight].flags = _notarization.flags;
         PBaaSNotarization[verusHeight].proposer = _notarization.proposer;
@@ -94,32 +99,33 @@ contract VerusNotarizerStorage {
             PBaaSNotarization[verusHeight].nodes.push(_notarization.nodes[i]);
         }  
 
-        lastBlockHeight = verusHeight;
+        // First notarization recieved is valid and this becomes the returned lastimportproof
+        if(lastAcceptedBlockHeight == 0)
+        {
+            lastAcceptedBlockHeight = verusHeight;
+        }
+        // second notarization received is not put as the accepted yet until next n+1 notarization received
+        else if (_notarization.prevheight != verusHeight)
+        {
+            lastAcceptedBlockHeight = _notarization.prevheight;
+        }
 
     }
 
-    function getLastProofRoot() public view returns(VerusObjectsNotarization.CProofRoot memory){
+    function setVerusStateRoot(uint32 height, bytes32 stateroot) public {
 
-        for (uint i=0; i< PBaaSNotarization[lastBlockHeight].proofroots.length; i++)
-        {
-            if (PBaaSNotarization[lastBlockHeight].proofroots[i].systemid == VerusConstants.VerusCurrencyId) 
-            {
-                return PBaaSNotarization[lastBlockHeight].proofroots[i];
-            }
-        }
-
-        VerusObjectsNotarization.CProofRoot[] memory proofRoot = new VerusObjectsNotarization.CProofRoot[](1);
-        return proofRoot[0];
+        require( msg.sender == verusNotarizer,"setNotarizedProof:callfromNotarizeronly");
+        verusStateRoot[height] = stateroot;
     }
 
     function getLastNotarizationProposer() public view returns (address){
 
         address proposer;
-        bytes memory proposerBytes = PBaaSNotarization[lastBlockHeight].proposer.destinationaddress;
+        bytes memory proposerBytes = PBaaSNotarization[lastAcceptedBlockHeight].proposer.destinationaddress;
 
-        assembly {
-            proposer := mload(add(proposerBytes,20))
-        } 
+            assembly {
+                proposer := mload(add(proposerBytes,20))
+            } 
 
         return proposer;
 

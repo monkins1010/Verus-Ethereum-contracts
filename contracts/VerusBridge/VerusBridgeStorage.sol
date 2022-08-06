@@ -29,35 +29,27 @@ contract VerusBridgeStorage {
 
     mapping (bytes32 => bool) public processedTxids;
     mapping (address => VerusObjects.mappedToken) public verusToERC20mapping;
+    mapping (uint32 => VerusObjects.lastImportInfo) public lastImportInfo;
     address[] public tokenList;
-
     
     uint public lastTxImportHeight;
-    uint32 public firstBlock;
+
     uint32 public lastCCEExportHeight;
    
     //  contract allows the contracts to be set and reset
     constructor(
         address upgradeContractAddress, uint256 _poolSize){
         upgradeContract = upgradeContractAddress;     
-        poolSize = _poolSize;   
-        firstBlock = uint32(block.number);
+        poolSize = _poolSize;
     }
 
     function setContracts(address[12] memory contracts) public {
         
-        //TODO: Make updating contract a multisig check across 3 notaries.(change in VerusBridgeMaster.)
         require(msg.sender == upgradeContract);
 
-        if(contracts[uint(VerusConstants.ContractType.TokenManager)] != address(tokenManager))
-        {
-            tokenManager = TokenManager(contracts[uint(VerusConstants.ContractType.TokenManager)]);
-        } 
-        
-        if(contracts[uint(VerusConstants.ContractType.VerusBridge)] != verusBridge)
-        {
-            verusBridge = contracts[uint(VerusConstants.ContractType.VerusBridge)];
-        } 
+        tokenManager = TokenManager(contracts[uint(VerusConstants.ContractType.TokenManager)]);
+
+        verusBridge = contracts[uint(VerusConstants.ContractType.VerusBridge)];
 
     }
 
@@ -66,12 +58,10 @@ contract VerusBridgeStorage {
         require( sender == verusBridge);
     }
 
-    /* function addToFeesHeld(uint256 _feesAmount) public {
+    function setLastImport(bytes32 hashofTXs, bytes32 exporttxid, uint32 txoutnum ) public {
         isSenderBridgeContract(msg.sender);
-        feesHeld += _feesAmount;
-    } */
-
-
+        lastImportInfo[uint32(lastTxImportHeight)] = VerusObjects.lastImportInfo(hashofTXs, exporttxid, txoutnum);
+    } 
 
     function addToEthHeld(uint256 _ethAmount) public {
         isSenderBridgeContract(msg.sender);

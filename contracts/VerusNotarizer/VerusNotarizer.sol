@@ -37,7 +37,6 @@ contract VerusNotarizer {
 
     uint32 public notaryCount;
     bool public poolAvailable;
-    uint32 public notaryTurn = 100;
 
     // Notifies when a new block hash is published
     event NewBlock(VerusObjectsNotarization.CPBaaSNotarization, uint32 notarizedDataHeight);
@@ -117,82 +116,93 @@ contract VerusNotarizer {
 
     }
  
-    function setLatestData(VerusObjectsNotarization.CPBaaSNotarization memory _pbaasNotarization,
-        uint8[] memory _vs,
+    function setLatestData(VerusObjectsNotarization.CPBaaSNotarization memory _pbaasNotarization, bytes memory data
+        ) public returns(bool output) {
+
+       ( uint8[] memory _vs,
         bytes32[] memory _rs,
         bytes32[] memory _ss,
         uint32[] memory blockheights,
-        address[] memory notaryAddress
-        ) public returns(bool output) {
+        address[] memory notaryAddress) = abi.decode(data,(uint8[],bytes32[], bytes32[],uint32[],address[]));
 
-        uint32 lastNotarizationHeight = verusNotarizerStorage.lastBlockHeight();
+        uint32 lastReceivedBlockHeight = verusNotarizerStorage.lastReceivedBlockHeight();
 
-        require((_rs.length == _ss.length) && (_rs.length == _vs.length),"Signature arrays must be of equal length");
-        require(lastNotarizationHeight != uint32(0xffffffff), "Notarizer Revoked");
-        require(_pbaasNotarization.notarizationheight > lastNotarizationHeight,"Block Height must be greater than current block height");
+        require(_pbaasNotarization.notarizationheight > lastReceivedBlockHeight,"Block Height must be greater than current block height");
 
         bytes memory serializedNotarisation = verusSerializer.serializeCPBaaSNotarization(_pbaasNotarization);
         
-        //add in the extra fields for the hashing
-        //add in the other pieces for encoding
-        bytes32 hashedNotarization;
+        bytes32 hashedNotarizationByID;
         uint validSignatures;
+        bytes32 hashedNotarization;
 
         for(uint i=0; i < blockheights.length;i++)
         {
-            //build the hashing sequence
-            hashedNotarization = keccak256(abi.encodePacked(uint8(1),
+            // hash the notarization only
+            hashedNotarization = keccak256(serializedNotarisation);
+
+            // hash the notarizations with the vdxf key, system, height & NotaryID
+            hashedNotarizationByID = keccak256(abi.encodePacked(uint8(1),
                 vdxfcode,
                 VerusConstants.VerusSystemId,
                 verusSerializer.serializeUint32(blockheights[i]),
                 notaryAddress[i],
-                abi.encodePacked(keccak256(serializedNotarisation))));
+                abi.encodePacked(hashedNotarization)));
 
-            if (recoverSigner(hashedNotarization, _vs[i]-4, _rs[i], _ss[i]) != notaryAddressMapping[notaryAddress[i]].main ||
-                notaryAddressMapping[notaryAddress[i]].state != VerusConstants.NOTARY_VALID)
+            if (recoverSigner(hashedNotarizationByID, _vs[i]-4, _rs[i], _ss[i]) != notaryAddressMapping[notaryAddress[i]].main)
             {
-                   revert("Invalid notary signer");  
+                revert("Invalid notary signature");  
+            }
+            if (notaryAddressMapping[notaryAddress[i]].state != VerusConstants.NOTARY_VALID)
+            {
+                revert("Notary revoked"); 
             }
 
-            if (lastNotarizationHeight != 0)
+            if(lastReceivedBlockHeight != 0 && _pbaasNotarization.hashprevnotarization != verusNotarizerStorage.getNotarization(lastReceivedBlockHeight).hashnotarization)
             {
-                bytes32 prevNotarizationHash = verusNotarizerStorage.getNotarization(lastNotarizationHeight).hashprevnotarization;
-                if(reversebytes32(prevNotarizationHash) != hashedNotarization)
-                {
-                    notaryAddressMapping[notaryAddress[i]].state = VerusConstants.NOTARY_REVOKED;
-                    continue;
-                }
+                notaryAddressMapping[notaryAddress[i]].state = VerusConstants.NOTARY_REVOKED;
+                continue;
             }
+
             validSignatures++;
             
-            if(validSignatures >= currentNotariesRequired())
+        }
+
+        if(validSignatures < currentNotariesRequired())
+        {
+            return false;
+        }
+            
+        //valid amount of notarizations achieved
+        //loop through the currencystates and confirm if the bridge is active
+        for(uint k= 0; k < _pbaasNotarization.currencystates.length; k++)
+        {
+            if (!poolAvailable &&  _pbaasNotarization.currencystates[k].currencyid == VerusConstants.VerusBridgeAddress &&
+                _pbaasNotarization.currencystates[k].currencystate.flags & (FLAG_FRACTIONAL + FLAG_REFUNDING + FLAG_LAUNCHCONFIRMED + FLAG_LAUNCHCOMPLETEMARKER) == 
+                (FLAG_FRACTIONAL + FLAG_LAUNCHCONFIRMED + FLAG_LAUNCHCOMPLETEMARKER)) 
             {
-                //valid amount of notarizations achieved
-                //loop through the currencystates and confirm if the bridge is active
-                if(!poolAvailable)
-                {
-                    for(uint k= 0; k < _pbaasNotarization.currencystates.length; k++)
-                    {
-                        address currencyId = _pbaasNotarization.currencystates[k].currencyid;
-
-                        if (_pbaasNotarization.currencystates[k].currencystate.flags & (FLAG_FRACTIONAL + FLAG_REFUNDING + FLAG_LAUNCHCONFIRMED + FLAG_LAUNCHCOMPLETEMARKER) == 
-                                    (FLAG_FRACTIONAL + FLAG_LAUNCHCONFIRMED + FLAG_LAUNCHCOMPLETEMARKER) 
-                                    && verusNotarizerStorage.poolAvailable(currencyId) == 0 
-                                    && currencyId == VerusConstants.VerusBridgeAddress) 
-                            {
-                                verusNotarizerStorage.setPoolAvailable(uint32(block.number), currencyId);
-                                poolAvailable = true;
-                            }
-                    }
-                }
-
-                verusNotarizerStorage.setNotarization(_pbaasNotarization, _pbaasNotarization.notarizationheight);
-                emit NewBlock(_pbaasNotarization, _pbaasNotarization.notarizationheight);
-                return true;        
+                verusNotarizerStorage.setPoolAvailable();
+                poolAvailable = true;
             }
         }
       
-        return false;
+        getproofroot(_pbaasNotarization.proofroots, _pbaasNotarization.notarizationheight);
+        _pbaasNotarization.hashnotarization = hashedNotarization;
+        verusNotarizerStorage.setNotarization(_pbaasNotarization);
+        emit NewBlock(_pbaasNotarization, _pbaasNotarization.notarizationheight);
+        
+        return true;        
+
+    }
+
+    function getproofroot (VerusObjectsNotarization.CProofRoot[] memory proofRoots, uint32 height) private 
+    {
+        for (uint i = 0; i < proofRoots.length; i++) 
+        {
+            if (proofRoots[i].systemid == VerusConstants.VerusCurrencyId) 
+            {
+                verusNotarizerStorage.setVerusStateRoot(height, proofRoots[i].stateroot);
+            }
+        }  
     }
 
     function recoverSigner(bytes32 _h, uint8 _v, bytes32 _r, bytes32 _s) public pure returns (address) {
@@ -224,31 +234,14 @@ contract VerusNotarizer {
               
     }
 
-    function setNotaryFees(uint256 fees) private {
+    function setNotaryFees(uint256 notaryFees) private {
         
-        uint256 feeRemainder;
-        uint256 feeMinusRemainder;
-        uint256 feeAllocation;
+        uint32 psudorandom = uint32(uint(keccak256(abi.encodePacked(block.difficulty, block.timestamp))));
 
-        feeRemainder = fees % (notaries.length );
+        uint32 notaryTurn = uint32(psudorandom % (notaries.length ));
 
-        feeMinusRemainder = fees - feeRemainder;
+        verusNotarizerStorage.setClaimedFees(notaries[notaryTurn], notaryFees);
 
-        feeAllocation = feeMinusRemainder.div(notaries.length);
-
-        for(uint i = 0; i< notaries.length; i++)
-        {
-            verusNotarizerStorage.setClaimedFees(notaries[i], feeAllocation);
-        }
-
-        //cycle through notaries each notarization to pay them the remainding dust.
-        if(feeMinusRemainder !=0)
-        {
-            verusNotarizerStorage.setClaimedFees(notaries[notaryTurn % notaries.length], feeRemainder);
-        }
-        
-        notaryTurn++;
-    
     }
 
     function updateNotarizer(address notarizer, address mainAddress, address revokeAddress, uint8 state) public
