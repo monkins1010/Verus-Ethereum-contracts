@@ -27,7 +27,7 @@ contract VerusBridge {
     VerusBridgeStorage verusBridgeStorage;
     address verusUpgradeContract;
 
-    uint32 firstBlock;
+    uint32 public firstBlock;
 
     // Global storage is located in VerusBridgeStorage contract
 

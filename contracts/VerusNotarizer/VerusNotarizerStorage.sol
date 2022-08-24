@@ -26,10 +26,12 @@ contract VerusNotarizerStorage {
     mapping (address => uint256) public claimableFees;
     mapping (address => uint256) public storageGlobal;
     mapping (uint32 => bytes32) public verusStateRoot;
+    uint32 public firstBlock;
     
     constructor(address upgradeContractAddress)
     {
-        upgradeContract = upgradeContractAddress;     
+        upgradeContract = upgradeContractAddress; 
+        firstBlock = uint32(block.number);    
     }
 
     function setContracts(address[12] memory contracts) public {
