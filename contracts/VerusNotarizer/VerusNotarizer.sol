@@ -157,12 +157,6 @@ contract VerusNotarizer {
                 revert("Notary revoked"); 
             }
 
-            if(lastReceivedBlockHeight != 0 && _pbaasNotarization.hashprevnotarization != verusNotarizerStorage.getNotarization(lastReceivedBlockHeight).hashnotarization)
-            {
-                notaryAddressMapping[notaryAddress[i]].state = VerusConstants.NOTARY_REVOKED;
-                continue;
-            }
-
             validSignatures++;
             
         }
