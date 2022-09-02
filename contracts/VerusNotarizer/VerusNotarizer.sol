@@ -181,6 +181,7 @@ contract VerusNotarizer {
         }
       
         verusNotarizerStorage.setNotarization(_pbaasNotarization, hashedNotarization);
+        setNotarizationProofRoot(_pbaasNotarization, hashedNotarization, lastNotarizationTxid);
 
         emit NewNotarization(_pbaasNotarization.notarizationheight);
         
