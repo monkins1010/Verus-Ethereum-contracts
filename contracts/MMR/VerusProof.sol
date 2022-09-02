@@ -271,10 +271,14 @@ contract VerusProof {
     }
     
     function proveImports(VerusObjects.CReserveTransferImport memory _import, bytes32 hashOfTransfers) public view returns(bool){
+        
+        bytes32 confirmedStateRoot;
         bytes32 retStateRoot;
-        retStateRoot = proveTransaction(_import, hashOfTransfers);
 
-        return (retStateRoot != bytes32(0) && retStateRoot == flipBytes32(verusNotarizerStorage.verusStateRoot(verusNotarizerStorage.lastAcceptedBlockHeight())));
+        retStateRoot = proveTransaction(_import, hashOfTransfers);
+        confirmedStateRoot = verusNotarizerStorage.getBestProof(0).stateRoot;
+
+        return (retStateRoot != bytes32(0) && retStateRoot == flipBytes32(confirmedStateRoot));
  
     }
 

@@ -18,33 +18,23 @@ contract VerusNotarizerStorage {
     address verusNotarizer;
     using SafeMath for uint;
 
-    mapping (uint32 => VerusObjectsNotarization.CPBaaSNotarization) public PBaaSNotarization;
+    mapping (bytes32 => VerusObjectsNotarization.CPBaaSNotarization) public PBaaSNotarization;
     mapping (address => uint32) public poolAvailable;
   
-    uint32 public lastAcceptedBlockHeight;
-    uint32 public lastReceivedBlockHeight;
-    mapping (address => uint256) public claimableFees;
+    VerusObjectsNotarization.NotarizationProofs[] public bestProofs;
+    bytes32 public lastNotarizationTxid;
     mapping (address => uint256) public storageGlobal;
-    mapping (uint32 => bytes32) public verusStateRoot;
-    uint32 public firstBlock;
     
     constructor(address upgradeContractAddress)
     {
         upgradeContract = upgradeContractAddress; 
-        firstBlock = uint32(block.number);    
     }
 
     function setContracts(address[12] memory contracts) public {
         
         require(msg.sender == upgradeContract);
-        
-        if(contracts[uint(VerusConstants.ContractType.VerusBridge)] != verusBridge){
-            verusBridge = contracts[uint(VerusConstants.ContractType.VerusBridge)];
-         } 
-
-        if(contracts[uint(VerusConstants.ContractType.VerusNotarizer)] != verusNotarizer){
-            verusNotarizer = contracts[uint(VerusConstants.ContractType.VerusNotarizer)];
-         } 
+        verusBridge = contracts[uint(VerusConstants.ContractType.VerusBridge)];
+        verusNotarizer = contracts[uint(VerusConstants.ContractType.VerusNotarizer)];
 
     }
 
@@ -63,67 +53,74 @@ contract VerusNotarizerStorage {
 
     }
 
-    function getNotarization(uint32 height) public view returns (VerusObjectsNotarization.CPBaaSNotarization memory){
+    function getNotarization(bytes32 txid) public view returns (VerusObjectsNotarization.CPBaaSNotarization memory){
 
-        return PBaaSNotarization[height];
+        return PBaaSNotarization[txid];
 
     }
 
-    function setNotarization(VerusObjectsNotarization.CPBaaSNotarization memory _notarization) public {
+    function setNotarization(VerusObjectsNotarization.CPBaaSNotarization memory _notarization, bytes32 hashOfNotarization) public {
 
         require( msg.sender == verusNotarizer,"setNotarizedProof:callfromNotarizeronly");
         
         // copying from memory to storage cannot be done directly
 
-        uint32 verusHeight = lastReceivedBlockHeight = _notarization.notarizationheight;
 
-        PBaaSNotarization[verusHeight].version = _notarization.version; 
-        PBaaSNotarization[verusHeight].flags = _notarization.flags;
-        PBaaSNotarization[verusHeight].proposer = _notarization.proposer;
-        PBaaSNotarization[verusHeight].currencystate = _notarization.currencystate;
-        PBaaSNotarization[verusHeight].notarizationheight = _notarization.notarizationheight;
-        PBaaSNotarization[verusHeight].prevnotarization = _notarization.prevnotarization;
-        PBaaSNotarization[verusHeight].hashprevnotarization = _notarization.hashprevnotarization;
-        PBaaSNotarization[verusHeight].prevheight = _notarization.prevheight;
+        PBaaSNotarization[hashOfNotarization].version = _notarization.version; 
+        PBaaSNotarization[hashOfNotarization].flags = _notarization.flags;
+        PBaaSNotarization[hashOfNotarization].proposer = _notarization.proposer;
+        PBaaSNotarization[hashOfNotarization].currencystate = _notarization.currencystate;
+        PBaaSNotarization[hashOfNotarization].notarizationheight = _notarization.notarizationheight;
+        PBaaSNotarization[hashOfNotarization].prevnotarization = _notarization.prevnotarization;
+        PBaaSNotarization[hashOfNotarization].hashprevnotarization = _notarization.hashprevnotarization;
+        PBaaSNotarization[hashOfNotarization].prevheight = _notarization.prevheight;
+        PBaaSNotarization[hashOfNotarization].txid = _notarization.txid;
 
         for (uint i = 0; i < _notarization.currencystates.length; i++) {
  
-            PBaaSNotarization[verusHeight].currencystates.push(_notarization.currencystates[i]);
+            PBaaSNotarization[hashOfNotarization].currencystates.push(_notarization.currencystates[i]);
         }  
               
         for (uint i = 0; i < _notarization.proofroots.length; i++) {
  
-            PBaaSNotarization[verusHeight].proofroots.push(_notarization.proofroots[i]);
+            PBaaSNotarization[hashOfNotarization].proofroots.push(_notarization.proofroots[i]);
         }  
 
         for (uint i = 0; i < _notarization.nodes.length; i++) {
  
-            PBaaSNotarization[verusHeight].nodes.push(_notarization.nodes[i]);
+            PBaaSNotarization[hashOfNotarization].nodes.push(_notarization.nodes[i]);
         }  
 
-        // First notarization recieved is valid and this becomes the returned lastimportproof
-        if(lastAcceptedBlockHeight == 0)
-        {
-            lastAcceptedBlockHeight = verusHeight;
-        }
-        // second notarization received is not put as the accepted yet until next n+1 notarization received
-        else if (_notarization.prevheight != verusHeight)
-        {
-            lastAcceptedBlockHeight = _notarization.prevheight;
-        }
-
+        lastNotarizationTxid = _notarization.txid.hash;
+       
     }
 
-    function setVerusStateRoot(uint32 height, bytes32 stateroot) public {
-
+    function setBestProof(VerusObjectsNotarization.NotarizationProofs memory proof) public 
+    {
         require( msg.sender == verusNotarizer,"setNotarizedProof:callfromNotarizeronly");
-        verusStateRoot[height] = stateroot;
+        bestProofs.push(proof);
+    }
+
+    function getBestProof(uint index) public view returns (VerusObjectsNotarization.NotarizationProofs memory)
+    {
+        return bestProofs[index];
+    }
+
+    function deleteBestProof() public 
+    {
+        require( msg.sender == verusNotarizer,"setNotarizedProof:callfromNotarizeronly");
+        delete bestProofs;
+    }
+
+    function bestProofLength() public view returns (uint256)
+    {
+        return bestProofs.length;
     }
 
     function getLastNotarizationProposer() public view returns (address){
 
         address proposer;
-        bytes memory proposerBytes = PBaaSNotarization[lastAcceptedBlockHeight].proposer.destinationaddress;
+        bytes memory proposerBytes = PBaaSNotarization[bestProofs[0].hashOfNotarization].proposer.destinationaddress;
 
             assembly {
                 proposer := mload(add(proposerBytes,20))
@@ -131,15 +128,6 @@ contract VerusNotarizerStorage {
 
         return proposer;
 
-    }
-    
-    function setClaimedFees(address _address, uint256 fees)public returns (uint256)
-    {
-        require(msg.sender == verusNotarizer);
-
-        claimableFees[_address] += fees;
-
-        return claimableFees[_address];
     }
 
 }

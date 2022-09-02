@@ -9,6 +9,7 @@ import "../Libraries/VerusObjectsNotarization.sol";
 import "../VerusBridge/VerusSerializer.sol";
 import "../MMR/VerusBlake2b.sol";
 import "../VerusNotarizer/VerusNotarizerStorage.sol";
+import "../VerusBridge/VerusBridgeMaster.sol";
 import "@openzeppelin/contracts/utils/math/SafeMath.sol";
 
 contract VerusNotarizer {
@@ -26,8 +27,8 @@ contract VerusNotarizer {
 
     VerusSerializer verusSerializer;
     VerusNotarizerStorage verusNotarizerStorage;
+    VerusBridgeMaster verusBridgeMaster;
     address upgradeContract;
-    address verusBridgeMaster;
     // notarization vdxf key
 
     // list of all notarizers mapped to allow for quick searching
@@ -39,7 +40,7 @@ contract VerusNotarizer {
     bool public poolAvailable;
 
     // Notifies when a new block hash is published
-    event NewBlock(VerusObjectsNotarization.CPBaaSNotarization, uint32 notarizedDataHeight);
+    event NewNotarization(uint32 notarizedDataHeight);
 
     constructor(address _verusSerializerAddress, address upgradeContractAddress, 
     address[] memory _notaries, address[] memory _notariesEthAddress, address[] memory _notariesColdStoreEthAddress, 
@@ -48,7 +49,7 @@ contract VerusNotarizer {
         upgradeContract = upgradeContractAddress;
         notaryCount = uint32(_notaries.length);
         verusNotarizerStorage = VerusNotarizerStorage(verusNotarizerStorageAddress); 
-        verusBridgeMaster = verusBridgeMasterAddress;
+        verusBridgeMaster = VerusBridgeMaster(verusBridgeMasterAddress);
 
         // when contract is launching/upgrading copy in to global bool pool available.
         if(verusNotarizerStorage.poolAvailable(VerusConstants.VerusBridgeAddress) > 0 )
@@ -125,9 +126,9 @@ contract VerusNotarizer {
         uint32[] memory blockheights,
         address[] memory notaryAddress) = abi.decode(data,(uint8[],bytes32[], bytes32[],uint32[],address[]));
 
-        uint32 lastReceivedBlockHeight = verusNotarizerStorage.lastReceivedBlockHeight();
+        bytes32 lastNotarizationTxid = verusNotarizerStorage.lastNotarizationTxid();
 
-        require(_pbaasNotarization.notarizationheight > lastReceivedBlockHeight,"Block Height must be greater than current block height");
+        require(_pbaasNotarization.txid.hash != lastNotarizationTxid,"Known txid of Notarization");
 
         bytes memory serializedNotarisation = verusSerializer.serializeCPBaaSNotarization(_pbaasNotarization);
         
@@ -179,25 +180,64 @@ contract VerusNotarizer {
             }
         }
       
-        getproofroot(_pbaasNotarization.proofroots, _pbaasNotarization.notarizationheight);
-        _pbaasNotarization.hashnotarization = hashedNotarization;
-        verusNotarizerStorage.setNotarization(_pbaasNotarization);
-        emit NewBlock(_pbaasNotarization, _pbaasNotarization.notarizationheight);
+        verusNotarizerStorage.setNotarization(_pbaasNotarization, hashedNotarization);
+
+        emit NewNotarization(_pbaasNotarization.notarizationheight);
         
         return true;        
 
     }
 
-    function getproofroot (VerusObjectsNotarization.CProofRoot[] memory proofRoots, uint32 height) private 
+    function setNotarizationProofRoot(VerusObjectsNotarization.CPBaaSNotarization memory _pbaasNotarization, bytes32 hashedNotarization, bytes32 lastNotarizationTxid) private 
     {
-        for (uint i = 0; i < proofRoots.length; i++) 
+        bytes32 stateRoot;
+
+        stateRoot = getETHStateRoot(_pbaasNotarization.proofroots);
+        
+        VerusObjectsNotarization.NotarizationProofs memory candidateProof = VerusObjectsNotarization.NotarizationProofs(hashedNotarization, _pbaasNotarization.txid, _pbaasNotarization.notarizationheight, stateRoot);
+    
+        if(lastNotarizationTxid == bytes32(0))
         {
-            if (proofRoots[i].systemid == VerusConstants.VerusCurrencyId) 
+            verusNotarizerStorage.setBestProof(candidateProof);
+        }
+
+        else if (verusNotarizerStorage.getBestProof(0).hashOfNotarization == _pbaasNotarization.prevnotarization.hash)
+        {
+            verusNotarizerStorage.setBestProof(candidateProof);
+        }
+        else
+        {
+            for (uint i = 1; i < verusNotarizerStorage.bestProofLength(); i++) {
+
+                VerusObjectsNotarization.NotarizationProofs memory tempProof;
+                
+                if (verusNotarizerStorage.getBestProof(i).hashOfNotarization == _pbaasNotarization.prevnotarization.hash) {
+                    
+                    tempProof = verusNotarizerStorage.getBestProof(i);
+                    verusNotarizerStorage.deleteBestProof();
+                    verusNotarizerStorage.setBestProof(tempProof);
+                    verusNotarizerStorage.setBestProof(candidateProof);
+
+                }
+            }
+            revert("Last notarization not found");
+        }
+
+    }
+
+    function getETHStateRoot(VerusObjectsNotarization.CProofRoot[] memory proofroots) public pure returns (bytes32) {
+
+        for (uint i = 0; i < proofroots.length; i++) 
+        {
+            if (proofroots[i].systemid == VerusConstants.VerusCurrencyId) 
             {
-                verusNotarizerStorage.setVerusStateRoot(height, proofRoots[i].stateroot);
+                 return proofroots[i].stateroot;
             }
         }  
+
+        return bytes32(0);
     }
+
 
     function recoverSigner(bytes32 _h, uint8 _v, bytes32 _r, bytes32 _s) public pure returns (address) {
 
@@ -206,7 +246,7 @@ contract VerusNotarizer {
 
     function setClaimableFees(address _feeRecipient, address _proposer, uint256 _ethAmount) public returns (uint256){
 
-        require(msg.sender == verusBridgeMaster); 
+        require(msg.sender == address(verusBridgeMaster)); 
         
         uint256 notaryFees;
         uint256 LPFees;
@@ -220,11 +260,11 @@ contract VerusNotarizer {
         LPFees = _ethAmount - (notaryFees + exporterFees + proposerFees);
 
         setNotaryFees(notaryFees);
-        verusNotarizerStorage.setClaimedFees(_feeRecipient, exporterFees);
-        verusNotarizerStorage.setClaimedFees(_proposer, proposerFees);
+        verusBridgeMaster.setClaimedFees(_feeRecipient, exporterFees);
+        verusBridgeMaster.setClaimedFees(_proposer, proposerFees);
 
         //return total amount of unclaimed LP Fees accrued.
-        return verusNotarizerStorage.setClaimedFees(address(this), LPFees);
+        return verusBridgeMaster.setClaimedFees(address(this), LPFees);
               
     }
 
@@ -234,7 +274,7 @@ contract VerusNotarizer {
 
         uint32 notaryTurn = uint32(psudorandom % (notaries.length ));
 
-        verusNotarizerStorage.setClaimedFees(notaries[notaryTurn], notaryFees);
+        verusBridgeMaster.setClaimedFees(notaries[notaryTurn], notaryFees);
 
     }
 

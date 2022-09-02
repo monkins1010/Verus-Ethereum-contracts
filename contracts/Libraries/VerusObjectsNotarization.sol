@@ -57,6 +57,13 @@ library VerusObjectsNotarization {
         uint32 n;
     }
 
+    struct NotarizationProofs {
+        bytes32 hashOfNotarization;
+        CUTXORef txid;
+        uint32 height;
+        bytes32 stateRoot;
+    }
+
     struct CNodeData {
         string networkaddress;
         address nodeidentity;
@@ -75,7 +82,7 @@ library VerusObjectsNotarization {
         CurrencyStates[] currencystates;
         CProofRoot[] proofroots;
         CNodeData[] nodes;
-        bytes32 hashnotarization;
+        CUTXORef txid;
     }
 
     //represents the output from the pbaas rpc

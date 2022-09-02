@@ -19,6 +19,7 @@ contract VerusBridgeMaster {
     VerusNotarizerStorage verusNotarizerStorage;
 
     address upgradeContract;
+    mapping (address => uint256) public claimableFees;
      
     constructor(address upgradeContractAddress)
     {
@@ -64,12 +65,8 @@ contract VerusBridgeMaster {
 
     function getLastProofRoot() public view returns(bytes memory){
 
-       return abi.encode(verusNotarizerStorage.getNotarization(verusNotarizerStorage.lastAcceptedBlockHeight()).proofroots);
+       return abi.encode(verusNotarizerStorage.getNotarization(verusNotarizerStorage.lastNotarizationTxid()).proofroots);
 
-    }
-
-    function lastBlockHeight() public view returns(uint32){
-        return verusNotarizerStorage.lastAcceptedBlockHeight();
     }
 
     function setLatestData(VerusObjectsNotarization.CPBaaSNotarization memory _pbaasNotarization, bytes memory data) public returns(bool)
@@ -136,7 +133,7 @@ contract VerusBridgeMaster {
     function claimfees() public returns (bool) 
     {
         uint256 claimAmount;
-        claimAmount = verusNotarizerStorage.claimableFees(msg.sender);
+        claimAmount = claimableFees[msg.sender];
 
         if(claimAmount > 0)
         {
@@ -147,6 +144,16 @@ contract VerusBridgeMaster {
 
         return false;
 
+    }
+
+        
+    function setClaimedFees(address _address, uint256 fees)public returns (uint256)
+    {
+        require(msg.sender == address(verusNotarizer));
+
+        claimableFees[_address] += fees;
+
+        return claimableFees[_address];
     }
 
 }
