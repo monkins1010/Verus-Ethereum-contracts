@@ -24,8 +24,8 @@ contract VerusBridgeStorage {
     // uint256 feesHeld = 0;
     uint256 ethHeld = 0;
 
-    // VRSC pool size in WEI
-    uint256 poolSize = 0;  
+    // VRSC pool size in sats
+    uint256 public poolSize;  
 
     mapping (bytes32 => bool) public processedTxids;
     mapping (address => VerusObjects.mappedToken) public verusToERC20mapping;

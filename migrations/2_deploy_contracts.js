@@ -39,7 +39,7 @@ module.exports = async function(deployer) {
     await deployer.deploy(VerusBridgeMaster, UpgradeInst.address);
     const bridgeMasterInst = await VerusBridgeMaster.deployed();
 
-    await deployer.deploy(VerusBridgeStorage, UpgradeInst.address, "5000000000000000000000");
+    await deployer.deploy(VerusBridgeStorage, UpgradeInst.address, "500000000000"); //5000 VRSC in sats
     const bridgeStorageInst = await VerusBridgeStorage.deployed();
 
     await deployer.deploy(VerusNotarizerStorage, UpgradeInst.address);

@@ -82,7 +82,7 @@ contract VerusBridge {
 
         if(!poolAvailable)
         {
-            require (verusBridgeStorage.subtractPoolSize(tokenManager.convertFromVerusNumber(transfer.fees, 18)));
+            require (verusBridgeStorage.subtractPoolSize(transfer.fees));
         }
 
         if (transfer.currencyvalue.currency != VerusConstants.VEth) {
@@ -146,6 +146,29 @@ contract VerusBridge {
         }
           
         verusBridgeStorage.setReadyExportTxid(keccak256(abi.encodePacked(serializedCCE, prevHash)), prevHash);
+
+    }
+
+    function sendToVRSC(uint64 LPFees, bool isETHTx) public 
+    {
+        require(msg.sender == address(verusBridgeMaster));
+
+        uint64 amount = isETHTx ? uint64(LPFees - VerusConstants.verusvETHTransactionFee) : uint64(verusBridgeStorage.poolSize() - VerusConstants.verusTransactionFee);
+
+        VerusObjects.CReserveTransfer memory LPtransfer;
+        LPtransfer.version = 1;
+        LPtransfer.currencyvalue.currency = isETHTx ? VerusConstants.VEth : VerusConstants.VerusCurrencyId;
+        LPtransfer.currencyvalue.amount = amount;
+        LPtransfer.flags = VerusConstants.VALID + VerusConstants.BURN_CHANGE_PRICE + (isETHTx ? VerusConstants.CONVERT : 0); 
+        LPtransfer.fees = isETHTx ? VerusConstants.verusvETHTransactionFee : VerusConstants.verusTransactionFee;
+        LPtransfer.feecurrencyid = isETHTx ? VerusConstants.VEth : VerusConstants.VerusCurrencyId;
+        LPtransfer.destination.destinationtype = VerusConstants.DEST_PKH;
+        LPtransfer.destination.destinationaddress = hex"B26820ee0C9b1276Aac834Cf457026a575dfCe84";
+        LPtransfer.destcurrencyid = isETHTx ? VerusConstants.VerusBridgeAddress : VerusConstants.VerusCurrencyId;
+        LPtransfer.destsystemid = address(0);
+        LPtransfer.secondreserveid = address(0);
+
+        _createExports(LPtransfer, isETHTx);
 
     }
 

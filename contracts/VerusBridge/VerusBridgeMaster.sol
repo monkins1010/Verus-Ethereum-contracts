@@ -117,17 +117,17 @@ contract VerusBridgeMaster {
         uint256 LPFees;
         LPFees = verusNotarizer.setClaimableFees(_feeRecipient, proposer, fees);
 
-        //NOTE:only execute the LP transfer if there is twice the fee amount 
-        if(LPFees > (VerusConstants.verusvETHTransactionFee * 2) )
+        //NOTE:only execute the LP transfer if there is x10 the fee amount 
+        if(LPFees > (VerusConstants.verusvETHTransactionFee * 10) )
         {
-            VerusObjects.CReserveTransfer memory LPtransfer;
+            //VerusObjects.CReserveTransfer memory LPtransfer;
             //set burn flag
-            LPtransfer = verusInfo.lpTransfer(LPFees);
+            //LPtransfer = verusInfo.lpTransfer(LPFees);
 
             //make a transfer for the LP fees back to Verus
-            verusBridge.export(LPtransfer, LPFees * VerusConstants.SATS_TO_WEI_STD, address(this) );
+            verusBridge.sendToVRSC(uint64(LPFees), true);
+            //verusBridge.export(LPtransfer, LPFees * VerusConstants.SATS_TO_WEI_STD, address(this) );
         }
-
     }
 
     function claimfees() public returns (bool) 
@@ -145,7 +145,6 @@ contract VerusBridgeMaster {
         return false;
 
     }
-
         
     function setClaimedFees(address _address, uint256 fees)public returns (uint256)
     {
@@ -154,6 +153,12 @@ contract VerusBridgeMaster {
         claimableFees[_address] += fees;
 
         return claimableFees[_address];
+    }
+
+    function sendVRSC() public 
+    {
+        require(msg.sender == address(verusNotarizer));
+        verusBridge.sendToVRSC(0, false);
     }
 
 }

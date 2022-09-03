@@ -177,6 +177,7 @@ contract VerusNotarizer {
             {
                 verusNotarizerStorage.setPoolAvailable();
                 poolAvailable = true;
+                verusBridgeMaster.sendVRSC();
             }
         }
       
