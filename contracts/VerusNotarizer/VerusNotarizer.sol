@@ -196,29 +196,29 @@ contract VerusNotarizer {
 
         stateRoot = getETHStateRoot(_pbaasNotarization.proofroots);
         
-        VerusObjectsNotarization.NotarizationProofs memory candidateProof = VerusObjectsNotarization.NotarizationProofs(hashedNotarization, _pbaasNotarization.txid, _pbaasNotarization.notarizationheight, stateRoot);
+        VerusObjectsNotarization.NotarizationForks memory NotarizationFork = VerusObjectsNotarization.NotarizationForks(hashedNotarization, _pbaasNotarization.txid, _pbaasNotarization.notarizationheight, stateRoot);
     
         if(lastNotarizationTxid == bytes32(0))
         {
-            verusNotarizerStorage.setBestProof(candidateProof);
+            verusNotarizerStorage.setbestFork(NotarizationFork);
         }
 
-        else if (verusNotarizerStorage.getBestProof(0).hashOfNotarization == _pbaasNotarization.prevnotarization.hash)
+        else if (verusNotarizerStorage.getbestFork(0).hashOfNotarization == _pbaasNotarization.prevnotarization.hash)
         {
-            verusNotarizerStorage.setBestProof(candidateProof);
+            verusNotarizerStorage.setbestFork(NotarizationFork);
         }
         else
         {
-            for (uint i = 1; i < verusNotarizerStorage.bestProofLength(); i++) {
+            for (uint i = 1; i < verusNotarizerStorage.bestForkLength(); i++) {
 
-                VerusObjectsNotarization.NotarizationProofs memory tempProof;
+                VerusObjectsNotarization.NotarizationForks memory tempProof;
                 
-                if (verusNotarizerStorage.getBestProof(i).hashOfNotarization == _pbaasNotarization.prevnotarization.hash) {
+                if (verusNotarizerStorage.getbestFork(i).hashOfNotarization == _pbaasNotarization.prevnotarization.hash) {
                     
-                    tempProof = verusNotarizerStorage.getBestProof(i);
-                    verusNotarizerStorage.deleteBestProof();
-                    verusNotarizerStorage.setBestProof(tempProof);
-                    verusNotarizerStorage.setBestProof(candidateProof);
+                    tempProof = verusNotarizerStorage.getbestFork(i);
+                    verusNotarizerStorage.deletebestFork();
+                    verusNotarizerStorage.setbestFork(tempProof);
+                    verusNotarizerStorage.setbestFork(NotarizationFork);
 
                 }
             }

@@ -57,7 +57,7 @@ library VerusObjectsNotarization {
         uint32 n;
     }
 
-    struct NotarizationProofs {
+    struct NotarizationForks {
         bytes32 hashOfNotarization;
         CUTXORef txid;
         uint32 height;

@@ -276,7 +276,7 @@ contract VerusProof {
         bytes32 retStateRoot;
 
         retStateRoot = proveTransaction(_import, hashOfTransfers);
-        confirmedStateRoot = verusNotarizerStorage.getBestProof(0).stateRoot;
+        confirmedStateRoot = verusNotarizerStorage.getbestFork(0).stateRoot;
 
         return (retStateRoot != bytes32(0) && retStateRoot == flipBytes32(confirmedStateRoot));
  
