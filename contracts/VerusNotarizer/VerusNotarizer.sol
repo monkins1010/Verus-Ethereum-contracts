@@ -203,7 +203,7 @@ contract VerusNotarizer {
             verusNotarizerStorage.setbestFork(NotarizationFork);
         }
 
-        else if (verusNotarizerStorage.getbestFork(0).hashOfNotarization == _pbaasNotarization.prevnotarization.hash)
+        else if (verusNotarizerStorage.getbestFork(0).hashOfNotarization == reversebytes32(_pbaasNotarization.prevnotarization.hash))
         {
             verusNotarizerStorage.setbestFork(NotarizationFork);
         }
@@ -213,13 +213,13 @@ contract VerusNotarizer {
 
                 VerusObjectsNotarization.NotarizationForks memory tempProof;
                 
-                if (verusNotarizerStorage.getbestFork(i).hashOfNotarization == _pbaasNotarization.prevnotarization.hash) {
+                if (verusNotarizerStorage.getbestFork(i).hashOfNotarization == reversebytes32(_pbaasNotarization.prevnotarization.hash)) {
                     
                     tempProof = verusNotarizerStorage.getbestFork(i);
                     verusNotarizerStorage.deletebestFork();
                     verusNotarizerStorage.setbestFork(tempProof);
                     verusNotarizerStorage.setbestFork(NotarizationFork);
-
+                    return;
                 }
             }
             revert("Last notarization not found");
