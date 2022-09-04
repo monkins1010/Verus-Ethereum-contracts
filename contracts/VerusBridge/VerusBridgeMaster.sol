@@ -100,11 +100,6 @@ contract VerusBridgeMaster {
         return verusInfo.getcurrency(_currencyid);
     }
 
-    function getLastimportHeight() public view returns (uint)
-    {
-        return verusBridgeStorage.lastTxImportHeight();
-    }
-
     function setClaimableFees(address _feeRecipient, uint256 fees) public
     {
         require(msg.sender == address(verusBridge));
