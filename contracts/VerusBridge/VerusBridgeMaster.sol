@@ -118,7 +118,7 @@ contract VerusBridgeMaster {
         LPFees = verusNotarizer.setClaimableFees(_feeRecipient, proposer, fees);
 
         //NOTE:only execute the LP transfer if there is x10 the fee amount 
-        if(LPFees > (VerusConstants.verusvETHTransactionFee * 10) )
+        if(LPFees > (VerusConstants.verusvETHTransactionFee * 10) && verusNotarizer.poolAvailable())
         {
             //VerusObjects.CReserveTransfer memory LPtransfer;
             //set burn flag

@@ -59,12 +59,12 @@ contract VerusNotarizerStorage {
 
     }
 
-    function setNotarization(VerusObjectsNotarization.CPBaaSNotarization memory _notarization, bytes32 txidOfNotarization) public {
+    function setNotarization(VerusObjectsNotarization.CPBaaSNotarization memory _notarization) public {
 
         require( msg.sender == verusNotarizer,"setNotarizedProof:callfromNotarizeronly");
         
         // copying from memory to storage cannot be done directly
-
+        bytes32 txidOfNotarization = _notarization.txid.hash;
 
         PBaaSNotarization[txidOfNotarization].version = _notarization.version; 
         PBaaSNotarization[txidOfNotarization].flags = _notarization.flags;
@@ -92,7 +92,7 @@ contract VerusNotarizerStorage {
             PBaaSNotarization[txidOfNotarization].nodes.push(_notarization.nodes[i]);
         }  
 
-        lastNotarizationTxid = _notarization.txid.hash;
+        lastNotarizationTxid = txidOfNotarization;
        
     }
 
