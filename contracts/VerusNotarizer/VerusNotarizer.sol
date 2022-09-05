@@ -186,7 +186,7 @@ contract VerusNotarizer {
 
         // replace keccack hash with blake2b for index lookup
 
-        hashedNotarization = blake2b.createHash(serializedNotarisation);
+        hashedNotarization = blake2b.createDefaultHash(serializedNotarisation);
         verusNotarizerStorage.setNotarization(_pbaasNotarization);
         setNotarizationProofRoot(_pbaasNotarization, hashedNotarization, lastNotarizationTxid);
 

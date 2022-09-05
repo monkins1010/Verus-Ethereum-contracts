@@ -9,7 +9,12 @@ contract VerusBlake2b {
     using Blake2b for Blake2b.Instance;
 
     function createHash(bytes memory input) public view returns (bytes32) {
-      Blake2b.Instance memory instance = Blake2b.init(hex"", 32);
+      Blake2b.Instance memory instance = Blake2b.init(hex"", 32, true);
+      return bytesToBytes32(instance.finalize(input));
+    }
+
+    function createDefaultHash(bytes memory input) public view returns (bytes32) {
+      Blake2b.Instance memory instance = Blake2b.init(hex"", 32, false);
       return bytesToBytes32(instance.finalize(input));
     }
 

@@ -31,7 +31,7 @@ library Blake2b {
     }
 
     // Initialise the state with a given `key` and required `out_len` hash length.
-    function init(bytes memory key, uint out_len)
+    function init(bytes memory key, uint out_len, bool useVerusPersonal)
         internal
         view
         returns (Instance memory instance)
@@ -42,11 +42,11 @@ library Blake2b {
         //    if eq(extcodehash(0x09), 0) { revert(0, 0) }
         //}
 
-        reset(instance, key, out_len);
+        reset(instance, key, out_len, useVerusPersonal);
     }
 
     // Initialise the state with a given `key` and required `out_len` hash length.
-    function reset(Instance memory instance, bytes memory key, uint out_len)
+    function reset(Instance memory instance, bytes memory key, uint out_len, bool useVerusPersonal)
         internal
         view
     {
@@ -57,7 +57,11 @@ library Blake2b {
         // It is byteswapped for the encoding requirements, additionally
         // the IV has the initial parameter block 0 XOR constant applied, but
         // not the key and output length.
-        instance.state = hex"0000000c08c9bdf267e6096a3ba7ca8485ae67bb2bf894fe72f36e3cf1361d5f3af54fa5d182e6ad7f520e511f6c3e2b8c68059b3DD8338ED89DE6791854126751AC933300000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000";
+        if(useVerusPersonal)
+            instance.state = hex"0000000c08c9bdf267e6096a3ba7ca8485ae67bb2bf894fe72f36e3cf1361d5f3af54fa5d182e6ad7f520e511f6c3e2b8c68059b3DD8338ED89DE6791854126751AC933300000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000";
+        else
+            instance.state = hex"0000000c08c9bdf267e6096a3ba7ca8485ae67bb2bf894fe72f36e3cf1361d5f3af54fa5d182e6ad7f520e511f6c3e2b8c68059b6bbd41fbabd9831f79217e1319cde05b00000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000";
+        
         bytes memory state = instance.state;
 
         // Update parameter block 0 with key length and output length.
