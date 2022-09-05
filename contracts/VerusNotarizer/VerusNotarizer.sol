@@ -38,18 +38,20 @@ contract VerusNotarizer {
 
     uint32 public notaryCount;
     bool public poolAvailable;
+    VerusBlake2b blake2b;
 
     // Notifies when a new block hash is published
     event NewNotarization(uint32 notarizedDataHeight);
 
     constructor(address _verusSerializerAddress, address upgradeContractAddress, 
     address[] memory _notaries, address[] memory _notariesEthAddress, address[] memory _notariesColdStoreEthAddress, 
-    address verusNotarizerStorageAddress, address verusBridgeMasterAddress) {
+    address verusNotarizerStorageAddress, address verusBridgeMasterAddress, address verusBLAKE2bAddress) {
         verusSerializer = VerusSerializer(_verusSerializerAddress);
         upgradeContract = upgradeContractAddress;
         notaryCount = uint32(_notaries.length);
         verusNotarizerStorage = VerusNotarizerStorage(verusNotarizerStorageAddress); 
         verusBridgeMaster = VerusBridgeMaster(verusBridgeMasterAddress);
+        blake2b = VerusBlake2b(verusBLAKE2bAddress);
 
         // when contract is launching/upgrading copy in to global bool pool available.
         if(verusNotarizerStorage.poolAvailable(VerusConstants.VerusBridgeAddress) > 0 )
@@ -135,11 +137,12 @@ contract VerusNotarizer {
         bytes32 hashedNotarizationByID;
         uint validSignatures;
         bytes32 hashedNotarization;
+        
+        hashedNotarization = keccak256(serializedNotarisation);
 
         for(uint i=0; i < blockheights.length;i++)
         {
             // hash the notarization only
-            hashedNotarization = keccak256(serializedNotarisation);
 
             // hash the notarizations with the vdxf key, system, height & NotaryID
             hashedNotarizationByID = keccak256(abi.encodePacked(uint8(1),
@@ -180,7 +183,10 @@ contract VerusNotarizer {
                 verusBridgeMaster.sendVRSC();
             }
         }
-      
+
+        // replace keccack hash with blake2b for index lookup
+
+        hashedNotarization = blake2b.createHash(serializedNotarisation);
         verusNotarizerStorage.setNotarization(_pbaasNotarization);
         setNotarizationProofRoot(_pbaasNotarization, hashedNotarization, lastNotarizationTxid);
 
@@ -196,14 +202,14 @@ contract VerusNotarizer {
 
         stateRoot = getETHStateRoot(_pbaasNotarization.proofroots);
         
-        VerusObjectsNotarization.NotarizationForks memory NotarizationFork = VerusObjectsNotarization.NotarizationForks(hashedNotarization, _pbaasNotarization.txid, _pbaasNotarization.notarizationheight, stateRoot);
+        VerusObjectsNotarization.NotarizationForks memory NotarizationFork = VerusObjectsNotarization.NotarizationForks(reversebytes32(hashedNotarization), _pbaasNotarization.txid, _pbaasNotarization.notarizationheight, stateRoot);
     
         if(lastNotarizationTxid == bytes32(0))
         {
             verusNotarizerStorage.setbestFork(NotarizationFork);
         }
 
-        else if (verusNotarizerStorage.getbestFork(0).hashOfNotarization == reversebytes32(_pbaasNotarization.prevnotarization.hash))
+        else if (verusNotarizerStorage.getbestFork(0).hashOfNotarization == _pbaasNotarization.hashprevnotarization)
         {
             verusNotarizerStorage.setbestFork(NotarizationFork);
         }
@@ -213,7 +219,7 @@ contract VerusNotarizer {
 
                 VerusObjectsNotarization.NotarizationForks memory tempProof;
                 
-                if (verusNotarizerStorage.getbestFork(i).hashOfNotarization == reversebytes32(_pbaasNotarization.prevnotarization.hash)) {
+                if (verusNotarizerStorage.getbestFork(i).hashOfNotarization == _pbaasNotarization.hashprevnotarization) {
                     
                     tempProof = verusNotarizerStorage.getbestFork(i);
                     verusNotarizerStorage.deletebestFork();
@@ -222,7 +228,7 @@ contract VerusNotarizer {
                     return;
                 }
             }
-            revert("Last notarization not found");
+            revert("Hash of notarization not found");
         }
 
     }
