@@ -33,6 +33,7 @@ contract VerusNotarizer {
 
     // list of all notarizers mapped to allow for quick searching
     mapping (address => VerusObjects.notarizer ) public notaryAddressMapping;
+    mapping (address => uint) sigCheck;
 
     address[] private notaries;
 
@@ -140,7 +141,9 @@ contract VerusNotarizer {
         
         hashedNotarization = keccak256(serializedNotarisation);
 
-        for(uint i=0; i < blockheights.length;i++)
+        checkunique(notaryAddress);
+
+        for(uint i = 0; i < blockheights.length; i++)
         {
             // hash the notarization only
 
@@ -152,7 +155,7 @@ contract VerusNotarizer {
                 notaryAddress[i],
                 abi.encodePacked(hashedNotarization)));
 
-            if (recoverSigner(hashedNotarizationByID, _vs[i]-4, _rs[i], _ss[i]) != notaryAddressMapping[notaryAddress[i]].main)
+            if (recoverSigner(hashedNotarizationByID, _vs[i]-4, _rs[i], _ss[i]) != notaryAddressMapping[notaryAddress[i]].main || sigCheck[notaryAddress[i]] != i)
             {
                 revert("Invalid notary signature");  
             }
@@ -202,14 +205,12 @@ contract VerusNotarizer {
 
         stateRoot = getETHStateRoot(_pbaasNotarization.proofroots);
         
-        VerusObjectsNotarization.NotarizationForks memory NotarizationFork = VerusObjectsNotarization.NotarizationForks(reversebytes32(hashedNotarization), _pbaasNotarization.txid, _pbaasNotarization.notarizationheight, stateRoot);
+        VerusObjectsNotarization.NotarizationForks memory NotarizationFork = VerusObjectsNotarization.NotarizationForks(reversebytes32(hashedNotarization),
+                                                                             _pbaasNotarization.txid, _pbaasNotarization.notarizationheight, stateRoot);
     
-        if(lastNotarizationTxid == bytes32(0))
-        {
-            verusNotarizerStorage.setbestFork(NotarizationFork);
-        }
-
-        else if (verusNotarizerStorage.getbestFork(0).hashOfNotarization == _pbaasNotarization.hashprevnotarization)
+        if(lastNotarizationTxid == bytes32(0) 
+            || verusNotarizerStorage.getbestFork(0).hashOfNotarization == _pbaasNotarization.hashprevnotarization 
+            || _pbaasNotarization.hashprevnotarization == bytes32(0))
         {
             verusNotarizerStorage.setbestFork(NotarizationFork);
         }
@@ -244,6 +245,14 @@ contract VerusNotarizer {
         }  
 
         return bytes32(0);
+    }
+
+    function checkunique(address[] memory ids) private
+    {
+        for (uint i = 0; i < ids.length; i++)
+        {
+            sigCheck[ids[i]] = i;
+        }
     }
 
 
