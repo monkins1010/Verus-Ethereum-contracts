@@ -122,11 +122,11 @@ contract VerusBridge {
             verusBridgeStorage.addToEthHeld(paidValue);  // msg.value == fees + amount in transaction checked in checkExport()
             //verusBridgeStorage.addToFeesHeld(fees); 
         }
-        _createExports(transfer, poolAvailable);
+        _createExports(transfer, poolAvailable, block.number);
     }
 
-    function _createExports(VerusObjects.CReserveTransfer memory newTransaction, bool poolAvailable) private {
-        uint currentHeight = block.number;
+    function _createExports(VerusObjects.CReserveTransfer memory newTransaction, bool poolAvailable, uint blockNumber) private {
+        uint currentHeight = blockNumber;
 
         //check if the current block height has a set of transfers associated with it if so add to the existing array
         bool newBlock;
@@ -145,30 +145,31 @@ contract VerusBridge {
             prevHash = verusBridgeStorage.getReadyExports(currentHeight).prevExportHash;
         }
           
-        verusBridgeStorage.setReadyExportTxid(keccak256(abi.encodePacked(serializedCCE, prevHash)), prevHash);
+        verusBridgeStorage.setReadyExportTxid(keccak256(abi.encodePacked(serializedCCE, prevHash)), prevHash, currentHeight);
 
     }
 
-    function sendToVRSC(uint64 LPFees, bool isETHTx) public 
+    function sendToVRSC(uint64 LPFees, bool isBRIDGETx) public 
     {
         require(msg.sender == address(verusBridgeMaster));
 
-        uint64 amount = isETHTx ? uint64(LPFees - VerusConstants.verusvETHTransactionFee) : uint64(verusBridgeStorage.poolSize() - VerusConstants.verusTransactionFee);
+        uint64 amount = isBRIDGETx ? uint64(LPFees - VerusConstants.verusvETHTransactionFee) : uint64(verusBridgeStorage.poolSize() - VerusConstants.verusTransactionFee);
 
         VerusObjects.CReserveTransfer memory LPtransfer;
         LPtransfer.version = 1;
-        LPtransfer.currencyvalue.currency = isETHTx ? VerusConstants.VEth : VerusConstants.VerusCurrencyId;
+        LPtransfer.currencyvalue.currency = isBRIDGETx ? VerusConstants.VEth : VerusConstants.VerusCurrencyId;
         LPtransfer.currencyvalue.amount = amount;
-        LPtransfer.flags = VerusConstants.VALID + VerusConstants.BURN_CHANGE_PRICE + (isETHTx ? VerusConstants.CONVERT : 0); 
-        LPtransfer.fees = isETHTx ? VerusConstants.verusvETHTransactionFee : VerusConstants.verusTransactionFee;
-        LPtransfer.feecurrencyid = isETHTx ? VerusConstants.VEth : VerusConstants.VerusCurrencyId;
+        LPtransfer.flags = VerusConstants.VALID + VerusConstants.BURN_CHANGE_PRICE; 
+        LPtransfer.fees = isBRIDGETx ? VerusConstants.verusvETHTransactionFee : VerusConstants.verusTransactionFee;
+        LPtransfer.feecurrencyid = isBRIDGETx ? VerusConstants.VEth : VerusConstants.VerusCurrencyId;
         LPtransfer.destination.destinationtype = VerusConstants.DEST_PKH;
         LPtransfer.destination.destinationaddress = hex"B26820ee0C9b1276Aac834Cf457026a575dfCe84";
-        LPtransfer.destcurrencyid = isETHTx ? VerusConstants.VerusBridgeAddress : VerusConstants.VerusCurrencyId;
+        LPtransfer.destcurrencyid = VerusConstants.VerusBridgeAddress;
         LPtransfer.destsystemid = address(0);
         LPtransfer.secondreserveid = address(0);
 
-        _createExports(LPtransfer, isETHTx);
+        // When the bridge launches to make sure a fresh block with no pending transfers is used to insert the CCX
+        _createExports(LPtransfer, true, block.number + 1);
 
     }
 
@@ -179,8 +180,10 @@ contract VerusBridge {
         //loop through the transfers and return a list of unprocessed
         bytes32[] memory txidList = new bytes32[](_imports.length);
         uint iterator;
-        for(uint i = 0; i < _imports.length; i++){
-            if(verusBridgeStorage.processedTxids(_imports[i]) != true){
+        for(uint i = 0; i < _imports.length; i++)
+        {
+            if(verusBridgeStorage.processedTxids(_imports[i]) != true)
+            {
                 txidList[iterator] = _imports[i];
                 iterator++;
             }
@@ -190,7 +193,8 @@ contract VerusBridge {
 
     function submitImports(VerusObjects.CReserveTransferImport[] calldata _imports) public {
         //loop through the transfers and process
-        for(uint i = 0; i < _imports.length; i++){
+        for(uint i = 0; i < _imports.length; i++)
+        {
            _createImports(_imports[i]);
         }
     }
@@ -254,15 +258,22 @@ contract VerusBridge {
     function getReadyExportsByRange(uint _startBlock,uint _endBlock) public view returns(VerusObjects.CReserveTransferSet[] memory returnedExports){
         //calculate the size that the return array will be to initialise it
         uint outputSize = 0;
-        if(_startBlock < firstBlock) _startBlock = firstBlock;
-        for(uint i = _startBlock; i <= _endBlock; i++){
-            if(verusBridgeStorage.getReadyExports(i).exportHash != bytes32(0))  outputSize += 1;
+        if (_startBlock < firstBlock) 
+        {
+            _startBlock = firstBlock;
+        }
+
+        for(uint i = _startBlock; i <= _endBlock; i++)
+        {
+            if (verusBridgeStorage.getReadyExports(i).exportHash != bytes32(0))  outputSize += 1;
         }
 
         VerusObjects.CReserveTransferSet[] memory output = new VerusObjects.CReserveTransferSet[](outputSize);
         uint outputPosition = 0;
-        for (uint blockNumber = _startBlock; blockNumber <= _endBlock; blockNumber++){
-            if (verusBridgeStorage.getReadyExports(blockNumber).exportHash != bytes32(0)) {
+        for (uint blockNumber = _startBlock; blockNumber <= _endBlock; blockNumber++)
+        {
+            if (verusBridgeStorage.getReadyExports(blockNumber).exportHash != bytes32(0)) 
+            {
                 output[outputPosition] = verusBridgeStorage.getReadyExports(blockNumber);
                 outputPosition++;
             }

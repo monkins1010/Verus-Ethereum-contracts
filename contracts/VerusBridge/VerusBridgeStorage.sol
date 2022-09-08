@@ -91,10 +91,9 @@ contract VerusBridgeStorage {
     
     }
 
-    function setReadyExportTxid(bytes32 txidhash, bytes32 prevTxidHash) public {
+    function setReadyExportTxid(bytes32 txidhash, bytes32 prevTxidHash, uint _block) public {
         
         isSenderBridgeContract(msg.sender);
-        uint _block = block.number;
         
         _readyExports[_block].exportHash = txidhash;
 
