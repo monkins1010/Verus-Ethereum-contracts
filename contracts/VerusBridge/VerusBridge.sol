@@ -33,7 +33,7 @@ contract VerusBridge {
 
     constructor(address verusBridgeMasterAddress, address verusBridgeStorageAddress,
                 address tokenManagerAddress, address verusSerializerAddress, address verusProofAddress,
-                address verusCCEAddress, address exportManagerAddress, address verusUpgradeAddress) {
+                address verusCCEAddress, address exportManagerAddress, address verusUpgradeAddress, uint firstblock) {
         verusBridgeMaster = VerusBridgeMaster(verusBridgeMasterAddress); 
         verusBridgeStorage = VerusBridgeStorage(verusBridgeStorageAddress); 
         tokenManager = TokenManager(tokenManagerAddress);
@@ -42,7 +42,7 @@ contract VerusBridge {
         verusCCE = VerusCrossChainExport(verusCCEAddress);
         exportManager = ExportManager(exportManagerAddress);
         verusUpgradeContract = verusUpgradeAddress;
-        firstBlock = uint32(block.number);
+        firstBlock = uint32(firstblock);
 
     }
 
@@ -132,7 +132,7 @@ contract VerusBridge {
         bool newBlock;
         newBlock = verusBridgeStorage.setReadyExportTransfers(currentHeight, newTransaction);
 
-        bytes memory serializedCCE = verusSerializer.serializeCCrossChainExport(verusCCE.generateCCE(verusBridgeStorage.getReadyExports(currentHeight).transfers, poolAvailable));
+        bytes memory serializedCCE = verusSerializer.serializeCCrossChainExport(verusCCE.generateCCE(verusBridgeStorage.getReadyExports(currentHeight).transfers, poolAvailable, currentHeight));
 
         bytes32 prevHash;
  

@@ -1,3 +1,4 @@
+const Web3 = require('web3');
 var UpgradeManager = artifacts.require("./VerusBridge/UpgradeManager.sol");
 var VerusBridgeMaster = artifacts.require("./VerusBridge/VerusBridgeMaster.sol");
 var VerusBridgeStorage = artifacts.require("./VerusBridge/VerusBridgeStorage.sol");
@@ -33,6 +34,8 @@ const USDCERC20GOERLI = "0x98339D8C260052B7ad81c28c16C0b98420f2B46a";
 
 module.exports = async function(deployer) {
 
+    let block = await web3.eth.getBlock("latest");
+
     await deployer.deploy(UpgradeManager);
     const UpgradeInst = await UpgradeManager.deployed();
 
@@ -66,7 +69,8 @@ module.exports = async function(deployer) {
     await deployer.deploy(ExportManager, bridgeStorageInst.address, tokenInst.address, UpgradeInst.address);
     const ExportManInst = await ExportManager.deployed();
 
-    await deployer.deploy(VerusBridge, bridgeMasterInst.address, bridgeStorageInst.address, tokenInst.address, serializerInst.address, ProofInst.address, CCEInst.address, ExportManInst.address, UpgradeInst.address);
+    
+    await deployer.deploy(VerusBridge, bridgeMasterInst.address, bridgeStorageInst.address, tokenInst.address, serializerInst.address, ProofInst.address, CCEInst.address, ExportManInst.address, UpgradeInst.address, block.number);
     const VerusBridgeInst = await VerusBridge.deployed();
 
     await deployer.deploy(VerusInfo, notarizerInst.address, "2000753", "0.7.3-9-rc1", "VETH", true, UpgradeInst.address, tokenInst.address);
