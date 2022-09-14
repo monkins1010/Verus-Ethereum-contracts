@@ -86,7 +86,7 @@ contract VerusInfo {
                 VerusConstants.VEth,
                 VerusConstants.VerusSystemId,
                 VerusConstants.VerusSystemId,
-                2,
+                1,
                 3,
                 VerusObjectsCommon.CTransferDestination(9,abi.encodePacked(currencyAddress)),
                 VerusConstants.VerusSystemId,

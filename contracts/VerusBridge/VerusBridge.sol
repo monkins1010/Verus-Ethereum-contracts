@@ -230,7 +230,7 @@ contract VerusBridge {
             verusBridgeStorage.setlastTxImportHeight(_import.height);
         }   
 
-        verusBridgeStorage.setLastImport(hashOfTransfers, _import.txid, uint32(_import.txoutnum));
+        verusBridgeStorage.setLastImport(hashOfTransfers, txidfound, uint32(_import.txoutnum));
         
         // Deserialize transfers and pack into send arrays
         VerusObjects.ETHPayments[] memory payments = 
