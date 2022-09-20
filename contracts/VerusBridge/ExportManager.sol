@@ -46,6 +46,7 @@ contract ExportManager {
         address gatewayID;
         address gatewayCode;
         address destAddressID;
+        uint8 destinationType;
         
         require (checkTransferFlags(transfer), "Flag Check failed");         
                                   
@@ -57,11 +58,28 @@ contract ExportManager {
         // Check destination address is not zero
         serializedDest = transfer.destination.destinationaddress;  
 
-        assembly 
+        if (transfer.destination.destinationtype != VerusConstants.DEST_ETHNFT)
         {
-            destAddressID := mload(add(serializedDest, 20))
+            assembly 
+            {
+                destAddressID := mload(add(serializedDest, 20))
+            }
         }
+        else
+        {
+            // Custom destination for NFT  = 1byte desttype + 20bytes destinationaddres + 20bytes NFT address + 32bytes NFTTokenID
+            require (transfer.destination.destinationaddress.length == 73, "NFT destination address not 73 bytes");
+            require (transfer.flags == VerusConstants.VALID, "Invalid flags for NFT transfer");
+            assembly 
+            {
+                destinationType := mload(add(serializedDest, 1))
+                destAddressID := mload(add(serializedDest, 21))
+            }
+            require (destinationType == VerusConstants.DEST_PKH ||
+                   destinationType == VerusConstants.DEST_ID  ||
+                   destinationType == VerusConstants.DEST_SH, "NFT destination not valid");
 
+        }
         require (destAddressID != address(0), "Destination Address null");// Destination can be currency definition
 
         // Check fees are correct, if pool unavailble vrsctest only fees, TODO:if pool availble vETH fees only for now
@@ -93,7 +111,7 @@ contract ExportManager {
                 require(transfer.destcurrencyid == VerusConstants.VerusBridgeAddress);
             }
 
-            if (transfer.destination.destinationtype == (VerusConstants.FLAG_DEST_GATEWAY | VerusConstants.DEST_ETH )) {
+            if (transfer.destination.destinationtype == (VerusConstants.FLAG_DEST_GATEWAY + VerusConstants.DEST_ETH )) {
 
                 //destination is concatenated with the gateway back address (bridge.veth) + (gatewayCode) + 0.003 ETH in fees uint64LE
                 
@@ -116,7 +134,7 @@ contract ExportManager {
                 requiredFees += requiredFees;  //bounceback fees required as well as send fees
 
             } else if (!(transfer.destination.destinationtype == VerusConstants.DEST_PKH || transfer.destination.destinationtype == VerusConstants.DEST_ID 
-                        || transfer.destination.destinationtype == VerusConstants.DEST_SH )) {
+                        || transfer.destination.destinationtype == VerusConstants.DEST_SH || transfer.destination.destinationtype == VerusConstants.DEST_ETHNFT)) {
 
                 return 0;  
 
@@ -211,14 +229,16 @@ contract ExportManager {
         }
         else if (transfer.flags == (VerusConstants.CURRENCY_EXPORT + VerusConstants.VALID) && transferType == VerusConstants.DEST_REGISTERCURRENCY)
         {
-            // TODO: upgrade contract to handle NFT's
+            // TODO: upgrade contract to handle ERC721's registered by the contract (currently only from mapped currencies from the daemon)
             // NFT currency export definition.  Contains ERC721 contract address and token ID. 
+            // NOTE: Check when importing a currency check the fees and gateway
             // can be sent to DEST_ID / DEST_PKH / DEST_SH
             return false; /* NFTS NOT CURRENCTLY ACTIVATED */
         }
         else if ((transferType != VerusConstants.DEST_ID && 
                 transferType != VerusConstants.DEST_PKH && 
-                transferType != VerusConstants.DEST_SH) )
+                transferType != VerusConstants.DEST_SH &&
+                transferType != VerusConstants.DEST_ETHNFT) )
         {
             return false;
         }

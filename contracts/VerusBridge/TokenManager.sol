@@ -174,13 +174,12 @@ contract TokenManager {
             name[i] = bytes1(uint8(_tx.destinationAndFlags >> ((i+1) * 8)));
         }
 
-        uint8 currencyFlags;
+        //TODO: decide here whether, A) token ETH mapped using native B) verus token minted to new ERC20, c)NFT eth mapped d) NFT minted from tokenized ID.
 
-        if (_tx.nativeCurrency != address(0))
+        if (uint8(_tx.destinationAndFlags >> 160) == VerusConstants.MAPPING_ETHEREUM_OWNED + VerusConstants.TOKEN_LAUNCH)
         {
             address erc20address = _tx.nativeCurrency;
-            currencyFlags = VerusConstants.MAPPING_ETHEREUM_OWNED;
-
+            //currencyFlags = VerusConstants.MAPPING_ETHEREUM_OWNED;
             try (this).getName(erc20address) returns (string memory retval) 
             {
                 outputName = string(abi.encodePacked("[", retval, "] as ", name));
@@ -192,11 +191,11 @@ contract TokenManager {
         }
         else 
         {
-            currencyFlags = VerusConstants.MAPPING_VERUS_OWNED;
+            //currencyFlags = VerusConstants.MAPPING_VERUS_OWNED;
             outputName = string(name);
         }
 
-        recordToken(destinationCurrencyID, _tx.nativeCurrency, outputName, getSymbol(string(name)), currencyFlags);
+        recordToken(destinationCurrencyID, _tx.nativeCurrency, outputName, getSymbol(string(name)), uint8(_tx.destinationAndFlags >> 160), _tx.currencyAndAmount);
     }
 
     function launchTokens(VerusObjects.setupToken[] memory tokensToDeploy) public  {
@@ -209,7 +208,8 @@ contract TokenManager {
                 tokensToDeploy[i].erc20ContractAddress,
                 tokensToDeploy[i].name,
                 tokensToDeploy[i].ticker,
-                tokensToDeploy[i].flags
+                tokensToDeploy[i].flags,
+                uint256(0)
 
             );
         }
@@ -220,23 +220,36 @@ contract TokenManager {
         address ethContractAddress,
         string memory name,
         string memory ticker,
-        uint8 flags
+        uint8 flags,
+        uint256 tokenID
     ) private returns (address) {
 
         address ERCContract;
 
-        if (flags & VerusConstants.MAPPING_VERUS_OWNED == VerusConstants.MAPPING_VERUS_OWNED ) {
-
-            ERCContract = verusBridgeStorage.emitNewToken(name, ticker, _iaddress);     
-
-        } else {
-
-            ERCContract = ethContractAddress;
-            verusBridgeStorage.pushTokenList(_iaddress);
-
+        if (flags & VerusConstants.TOKEN_LAUNCH == VerusConstants.TOKEN_LAUNCH) 
+        {
+            if (flags & VerusConstants.MAPPING_VERUS_OWNED == VerusConstants.MAPPING_VERUS_OWNED) 
+            {
+                ERCContract = verusBridgeStorage.emitNewToken(name, ticker, _iaddress);     
+            } 
+            else 
+            {
+                ERCContract = ethContractAddress;
+            }
+            
+        } 
+        else if (flags & VerusConstants.TOKEN_ETH_NFT_DEFINITION == VerusConstants.TOKEN_ETH_NFT_DEFINITION) 
+        {
+            if (flags & VerusConstants.MAPPING_VERUS_OWNED == VerusConstants.MAPPING_VERUS_OWNED) 
+            {
+                ///TODO: call mint NFT contract
+                // ERCContract == NFTcontract;
+            }
         }
         
-        verusBridgeStorage.RecordverusToERC20mapping(_iaddress, VerusObjects.mappedToken(ERCContract, flags, verusBridgeStorage.getTokenListLength(), name));
+        verusBridgeStorage.pushTokenList(_iaddress);
+
+        verusBridgeStorage.RecordTokenmapping(_iaddress, VerusObjects.mappedToken(ERCContract, flags, verusBridgeStorage.getTokenListLength(), name, tokenID));
         return ERCContract;
     }
 
@@ -308,29 +321,23 @@ contract TokenManager {
                 ETHPaymentCounter++;                        
         
             } 
-            else if(flags & VerusConstants.TOKEN_SEND == VerusConstants.TOKEN_SEND)
+            else if(flags & VerusConstants.TOKEN_ERC20_SEND == VerusConstants.TOKEN_ERC20_SEND)
             { 
                 transferLocations[transferCounter] = i;
                 transferCounter++;
                 
             } 
-            else if (flags & VerusConstants.TOKEN_LAUNCH == VerusConstants.TOKEN_LAUNCH) 
+            else if (flags & VerusConstants.TOKEN_LAUNCH == VerusConstants.TOKEN_LAUNCH || 
+                    flags & VerusConstants.TOKEN_ETH_NFT_DEFINITION == VerusConstants.TOKEN_ETH_NFT_DEFINITION) 
             {                     
                 currencyLocations[currencyCounter] = i;
                 currencyCounter++;            
-            }
-            else
-            {
-                //REMOVE: comments and make NFT WORK
-                //   uint256 NFTID; 
-                //   ERC721 NFT;    
-                //   if(NFTID != uint256(0))
-                //       verusBridgeStorage.transferFromERC721(destinationAddress, address(verusBridgeStorage), NFT, NFTID );
             }
                 
         }
 
         //send tokens
+        //TODO: HANDLE 0.00000001 NFT MINTS and send to address if a token send then use flags on ethereum to determine its a nft and handle
         if(transferCounter > 0)
             verusBridgeStorage.importTransactions(transfers.transfers, transferLocations);
 

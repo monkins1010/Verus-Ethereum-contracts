@@ -261,24 +261,28 @@ contract VerusNotarizer {
         return ecrecover(_h, _v, _r, _s);
     }
 
-    function setClaimableFees(address _feeRecipient, address _proposer, uint256 _ethAmount) public returns (uint256){
+    function setClaimableFees(address _feeRecipient, address _proposer, uint256 _ethAmount, address bridgekeeper) public returns (uint256){
 
         require(msg.sender == address(verusBridgeMaster)); 
         
         uint256 notaryFees;
         uint256 LPFees;
         uint256 exporterFees;
-        uint256 proposerFees;                
+        uint256 proposerFees;  
+        uint256 bridgekeeperFees;              
 
         notaryFees = _ethAmount.div(10).mul(3); 
 
         exporterFees = _ethAmount.div(10);
         proposerFees = _ethAmount.div(10);
-        LPFees = _ethAmount - (notaryFees + exporterFees + proposerFees);
+        bridgekeeperFees = _ethAmount.div(10).mul(3); 
+
+        LPFees = _ethAmount - (notaryFees + exporterFees + proposerFees + bridgekeeperFees);
 
         setNotaryFees(notaryFees);
         verusBridgeMaster.setClaimedFees(_feeRecipient, exporterFees);
         verusBridgeMaster.setClaimedFees(_proposer, proposerFees);
+        verusBridgeMaster.setClaimedFees(bridgekeeper, bridgekeeperFees);
 
         //return total amount of unclaimed LP Fees accrued.
         return verusBridgeMaster.setClaimedFees(address(this), LPFees);

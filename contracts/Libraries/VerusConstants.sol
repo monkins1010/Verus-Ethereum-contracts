@@ -33,23 +33,22 @@ library VerusConstants {
     uint8 constant DEST_ID = 4;
     uint8 constant DEST_REGISTERCURRENCY = 6;
     uint8 constant DEST_ETH = 9;
+    uint8 constant DEST_ETHNFT = 10;
     uint8 constant FLAG_DEST_AUX = 64;
     uint8 constant FLAG_DEST_GATEWAY = 128;
     uint8 constant CURRENT_VERSION = 1;
 
     // deployTokens flags 
-    uint8 constant MAPPING_ETHEREUM_OWNED = 1;
-    uint8 constant MAPPING_VERUS_OWNED = 2;
-    uint8 constant MAPPING_PARTOF_BRIDGEVETH = 4;
-    uint8 constant MAPPING_ISBRIDGE_CURRENCY = 8;
-    uint constant TICKER_LENGTH_MAX = 4;
+    uint32 constant MAPPING_ETHEREUM_OWNED = 1;
+    uint32 constant MAPPING_VERUS_OWNED = 2;
+    uint32 constant MAPPING_PARTOF_BRIDGEVETH = 4;
+    uint32 constant MAPPING_ISBRIDGE_CURRENCY = 8;
+    uint32 constant TOKEN_ERC20_SEND = 16;
+    uint32 constant TOKEN_LAUNCH = 32;
+    uint32 constant TOKEN_ETH_SEND = 64;
+    uint32 constant TOKEN_ETH_NFT_DEFINITION = 128;
 
-    //deploy currency flags
-    uint8 constant TOKEN_SEND = 1;
-    uint8 constant TOKEN_LAUNCH = 2;
-    uint8 constant TOKEN_MAPPED_ERC20 = 4;
-    uint8 constant TOKEN_ETH_SEND = 8;
-
+    uint32 constant TICKER_LENGTH_MAX = 4;
     uint8 constant DESTINATION_PLUS_GATEWAY = 68;
 
     //notary flags

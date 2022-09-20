@@ -48,8 +48,8 @@ contract VerusBridgeMaster {
         return verusBridgeStorage.processedTxids(_imports);
     }
 
-    function submitImports(VerusObjects.CReserveTransferImport[] memory _imports) public {
-        verusBridge.submitImports(_imports);
+    function submitImports(VerusObjects.CReserveTransferImport calldata _imports) public {
+        verusBridge._createImports(_imports, msg.sender);
     }
 
     function getReadyExportsByRange(uint _startBlock, uint _endBlock) public view 
@@ -100,7 +100,7 @@ contract VerusBridgeMaster {
         return verusInfo.getcurrency(_currencyid);
     }
 
-    function setClaimableFees(address _feeRecipient, uint256 fees) public
+    function setClaimableFees(address _feeRecipient, uint256 fees, address bridgekeeper) public
     {
         require(msg.sender == address(verusBridge));
         
@@ -110,15 +110,12 @@ contract VerusBridgeMaster {
         //exporter 10%
 
         uint256 LPFees;
-        LPFees = verusNotarizer.setClaimableFees(_feeRecipient, proposer, fees);
+        LPFees = verusNotarizer.setClaimableFees(_feeRecipient, proposer, fees, bridgekeeper);
 
         //NOTE:only execute the LP transfer if there is x10 the fee amount 
         if(LPFees > (VerusConstants.verusvETHTransactionFee * 10) && verusNotarizer.poolAvailable())
         {
-            //VerusObjects.CReserveTransfer memory LPtransfer;
-            //set burn flag
-            //LPtransfer = verusInfo.lpTransfer(LPFees);
-
+        
             //make a transfer for the LP fees back to Verus
             verusBridge.sendToVRSC(uint64(LPFees), true);
             //verusBridge.export(LPtransfer, LPFees * VerusConstants.SATS_TO_WEI_STD, address(this) );

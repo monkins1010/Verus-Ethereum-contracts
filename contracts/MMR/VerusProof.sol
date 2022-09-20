@@ -8,6 +8,7 @@ import "./VerusBlake2b.sol";
 import "../VerusBridge/VerusSerializer.sol";
 import "../Libraries/VerusObjectsCommon.sol";
 import "../VerusNotarizer/VerusNotarizerStorage.sol";
+import "./MMR.sol";
 
 contract VerusProof {
 
@@ -33,6 +34,7 @@ contract VerusProof {
     uint32 constant SCRIPT_OP_PUSHDATA1 = 0x4c;
     uint32 constant SCRIPT_OP_PUSHDATA2 = 0x4d;
     uint32 constant TYPE_TX_OUTPUT = 4;
+    uint32 constant SIZEOF_UINT64 = 8;
     address verusUpgradeContract;
 
     event HashEvent(bytes32 newHash,uint8 eventType);
@@ -77,7 +79,7 @@ contract VerusProof {
         bytes32 hashInProgress = _hashToCheck;
         bytes memory joined;
         //hashInProgress = blake2b.bytesToBytes32(abi.encodePacked(_hashToCheck));
-        uint hashIndex = _branch.nIndex;
+        uint hashIndex = VerusMMR.GetMMRProofIndex(_branch.nIndex, _branch.nSize, _branch.extraHashes);
         
        for(uint i = 0;i < branchLength; i++){
             if(hashIndex & 1 > 0){
@@ -95,130 +97,152 @@ contract VerusProof {
 
     }
     
-    function checkTransfers(VerusObjects.CReserveTransferImport memory _import, bytes32 hashOfTransfers) public view returns (bool) {
-
-        // ensure that the hashed transfers are in the export
-        bytes32 hashedTransfers = hashOfTransfers;
+    function checkTransfers(VerusObjects.CReserveTransferImport calldata _import, bytes32 hashedTransfers) public view returns (uint256, uint128) {
 
         // the first component of the import partial transaction proof is the transaction header, for each version of
         // transaction header, we have a specific offset for the hash of transfers. if we change this, we must
         // deprecate and deploy new contracts
-        uint doneLen = _import.partialtransactionproof.components.length;
-        uint i;
 
-        for (i = 1; i < doneLen; i++)
+        for (uint i = 1; i < _import.partialtransactionproof.components.length; i++)
         {
-            if (_import.partialtransactionproof.components[i].elType == TYPE_TX_OUTPUT)
+            if (_import.partialtransactionproof.components[i].elType != TYPE_TX_OUTPUT)
+                continue;
+            
+            bytes memory firstObj = _import.partialtransactionproof.components[i].elVchObj; // we should have a first entry that is the txout with the export
+
+            // ensure this is an export to VETH and pull the hash for reserve transfers
+            // to ensure a valid export.
+            // the eval code for the main COptCCParams must be EVAL_CROSSCHAIN_EXPORT, and the destination system
+            // must match VETH
+
+            uint32 nextOffset;
+            uint8 var1;
+            uint8 opCode2;
+            uint32 nIndex; 
+            nIndex = _import.partialtransactionproof.components[i].elProof[0].proofSequence.nIndex;
+
+            VerusObjectsCommon.UintReader memory readerLen;
+
+            readerLen = verusSerializer.readCompactSizeLE(firstObj, OUTPUT_SCRIPT_OFFSET);    // get the length of the output script
+            readerLen = verusSerializer.readCompactSizeLE(firstObj, readerLen.offset);        // then length of first master push
+
+            // must be push less than 75 bytes, as that is an op code encoded similarly to a vector.
+            // all we do here is ensure that is the case and skip master
+            if (readerLen.value == 0 || readerLen.value > 0x4b)
             {
-                bytes memory firstObj = _import.partialtransactionproof.components[i].elVchObj; // we should have a first entry that is the txout with the export
-
-                // ensure this is an export to VETH and pull the hash for reserve transfers
-                // to ensure a valid export.
-                // the eval code for the main COptCCParams must be EVAL_CROSSCHAIN_EXPORT, and the destination system
-                // must match VETH
-
-                uint32 nextOffset;
-                uint8 opCode1;
-                uint8 opCode2;
-                VerusObjectsCommon.UintReader memory readerLen;
-
-                readerLen = verusSerializer.readCompactSizeLE(firstObj, OUTPUT_SCRIPT_OFFSET);    // get the length of the output script
-                readerLen = verusSerializer.readCompactSizeLE(firstObj, readerLen.offset);        // then length of first master push
-
-                // must be push less than 75 bytes, as that is an op code encoded similarly to a vector.
-                // all we do here is ensure that is the case and skip master
-                if (readerLen.value == 0 || readerLen.value > 0x4b)
-                {
-                    return false;
-                }
-
-                nextOffset = readerLen.offset + readerLen.value;        // add the length of the push of master to point to cc opcode
-
-                assembly {
-                    opCode1 := mload(add(firstObj, nextOffset))         // this should be OP_CHECKCRYPTOCONDITION
-                    nextOffset := add(nextOffset, 1)                    // and after that...
-                    opCode2 := mload(add(firstObj, nextOffset))         // should be OP_PUSHDATA1 or OP_PUSHDATA2
-                    nextOffset := add(nextOffset, 1)                    // point to the length of the pushed data after CC instruction
-                }
-
-                if (opCode1 != SCRIPT_OP_CHECKCRYPTOCONDITION ||
-                    (opCode2 != SCRIPT_OP_PUSHDATA1 && opCode2 != SCRIPT_OP_PUSHDATA2))
-                {
-                    return false;
-                }
-
-                uint16 optCCParamLen;
-                if (opCode2 == SCRIPT_OP_PUSHDATA1)
-                {
-                    uint8 tempUi8;
-                    assembly {
-                        tempUi8 := mload(add(firstObj, nextOffset))     // single byte val
-                        nextOffset := add(nextOffset, 1)
-                    }
-                    optCCParamLen = tempUi8;
-                }
-                else
-                {
-                    uint8 tempUi8lo;
-                    uint8 tempUi8hi;
-                    assembly {
-                        tempUi8lo := mload(add(firstObj, nextOffset))    // first LE byte val
-                        nextOffset := add(nextOffset, 1)
-                        tempUi8hi := mload(add(firstObj, nextOffset))    // second LE byte val
-                        nextOffset := add(nextOffset, 1)
-                    }
-                    optCCParamLen = tempUi8hi;
-                    optCCParamLen = (optCCParamLen << 8) + tempUi8lo;
-                }
-
-                // COptCCParams are serialized as pushes in a script, first the header, then the keys, then the data
-                // skip right to the serialized export and then to the source system
-                uint8 evalCode;
-                nextOffset += CCE_COPTP_EVALOFFSET;
-                assembly {
-                    evalCode := mload(add(firstObj, nextOffset))
-                }
-
-                if (evalCode != CCE_EVAL_EXPORT)
-                {
-                    return false;
-                }
-
-                nextOffset += CCE_SOURCE_SYSTEM_OFFSET;
-
-                assembly {
-                    opCode2 := mload(add(firstObj, nextOffset))         // should be OP_PUSHDATA1 or OP_PUSHDATA2
-                }
-
-                nextOffset += CCE_COPTP_HEADERSIZE;
-                
-                if (opCode2 == SCRIPT_OP_PUSHDATA2)
-                {
-                      nextOffset += 1; // one extra byte taken for varint
-                } 
-                bytes32 incomingValue;
-                address systemSourceID;
-                address destSystemID;
-                address destCurrencyID;
-
-                assembly {
-                    systemSourceID := mload(add(firstObj, nextOffset))      // source system ID, which should match expected source (VRSC/VRSCTEST)
-                    nextOffset := add(nextOffset, CCE_HASH_TRANSFERS_DELTA)
-                    incomingValue := mload(add(firstObj, nextOffset))       // get hash of reserve transfers from partial transaction proof
-                    nextOffset := add(nextOffset, CCE_DEST_SYSTEM_DELTA)
-                    destSystemID := mload(add(firstObj, nextOffset))        // destination system, which should be vETH
-                    nextOffset := add(nextOffset, CCE_DEST_CURRENCY_DELTA)
-                    destCurrencyID := mload(add(firstObj, nextOffset))      // destination currency, which should be vETH
-                }
-
-                // validate source and destination values as well
-                return (hashedTransfers == incomingValue &&
-                        systemSourceID == VerusConstants.VerusSystemId &&
-                        destSystemID == VerusConstants.EthSystemID &&
-                        destCurrencyID == VerusConstants.VEth);
+                return (uint256(0), uint128(0));
             }
+
+            nextOffset = readerLen.offset + readerLen.value;        // add the length of the push of master to point to cc opcode
+
+            assembly {
+                var1 := mload(add(firstObj, nextOffset))         // this should be OP_CHECKCRYPTOCONDITION
+                nextOffset := add(nextOffset, 1)                    // and after that...
+                opCode2 := mload(add(firstObj, nextOffset))         // should be OP_PUSHDATA1 or OP_PUSHDATA2
+                nextOffset := add(nextOffset, 1)                    // point to the length of the pushed data after CC instruction
+            }
+
+            if (var1 != SCRIPT_OP_CHECKCRYPTOCONDITION ||
+                (opCode2 != SCRIPT_OP_PUSHDATA1 && opCode2 != SCRIPT_OP_PUSHDATA2))
+            {
+                return (uint256(0), uint128(0));
+            }
+
+            if (opCode2 == SCRIPT_OP_PUSHDATA1)
+            {
+                assembly {
+                    nextOffset := add(nextOffset, 1)
+                }
+            }
+            else
+            {
+                assembly {
+                    nextOffset := add(nextOffset, 2)
+                }
+
+            }
+
+            // COptCCParams are serialized as pushes in a script, first the header, then the keys, then the data
+            // skip right to the serialized export and then to the source system
+
+            nextOffset += CCE_COPTP_EVALOFFSET;
+            assembly {
+                var1 := mload(add(firstObj, nextOffset))
+            }
+
+            if (var1 != CCE_EVAL_EXPORT)
+            {
+                return (uint256(0), uint128(0));
+            }
+
+            nextOffset += CCE_SOURCE_SYSTEM_OFFSET;
+
+            assembly {
+                opCode2 := mload(add(firstObj, nextOffset))         // should be OP_PUSHDATA1 or OP_PUSHDATA2
+            }
+
+            nextOffset += CCE_COPTP_HEADERSIZE;
+            
+            if (opCode2 == SCRIPT_OP_PUSHDATA2)
+            {
+                    nextOffset += 1; // one extra byte taken for varint
+            } 
+           
+            // validate source and destination values as well and set reward address
+            return (checkCCEValues(firstObj, nextOffset, hashedTransfers, nIndex));
+        
         }
-        return false;
+        return (uint256(0), uint128(0));
+    }
+
+    function checkCCEValues(bytes memory firstObj, uint32 nextOffset, bytes32 hashedTransfers, uint32 nIndex) public pure returns(uint256, uint128)
+    {
+        bytes32 incomingValue;
+        address systemSourceID;
+        address destSystemID;
+        address destCurrencyID;
+        address exporter;
+        uint64 rewardFees;
+        uint32 startheight;
+        uint32 endheight;
+        uint256 rewardAddressPlusFees;
+        
+        assembly {
+            systemSourceID := mload(add(firstObj, nextOffset))      // source system ID, which should match expected source (VRSC/VRSCTEST)
+            nextOffset := add(nextOffset, CCE_HASH_TRANSFERS_DELTA)
+            incomingValue := mload(add(firstObj, nextOffset))       // get hash of reserve transfers from partial transaction proof
+            nextOffset := add(nextOffset, CCE_DEST_SYSTEM_DELTA)
+            destSystemID := mload(add(firstObj, nextOffset))        // destination system, which should be vETH
+            nextOffset := add(nextOffset, CCE_DEST_CURRENCY_DELTA)
+            destCurrencyID := mload(add(firstObj, nextOffset))      // destination currency, which should be vETH
+            nextOffset := add(nextOffset, 2)                        // skip type and length 0x09 & 0x16
+            nextOffset := add(nextOffset, CCE_DEST_CURRENCY_DELTA)
+            exporter := mload(add(firstObj, nextOffset))            // exporter
+            nextOffset := add(nextOffset, 1)                        // itterate next byte for varint
+        }
+
+        (startheight, nextOffset)  = readVarint(firstObj, nextOffset); 
+        (endheight, nextOffset)  = readVarint(firstObj, nextOffset); 
+
+        assembly {
+            nextOffset := add(nextOffset, 1)                        // itterate next byte for mapsise
+            nextOffset := add(nextOffset, CCE_DEST_CURRENCY_DELTA)
+            rewardFees := mload(add(firstObj, nextOffset))    
+        }
+            // packed uint64 and uint160 into a uint256 for efficiency (fees and address)
+            rewardAddressPlusFees = uint256(uint160(exporter));
+            rewardAddressPlusFees |= uint256(rewardFees) << 160;
+
+        if (!(hashedTransfers == incomingValue &&
+                systemSourceID == VerusConstants.VerusSystemId &&
+                destSystemID == VerusConstants.EthSystemID &&
+                destCurrencyID == VerusConstants.VEth)) {
+
+            revert("CCE information does not checkout");
+        }
+
+        return (rewardAddressPlusFees, uint128(startheight) | (uint128(endheight) << 32) | (uint128(nIndex) << 64) );
+
     }
 
     // roll through each proveComponents
@@ -250,35 +274,31 @@ contract VerusProof {
         return txRoot;
     }
     
-    function proveTransaction(VerusObjects.CReserveTransferImport memory _import, bytes32 hashOfTransfers) public view returns(bytes32 stateRoot){
+    function proveImports(VerusObjects.CReserveTransferImport calldata _import, bytes32 hashOfTransfers) public view returns(uint256, uint128){
+        
+        bytes32 confirmedStateRoot;
+        bytes32 retStateRoot;
+        uint256 rewardAddPlusFees;
+        uint128 heightsAndTXNum;
 
-        stateRoot = bytes32(0);
-
-        if(!checkTransfers(_import, hashOfTransfers))
-        {
-            return stateRoot;  
-        } 
+        (rewardAddPlusFees, heightsAndTXNum) = checkTransfers(_import, hashOfTransfers);
         
         bytes32 txRoot = proveComponents(_import);
 
         if(txRoot == bytes32(0))
         { 
-            return stateRoot;
+            revert("Components do not validate"); 
         }
 
-        stateRoot = checkProof(txRoot,_import.partialtransactionproof.txproof);
-        return stateRoot;
-    }
-    
-    function proveImports(VerusObjects.CReserveTransferImport memory _import, bytes32 hashOfTransfers) public view returns(bool){
-        
-        bytes32 confirmedStateRoot;
-        bytes32 retStateRoot;
-
-        retStateRoot = proveTransaction(_import, hashOfTransfers);
+        retStateRoot = checkProof(txRoot, _import.partialtransactionproof.txproof);
         confirmedStateRoot = verusNotarizerStorage.getbestFork(0).stateRoot;
 
-        return (retStateRoot != bytes32(0) && retStateRoot == flipBytes32(confirmedStateRoot));
+        if (retStateRoot == bytes32(0) || retStateRoot != flipBytes32(confirmedStateRoot)) {
+
+            revert("Stateroot does not match");
+        }
+        //truncate to only return heights as, contract will revert if issue with proofs.
+        return (rewardAddPlusFees, heightsAndTXNum);
  
     }
 
@@ -309,71 +329,21 @@ contract VerusProof {
         v = (v >> 128) | (v << 128);
     }
     
-    function slice(bytes memory _bytes,uint256 _start,uint256 _length
-    )
-        internal
-        pure
-        returns (bytes memory)
-    {
-        require(_length + 31 >= _length, "slice_overflow");
-        require(_bytes.length >= _start + _length, "slice_outOfBounds");
+    function readVarint(bytes memory buf, uint32 idx) public pure returns (uint32 v, uint32 retidx) {
 
-        bytes memory tempBytes;
+        uint8 b; // store current byte content
 
-        assembly {
-            switch iszero(_length)
-            case 0 {
-                // Get a location of some free memory and store it in tempBytes as
-                // Solidity does for memory variables.
-                tempBytes := mload(0x40)
-
-                // The first word of the slice result is potentially a partial
-                // word read from the original array. To read it, we calculate
-                // the length of that partial word and start copying that many
-                // bytes into the array. The first word we copy will start with
-                // data we don't care about, but the last `lengthmod` bytes will
-                // land at the beginning of the contents of the new array. When
-                // we're done copying, we overwrite the full first word with
-                // the actual length of the slice.
-                let lengthmod := and(_length, 31)
-
-                // The multiplication in the next line is necessary
-                // because when slicing multiples of 32 bytes (lengthmod == 0)
-                // the following copy loop was copying the origin's length
-                // and then ending prematurely not copying everything it should.
-                let mc := add(add(tempBytes, lengthmod), mul(0x20, iszero(lengthmod)))
-                let end := add(mc, _length)
-
-                for {
-                    // The multiplication in the next line has the same exact purpose
-                    // as the one above.
-                    let cc := add(add(add(_bytes, lengthmod), mul(0x20, iszero(lengthmod))), _start)
-                } lt(mc, end) {
-                    mc := add(mc, 0x20)
-                    cc := add(cc, 0x20)
-                } {
-                    mstore(mc, mload(cc))
-                }
-
-                mstore(tempBytes, _length)
-
-                //update free-memory pointer
-                //allocating the array padded to 32 bytes like the compiler does now
-                mstore(0x40, and(add(mc, 31), not(31)))
-            }
-            //if we want a zero-length slice let's just return a zero-length array
-            default {
-                tempBytes := mload(0x40)
-                //zero out the 32 bytes slice we are about to return
-                //we need to do it because Solidity does not garbage collect
-                mstore(tempBytes, 0)
-
-                mstore(0x40, add(tempBytes, 0x20))
-            }
+        for (uint32 i=0; i<10; i++) {
+            b = uint8(buf[i+idx]);
+            v = (v << 7) | b & 0x7F;
+            if (b & 0x80 == 0x80)
+                v++;
+            else
+            return (v, idx + i + 1);
         }
-
-        return tempBytes;
+        revert(); // i=10, invalid varint stream
     }
+  
     
 }
 

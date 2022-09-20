@@ -13,6 +13,7 @@ library VerusObjectsProof {
         uint8  CMerkleBranchBase;
         uint32 nIndex;
         uint32 nSize;
+        uint8 extraHashes;
         bytes32[] branch;
     }
 
