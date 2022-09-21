@@ -51,7 +51,7 @@ library VerusObjects {
         CCurrencyValueMap currencyvalue;
         uint32 flags;
         address feecurrencyid;
-        uint256 fees;
+        uint64 fees;
         VerusObjectsCommon.CTransferDestination destination;
         address destcurrencyid;
         address destsystemid;

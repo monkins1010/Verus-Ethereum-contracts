@@ -16,8 +16,8 @@ library VerusConstants {
     uint8 constant public RewardAddressType = 4;
     uint256 constant public transactionFee = 3000000000000000; //0.003 ETH 18 decimals
     string constant public currencyName = "VETH";
-    uint256 constant public verusTransactionFee = 2000000; //0.02 VRSC
-    uint256 constant public verusvETHTransactionFee = 300000; //0.003 vETH 10 decimasls
+    uint64 constant public verusTransactionFee = 2000000; //0.02 VRSC
+    uint64 constant public verusvETHTransactionFee = 300000; //0.003 vETH 10 decimasls
     uint32 constant  VALID = 1;
     uint32 constant  CONVERT = 2;
     uint32 constant  CROSS_SYSTEM = 0x40; 

@@ -10,6 +10,10 @@ import "../Libraries/VerusConstants.sol";
 contract VerusSerializer {
 
     uint constant ETH_ADDRESS_SIZE_BYTES = 20;
+    uint32 constant CCC_PREFIX_TO_PARENT = 4 + 4 + 20 + 1;
+    uint32 constant CCC_ID_LEN = 20;
+    uint32 constant CCC_NATIVE_OFFSET = 20 + 4 + 4;
+    uint32 constant CCC_TOKENID_OFFSET = 32;
 
     function readVarUintLE(bytes memory incoming, uint32 offset) public pure returns(VerusObjectsCommon.UintReader memory) {
         uint32 retVal = 0;
@@ -416,55 +420,6 @@ contract VerusSerializer {
         return output;
     }
 
-    function deSerializeCurrencyDefinition(bytes memory input)
-         public
-         pure
-         returns (
-             VerusObjects.CcurrencyDefinition memory ccurrencyDefinition
-         )
-    {
-        uint32 nextOffset;
-        uint8 nameStringLength;
-        address parent;
-        address launchSystemID;
-        address systemID;
-        address nativeCurrencyID;
-        uint32 CCC_PREFIX_TO_PARENT = 4 + 4 + 20;
-        uint32 CCC_ID_LEN = 20;
-        uint32 CCC_NATIVE_OFFSET = CCC_ID_LEN + 4 + 4;
-
-        nextOffset = CCC_PREFIX_TO_PARENT;
-
-        assembly {
-            parent := mload(add(input, nextOffset)) // this should be parent ID
-            nextOffset := add(nextOffset, 1) // and after that...
-            nameStringLength := mload(add(input, nextOffset)) // string length MAX 64 so will always be a byte
-        }
-
-        ccurrencyDefinition.parent = parent;
-
-        bytes memory name = new bytes(nameStringLength);
-
-        for (uint256 i = 0; i < nameStringLength; i++) {
-            name[i] = input[i + nextOffset];
-        }
-
-        ccurrencyDefinition.name = string(name);
-        nextOffset = nextOffset + nameStringLength + CCC_ID_LEN;
-
-        assembly {
-            launchSystemID := mload(add(input, nextOffset)) // this should be launchsysemID
-            nextOffset := add(nextOffset, CCC_ID_LEN)
-            systemID := mload(add(input, nextOffset)) // this should be systemID 
-            nextOffset := add(nextOffset, CCC_NATIVE_OFFSET)
-            nativeCurrencyID := mload(add(input, nextOffset)) //TODO:When example available to test, fix this
-        }
-
-        ccurrencyDefinition.launchSystemID = launchSystemID;
-        ccurrencyDefinition.systemID = systemID;
-        ccurrencyDefinition.nativeCurrencyID = nativeCurrencyID;
-    }
-
     function currencyParser(bytes memory input) public pure
                     returns (uint256, address, uint256)
     {
@@ -472,10 +427,6 @@ contract VerusSerializer {
         uint8 nameStringLength;
         address systemID;
         address nativeCurrencyID;
-        uint32 CCC_PREFIX_TO_PARENT = 4 + 4 + 20 + 1;
-        uint32 CCC_ID_LEN = 20;
-        uint32 CCC_NATIVE_OFFSET = CCC_ID_LEN + 4 + 4;
-        uint32 CCC_TOKENID_OFFSET = 32;
         uint256 destinationAndFlags;
         uint256 nftID;
         uint8 NativeCurrencyType;

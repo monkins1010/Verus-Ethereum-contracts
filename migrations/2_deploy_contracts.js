@@ -42,7 +42,7 @@ module.exports = async function(deployer) {
     await deployer.deploy(VerusBridgeMaster, UpgradeInst.address);
     const bridgeMasterInst = await VerusBridgeMaster.deployed();
 
-    await deployer.deploy(VerusBridgeStorage, UpgradeInst.address, "500000000000"); //5000 VRSC in sats
+    await deployer.deploy(VerusBridgeStorage, UpgradeInst.address); //5000 VRSC in sats
     const bridgeStorageInst = await VerusBridgeStorage.deployed();
 
     await deployer.deploy(VerusNotarizerStorage, UpgradeInst.address);
@@ -69,8 +69,8 @@ module.exports = async function(deployer) {
     await deployer.deploy(ExportManager, bridgeStorageInst.address, tokenInst.address, UpgradeInst.address);
     const ExportManInst = await ExportManager.deployed();
 
-    
-    await deployer.deploy(VerusBridge, bridgeMasterInst.address, bridgeStorageInst.address, tokenInst.address, serializerInst.address, ProofInst.address, CCEInst.address, ExportManInst.address, UpgradeInst.address, block.number);
+
+    await deployer.deploy(VerusBridge, bridgeMasterInst.address, bridgeStorageInst.address, tokenInst.address, serializerInst.address, ProofInst.address, CCEInst.address, ExportManInst.address, UpgradeInst.address, block.number, "500000000000");
     const VerusBridgeInst = await VerusBridge.deployed();
 
     await deployer.deploy(VerusInfo, notarizerInst.address, "2000753", "0.7.3-9-rc1", "VETH", true, UpgradeInst.address, tokenInst.address);

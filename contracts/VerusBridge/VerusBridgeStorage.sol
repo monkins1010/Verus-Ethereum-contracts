@@ -7,7 +7,7 @@ import "../Libraries/VerusObjects.sol";
 import "../Libraries/VerusConstants.sol";
 import "../Libraries/VerusObjectsNotarization.sol";
 import "@openzeppelin/contracts/token/ERC721/ERC721.sol";
-import "./TokenManager.sol";
+
 
 
 contract VerusBridgeStorage {
@@ -16,16 +16,9 @@ contract VerusBridgeStorage {
 
     address upgradeContract;
     address verusBridge;
-    TokenManager tokenManager;
+    address tokenManager;
 
-    // event TokenCreated(address tokenAddress);
-
-    // all major functions get declared here and passed through to the underlying contract
-    // uint256 feesHeld = 0;
-    uint256 ethHeld = 0;
-
-    // VRSC pool size in sats
-    uint256 public poolSize;  
+   // VRSC pool size in sats
 
     mapping (bytes32 => bool) public processedTxids;
     mapping (address => VerusObjects.mappedToken) public verusToERC20mapping;
@@ -38,16 +31,16 @@ contract VerusBridgeStorage {
    
     //  contract allows the contracts to be set and reset
     constructor(
-        address upgradeContractAddress, uint256 _poolSize){
+        address upgradeContractAddress){
         upgradeContract = upgradeContractAddress;     
-        poolSize = _poolSize;
+
     }
 
     function setContracts(address[12] memory contracts) public {
         
         require(msg.sender == upgradeContract);
 
-        tokenManager = TokenManager(contracts[uint(VerusConstants.ContractType.TokenManager)]);
+        tokenManager = contracts[uint(VerusConstants.ContractType.TokenManager)];
 
         verusBridge = contracts[uint(VerusConstants.ContractType.VerusBridge)];
     }
@@ -70,23 +63,6 @@ contract VerusBridgeStorage {
             return 1;
         }
         return lastImportInfo[lastTxIdImport].height;
-    }
-
-    function addToEthHeld(uint256 _ethAmount) public {
-        isSenderBridgeContract(msg.sender);
-        ethHeld += _ethAmount;
-    }
-
-    function subtractFromEthHeld(uint256 _ethAmount) public {
-        require( msg.sender == verusBridge || msg.sender == address(tokenManager));
-        ethHeld -= _ethAmount;
-    }
-
-    function subtractPoolSize(uint256 _amount) public returns (bool){
-        isSenderBridgeContract(msg.sender);
-        if(_amount > poolSize) return false;
-        poolSize -= _amount;
-        return true;
     }
 
     function setReadyExportTransfers(uint _block, VerusObjects.CReserveTransfer memory reserveTransfer) public returns (bool){
@@ -171,25 +147,6 @@ contract VerusBridgeStorage {
         (ERC20Registered(transfer.secondreserveid) || 
         transfer.secondreserveid == address(0)) &&
         transfer.destsystemid == address(0));
-
-        if (transfer.flags == VerusConstants.VALID && transfer.destination.destinationtype == VerusConstants.DEST_ETHNFT)
-        {
-            address nftContract;
-            uint256 tokenId;
-
-            bytes memory serializedDest;
-            serializedDest = transfer.destination.destinationaddress;  
-
-            assembly
-            {
-                nftContract := mload(add(serializedDest, 20))
-                tokenId := mload(add(serializedDest, 52))
-            }
-
-            ERC721 nft = ERC721(nftContract);
-            require (nft.getApproved(tokenId) == address(this), "NFT not approved");
-
-        }
     }
 
 
@@ -251,11 +208,7 @@ contract VerusBridgeStorage {
                     nft.transferFrom(address(this), destinationAddress, tokenID);
 
             }
-
-
-                  
         }
-            
     }
     
     function exportERC20Tokens(uint256 _tokenAmount, Token token, bool burn, address sender ) public {

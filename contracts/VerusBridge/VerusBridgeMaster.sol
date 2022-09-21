@@ -10,6 +10,8 @@ import "./VerusBridge.sol";
 import "./VerusInfo.sol";
 import "../VerusNotarizer/VerusNotarizerStorage.sol";
 
+import "./UpgradeManager.sol";
+
 contract VerusBridgeMaster {
 
     VerusNotarizer verusNotarizer;
@@ -20,6 +22,7 @@ contract VerusBridgeMaster {
 
     address upgradeContract;
     mapping (address => uint256) public claimableFees;
+    uint256 ethHeld = 0;
      
     constructor(address upgradeContractAddress)
     {
@@ -131,7 +134,7 @@ contract VerusBridgeMaster {
         {
             //stored as SATS convert to WEI
             payable(msg.sender).transfer(claimAmount * VerusConstants.SATS_TO_WEI_STD);
-            verusBridgeStorage.subtractFromEthHeld(claimAmount * VerusConstants.SATS_TO_WEI_STD);
+            subtractFromEthHeld(claimAmount * VerusConstants.SATS_TO_WEI_STD);
         }
 
         return false;
@@ -153,4 +156,15 @@ contract VerusBridgeMaster {
         verusBridge.sendToVRSC(0, false);
     }
 
+    function addToEthHeld(uint256 _ethAmount) public {
+        require( msg.sender == address(verusBridge));
+        ethHeld += _ethAmount;
+    }
+
+    function subtractFromEthHeld(uint256 _ethAmount) public {
+
+        UpgradeManager upgrademanager = UpgradeManager(upgradeContract);
+        require( msg.sender == address(verusBridge) || msg.sender == address(upgrademanager.contracts(uint(VerusConstants.ContractType.TokenManager))));
+        ethHeld -= _ethAmount;
+    }
 }

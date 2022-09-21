@@ -14,6 +14,7 @@ import "../VerusBridge/VerusBridgeStorage.sol";
 import "../VerusBridge/UpgradeManager.sol";
 import "../Libraries/VerusObjectsCommon.sol";
 import "@openzeppelin/contracts/token/ERC721/ERC721.sol";
+import "./VerusBridgeMaster.sol";
 
 contract TokenManager {
 
@@ -354,7 +355,8 @@ contract TokenManager {
                 totalPayments += payments[i].amount;
             }
             
-            verusBridgeStorage.subtractFromEthHeld(totalPayments);
+            VerusBridgeMaster verusBridgeMaster = VerusBridgeMaster(upgradeManager.contracts(uint(VerusConstants.ContractType.VerusBridgeMaster)));
+            verusBridgeMaster.subtractFromEthHeld(totalPayments);
         }
         //return ETH and addresses to be sent to 
         return payments;

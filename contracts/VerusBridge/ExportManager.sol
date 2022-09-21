@@ -14,6 +14,7 @@ contract ExportManager {
     TokenManager tokenManager;
     VerusBridgeStorage verusBridgeStorage;
     address verusUpgradeContract;
+    uint8 constant  FEE_OFFSET = 20 + 20 + 20 + 8; // 3 x 20bytes address + 64bit uint
 
     constructor(address verusBridgeStorageAddress, address tokenManagerAddress, address verusUpgradeAddress)
     {
@@ -37,17 +38,16 @@ contract ExportManager {
 
         verusBridgeStorage.checkiaddresses(transfer);
 
+
         uint256 requiredFees =  VerusConstants.transactionFee;  //0.003 eth in WEI
-        uint256 verusFees = VerusConstants.verusTransactionFee; //0.02 verus in SATS
         uint64 bounceBackFee;
         uint64 transferFee;
-        uint8  FEE_OFFSET = 20 + 20 + 20 + 8; // 3 x 20bytes address + 64bit uint
         bytes memory serializedDest;
         address gatewayID;
         address gatewayCode;
         address destAddressID;
         uint8 destinationType;
-        
+    
         require (checkTransferFlags(transfer), "Flag Check failed");         
                                   
         //TODO: We cant mix different transfer destinations together in the CCE require on non same fields.
@@ -70,6 +70,7 @@ contract ExportManager {
             // Custom destination for NFT  = 1byte desttype + 20bytes destinationaddres + 20bytes NFT address + 32bytes NFTTokenID
             require (transfer.destination.destinationaddress.length == 73, "NFT destination address not 73 bytes");
             require (transfer.flags == VerusConstants.VALID, "Invalid flags for NFT transfer");
+            require (transfer.currencyvalue.amount == 1, "Currency value must be 1 Satoshi");
             assembly 
             {
                 destinationType := mload(add(serializedDest, 1))
@@ -167,7 +168,7 @@ contract ExportManager {
         }
         else 
         {
-            if (transfer.fees != verusFees)
+            if (transfer.fees != VerusConstants.verusTransactionFee)
             {
                 revert ("Invalid VRSC fee");
             }
@@ -186,6 +187,7 @@ contract ExportManager {
         return requiredFees;
 
     }
+
 
     function checkTransferFlags(VerusObjects.CReserveTransfer memory transfer) public view returns(bool) {
 
