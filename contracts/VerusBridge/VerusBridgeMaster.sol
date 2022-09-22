@@ -101,13 +101,10 @@ contract VerusBridgeMaster {
     {
         require(msg.sender == address(verusBridge));
         
-        address proposer;
-
-        proposer = verusNotarizerStorage.getLastNotarizationProposer(); //miner and staker 10%, 
         //exporter 10%
 
         uint256 LPFees;
-        LPFees = verusNotarizer.setClaimableFees(_feeRecipient, proposer, fees, bridgekeeper);
+        LPFees = verusNotarizer.setClaimableFees(_feeRecipient, fees, bridgekeeper);
 
         //NOTE:only execute the LP transfer if there is x10 the fee amount 
         if(LPFees > (VerusConstants.verusvETHTransactionFee * 10) && verusNotarizer.poolAvailable())

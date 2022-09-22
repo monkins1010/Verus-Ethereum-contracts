@@ -21,7 +21,7 @@ contract VerusNotarizerStorage {
     mapping (bytes32 => VerusObjectsNotarization.CPBaaSNotarization) public PBaaSNotarization;
     mapping (address => uint32) public poolAvailable;
   
-    VerusObjectsNotarization.NotarizationForks[] public bestForks;
+    //VerusObjectsNotarization.NotarizationForks[] public bestForks;
     mapping (bytes32 => bool) public notarizationHashes;
     mapping (address => uint256) public storageGlobal;
     
@@ -91,41 +91,6 @@ contract VerusNotarizerStorage {
 
         notarizationHashes[hashOfNotarization] = true;
        
-    }
-
-    function setbestFork(VerusObjectsNotarization.NotarizationForks memory proof) public 
-    {
-        require( msg.sender == verusNotarizer,"setNotarizedProof:callfromNotarizeronly");
-        bestForks.push(proof);
-    }
-
-    function getbestFork(uint index) public view returns (VerusObjectsNotarization.NotarizationForks memory)
-    {
-        return bestForks[index];
-    }
-
-    function deletebestFork() public 
-    {
-        require( msg.sender == verusNotarizer,"setNotarizedProof:callfromNotarizeronly");
-        delete bestForks;
-    }
-
-    function bestForkLength() public view returns (uint256)
-    {
-        return bestForks.length;
-    }
-
-    function getLastNotarizationProposer() public view returns (address){
-
-        address proposer;
-        bytes memory proposerBytes = PBaaSNotarization[bestForks[0].txid.hash].proposer.destinationaddress;
-
-            assembly {
-                proposer := mload(add(proposerBytes,20))
-            } 
-
-        return proposer;
-
     }
 
 }

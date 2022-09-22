@@ -247,6 +247,7 @@ contract VerusBridge {
         uint128 CCEHeightsAndnIndex;
 
         hashOfTransfers = keccak256(_import.serializedTransfers);
+
         (rewardDestinationPlusFees, CCEHeightsAndnIndex) = verusProof.proveImports(_import, hashOfTransfers);
  
         if (verusBridgeStorage.getLastCceEndHeight() - 1 != uint32(CCEHeightsAndnIndex)) {

@@ -7,7 +7,7 @@ import "../Libraries/VerusObjects.sol";
 import "./VerusBlake2b.sol";
 import "../VerusBridge/VerusSerializer.sol";
 import "../Libraries/VerusObjectsCommon.sol";
-import "../VerusNotarizer/VerusNotarizerStorage.sol";
+import "../VerusNotarizer/VerusNotarizer.sol";
 import "./MMR.sol";
 
 contract VerusProof {
@@ -15,7 +15,7 @@ contract VerusProof {
     uint256 mmrRoot;
     VerusBlake2b blake2b;
     VerusSerializer verusSerializer;
-    VerusNotarizerStorage verusNotarizerStorage;
+    VerusNotarizer verusNotarizer;
     
     // these constants should be able to reference each other, as many are relative, but Solidity does not
     // allow referencing them and still considering the result a constant. For any changes to these constants,
@@ -40,12 +40,12 @@ contract VerusProof {
     event HashEvent(bytes32 newHash,uint8 eventType);
 
     constructor(address verusUpgradeAddress, address verusBLAKE2bAddress, address verusSerializerAddress, 
-    address verusNotarizerStorageAddress) 
+    address verusNotarizerAddress) 
     {
         verusUpgradeContract = verusUpgradeAddress;
         verusSerializer = VerusSerializer(verusSerializerAddress);
         blake2b = VerusBlake2b(verusBLAKE2bAddress);
-        verusNotarizerStorage = VerusNotarizerStorage(verusNotarizerStorageAddress);
+        verusNotarizer = VerusNotarizer(verusNotarizerAddress);
     }
 
     function setContract(address _contract) public {
@@ -291,7 +291,7 @@ contract VerusProof {
         }
 
         retStateRoot = checkProof(txRoot, _import.partialtransactionproof.txproof);
-        confirmedStateRoot = verusNotarizerStorage.getbestFork(0).stateRoot;
+        confirmedStateRoot = verusNotarizer.getBestStateroot();
 
         if (retStateRoot == bytes32(0) || retStateRoot != flipBytes32(confirmedStateRoot)) {
 

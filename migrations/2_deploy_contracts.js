@@ -60,7 +60,7 @@ module.exports = async function(deployer) {
     await deployer.deploy(VerusNotarizer, serializerInst.address, UpgradeInst.address, verusNotariserIDS, verusNotariserSigner, verusNotariserRevoker, NotarizerStorageInst.address, bridgeMasterInst.address, blakeInst.address);
     const notarizerInst = await VerusNotarizer.deployed();
 
-    await deployer.deploy(VerusProof, UpgradeInst.address, blakeInst.address, serializerInst.address, NotarizerStorageInst.address);
+    await deployer.deploy(VerusProof, UpgradeInst.address, blakeInst.address, serializerInst.address, notarizerInst.address);
     const ProofInst = await VerusProof.deployed();
 
     await deployer.deploy(VerusCCE, serializerInst.address, UpgradeInst.address);

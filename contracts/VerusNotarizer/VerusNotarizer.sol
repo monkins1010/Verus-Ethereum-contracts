@@ -176,7 +176,7 @@ contract VerusNotarizer {
 
     function setNotarizationProofRoot(VerusObjectsNotarization.CPBaaSNotarization memory _pbaasNotarization, bytes32 hashedNotarization) private 
     {
-        bytes32 stateRoot;
+         bytes32 stateRoot;
 
         stateRoot = getVRSCStateRoot(_pbaasNotarization.proofroots);
         
@@ -197,7 +197,7 @@ contract VerusNotarizer {
             {
                 for (int j = int(bestForks[uint(i)].length) - 1; j >= 0; j--)
                 {
-                    if (reversebytes32(hashedNotarization) == bestForks[uint(i)][uint(j)].hashOfNotarization)
+                    if (_pbaasNotarization.hashprevnotarization == reversebytes32(bestForks[uint(i)][uint(j)].hashOfNotarization))
                     {
                         forkIdx = i;
                         forkPos = j;
@@ -212,61 +212,74 @@ contract VerusNotarizer {
         }
         if (forkIdx == -1)
         {
-            revert("invalid prior notarization - neither pending nor confirmed");
+            revert("invalid notarization hash");
         }
 
-        if (forksLength == 1)
+        if (bestForks[0].length == 2 && forkPos == 1 && lastForkIndex == 1 && forksLength == 1)
         {
-            if (bestForks[0].length == 2 && forkPos == 1 && lastForkIndex == 1)
-            {
-                //This should be the most common case where we have [[0,1,2]]
-                VerusObjectsNotarization.NotarizationForks memory tempProof;
-                tempProof = bestForks[0][1];
-                delete bestForks;
-                bestForks[0].push(tempProof);
-                bestForks[0].push(VerusObjectsNotarization.NotarizationForks(reversebytes32(hashedNotarization), stateRoot, 
-                              _pbaasNotarization.txid, _pbaasNotarization.notarizationheight, PENDING, 1));
-                return;
-
-            }
-
-            if (bestForks[0].length == 1 && forkPos == 0 && lastForkIndex == 0)
-            {
-                bestForks[0].push(VerusObjectsNotarization.NotarizationForks(reversebytes32(hashedNotarization), stateRoot, 
-                _pbaasNotarization.txid, _pbaasNotarization.notarizationheight, PENDING, 1));
-                lastForkIndex = 1;
-                return;
-            }
-        }
-        else if (forksLength > 1)
-        {
-           
-
-        }
-
-
- /* 
-        for (uint i = 0; i < forksLength; i++) {
-
+            //This should be the most common case where we have [[0,1,2]]
             VerusObjectsNotarization.NotarizationForks memory tempProof;
-            uint idx;
-            uint num;
-
-            (idx, num) = verusNotarizerStorage.getbestFork(i);
-            
-            if (verusNotarizerStorage.getbestFork(i).hashOfNotarization == _pbaasNotarization.hashprevnotarization) {
-                
-                tempProof = verusNotarizerStorage.getbestFork(i);
-                verusNotarizerStorage.deletebestFork();
-                verusNotarizerStorage.setbestFork(tempProof);
-                verusNotarizerStorage.setbestFork(NotarizationFork);
-                return;
-            }
-
+            tempProof = bestForks[0][1];
+            tempProof.forkIndex = 0;
+            tempProof.status = CONFIRMED;
+            delete bestForks;
+            bestForks[0].push(tempProof);
+            bestForks[0].push(VerusObjectsNotarization.NotarizationForks(reversebytes32(hashedNotarization), stateRoot, 
+                        _pbaasNotarization.txid, _pbaasNotarization.notarizationheight, PENDING, 1));
+            lastForkIndex = 1;
         }
-        revert("Hash of notarization not found"); */
- 
+            //This is the second notarization that should happen i.e.  [0] -> [0,1]
+        else if (bestForks[0].length == 1 && forkPos == 0 && lastForkIndex == 0 && forksLength == 1)
+        {
+            bestForks[0].push(VerusObjectsNotarization.NotarizationForks(reversebytes32(hashedNotarization), stateRoot, 
+            _pbaasNotarization.txid, _pbaasNotarization.notarizationheight, PENDING, 1));
+            lastForkIndex = 1;
+        } 
+            //this is to add to existing forks
+        else 
+        {
+            lastForkIndex++;
+            if (forkPos == 0 && forkIdx == 0) {
+                bestForks[uint256(forksLength)].push(bestForks[0][0]);
+            }
+            
+            bestForks[uint256(forksLength)].push(VerusObjectsNotarization.NotarizationForks(reversebytes32(hashedNotarization), stateRoot, 
+            _pbaasNotarization.txid, _pbaasNotarization.notarizationheight, PENDING, lastForkIndex));
+        }
 
+        //prune if poss
+        if(bestForks.length > 1) 
+        {
+            uint totalnotarizations;
+            for (int i = 0; i < forksLength; i++) 
+            {
+                for (int j = int(bestForks[uint(i)].length) - 1; j > 0; j--)
+                {
+                    totalnotarizations++;
+                    int chainCounter;
+                    if ((bestForks[uint(i)][uint(j)].forkIndex + 1) == bestForks[uint(i)][uint(j)].forkIndex)
+                    {
+                        chainCounter++;
+
+                        if (chainCounter >= 3)
+                        {
+                            VerusObjectsNotarization.NotarizationForks[] memory tempProof = new VerusObjectsNotarization.NotarizationForks[](2);
+                            tempProof[0] = bestForks[uint(i)][uint(bestForks[uint(i)].length) - 2];
+                            tempProof[0].forkIndex = 0;
+                            tempProof[0].status = CONFIRMED;
+                            tempProof[1] = bestForks[uint(i)][uint(bestForks[uint(i)].length) - 1];
+                            tempProof[1].forkIndex = 1;
+                            tempProof[1].status = PENDING;
+                            delete bestForks;
+                            bestForks[0].push(tempProof[0]);
+                            bestForks[0].push(tempProof[1]);
+                            lastForkIndex = 1;
+                        }
+                    }
+                }
+                totalnotarizations++;
+            }
+        } 
     }
 
     function getVRSCStateRoot(VerusObjectsNotarization.CProofRoot[] memory proofroots) public pure returns (bytes32) {
@@ -296,7 +309,12 @@ contract VerusNotarizer {
         return ecrecover(_h, _v, _r, _s);
     }
 
-    function setClaimableFees(address _feeRecipient, address _proposer, uint256 _ethAmount, address bridgekeeper) public returns (uint256){
+    function getBestStateroot() public view returns (bytes32)
+    {
+        return bestForks[0][0].stateRoot;
+    }
+
+    function setClaimableFees(address _feeRecipient, uint256 _ethAmount, address bridgekeeper) public returns (uint256){
 
         require(msg.sender == address(verusBridgeMaster)); 
         
@@ -305,6 +323,13 @@ contract VerusNotarizer {
         uint256 exporterFees;
         uint256 proposerFees;  
         uint256 bridgekeeperFees;              
+
+        address proposer;
+        bytes memory proposerBytes = verusNotarizerStorage.getNotarization(bestForks[0][0].hashOfNotarization).proposer.destinationaddress;
+
+        assembly {
+                proposer := mload(add(proposerBytes,20))
+        } 
 
         notaryFees = _ethAmount.div(10).mul(3); 
 
@@ -316,7 +341,7 @@ contract VerusNotarizer {
 
         setNotaryFees(notaryFees);
         verusBridgeMaster.setClaimedFees(_feeRecipient, exporterFees);
-        verusBridgeMaster.setClaimedFees(_proposer, proposerFees);
+        verusBridgeMaster.setClaimedFees(proposer, proposerFees);
         verusBridgeMaster.setClaimedFees(bridgekeeper, bridgekeeperFees);
 
         //return total amount of unclaimed LP Fees accrued.
