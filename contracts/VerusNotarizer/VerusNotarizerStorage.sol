@@ -22,7 +22,7 @@ contract VerusNotarizerStorage {
     mapping (address => uint32) public poolAvailable;
   
     VerusObjectsNotarization.NotarizationForks[] public bestForks;
-    bytes32 public lastNotarizationTxid;
+    mapping (bytes32 => bool) public notarizationHashes;
     mapping (address => uint256) public storageGlobal;
     
     constructor(address upgradeContractAddress)
@@ -59,40 +59,37 @@ contract VerusNotarizerStorage {
 
     }
 
-    function setNotarization(VerusObjectsNotarization.CPBaaSNotarization memory _notarization) public {
+    function setNotarization(VerusObjectsNotarization.CPBaaSNotarization memory _notarization, bytes32 hashOfNotarization) public {
 
         require( msg.sender == verusNotarizer,"setNotarizedProof:callfromNotarizeronly");
         
-        // copying from memory to storage cannot be done directly
-        bytes32 txidOfNotarization = _notarization.txid.hash;
-
-        PBaaSNotarization[txidOfNotarization].version = _notarization.version; 
-        PBaaSNotarization[txidOfNotarization].flags = _notarization.flags;
-        PBaaSNotarization[txidOfNotarization].proposer = _notarization.proposer;
-        PBaaSNotarization[txidOfNotarization].currencyid = _notarization.currencyid;
-        PBaaSNotarization[txidOfNotarization].currencystate = _notarization.currencystate;
-        PBaaSNotarization[txidOfNotarization].notarizationheight = _notarization.notarizationheight;
-        PBaaSNotarization[txidOfNotarization].prevnotarization = _notarization.prevnotarization;
-        PBaaSNotarization[txidOfNotarization].hashprevnotarization = _notarization.hashprevnotarization;
-        PBaaSNotarization[txidOfNotarization].prevheight = _notarization.prevheight;
-        PBaaSNotarization[txidOfNotarization].txid = _notarization.txid;
+        PBaaSNotarization[hashOfNotarization].version = _notarization.version; 
+        PBaaSNotarization[hashOfNotarization].flags = _notarization.flags;
+        PBaaSNotarization[hashOfNotarization].proposer = _notarization.proposer;
+        PBaaSNotarization[hashOfNotarization].currencyid = _notarization.currencyid;
+        PBaaSNotarization[hashOfNotarization].currencystate = _notarization.currencystate;
+        PBaaSNotarization[hashOfNotarization].notarizationheight = _notarization.notarizationheight;
+        PBaaSNotarization[hashOfNotarization].prevnotarization = _notarization.prevnotarization;
+        PBaaSNotarization[hashOfNotarization].hashprevnotarization = _notarization.hashprevnotarization;
+        PBaaSNotarization[hashOfNotarization].prevheight = _notarization.prevheight;
+        PBaaSNotarization[hashOfNotarization].txid = _notarization.txid;
 
         for (uint i = 0; i < _notarization.currencystates.length; i++) {
  
-            PBaaSNotarization[txidOfNotarization].currencystates.push(_notarization.currencystates[i]);
+            PBaaSNotarization[hashOfNotarization].currencystates.push(_notarization.currencystates[i]);
         }  
               
         for (uint i = 0; i < _notarization.proofroots.length; i++) {
  
-            PBaaSNotarization[txidOfNotarization].proofroots.push(_notarization.proofroots[i]);
+            PBaaSNotarization[hashOfNotarization].proofroots.push(_notarization.proofroots[i]);
         }  
 
         for (uint i = 0; i < _notarization.nodes.length; i++) {
  
-            PBaaSNotarization[txidOfNotarization].nodes.push(_notarization.nodes[i]);
+            PBaaSNotarization[hashOfNotarization].nodes.push(_notarization.nodes[i]);
         }  
 
-        lastNotarizationTxid = txidOfNotarization;
+        notarizationHashes[hashOfNotarization] = true;
        
     }
 

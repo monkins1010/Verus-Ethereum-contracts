@@ -66,12 +66,6 @@ contract VerusBridgeMaster {
         return verusNotarizer.poolAvailable();
     }
 
-    function getLastProofRoot() public view returns(bytes memory){
-
-       return abi.encode(verusNotarizerStorage.getNotarization(verusNotarizerStorage.lastNotarizationTxid()).proofroots);
-
-    }
-
     function setLatestData(VerusObjectsNotarization.CPBaaSNotarization memory _pbaasNotarization, bytes memory data) public returns(bool)
     {
 
