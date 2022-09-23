@@ -101,6 +101,7 @@ contract VerusBridgeMaster {
     {
         require(msg.sender == address(verusBridge));
         
+
         //exporter 10%
 
         uint256 LPFees;

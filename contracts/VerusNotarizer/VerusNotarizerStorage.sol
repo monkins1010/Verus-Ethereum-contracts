@@ -20,8 +20,6 @@ contract VerusNotarizerStorage {
 
     mapping (bytes32 => VerusObjectsNotarization.CPBaaSNotarization) public PBaaSNotarization;
     mapping (address => uint32) public poolAvailable;
-  
-    //VerusObjectsNotarization.NotarizationForks[] public bestForks;
     mapping (bytes32 => bool) public notarizationHashes;
     mapping (address => uint256) public storageGlobal;
     

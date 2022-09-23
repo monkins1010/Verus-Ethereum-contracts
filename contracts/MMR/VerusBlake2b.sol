@@ -5,7 +5,7 @@ pragma experimental ABIEncoderV2;
 
 import "./Blake2b.sol";
 
-contract VerusBlake2b {
+library VerusBlake2b {
     using Blake2b for Blake2b.Instance;
 
     function createHash(bytes memory input) public view returns (bytes32) {
@@ -18,15 +18,11 @@ contract VerusBlake2b {
       return bytesToBytes32(instance.finalize(input));
     }
 
-    function bytesToBytes32(bytes memory b)
-        public
-        pure
-        returns (bytes32)
-    {
+    function bytesToBytes32(bytes memory b) public pure returns (bytes32) {
         bytes32 out;
 
-        for (uint256 i = 0; i < 32; i++) {
-            out |= bytes32(b[(i)] & 0xFF) >> (i * 8);
+        assembly {
+            out := mload(add(b, 32))
         }
         return out;
     }    

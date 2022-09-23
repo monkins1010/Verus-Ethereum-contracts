@@ -6,6 +6,7 @@ pragma experimental ABIEncoderV2;
 import "../Libraries/VerusObjects.sol";
 import "../Libraries/VerusObjectsNotarization.sol";
 import "../Libraries/VerusConstants.sol";
+import "../MMR/VerusBlake2b.sol";
 
 contract VerusSerializer {
 
@@ -14,6 +15,7 @@ contract VerusSerializer {
     uint32 constant CCC_ID_LEN = 20;
     uint32 constant CCC_NATIVE_OFFSET = 20 + 4 + 4;
     uint32 constant CCC_TOKENID_OFFSET = 32;
+    using VerusBlake2b for bytes;
 
     function readVarUintLE(bytes memory incoming, uint32 offset) public pure returns(VerusObjectsCommon.UintReader memory) {
         uint32 retVal = 0;
@@ -651,6 +653,11 @@ contract VerusSerializer {
             return ((twoByte << 8) + oneByte, offset + 1);
         }
         return (0, offset);
+    }
+
+    function blake2bDefault(bytes memory incoming) public view returns (bytes32)
+    {
+        return incoming.createDefaultHash();
     }
 
 }

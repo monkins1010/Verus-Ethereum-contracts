@@ -7,7 +7,6 @@ pragma experimental ABIEncoderV2;
 import "../Libraries/VerusConstants.sol";
 import "../Libraries/VerusObjectsNotarization.sol";
 import "../VerusBridge/VerusSerializer.sol";
-import "../MMR/VerusBlake2b.sol";
 import "../VerusNotarizer/VerusNotarizerStorage.sol";
 import "../VerusBridge/VerusBridgeMaster.sol";
 import "@openzeppelin/contracts/utils/math/SafeMath.sol";
@@ -37,26 +36,20 @@ contract VerusNotarizer {
 
     address[] private notaries;
 
-    uint32 public notaryCount;
     bool public poolAvailable;
-    VerusBlake2b blake2b;
     VerusObjectsNotarization.NotarizationForks[][] public bestForks;
-    uint32 lastForkIndex;
+    int32 lastForkIndex;
 
     // Notifies when a new block hash is published
     event NewNotarization(uint32 notarizedDataHeight);
-    uint8 constant PENDING = 1;
-    uint8 constant CONFIRMED = 2;
 
     constructor(address _verusSerializerAddress, address upgradeContractAddress, 
     address[] memory _notaries, address[] memory _notariesEthAddress, address[] memory _notariesColdStoreEthAddress, 
-    address verusNotarizerStorageAddress, address verusBridgeMasterAddress, address verusBLAKE2bAddress) {
+    address verusNotarizerStorageAddress, address verusBridgeMasterAddress) {
         verusSerializer = VerusSerializer(_verusSerializerAddress);
         upgradeContract = upgradeContractAddress;
-        notaryCount = uint32(_notaries.length);
         verusNotarizerStorage = VerusNotarizerStorage(verusNotarizerStorageAddress); 
         verusBridgeMaster = VerusBridgeMaster(verusBridgeMasterAddress);
-        blake2b = VerusBlake2b(verusBLAKE2bAddress);
 
         // when contract is launching/upgrading copy in to global bool pool available.
         if(verusNotarizerStorage.poolAvailable(VerusConstants.VerusBridgeAddress) > 0 )
@@ -66,6 +59,7 @@ contract VerusNotarizer {
             notaryAddressMapping[_notaries[i]] = VerusObjects.notarizer(_notariesEthAddress[i], _notariesColdStoreEthAddress[i], VerusConstants.NOTARY_VALID);
             notaries.push(_notaries[i]);
         }
+        lastForkIndex  = -1;
     }
 
     function setContract(address contractAddress) public {
@@ -75,30 +69,11 @@ contract VerusNotarizer {
         verusSerializer = VerusSerializer(contractAddress);
 
     }
-
-    //NOTE: This modifier is not used, is it to be used it should be in the verusBridgeMAster contract.
-    modifier onlyNotary() {
-        address msgSender = msg.sender;
-        bytes memory errorMessage = abi.encodePacked("Caller is not a notary",msgSender);
-        require(notaryAddressMapping[msgSender].state == VerusConstants.NOTARY_VALID, string(errorMessage));
-        _;
-    }
-    
-    function getNotaries() public view returns(address[] memory){
-        return notaries;
-    }
-        
-    function isNotary(address _notary) public view returns(bool) {
-       return (notaryAddressMapping[_notary].state == VerusConstants.NOTARY_VALID);  
-    }
-
-    //this function allows for intially expanding out the number of notaries
+          
     function currentNotariesRequired() public view returns(uint8){
 
-        if(notaryCount < 3 ) return 1;
-        uint halfNotaryCount = (notaryCount/2) + 1;
-        if(halfNotaryCount > requiredNotaries) return requiredNotaries;
-        else return uint8(halfNotaryCount);
+        return uint8((notaries.length/2) + 1);
+
     }
  
     function setLatestData(VerusObjectsNotarization.CPBaaSNotarization memory _pbaasNotarization, bytes memory data
@@ -114,9 +89,9 @@ contract VerusNotarizer {
         bytes memory serializedNotarisation = verusSerializer.serializeCPBaaSNotarization(_pbaasNotarization);
 
         // Notarizations are keyed by blake2b hash of notarization
-        hashedNotarization = blake2b.createDefaultHash(serializedNotarisation);
+        hashedNotarization = verusSerializer.blake2bDefault(serializedNotarisation);
 
-        require(!verusNotarizerStorage.notarizationHashes(hashedNotarization),"Known hash of Notarization");
+        require(!verusNotarizerStorage.notarizationHashes(hashedNotarization));
 
         bytes32 hashedNotarizationByID;
         uint validSignatures;
@@ -176,110 +151,72 @@ contract VerusNotarizer {
 
     function setNotarizationProofRoot(VerusObjectsNotarization.CPBaaSNotarization memory _pbaasNotarization, bytes32 hashedNotarization) private 
     {
-         bytes32 stateRoot;
+        bytes32 stateRoot;
 
         stateRoot = getVRSCStateRoot(_pbaasNotarization.proofroots);
         
-        int forksLength = int(bestForks.length);
         int forkIdx = -1;
         int forkPos;
         
-        if(forksLength == 0)
+        for (int i = 0; i < int(bestForks.length) ; i++) 
         {
-            bestForks[0].push(VerusObjectsNotarization.NotarizationForks(reversebytes32(hashedNotarization), stateRoot, 
-                              _pbaasNotarization.txid, _pbaasNotarization.notarizationheight, CONFIRMED, 0));
-            return;
-        }
-
-        for (int i = 0; i < forksLength; i++) 
-        {
-            if (bestForks[uint(i)].length > 1)
+            for (int j = int(bestForks[uint(i)].length) - 1; j >= 0; j--)
             {
-                for (int j = int(bestForks[uint(i)].length) - 1; j >= 0; j--)
+                if (_pbaasNotarization.hashprevnotarization == reversebytes32(bestForks[uint(i)][uint(j)].hashOfNotarization))
                 {
-                    if (_pbaasNotarization.hashprevnotarization == reversebytes32(bestForks[uint(i)][uint(j)].hashOfNotarization))
-                    {
-                        forkIdx = i;
-                        forkPos = j;
-                        break;
-                    }
-                }
-                if (forkIdx > -1)
-                {
+                    forkIdx = i;
+                    forkPos = j;
                     break;
                 }
             }
+            if (forkIdx > -1)
+            {
+                break;
+            }
+           
         }
-        if (forkIdx == -1)
+        if (forkIdx == -1 && bestForks.length != 0)
         {
             revert("invalid notarization hash");
         }
-
-        if (bestForks[0].length == 2 && forkPos == 1 && lastForkIndex == 1 && forksLength == 1)
+                  
+        if (forkPos != int(bestForks[uint(forkIdx)].length) - 1 && lastForkIndex > 0)  
         {
-            //This should be the most common case where we have [[0,1,2]]
-            VerusObjectsNotarization.NotarizationForks memory tempProof;
-            tempProof = bestForks[0][1];
-            tempProof.forkIndex = 0;
-            tempProof.status = CONFIRMED;
-            delete bestForks;
-            bestForks[0].push(tempProof);
-            bestForks[0].push(VerusObjectsNotarization.NotarizationForks(reversebytes32(hashedNotarization), stateRoot, 
-                        _pbaasNotarization.txid, _pbaasNotarization.notarizationheight, PENDING, 1));
-            lastForkIndex = 1;
+            bestForks[uint256(bestForks.length)].push(bestForks[uint(forkIdx)][uint(forkPos)]);
+            forkIdx = int(bestForks.length);
         }
-            //This is the second notarization that should happen i.e.  [0] -> [0,1]
-        else if (bestForks[0].length == 1 && forkPos == 0 && lastForkIndex == 0 && forksLength == 1)
-        {
-            bestForks[0].push(VerusObjectsNotarization.NotarizationForks(reversebytes32(hashedNotarization), stateRoot, 
-            _pbaasNotarization.txid, _pbaasNotarization.notarizationheight, PENDING, 1));
-            lastForkIndex = 1;
-        } 
-            //this is to add to existing forks
-        else 
-        {
-            lastForkIndex++;
-            if (forkPos == 0 && forkIdx == 0) {
-                bestForks[uint256(forksLength)].push(bestForks[0][0]);
-            }
-            
-            bestForks[uint256(forksLength)].push(VerusObjectsNotarization.NotarizationForks(reversebytes32(hashedNotarization), stateRoot, 
-            _pbaasNotarization.txid, _pbaasNotarization.notarizationheight, PENDING, lastForkIndex));
-        }
+        lastForkIndex++;
+        
+        bestForks[uint256(forkIdx)].push(VerusObjectsNotarization.NotarizationForks(reversebytes32(hashedNotarization), stateRoot, 
+        _pbaasNotarization.txid, _pbaasNotarization.notarizationheight, uint32(lastForkIndex)));
+        
 
         //prune if poss
-        if(bestForks.length > 1) 
+        for (int i = 0; i < int(bestForks.length) && (bestForks.length > 1) ; i++) 
         {
-            uint totalnotarizations;
-            for (int i = 0; i < forksLength; i++) 
+            for (int j = int(bestForks[uint(i)].length) - 1; j > 0; j--)
             {
-                for (int j = int(bestForks[uint(i)].length) - 1; j > 0; j--)
+                int chainCounter;
+                if ((bestForks[uint(i)][uint(j)].forkIndex + 1) == bestForks[uint(i)][uint(j)].forkIndex)
                 {
-                    totalnotarizations++;
-                    int chainCounter;
-                    if ((bestForks[uint(i)][uint(j)].forkIndex + 1) == bestForks[uint(i)][uint(j)].forkIndex)
-                    {
-                        chainCounter++;
+                    chainCounter++;
 
-                        if (chainCounter >= 3)
-                        {
-                            VerusObjectsNotarization.NotarizationForks[] memory tempProof = new VerusObjectsNotarization.NotarizationForks[](2);
-                            tempProof[0] = bestForks[uint(i)][uint(bestForks[uint(i)].length) - 2];
-                            tempProof[0].forkIndex = 0;
-                            tempProof[0].status = CONFIRMED;
-                            tempProof[1] = bestForks[uint(i)][uint(bestForks[uint(i)].length) - 1];
-                            tempProof[1].forkIndex = 1;
-                            tempProof[1].status = PENDING;
-                            delete bestForks;
-                            bestForks[0].push(tempProof[0]);
-                            bestForks[0].push(tempProof[1]);
-                            lastForkIndex = 1;
-                        }
+                    if (chainCounter >= 3)
+                    {
+                        VerusObjectsNotarization.NotarizationForks[] memory tempProof = new VerusObjectsNotarization.NotarizationForks[](2);
+                        tempProof[0] = bestForks[uint(i)][uint(bestForks[uint(i)].length) - 2];
+                        tempProof[0].forkIndex = 0;
+                        tempProof[1] = bestForks[uint(i)][uint(bestForks[uint(i)].length) - 1];
+                        tempProof[1].forkIndex = 1;
+                        delete bestForks;
+                        bestForks[0].push(tempProof[0]);
+                        bestForks[0].push(tempProof[1]);
+                        lastForkIndex = 1;
                     }
                 }
-                totalnotarizations++;
             }
-        } 
+        }
+        
     }
 
     function getVRSCStateRoot(VerusObjectsNotarization.CProofRoot[] memory proofroots) public pure returns (bytes32) {

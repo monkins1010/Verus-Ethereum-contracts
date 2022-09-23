@@ -4,7 +4,6 @@ var VerusBridgeMaster = artifacts.require("./VerusBridge/VerusBridgeMaster.sol")
 var VerusBridgeStorage = artifacts.require("./VerusBridge/VerusBridgeStorage.sol");
 var VerusNotarizerStorage = artifacts.require("./VerusNotarizer/VerusNotarizerStorage.sol");
 var VerusTokenManager = artifacts.require("./VerusBridge/TokenManager.sol");
-var VerusBlake2b = artifacts.require("./MMR/VerusBlake2b.sol");
 var VerusSerializer = artifacts.require("./VerusBridge/VerusSerializer.sol");
 var VerusNotarizer = artifacts.require("./VerusNotarizer/VerusNotarizer.sol");
 var VerusProof = artifacts.require("./MMR/VerusProof.sol");
@@ -29,7 +28,6 @@ const tokenmanbeth = ["0xffEce948b8A38bBcC813411D2597f7f8485a0689", "0x000000000
 const tokenmanUSDC = ["0xf0a1263056c30e221f0f851c36b767fff2544f7f", "0xeb8f08a975ab53e34d8a0330e0d34de942c95926", "0xA6ef9ea235635E328124Ff3429dB9F9E91b64e2d", MAPPING_ETHEREUM_OWNED + MAPPING_PARTOF_BRIDGEVETH, "Testnet USDC", "USDC"];
 const vETH = ["0x67460C2f56774eD27EeB8685f29f6CEC0B090B00", "0x06012c8cf97bead5deae237070f9587f8e7a266d", "0xA6ef9ea235635E328124Ff3429dB9F9E91b64e2d", MAPPING_ETHEREUM_OWNED + MAPPING_PARTOF_BRIDGEVETH, "Testnet ETH", "ETH"];
 
-const USDCERC20RINKEBY = "0xeb8f08a975ab53e34d8a0330e0d34de942c95926";
 const USDCERC20GOERLI = "0x98339D8C260052B7ad81c28c16C0b98420f2B46a";
 
 module.exports = async function(deployer) {
@@ -48,19 +46,16 @@ module.exports = async function(deployer) {
     await deployer.deploy(VerusNotarizerStorage, UpgradeInst.address);
     const NotarizerStorageInst = await VerusNotarizerStorage.deployed();
 
-    await deployer.deploy(VerusBlake2b);
-    const blakeInst = await VerusBlake2b.deployed();
-
     await deployer.deploy(VerusSerializer);
     const serializerInst = await VerusSerializer.deployed();
 
     await deployer.deploy(VerusTokenManager, UpgradeInst.address, bridgeStorageInst.address, serializerInst.address)
     const tokenInst = await VerusTokenManager.deployed();
 
-    await deployer.deploy(VerusNotarizer, serializerInst.address, UpgradeInst.address, verusNotariserIDS, verusNotariserSigner, verusNotariserRevoker, NotarizerStorageInst.address, bridgeMasterInst.address, blakeInst.address);
+    await deployer.deploy(VerusNotarizer, serializerInst.address, UpgradeInst.address, verusNotariserIDS, verusNotariserSigner, verusNotariserRevoker, NotarizerStorageInst.address, bridgeMasterInst.address);
     const notarizerInst = await VerusNotarizer.deployed();
 
-    await deployer.deploy(VerusProof, UpgradeInst.address, blakeInst.address, serializerInst.address, notarizerInst.address);
+    await deployer.deploy(VerusProof, UpgradeInst.address, serializerInst.address, notarizerInst.address);
     const ProofInst = await VerusProof.deployed();
 
     await deployer.deploy(VerusCCE, serializerInst.address, UpgradeInst.address);
@@ -68,7 +63,6 @@ module.exports = async function(deployer) {
 
     await deployer.deploy(ExportManager, bridgeStorageInst.address, tokenInst.address, UpgradeInst.address);
     const ExportManInst = await ExportManager.deployed();
-
 
     await deployer.deploy(VerusBridge, bridgeMasterInst.address, bridgeStorageInst.address, tokenInst.address, serializerInst.address, ProofInst.address, CCEInst.address, ExportManInst.address, UpgradeInst.address, block.number, "500000000000");
     const VerusBridgeInst = await VerusBridge.deployed();

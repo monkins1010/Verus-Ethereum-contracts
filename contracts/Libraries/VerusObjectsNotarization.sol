@@ -62,7 +62,6 @@ library VerusObjectsNotarization {
         bytes32 stateRoot;
         CUTXORef txid;
         uint32 height;
-        uint8 status;
         uint32 forkIndex;
     }
 

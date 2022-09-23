@@ -66,14 +66,14 @@ contract VerusInfo {
         VerusObjects.currencyDetail memory returnCurrency;
         returnCurrency.version = chainInfo.version;
         //if the _currencyid is null then return VEth
-        address[] memory notaries = verusNotarizer.getNotaries();
+        address[] memory notaries = new address[](1);
         uint8 minnotaries = verusNotarizer.currentNotariesRequired();
         
         address currencyAddress;
         uint256 initialsupply;
         if(_currencyid == VerusConstants.VEth){
             currencyAddress = VerusConstants.VEth;
-            initialsupply = 72000000;
+            initialsupply = 0;
         } else {
             currencyAddress = _currencyid;
             initialsupply = 0;

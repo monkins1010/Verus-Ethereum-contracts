@@ -13,9 +13,9 @@ import "./MMR.sol";
 contract VerusProof {
 
     uint256 mmrRoot;
-    VerusBlake2b blake2b;
     VerusSerializer verusSerializer;
     VerusNotarizer verusNotarizer;
+    using VerusBlake2b for bytes;
     
     // these constants should be able to reference each other, as many are relative, but Solidity does not
     // allow referencing them and still considering the result a constant. For any changes to these constants,
@@ -39,12 +39,11 @@ contract VerusProof {
 
     event HashEvent(bytes32 newHash,uint8 eventType);
 
-    constructor(address verusUpgradeAddress, address verusBLAKE2bAddress, address verusSerializerAddress, 
+    constructor(address verusUpgradeAddress, address verusSerializerAddress, 
     address verusNotarizerAddress) 
     {
         verusUpgradeContract = verusUpgradeAddress;
         verusSerializer = VerusSerializer(verusSerializerAddress);
-        blake2b = VerusBlake2b(verusBLAKE2bAddress);
         verusNotarizer = VerusNotarizer(verusNotarizerAddress);
     }
 
@@ -89,7 +88,7 @@ contract VerusProof {
             } else {
                 joined = abi.encodePacked(hashInProgress,_branch.branch[i]);
             }
-            hashInProgress = blake2b.createHash(joined);
+            hashInProgress = joined.createHash();
             hashIndex >>= 1;
         }
 
@@ -218,7 +217,7 @@ contract VerusProof {
             nextOffset := add(nextOffset, 2)                        // skip type and length 0x09 & 0x16
             nextOffset := add(nextOffset, CCE_DEST_CURRENCY_DELTA)
             exporter := mload(add(firstObj, nextOffset))            // exporter
-            nextOffset := add(nextOffset, 1)                        // itterate next byte for varint
+            nextOffset := add(nextOffset, 9)                        // skip firstinput + numinputs + itterate next byte for varint
         }
 
         (startheight, nextOffset)  = readVarint(firstObj, nextOffset); 
@@ -253,7 +252,7 @@ contract VerusProof {
 
         if (_import.partialtransactionproof.components.length > 0)
         {   
-            hashInProgress = blake2b.createHash(_import.partialtransactionproof.components[0].elVchObj);
+            hashInProgress = _import.partialtransactionproof.components[0].elVchObj.createHash();
             if (_import.partialtransactionproof.components[0].elType == 1 )
             {
                 txRoot = checkProof(hashInProgress,_import.partialtransactionproof.components[0].elProof);           
@@ -261,7 +260,7 @@ contract VerusProof {
         }
 
         for (uint i = 1; i < _import.partialtransactionproof.components.length; i++) {
-            hashInProgress = blake2b.createHash(_import.partialtransactionproof.components[i].elVchObj);
+            hashInProgress = _import.partialtransactionproof.components[i].elVchObj.createHash();
             testHash = checkProof(hashInProgress,_import.partialtransactionproof.components[i].elProof);
         
             if (txRoot != testHash) 
