@@ -1,6 +1,6 @@
 // SPDX-License-Identifier: MIT
 pragma solidity >=0.6.0 <0.9.0;
-pragma experimental ABIEncoderV2;
+pragma abicoder v2;
 
 import "./Token.sol";
 import "../Libraries/VerusObjects.sol";

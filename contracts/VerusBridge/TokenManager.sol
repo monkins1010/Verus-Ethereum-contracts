@@ -2,7 +2,7 @@
 // Bridge between ethereum and verus
 
 pragma solidity >=0.4.20;
-pragma experimental ABIEncoderV2;
+pragma abicoder v2;
 
 import "./Token.sol";
 import "../Libraries/VerusConstants.sol";
