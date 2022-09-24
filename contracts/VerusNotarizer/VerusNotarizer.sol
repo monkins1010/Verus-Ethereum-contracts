@@ -13,8 +13,6 @@ import "@openzeppelin/contracts/utils/math/SafeMath.sol";
 
 contract VerusNotarizer {
         
-    using SafeMath for uint;
-
     //number of notaries required
     uint8 requiredNotaries = 13;
 
@@ -37,9 +35,10 @@ contract VerusNotarizer {
     address[] private notaries;
 
     bool public poolAvailable;
-    VerusObjectsNotarization.NotarizationForks[][] public bestForks;
+    VerusObjectsNotarization.NotarizationForks[12][8] public bestForks;
     int32 lastForkIndex;
-
+    int32[8] notarizationLength;
+    int32 amountsOfForks;
     // Notifies when a new block hash is published
     event NewNotarization(uint32 notarizedDataHeight);
 
@@ -83,7 +82,7 @@ contract VerusNotarizer {
         bytes32[] memory _rs,
         bytes32[] memory _ss,
         uint32[] memory blockheights,
-        address[] memory notaryAddress) = abi.decode(data,(uint8[],bytes32[], bytes32[],uint32[],address[]));
+        address[] memory notaryAddresses) = abi.decode(data,(uint8[],bytes32[], bytes32[],uint32[],address[]));
 
         bytes32 hashedNotarization;
         bytes memory serializedNotarisation = verusSerializer.serializeCPBaaSNotarization(_pbaasNotarization);
@@ -96,23 +95,23 @@ contract VerusNotarizer {
         bytes32 hashedNotarizationByID;
         uint validSignatures;
 
-        checkunique(notaryAddress);
+        checkunique(notaryAddresses);
 
-        for(uint i = 0; i < blockheights.length; i++)
+        for(uint i = 0; i < notaryAddresses.length; i++)
         {
             // hash the notarizations with the vdxf key, system, height & NotaryID
             hashedNotarizationByID = keccak256(abi.encodePacked(uint8(1),
                 vdxfcode,
                 VerusConstants.VerusSystemId,
                 verusSerializer.serializeUint32(blockheights[i]),
-                notaryAddress[i],
+                notaryAddresses[i],
                 abi.encodePacked(keccak256(serializedNotarisation))));
 
-            if (recoverSigner(hashedNotarizationByID, _vs[i]-4, _rs[i], _ss[i]) != notaryAddressMapping[notaryAddress[i]].main || sigCheck[notaryAddress[i]] != i)
+            if (recoverSigner(hashedNotarizationByID, _vs[i]-4, _rs[i], _ss[i]) != notaryAddressMapping[notaryAddresses[i]].main || sigCheck[notaryAddresses[i]] != i)
             {
                 revert("Invalid notary signature");  
             }
-            if (notaryAddressMapping[notaryAddress[i]].state != VerusConstants.NOTARY_VALID)
+            if (notaryAddressMapping[notaryAddresses[i]].state != VerusConstants.NOTARY_VALID)
             {
                 revert("Notary revoked"); 
             }
@@ -128,7 +127,7 @@ contract VerusNotarizer {
             
         //valid amount of notarizations achieved
         //loop through the currencystates and confirm if the bridge is active
-        for(uint k= 0; k < _pbaasNotarization.currencystates.length || poolAvailable; k++)
+        for(uint k= 0; k < _pbaasNotarization.currencystates.length && !poolAvailable; k++)
         {
             if (!poolAvailable &&  _pbaasNotarization.currencystates[k].currencyid == VerusConstants.VerusBridgeAddress &&
                 _pbaasNotarization.currencystates[k].currencystate.flags & (FLAG_FRACTIONAL + FLAG_REFUNDING + FLAG_LAUNCHCONFIRMED + FLAG_LAUNCHCOMPLETEMARKER) == 
@@ -158,9 +157,9 @@ contract VerusNotarizer {
         int forkIdx = -1;
         int forkPos;
         
-        for (int i = 0; i < int(bestForks.length) ; i++) 
+        for (int i = 0; i < int(amountsOfForks) ; i++) 
         {
-            for (int j = int(bestForks[uint(i)].length) - 1; j >= 0; j--)
+            for (int j = int(notarizationLength[uint256(i)]) - 1; j >= 0; j--)
             {
                 if (_pbaasNotarization.hashprevnotarization == reversebytes32(bestForks[uint(i)][uint(j)].hashOfNotarization))
                 {
@@ -173,53 +172,71 @@ contract VerusNotarizer {
             {
                 break;
             }
-           
         }
-        if (forkIdx == -1 && bestForks.length != 0)
+
+        if (forkIdx == -1 && amountsOfForks != 0)
         {
             revert("invalid notarization hash");
         }
-                  
-        if (forkPos != int(bestForks[uint(forkIdx)].length) - 1 && lastForkIndex > 0)  
-        {
-            bestForks[uint256(bestForks.length)].push(bestForks[uint(forkIdx)][uint(forkPos)]);
-            forkIdx = int(bestForks.length);
-        }
         lastForkIndex++;
+                  
+        if (forkIdx == -1){
+            forkIdx = 0;
+            amountsOfForks = 1;
+        }
         
-        bestForks[uint256(forkIdx)].push(VerusObjectsNotarization.NotarizationForks(reversebytes32(hashedNotarization), stateRoot, 
-        _pbaasNotarization.txid, _pbaasNotarization.notarizationheight, uint32(lastForkIndex)));
-        
-
-        //prune if poss
-        for (int i = 0; i < int(bestForks.length) && (bestForks.length > 1) ; i++) 
+        if (forkIdx >= 0 && forkPos != int(notarizationLength[uint(forkIdx)]) - 1 && lastForkIndex > 0)  
         {
-            for (int j = int(bestForks[uint(i)].length) - 1; j > 0; j--)
+            notarizationLength[uint32(amountsOfForks)]++;
+            bestForks[uint32(amountsOfForks)][0] = (bestForks[uint(forkIdx)][uint(forkPos)]);
+            forkIdx = amountsOfForks;
+            amountsOfForks++;
+        }
+
+        notarizationLength[uint256(forkIdx)]++;
+        bestForks[uint256(forkIdx)][uint32(notarizationLength[uint256(forkIdx)] - 1)] = 
+            VerusObjectsNotarization.NotarizationForks(reversebytes32(hashedNotarization), stateRoot, 
+            _pbaasNotarization.txid, _pbaasNotarization.notarizationheight, uint32(lastForkIndex));
+      
+        //prune if poss
+                for (int i = 0; i < int(amountsOfForks); i++) 
+        {
+            int chainCounter;
+            for (int j = int(notarizationLength[uint256(i)]) - 1; j > 0; j--)
             {
-                int chainCounter;
-                if ((bestForks[uint(i)][uint(j)].forkIndex + 1) == bestForks[uint(i)][uint(j)].forkIndex)
+                if ((bestForks[uint(i)][uint(j - 1)].forkIndex + 1) == bestForks[uint(i)][uint(j)].forkIndex)
                 {
                     chainCounter++;
 
-                    if (chainCounter >= 3)
+                    if (chainCounter >= 2)
                     {
                         VerusObjectsNotarization.NotarizationForks[] memory tempProof = new VerusObjectsNotarization.NotarizationForks[](2);
-                        tempProof[0] = bestForks[uint(i)][uint(bestForks[uint(i)].length) - 2];
+                        tempProof[0] = bestForks[uint(i)][uint32(notarizationLength[uint(i)]) - 2];
                         tempProof[0].forkIndex = 0;
-                        tempProof[1] = bestForks[uint(i)][uint(bestForks[uint(i)].length) - 1];
+                        tempProof[1] = bestForks[uint(i)][uint32(notarizationLength[uint(i)]) - 1];
                         tempProof[1].forkIndex = 1;
                         delete bestForks;
-                        bestForks[0].push(tempProof[0]);
-                        bestForks[0].push(tempProof[1]);
+                        bestForks[0][0] = tempProof[0];
+                        bestForks[0][1] = tempProof[1];
                         lastForkIndex = 1;
+                        amountsOfForks = 1;
+                        delete notarizationLength;
+                        notarizationLength[0] = 2;
+                        break;
                     }
                 }
+                else 
+                {
+                    chainCounter = 0;
+                }
             }
-        }
+            if (amountsOfForks == 1)
+                break;
+        } 
         
     }
 
-    function getVRSCStateRoot(VerusObjectsNotarization.CProofRoot[] memory proofroots) public pure returns (bytes32) {
+    function getVRSCStateRoot(VerusObjectsNotarization.CProofRoot[] memory proofroots) private pure returns (bytes32) {
 
         for (uint i = 0; i < proofroots.length; i++) 
         {
@@ -240,8 +257,7 @@ contract VerusNotarizer {
         }
     }
 
-
-    function recoverSigner(bytes32 _h, uint8 _v, bytes32 _r, bytes32 _s) public pure returns (address) {
+    function recoverSigner(bytes32 _h, uint8 _v, bytes32 _r, bytes32 _s) private pure returns (address) {
 
         return ecrecover(_h, _v, _r, _s);
     }
@@ -268,11 +284,11 @@ contract VerusNotarizer {
                 proposer := mload(add(proposerBytes,20))
         } 
 
-        notaryFees = _ethAmount.div(10).mul(3); 
+        notaryFees = (_ethAmount / 10 ) * 3 ; 
 
-        exporterFees = _ethAmount.div(10);
-        proposerFees = _ethAmount.div(10);
-        bridgekeeperFees = _ethAmount.div(10).mul(3); 
+        exporterFees = _ethAmount / 10 ;
+        proposerFees = _ethAmount / 10 ;
+        bridgekeeperFees = (_ethAmount / 10 ) * 3 ;
 
         LPFees = _ethAmount - (notaryFees + exporterFees + proposerFees + bridgekeeperFees);
 
@@ -303,7 +319,7 @@ contract VerusNotarizer {
 
     }
 
-    function reversebytes32(bytes32 input) internal pure returns (bytes32) {
+    function reversebytes32(bytes32 input) private pure returns (bytes32) {
 
         uint256 v;
         v = uint256(input);

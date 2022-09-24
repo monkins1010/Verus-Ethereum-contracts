@@ -133,9 +133,6 @@ contract VerusBridge {
                 ERC721 nft = ERC721(nftContract);
                 require (nft.getApproved(tokenId) == address(verusBridgeStorage), "NFT not approved");
 
-
-
-               // ERC721 nft = ERC721(nftAddress);
                 nft.safeTransferFrom(sender, address(verusBridgeStorage), tokenId);
                 verusBridgeMaster.addToEthHeld(paidValue);
                 transfer.destination.destinationtype = desttype;
@@ -193,7 +190,7 @@ contract VerusBridge {
         LPtransfer.destsystemid = address(0);
         LPtransfer.secondreserveid = address(0);
 
-        // When the bridge launches to make sure a fresh block with no pending transfers is used to insert the CCX
+        // When the bridge launches to make sure a fresh block with no pending transfers is used to insert the CCE
         _createExports(LPtransfer, true, block.number + 1);
 
     }
