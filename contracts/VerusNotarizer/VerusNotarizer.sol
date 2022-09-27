@@ -13,20 +13,17 @@ import "@openzeppelin/contracts/utils/math/SafeMath.sol";
 
 contract VerusNotarizer {
         
-    //number of notaries required
-    uint8 requiredNotaries = 13;
-
     uint8 constant FLAG_FRACTIONAL = 1;
     uint8 constant FLAG_REFUNDING = 4;
     uint8 constant FLAG_LAUNCHCONFIRMED = 0x10;
     uint8 constant FLAG_LAUNCHCOMPLETEMARKER = 0x20;
+    // notarization vdxf key
     bytes20 constant vdxfcode = bytes20(0x367Eaadd291E1976ABc446A143f83c2D4D2C5a84);
 
     VerusSerializer verusSerializer;
     VerusNotarizerStorage verusNotarizerStorage;
     VerusBridgeMaster verusBridgeMaster;
     address upgradeContract;
-    // notarization vdxf key
 
     // list of all notarizers mapped to allow for quick searching
     mapping (address => VerusObjects.notarizer ) public notaryAddressMapping;
@@ -35,10 +32,8 @@ contract VerusNotarizer {
     address[] private notaries;
 
     bool public poolAvailable;
-    VerusObjectsNotarization.NotarizationForks[12][8] public bestForks;
+    bytes[] public bestForks;
     int32 lastForkIndex;
-    int32[8] notarizationLength;
-    int32 amountsOfForks;
     // Notifies when a new block hash is published
     event NewNotarization(uint32 notarizedDataHeight);
 
@@ -148,6 +143,72 @@ contract VerusNotarizer {
 
     }
 
+     function decodeNotarization(uint index) private view returns (VerusObjectsNotarization.NotarizationForks[] memory)
+        {
+            uint amountOfNotarizations;
+            uint32 nextOffset;
+
+            bytes storage tempArray = bestForks[index];
+
+            bytes32 hashOfNotarization;
+            bytes32 stateRoot;
+            bytes32 txid;
+            uint32 txidvout;
+            uint32 height;
+            uint192 forkIndex;
+            bytes32 slotHash;
+            VerusObjectsNotarization.NotarizationForks[] memory retval;
+            if (tempArray.length > 0)
+            {
+                bytes memory slot = new bytes(32);
+                assembly {
+                        mstore(add(slot, 32),tempArray.slot)
+                        slotHash := keccak256(add(slot, 32), 32)
+                        amountOfNotarizations := sload(add(slotHash,nextOffset))
+                        }
+
+                retval = new VerusObjectsNotarization.NotarizationForks[](amountOfNotarizations);
+                for (int i = 0; i < int(amountOfNotarizations); i++) 
+                {
+                    assembly {
+                        nextOffset := add(nextOffset, 1)  
+                        hashOfNotarization := sload(add(slotHash,nextOffset))
+                        nextOffset := add(nextOffset, 1)  
+                        stateRoot := sload(add(slotHash,nextOffset))
+                        nextOffset := add(nextOffset, 1)  
+                        txid := sload(add(slotHash,nextOffset))
+                        nextOffset := add(nextOffset, 1)  
+                        txidvout := shr(224,sload(add(slotHash,nextOffset)))
+                        height := shr(192,sload(add(slotHash,nextOffset)))
+                        forkIndex := sload(add(slotHash,nextOffset))
+                    }
+                    retval[uint(i)] =  VerusObjectsNotarization.NotarizationForks(hashOfNotarization, stateRoot, txid, txidvout, height, forkIndex);
+                }
+
+                
+            }
+            return retval;
+               
+        }
+
+        function encodeNotarization(uint index, VerusObjectsNotarization.NotarizationForks memory notarizations)private  {
+
+            if (bestForks.length < index + 1)
+            {
+                bestForks.push(new bytes(32));
+            }
+
+            bestForks[index][31] = bytes1(uint8(bestForks[index][31]) + 1); 
+
+            bestForks[index] = abi.encodePacked(bestForks[index],notarizations.hashOfNotarization, 
+                                                notarizations.stateRoot,
+                                                notarizations.txid,
+                                                notarizations.n,
+                                                notarizations.height,
+                                                notarizations.forkIndex);
+
+        }
+
     function setNotarizationProofRoot(VerusObjectsNotarization.CPBaaSNotarization memory _pbaasNotarization, bytes32 hashedNotarization) private 
     {
         bytes32 stateRoot;
@@ -157,11 +218,13 @@ contract VerusNotarizer {
         int forkIdx = -1;
         int forkPos;
         
-        for (int i = 0; i < int(amountsOfForks) ; i++) 
+        VerusObjectsNotarization.NotarizationForks[] memory notarizations;   
+        for (int i = 0; i < int(bestForks.length) ; i++) 
         {
-            for (int j = int(notarizationLength[uint256(i)]) - 1; j >= 0; j--)
+            notarizations =  decodeNotarization(uint(i));
+            for (int j = int(notarizations.length) - 1; j >= 0; j--)
             {
-                if (_pbaasNotarization.hashprevnotarization == reversebytes32(bestForks[uint(i)][uint(j)].hashOfNotarization))
+                if (_pbaasNotarization.hashprevnotarization == reversebytes32(notarizations[uint(j)].hashOfNotarization))
                 {
                     forkIdx = i;
                     forkPos = j;
@@ -174,54 +237,44 @@ contract VerusNotarizer {
             }
         }
 
-        if (forkIdx == -1 && amountsOfForks != 0)
+        if (forkIdx == -1 && bestForks.length != 0)
         {
             revert("invalid notarization hash");
         }
         lastForkIndex++;
-                  
+
         if (forkIdx == -1){
             forkIdx = 0;
-            amountsOfForks = 1;
         }
         
-        if (forkIdx >= 0 && forkPos != int(notarizationLength[uint(forkIdx)]) - 1 && lastForkIndex > 0)  
+        if (forkIdx >= 0 && forkPos != int(notarizations.length) - 1 && lastForkIndex > 0)  
         {
-            notarizationLength[uint32(amountsOfForks)]++;
-            bestForks[uint32(amountsOfForks)][0] = (bestForks[uint(forkIdx)][uint(forkPos)]);
-            forkIdx = amountsOfForks;
-            amountsOfForks++;
+            encodeNotarization(uint(notarizations.length), notarizations[uint(forkPos)]);
+            forkIdx = int(notarizations.length);
         }
 
-        notarizationLength[uint256(forkIdx)]++;
-        bestForks[uint256(forkIdx)][uint32(notarizationLength[uint256(forkIdx)] - 1)] = 
-            VerusObjectsNotarization.NotarizationForks(reversebytes32(hashedNotarization), stateRoot, 
-            _pbaasNotarization.txid, _pbaasNotarization.notarizationheight, uint32(lastForkIndex));
+        encodeNotarization(uint(forkIdx), VerusObjectsNotarization.NotarizationForks(reversebytes32(hashedNotarization), stateRoot, 
+            _pbaasNotarization.txid.hash, _pbaasNotarization.txid.n, _pbaasNotarization.notarizationheight, uint32(lastForkIndex)));
       
         //prune if poss
-                for (int i = 0; i < int(amountsOfForks); i++) 
+        for (int i = 0; i < int(bestForks.length); i++) 
         {
             int chainCounter;
-            for (int j = int(notarizationLength[uint256(i)]) - 1; j > 0; j--)
+            notarizations =  decodeNotarization(uint(i));
+            for (int j = int(notarizations.length) - 1; j > 0; j--)
             {
-                if ((bestForks[uint(i)][uint(j - 1)].forkIndex + 1) == bestForks[uint(i)][uint(j)].forkIndex)
+                if ((notarizations[uint(j - 1)].forkIndex + 1) == notarizations[uint(j)].forkIndex)
                 {
                     chainCounter++;
 
                     if (chainCounter >= 2)
                     {
-                        VerusObjectsNotarization.NotarizationForks[] memory tempProof = new VerusObjectsNotarization.NotarizationForks[](2);
-                        tempProof[0] = bestForks[uint(i)][uint32(notarizationLength[uint(i)]) - 2];
-                        tempProof[0].forkIndex = 0;
-                        tempProof[1] = bestForks[uint(i)][uint32(notarizationLength[uint(i)]) - 1];
-                        tempProof[1].forkIndex = 1;
+                        notarizations[uint(j)].forkIndex = 0;
+                        notarizations[uint(j + 1)].forkIndex = 1;
                         delete bestForks;
-                        bestForks[0][0] = tempProof[0];
-                        bestForks[0][1] = tempProof[1];
+                        encodeNotarization(0, notarizations[uint(j)]);
+                        encodeNotarization(0, notarizations[uint(j + 1)]);
                         lastForkIndex = 1;
-                        amountsOfForks = 1;
-                        delete notarizationLength;
-                        notarizationLength[0] = 2;
                         break;
                     }
                 }
@@ -230,10 +283,9 @@ contract VerusNotarizer {
                     chainCounter = 0;
                 }
             }
-            if (amountsOfForks == 1)
+            if (bestForks.length == 1)
                 break;
         } 
-        
     }
 
     function getVRSCStateRoot(VerusObjectsNotarization.CProofRoot[] memory proofroots) private pure returns (bytes32) {
@@ -262,9 +314,23 @@ contract VerusNotarizer {
         return ecrecover(_h, _v, _r, _s);
     }
 
-    function getBestStateroot() public view returns (bytes32)
+    function getBestNotarizationValue(bool isStateRoot) public view returns (bytes32)
     {
-        return bestForks[0][0].stateRoot;
+        bytes32 stateRoot;
+        if (bestForks.length > 0)
+        {
+            uint stateOrHashOfNotarization;
+
+            stateOrHashOfNotarization = isStateRoot ? 2 : 1;
+            bytes storage tempArray = bestForks[0];
+            bytes memory slot = new bytes(32);
+            assembly {
+                        mstore(add(slot, 32),tempArray.slot)
+                        let slotHash := keccak256(add(slot, 32), 32)
+                        stateRoot := sload(add(slotHash, stateOrHashOfNotarization))
+            }
+        }
+        return stateRoot;
     }
 
     function setClaimableFees(address _feeRecipient, uint256 _ethAmount, address bridgekeeper) public returns (uint256){
@@ -278,7 +344,7 @@ contract VerusNotarizer {
         uint256 bridgekeeperFees;              
 
         address proposer;
-        bytes memory proposerBytes = verusNotarizerStorage.getNotarization(bestForks[0][0].hashOfNotarization).proposer.destinationaddress;
+        bytes memory proposerBytes = verusNotarizerStorage.getNotarization(getBestNotarizationValue(false)).proposer.destinationaddress;
 
         assembly {
                 proposer := mload(add(proposerBytes,20))

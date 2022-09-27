@@ -290,7 +290,7 @@ contract VerusProof {
         }
 
         retStateRoot = checkProof(txRoot, _import.partialtransactionproof.txproof);
-        confirmedStateRoot = verusNotarizer.getBestStateroot();
+        confirmedStateRoot = verusNotarizer.getBestNotarizationValue(true);
 
         if (retStateRoot == bytes32(0) || retStateRoot != flipBytes32(confirmedStateRoot)) {
 
