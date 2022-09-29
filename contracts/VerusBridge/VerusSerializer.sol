@@ -51,15 +51,13 @@ contract VerusSerializer {
         }
         else if (oneByte == 253)
         {
-            assembly {
-                oneByte := mload(add(incoming, offset))
-            }
-            uint16 twoByte = oneByte;
             offset++;
+            uint16 twoByte;
             assembly {
-                oneByte := mload(add(incoming, offset))
+                twoByte := mload(add(incoming, offset))
             }
-            return VerusObjectsCommon.UintReader(offset + 1, (twoByte << 8) + oneByte);
+ 
+            return VerusObjectsCommon.UintReader(offset + 1, ((twoByte << 8) & 0xffff)  | twoByte >> 8);
         }
         return VerusObjectsCommon.UintReader(offset, 0);
     }
@@ -642,15 +640,12 @@ contract VerusSerializer {
         }
         else if (oneByte == 253)
         {
-            assembly {
-                oneByte := mload(add(incoming, offset))
-            }
-            uint16 twoByte = oneByte;
             offset++;
+            uint16 twoByte;
             assembly {
-                oneByte := mload(add(incoming, offset))
+                twoByte := mload(add(incoming, offset))
             }
-            return ((twoByte << 8) + oneByte, offset + 1);
+            return (((twoByte << 8) & 0xffff)  | twoByte >> 8, offset + 1);
         }
         return (0, offset);
     }
