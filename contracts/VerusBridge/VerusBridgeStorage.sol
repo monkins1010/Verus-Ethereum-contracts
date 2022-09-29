@@ -55,7 +55,7 @@ contract VerusBridgeStorage {
         isSenderBridgeContract(msg.sender);
         processedTxids[processedTXID] = true;
         lastTxIdImport = processedTXID;
-        lastImportInfo[processedTXID] = VerusObjects.lastImportInfo(hashofTXs, uint32(CCEheightsandTXNum >> 64), uint32(CCEheightsandTXNum >> 32)) ;
+        lastImportInfo[processedTXID] = VerusObjects.lastImportInfo(processedTXID, hashofTXs, uint32(CCEheightsandTXNum >> 64), uint32(CCEheightsandTXNum >> 32));
     } 
 
     function getLastCceEndHeight() public view returns (uint32) {

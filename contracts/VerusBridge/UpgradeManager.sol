@@ -116,6 +116,7 @@ contract UpgradeManager {
             verusBridgeMaster.setContracts(tempcontracts);
             verusInfo.setContracts(tempcontracts);
             verusNotarizerStorage.setContracts(tempcontracts);
+            verusProof.setContracts(tempcontracts);
         }
 
         if(tempcontracts[uint(VerusConstants.ContractType.VerusBridge)] != address(verusBridge)) {
@@ -138,11 +139,12 @@ contract UpgradeManager {
         }
 
         if(tempcontracts[uint(VerusConstants.ContractType.VerusSerializer)] != contracts[uint(VerusConstants.ContractType.VerusSerializer)])  {   
-           verusCrossChainExport.setContract(tempcontracts[uint(VerusConstants.ContractType.VerusSerializer)]);
-           tokenManager.setContracts(tempcontracts[uint(VerusConstants.ContractType.VerusSerializer)], 
+            verusCrossChainExport.setContract(tempcontracts[uint(VerusConstants.ContractType.VerusSerializer)]);
+            tokenManager.setContracts(tempcontracts[uint(VerusConstants.ContractType.VerusSerializer)], 
                                     tempcontracts[uint(VerusConstants.ContractType.VerusBridge)]);
-           verusBridge.setContracts(tempcontracts);  
-
+            verusBridge.setContracts(tempcontracts);  
+            verusProof.setContracts(tempcontracts);
+            verusNotarizer.setContract(tempcontracts[uint(VerusConstants.ContractType.VerusSerializer)]);
         }
 
         // Once all the contracts are set copy the new values to the global

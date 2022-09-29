@@ -13,6 +13,8 @@ var Verusaddress = artifacts.require("./VerusBridge/VerusAddressCalculator.sol")
 var VerusInfo = artifacts.require("./VerusBridge/VerusInfo.sol");
 var Token = artifacts.require("./VerusBridge/Token.sol");
 var ExportManager = artifacts.require("./VerusBridge/ExportManager.sol");
+var VerusBlake2b = artifacts.require("./MMR/VerusBlake2b.sol");
+var VerusMMR = artifacts.require("./MMR/VerusMMR.sol");
 
 // QUESTION: remove all hard coded values like those below (tokenmanvrsctest, etc.) and put them in config or parameters
 // What is the most correct approach / actual best practice?
@@ -46,6 +48,10 @@ module.exports = async function(deployer) {
     await deployer.deploy(VerusNotarizerStorage, UpgradeInst.address);
     const NotarizerStorageInst = await VerusNotarizerStorage.deployed();
 
+    await deployer.deploy(VerusBlake2b);
+    const blakeInst = await VerusBlake2b.deployed();
+
+    await deployer.link(VerusBlake2b, VerusSerializer);
     await deployer.deploy(VerusSerializer);
     const serializerInst = await VerusSerializer.deployed();
 
@@ -55,6 +61,10 @@ module.exports = async function(deployer) {
     await deployer.deploy(VerusNotarizer, serializerInst.address, UpgradeInst.address, verusNotariserIDS, verusNotariserSigner, verusNotariserRevoker, NotarizerStorageInst.address, bridgeMasterInst.address);
     const notarizerInst = await VerusNotarizer.deployed();
 
+    await deployer.deploy(VerusMMR);
+    await VerusMMR.deployed();
+    await deployer.link(VerusMMR, VerusProof);
+    await deployer.link(VerusBlake2b, VerusProof);
     await deployer.deploy(VerusProof, UpgradeInst.address, serializerInst.address, notarizerInst.address);
     const ProofInst = await VerusProof.deployed();
 

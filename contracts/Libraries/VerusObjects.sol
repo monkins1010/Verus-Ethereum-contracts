@@ -208,6 +208,7 @@ library VerusObjects {
 
     struct lastImportInfo {
         bytes32 hashOfTransfers;
+        bytes32 exporttxid;
         uint32 exporttxoutnum;
         uint32 height;
     }

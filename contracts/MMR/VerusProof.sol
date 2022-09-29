@@ -8,7 +8,7 @@ import "./VerusBlake2b.sol";
 import "../VerusBridge/VerusSerializer.sol";
 import "../Libraries/VerusObjectsCommon.sol";
 import "../VerusNotarizer/VerusNotarizer.sol";
-import "./MMR.sol";
+import "./VerusMMR.sol";
 
 contract VerusProof {
 
@@ -47,12 +47,12 @@ contract VerusProof {
         verusNotarizer = VerusNotarizer(verusNotarizerAddress);
     }
 
-    function setContract(address _contract) public {
+    function setContracts(address[12] memory contracts) public {
 
         require(msg.sender == verusUpgradeContract);
 
-        if ( _contract != address(verusSerializer))
-            verusSerializer = VerusSerializer(_contract);
+        verusSerializer = VerusSerializer(contracts[uint(VerusConstants.ContractType.VerusSerializer)]);
+        verusNotarizer = VerusNotarizer(contracts[uint(VerusConstants.ContractType.VerusNotarizer)]);
         
     }
 

@@ -224,7 +224,7 @@ contract VerusNotarizer {
             notarizations =  decodeNotarization(uint(i));
             for (int j = int(notarizations.length) - 1; j >= 0; j--)
             {
-                if (_pbaasNotarization.hashprevnotarization == reversebytes32(notarizations[uint(j)].hashOfNotarization))
+                if (_pbaasNotarization.hashprevnotarization == notarizations[uint(j)].hashOfNotarization)
                 {
                     forkIdx = i;
                     forkPos = j;
