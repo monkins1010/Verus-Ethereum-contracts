@@ -33,7 +33,7 @@ contract VerusNotarizer {
 
     bool public poolAvailable;
     bytes[] public bestForks;
-    int32 lastForkIndex;
+    int32 lastForkIndex = -1;
     // Notifies when a new block hash is published
     event NewNotarization(uint32 notarizedDataHeight);
 
@@ -247,10 +247,10 @@ contract VerusNotarizer {
             forkIdx = 0;
         }
         
-        if (forkIdx >= 0 && forkPos != int(notarizations.length) - 1 && lastForkIndex > 0)  
+        if (forkPos != int(notarizations.length) - 1 && lastForkIndex > 0)  
         {
-            encodeNotarization(uint(notarizations.length), notarizations[uint(forkPos)]);
-            forkIdx = int(notarizations.length);
+            forkIdx = int(bestForks.length);
+            encodeNotarization(uint(forkIdx), notarizations[uint(forkPos)]);
         }
 
         encodeNotarization(uint(forkIdx), VerusObjectsNotarization.NotarizationForks(reversebytes32(hashedNotarization), stateRoot, 
