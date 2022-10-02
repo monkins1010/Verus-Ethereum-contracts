@@ -131,15 +131,14 @@ contract VerusCrossChainExport{
 
         workingCCE.totalburned = new VerusObjects.CCurrencyValueMap[](1);
         workingCCE.totalburned[0] = totalburnedCCVM;
-        //TODO: Finalize export when someone gets 
-        workingCCE.rewardaddress = VerusObjectsCommon.CTransferDestination(VerusConstants.RewardAddressType, abi.encodePacked(VerusConstants.RewardAddress));
+        //workingCCE.rewardaddress is left empty as it is serialized to 0x0000
+
         workingCCE.firstinput = 1;
 
         // clear the arrays
         delete currencies;
         delete fees;
 
-        // emit test1(workingCCE);
         return workingCCE;
 
     }

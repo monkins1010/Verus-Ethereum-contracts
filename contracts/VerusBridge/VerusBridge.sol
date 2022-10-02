@@ -71,11 +71,11 @@ contract VerusBridge {
 
     }
 
-    function subtractPoolSize(uint64 _amount) private returns (bool){
+    function subtractPoolSize(uint64 _amount) private returns (bool) {
 
-    if(_amount > poolSize) return false;
-    poolSize -= _amount;
-    return true;
+        if(_amount > poolSize) return false;
+        poolSize -= _amount;
+        return true;
     }
  
     function export(VerusObjects.CReserveTransfer memory transfer, uint256 paidValue, address sender) public {

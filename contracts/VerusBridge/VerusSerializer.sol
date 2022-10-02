@@ -394,15 +394,15 @@ contract VerusSerializer {
             serializeAddress(_ccce.destinationsystemid),
             serializeAddress(_ccce.destinationcurrencyid));
         bytes memory part2 = abi.encodePacked(
+            bytes2(0x0000), //Ctransferdesination is 00 type and 00 length for exporter
+            serializeInt32(_ccce.firstinput),
+            serializeUint32(_ccce.numinputs),
             writeVarInt(_ccce.sourceheightstart),
             writeVarInt(_ccce.sourceheightend),
-            serializeUint32(_ccce.numinputs),
-            serializeCCurrencyValueMaps(_ccce.totalamounts),
             serializeCCurrencyValueMaps(_ccce.totalfees),
+            serializeCCurrencyValueMaps(_ccce.totalamounts),
             serializeCCurrencyValueMaps(_ccce.totalburned),
-            serializeCTransferDestination(_ccce.rewardaddress),
-            serializeInt32(_ccce.firstinput),
-            bytes1(0x00));
+            bytes1(0x00)); // Reservetransfers 
             
         return abi.encodePacked(part1,part2);
 

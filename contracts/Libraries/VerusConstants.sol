@@ -10,10 +10,7 @@ library VerusConstants {
     address constant public VerusSystemId = 0xA6ef9ea235635E328124Ff3429dB9F9E91b64e2d;
     address constant public VerusCurrencyId = 0xA6ef9ea235635E328124Ff3429dB9F9E91b64e2d;
     address constant public VerusUSDCId = 0xF0A1263056c30E221F0F851C36b767ffF2544f7F;
-    //does this need to be set 
-    address constant public RewardAddress = 0xB26820ee0C9b1276Aac834Cf457026a575dfCe84;
     address constant public VerusBridgeAddress = 0xffEce948b8A38bBcC813411D2597f7f8485a0689;
-    uint8 constant public RewardAddressType = 4;
     uint256 constant public transactionFee = 3000000000000000; //0.003 ETH 18 decimals
     string constant public currencyName = "VETH";
     uint64 constant public verusTransactionFee = 2000000; //0.02 VRSC

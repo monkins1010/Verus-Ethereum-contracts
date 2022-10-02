@@ -231,7 +231,7 @@ contract TokenManager {
         {
             if (flags & VerusConstants.MAPPING_VERUS_OWNED == VerusConstants.MAPPING_VERUS_OWNED) 
             {
-                ERCContract = verusBridgeStorage.emitNewToken(name, ticker, _iaddress);     
+                ERCContract = verusBridgeStorage.emitNewToken(name, ticker);      
             } 
             else 
             {
@@ -248,8 +248,6 @@ contract TokenManager {
             }
         }
         
-        verusBridgeStorage.pushTokenList(_iaddress);
-
         verusBridgeStorage.RecordTokenmapping(_iaddress, VerusObjects.mappedToken(ERCContract, flags, verusBridgeStorage.getTokenListLength(), name, tokenID));
         return ERCContract;
     }

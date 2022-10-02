@@ -107,6 +107,7 @@ contract VerusBridgeStorage {
     function RecordTokenmapping(address iaddress, VerusObjects.mappedToken memory mappedToken) public {
 
         require( msg.sender == address(tokenManager));
+        tokenList.push(iaddress);
         verusToERC20mapping[iaddress] = mappedToken;
 
     }
@@ -122,14 +123,6 @@ contract VerusBridgeStorage {
     function getTokenListLength() public view returns(uint) {
 
         return tokenList.length;
-
-    }
-
-    function pushTokenList(address iaddress) public {
-
-        require(msg.sender == address(tokenManager));
-
-        return tokenList.push(iaddress);
 
     }
 
@@ -150,11 +143,10 @@ contract VerusBridgeStorage {
     }
 
 
-    function emitNewToken(string memory name, string memory ticker, address _iaddress) public returns (address){
+    function emitNewToken(string memory name, string memory ticker) public returns (address){
 
         require(msg.sender == address(tokenManager));
         Token t = new Token(name, ticker);   
-        tokenList.push(_iaddress); 
         // emit TokenCreated(address(t));
         return address(t);
 
