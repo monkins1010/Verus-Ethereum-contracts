@@ -224,7 +224,8 @@ contract VerusNotarizer {
             notarizations =  decodeNotarization(uint(i));
             for (int j = int(notarizations.length) - 1; j >= 0; j--)
             {
-                if (_pbaasNotarization.hashprevnotarization == notarizations[uint(j)].hashOfNotarization)
+                if (_pbaasNotarization.hashprevnotarization == notarizations[uint(j)].hashOfNotarization ||
+                    _pbaasNotarization.prevnotarization.hash == notarizations[uint(j)].txid)
                 {
                     forkIdx = i;
                     forkPos = j;
@@ -259,32 +260,17 @@ contract VerusNotarizer {
         //prune if poss
         for (int i = 0; i < int(bestForks.length); i++) 
         {
-            int chainCounter;
-            notarizations =  decodeNotarization(uint(i));
-            for (int j = int(notarizations.length) - 1; j > 0; j--)
+            notarizations = decodeNotarization(uint(i));
+            if (notarizations.length > 2)
             {
-                if ((notarizations[uint(j - 1)].forkIndex + 1) == notarizations[uint(j)].forkIndex)
-                {
-                    chainCounter++;
-
-                    if (chainCounter >= 2)
-                    {
-                        notarizations[uint(j)].forkIndex = 0;
-                        notarizations[uint(j + 1)].forkIndex = 1;
-                        delete bestForks;
-                        encodeNotarization(0, notarizations[uint(j)]);
-                        encodeNotarization(0, notarizations[uint(j + 1)]);
-                        lastForkIndex = 1;
-                        break;
-                    }
-                }
-                else 
-                {
-                    chainCounter = 0;
-                }
-            }
-            if (bestForks.length == 1)
+                notarizations[1].forkIndex = 0;
+                notarizations[2].forkIndex = 1;
+                delete bestForks;
+                encodeNotarization(0, notarizations[1]);
+                encodeNotarization(0, notarizations[2]);
+                lastForkIndex = 1;
                 break;
+            }
         } 
     }
 

@@ -87,20 +87,5 @@ library VerusObjectsNotarization {
         CUTXORef txid;
     }
 
-    //represents the output from the pbaas rpc
-    struct Notarization {
-        uint32 index;
-        bytes32 txid;
-        uint32 vout;
-        CPBaaSNotarization notarization;
-        CNodeData[] nodes;
-    }
 
-    struct CChainNotarizationData {
-        uint32 version;
-        Notarization[] notarizations;
-        int32[][] forks; // chains that represent alternate branches from the last confirmed notarization
-        int32 lastConfirmedHeight; // last confirmed notarization
-        int32 bestChain; // index in forks of the chain, beginning with the last confirmed notarization, that has the most power
-    }
 }

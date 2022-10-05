@@ -196,46 +196,51 @@ contract VerusProof {
 
     function checkCCEValues(bytes memory firstObj, uint32 nextOffset, bytes32 hashedTransfers, uint32 nIndex) public pure returns(uint256, uint128)
     {
-        bytes32 incomingValue;
+        bytes32 hashReserveTransfers;
         address systemSourceID;
         address destSystemID;
-        address destCurrencyID;
         address exporter;
         uint64 rewardFees;
         uint32 startheight;
         uint32 endheight;
         uint256 rewardAddressPlusFees;
+        uint8 feeVectorSize;
         
         assembly {
             systemSourceID := mload(add(firstObj, nextOffset))      // source system ID, which should match expected source (VRSC/VRSCTEST)
             nextOffset := add(nextOffset, CCE_HASH_TRANSFERS_DELTA)
-            incomingValue := mload(add(firstObj, nextOffset))       // get hash of reserve transfers from partial transaction proof
+            hashReserveTransfers := mload(add(firstObj, nextOffset))       // get hash of reserve transfers from partial transaction proof
             nextOffset := add(nextOffset, CCE_DEST_SYSTEM_DELTA)
             destSystemID := mload(add(firstObj, nextOffset))        // destination system, which should be vETH
             nextOffset := add(nextOffset, CCE_DEST_CURRENCY_DELTA)
-            destCurrencyID := mload(add(firstObj, nextOffset))      // destination currency, which should be vETH
             nextOffset := add(nextOffset, 2)                        // skip type and length 0x09 & 0x16
             nextOffset := add(nextOffset, CCE_DEST_CURRENCY_DELTA)
             exporter := mload(add(firstObj, nextOffset))            // exporter
-            nextOffset := add(nextOffset, 9)                        // skip firstinput + numinputs + itterate next byte for varint
+            nextOffset := add(nextOffset, 8)                        // skip firstinput + numinputs 
         }
 
         (startheight, nextOffset)  = readVarint(firstObj, nextOffset); 
         (endheight, nextOffset)  = readVarint(firstObj, nextOffset); 
 
         assembly {
-            nextOffset := add(nextOffset, 1)                        // itterate next byte for mapsise
-            nextOffset := add(nextOffset, CCE_DEST_CURRENCY_DELTA)
-            rewardFees := mload(add(firstObj, nextOffset))    
+            nextOffset := add(nextOffset, 1)                        // itterate next byte for mapsize
+            feeVectorSize := mload(add(firstObj, nextOffset)) 
         }
-            // packed uint64 and uint160 into a uint256 for efficiency (fees and address)
-            rewardAddressPlusFees = uint256(uint160(exporter));
-            rewardAddressPlusFees |= uint256(rewardFees) << 160;
 
-        if (!(hashedTransfers == incomingValue &&
+        if (feeVectorSize == 1) 
+        {
+            assembly {
+                nextOffset := add(nextOffset, CCE_DEST_CURRENCY_DELTA)
+                rewardFees := mload(add(firstObj, nextOffset))    
+            }
+                // packed uint64 and uint160 into a uint256 for efficiency (fees and address)
+                rewardAddressPlusFees = uint256(uint160(exporter));
+                rewardAddressPlusFees |= uint256(rewardFees) << 160;
+        }
+
+        if (!(hashedTransfers == hashReserveTransfers &&
                 systemSourceID == VerusConstants.VerusSystemId &&
-                destSystemID == VerusConstants.EthSystemID &&
-                destCurrencyID == VerusConstants.VEth)) {
+                destSystemID == VerusConstants.EthSystemID)) {
 
             revert("CCE information does not checkout");
         }

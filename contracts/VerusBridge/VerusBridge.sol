@@ -232,7 +232,7 @@ contract VerusBridge {
 
         if (verusBridgeStorage.processedTxids(txidfound)) 
         {
-            revert();
+            revert("Known txid");
         } 
 
         bytes32 hashOfTransfers;
@@ -247,7 +247,7 @@ contract VerusBridge {
 
         (rewardDestinationPlusFees, CCEHeightsAndnIndex) = verusProof.proveImports(_import, hashOfTransfers);
  
-        if (verusBridgeStorage.getLastCceEndHeight() - 1 != uint32(CCEHeightsAndnIndex)) {
+        if (verusBridgeStorage.getLastCceEndHeight() > 1 && verusBridgeStorage.getLastCceEndHeight() + 1 != uint32(CCEHeightsAndnIndex)) {
             revert("CCE Out of Order");
         }
 
@@ -267,7 +267,7 @@ contract VerusBridge {
             verusBridgeMaster.sendEth(payments);
         }
         
-        if((rewardDestinationPlusFees >> 160) != uint256(0))
+        if(uint160(rewardDestinationPlusFees) != uint160(0) && rewardDestinationPlusFees >> 160 != 0)
         {
            verusBridgeMaster.setClaimableFees(address(uint160(rewardDestinationPlusFees)), rewardDestinationPlusFees >> 160, bridgeKeeper);
         }

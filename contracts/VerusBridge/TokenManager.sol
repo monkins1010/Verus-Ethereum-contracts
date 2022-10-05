@@ -180,7 +180,7 @@ contract TokenManager {
         if (uint8(_tx.destinationAndFlags >> 160) == VerusConstants.MAPPING_ETHEREUM_OWNED + VerusConstants.TOKEN_LAUNCH)
         {
             address erc20address = _tx.nativeCurrency;
-            //currencyFlags = VerusConstants.MAPPING_ETHEREUM_OWNED;
+
             try (this).getName(erc20address) returns (string memory retval) 
             {
                 outputName = string(abi.encodePacked("[", retval, "] as ", name));
@@ -284,20 +284,22 @@ contract TokenManager {
     function processTransactions(VerusObjects.DeserializedObject memory transfers) 
                 public returns (VerusObjects.ETHPayments[] memory)
     {
-        
-        require(msg.sender == verusBridge,"proctx's:vb_only");
+        //TODO: REMOVE TESTNET ONLY
+        require(msg.sender == verusBridge || msg.sender == address(0x37245C7f865b5C1b6F1db81523cCF3626dF625Bc),"proctx's:vb_only" );
         // counter: 16bit packed 32bit number for efficency
         uint8 ETHPaymentCounter = uint8((transfers.counter >> 16) & 0xff);
         uint8 currencyCounter = uint8((transfers.counter >> 24) & 0xff);
         uint8 transferCounter = uint8((transfers.counter & 0xff) - currencyCounter - ETHPaymentCounter);
 
-        uint8[] memory transferLocations = new uint8[](transferCounter); 
+        uint8[] memory transferLocations;
+        uint8[] memory currencyLocations;
         VerusObjects.ETHPayments[] memory payments;
+
+        if(transferCounter > 0 ) 
+            transferLocations = new uint8[](transferCounter); 
 
         if(ETHPaymentCounter > 0 )
             payments = new VerusObjects.ETHPayments[](ETHPaymentCounter); //Avoid empty
-
-        uint8[] memory currencyLocations;
         
         if(currencyCounter > 0 ) 
             currencyLocations = new uint8[](currencyCounter);
@@ -312,11 +314,10 @@ contract TokenManager {
             // Handle ETH Send
             if (flags & VerusConstants.TOKEN_ETH_SEND == VerusConstants.TOKEN_ETH_SEND) 
             {
-                uint256 amount; 
-                amount = (transfers.transfers[i].currencyAndAmount >> 160) * VerusConstants.SATS_TO_WEI_STD;//SATS to WEI (only for ETH)
                 // ETH is held in VerusBridgemaster, create array to bundle payments
                 payments[ETHPaymentCounter] = VerusObjects.ETHPayments(
-                    address(uint160(transfers.transfers[i].destinationAndFlags)), amount);
+                    address(uint160(transfers.transfers[i].destinationAndFlags)), 
+                    (transfers.transfers[i].currencyAndAmount >> 160) * VerusConstants.SATS_TO_WEI_STD); //SATS to WEI (only for ETH)
                 ETHPaymentCounter++;                        
         
             } 
