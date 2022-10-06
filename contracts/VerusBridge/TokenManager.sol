@@ -158,6 +158,11 @@ contract TokenManager {
         return ERC20(cont).name();
     }
 
+    function getNFTName(address cont) public view returns (string memory)
+    {
+        return ERC721(cont).name();
+    }
+
     function deployToken(VerusObjects.PackedSend memory _tx) private {
         
         address destinationCurrencyID = address(uint160(_tx.currencyAndAmount));
@@ -179,9 +184,7 @@ contract TokenManager {
 
         if (uint8(_tx.destinationAndFlags >> 160) == VerusConstants.MAPPING_ETHEREUM_OWNED + VerusConstants.TOKEN_LAUNCH)
         {
-            address erc20address = _tx.nativeCurrency;
-
-            try (this).getName(erc20address) returns (string memory retval) 
+            try (this).getName(_tx.nativeCurrency) returns (string memory retval) 
             {
                 outputName = string(abi.encodePacked("[", retval, "] as ", name));
             } 
@@ -190,9 +193,19 @@ contract TokenManager {
                 return;
             }
         }
+        else if (uint8(_tx.destinationAndFlags >> 160) == VerusConstants.MAPPING_ETHEREUM_OWNED + VerusConstants.TOKEN_ETH_NFT_DEFINITION)
+        {
+            try (this).getNFTName(_tx.nativeCurrency) returns (string memory retval) 
+            {
+                outputName = string(abi.encodePacked("[", retval, "] as ", name));
+            } 
+            catch 
+            {
+                return;
+            }      
+        } 
         else 
         {
-            //currencyFlags = VerusConstants.MAPPING_VERUS_OWNED;
             outputName = string(name);
         }
 
@@ -284,8 +297,7 @@ contract TokenManager {
     function processTransactions(VerusObjects.DeserializedObject memory transfers) 
                 public returns (VerusObjects.ETHPayments[] memory)
     {
-        //TODO: REMOVE TESTNET ONLY
-        require(msg.sender == verusBridge || msg.sender == address(0x37245C7f865b5C1b6F1db81523cCF3626dF625Bc),"proctx's:vb_only" );
+        require(msg.sender == verusBridge,"proctx's:vb_only" );
         // counter: 16bit packed 32bit number for efficency
         uint8 ETHPaymentCounter = uint8((transfers.counter >> 16) & 0xff);
         uint8 currencyCounter = uint8((transfers.counter >> 24) & 0xff);

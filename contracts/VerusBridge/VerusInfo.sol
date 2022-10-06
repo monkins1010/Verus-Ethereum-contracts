@@ -70,7 +70,7 @@ contract VerusInfo {
         uint8 minnotaries = verusNotarizer.currentNotariesRequired();
         
         address currencyAddress;
-        uint256 initialsupply;
+        uint64 initialsupply;
         if(_currencyid == VerusConstants.VEth){
             currencyAddress = VerusConstants.VEth;
             initialsupply = 0;

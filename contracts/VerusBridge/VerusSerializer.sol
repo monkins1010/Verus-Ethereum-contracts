@@ -15,6 +15,7 @@ contract VerusSerializer {
     uint32 constant CCC_ID_LEN = 20;
     uint32 constant CCC_NATIVE_OFFSET = 20 + 4 + 4;
     uint32 constant CCC_TOKENID_OFFSET = 32;
+    int16 constant TYPE_ETHEREUM = 2;
     using VerusBlake2b for bytes;
 
     function readVarUintLE(bytes memory incoming, uint32 offset) public pure returns(VerusObjectsCommon.UintReader memory) {
@@ -62,18 +63,18 @@ contract VerusSerializer {
         return VerusObjectsCommon.UintReader(offset, 0);
     }
 
-    function writeVarInt(uint256 incoming) public pure returns(bytes memory) {
+    function writeVarInt(uint64 incoming) public pure returns(bytes memory) {
         bytes1 inProgress;
         bytes memory output;
         uint len = 0;
         while(true){
             inProgress = bytes1(uint8(incoming & 0x7f) | (len!=0 ? 0x80:0x00));
-            output = abi.encodePacked(output,inProgress);
+            output = abi.encodePacked(inProgress,output);
             if(incoming <= 0x7f) break;
             incoming = (incoming >> 7) -1;
             len++;
         }
-        return flipArray(output);
+        return output;
     }
 
    
@@ -98,16 +99,8 @@ contract VerusSerializer {
         return output;
     }
 
-    
-    function verusHashPrefix(string memory prefix,address systemID,int64 blockHeight,address signingID, bytes memory messageToHash) public pure returns(bytes memory){
-        return abi.encodePacked(serializeString(prefix),serializeAddress(systemID),serializeInt64(blockHeight),serializeAddress(signingID),messageToHash);    
-    }
-    
+  
     //serialize functions
-
-    function serializeBool(bool anyBool) public pure returns(bytes memory){
-        return abi.encodePacked(anyBool);
-    }
     
     function serializeString(string memory anyString) public pure returns(bytes memory){
         //naturally BigEndian
@@ -117,50 +110,79 @@ contract VerusSerializer {
         //return abi.encodePacked(anyString);
     }
 
-    function serializeBytes20(bytes20 anyBytes20) public pure returns(bytes memory){
+
+    function serializeBytes32(bytes32 anyBytes32) public pure returns(bytes32){
         //naturally BigEndian
-        return abi.encodePacked(anyBytes20);
-    }
-    function serializeBytes32(bytes32 anyBytes32) public pure returns(bytes memory){
-        //naturally BigEndian
-        return flipArray(abi.encodePacked(anyBytes32));
+        uint256 v;
+        v = uint256(anyBytes32);
+    
+        // swap bytes
+        v = ((v & 0xFF00FF00FF00FF00FF00FF00FF00FF00FF00FF00FF00FF00FF00FF00FF00FF00) >> 8) |
+            ((v & 0x00FF00FF00FF00FF00FF00FF00FF00FF00FF00FF00FF00FF00FF00FF00FF00FF) << 8);
+    
+        // swap 2-byte long pairs
+        v = ((v & 0xFFFF0000FFFF0000FFFF0000FFFF0000FFFF0000FFFF0000FFFF0000FFFF0000) >> 16) |
+            ((v & 0x0000FFFF0000FFFF0000FFFF0000FFFF0000FFFF0000FFFF0000FFFF0000FFFF) << 16);
+    
+        // swap 4-byte long pairs
+        v = ((v & 0xFFFFFFFF00000000FFFFFFFF00000000FFFFFFFF00000000FFFFFFFF00000000) >> 32) |
+            ((v & 0x00000000FFFFFFFF00000000FFFFFFFF00000000FFFFFFFF00000000FFFFFFFF) << 32);
+    
+        // swap 8-byte long pairs
+        v = ((v & 0xFFFFFFFFFFFFFFFF0000000000000000FFFFFFFFFFFFFFFF0000000000000000) >> 64) |
+            ((v & 0x0000000000000000FFFFFFFFFFFFFFFF0000000000000000FFFFFFFFFFFFFFFF) << 64);
+    
+        // swap 16-byte long pairs
+        v = (v >> 128) | (v << 128);
+            
+        return bytes32(v);
     }
 
-    function serializeUint8(uint8 number) public pure returns(bytes memory){
-        bytes memory be = abi.encodePacked(number);
-        return(flipArray(be));
+    
+    function serializeUint16(uint16 number) public pure returns(uint16){
+        number = (number << 8) | (number >> 8) ;
+        return number;
     }
     
-    function serializeUint16(uint16 number) public pure returns(bytes memory){
-        bytes memory be = abi.encodePacked(number);
-        return(flipArray(be));
-    }
-    
-    function serializeUint32(uint32 number) public pure returns(bytes memory){
-        bytes memory be = abi.encodePacked(number);
-        return(flipArray(be));
+    function serializeUint32(uint32 number) public pure returns(uint32){
+        // swap bytes
+        number = ((number & 0xFF00FF00) >> 8) | ((number & 0x00FF00FF) << 8);
+        number = (number >> 16) | (number << 16);
+        return number;
     }
 
-    function serializeInt16(int16 number) public pure returns(bytes memory){
-        bytes memory be = abi.encodePacked(number);
-        return(flipArray(be));
+    function serializeInt16(int16 number) public pure returns(int16){
+        number = (number << 8) | (number >> 8) ;
+        return number;
     }
     
-    function serializeInt32(int32 number) public pure returns(bytes memory){
-        bytes memory be = abi.encodePacked(number);
-        return(flipArray(be));
+    function serializeInt32(int32 inval) public pure returns(uint32){
+        uint32 number = uint32(inval);
+        number = ((number & 0xFF00FF00) >> 8) | ((number & 0x00FF00FF) << 8);
+        number = (number >> 16) | (number << 16);
+        return number;
     }
     
-    function serializeInt64(int64 number) public pure returns(bytes memory){
-        bytes memory be = abi.encodePacked(number);
-        return(flipArray(be));
+    function serializeInt64(int64 number) public pure returns(uint64){
+        
+        uint64 v = uint64(number);
+        v = ((v & 0xFF00FF00FF00FF00) >> 8) |
+        ((v & 0x00FF00FF00FF00FF) << 8);
+
+        // swap 2-byte long pairs
+        v = ((v & 0xFFFF0000FFFF0000) >> 16) |
+            ((v & 0x0000FFFF0000FFFF) << 16);
+
+        // swap 4-byte long pairs
+        v = (v >> 32) | (v << 32);
+        return v;
     }
 
     function serializeInt32Array(int32[] memory numbers) public pure returns(bytes memory){
         bytes memory be;
         be = writeCompactSize((numbers.length));
         for(uint i = 0;i < numbers.length; i++){
-            be = abi.encodePacked(be,serializeInt32(numbers[i]));
+            be = abi.encodePacked(be, serializeInt32(numbers[i]));
         }
         return be;
     }
@@ -169,35 +191,20 @@ contract VerusSerializer {
         bytes memory be;
         be = writeCompactSize((numbers.length));
         for(uint i = 0;i < numbers.length; i++){
-            be = abi.encodePacked(be,flipArray(abi.encodePacked(numbers[i])));
+            be = abi.encodePacked(be, serializeInt64(numbers[i]));
         }
         return be;
     }
 
-    function serializeUint64(uint64 number) public pure returns(bytes memory){
-        bytes memory be = abi.encodePacked(number);
-        return(flipArray(be));
-    }
-
-    function serializeAddress(address number) public pure returns(bytes memory){
-        bytes memory be = abi.encodePacked(number);
-        return be;
-    }
-    
     function serializeUint160Array(uint160[] memory numbers) public pure returns(bytes memory){
         bytes memory be;
         be = writeCompactSize((numbers.length));
         for(uint i = 0;i < numbers.length; i++){
             be = abi.encodePacked(be,abi.encodePacked(numbers[i]));
         }
-        return(be);
+        return be;
     }
 
-    function serializeUint256(uint256 number) public pure returns(bytes memory){
-        bytes memory be = abi.encodePacked(number);
-        return(flipArray(be));
-    }
-    
     function serializeCTransferDestination(VerusObjectsCommon.CTransferDestination memory ctd) public pure returns(bytes memory){
 
         uint256 destinationSize;
@@ -211,16 +218,16 @@ contract VerusSerializer {
             destinationSize = ETH_ADDRESS_SIZE_BYTES;
         }
 
-        return abi.encodePacked(serializeUint8(ctd.destinationtype),writeCompactSize(destinationSize),ctd.destinationaddress);
+        return abi.encodePacked(ctd.destinationtype, writeCompactSize(destinationSize),ctd.destinationaddress);
     }    
 
     function serializeCCurrencyValueMap(VerusObjects.CCurrencyValueMap memory _ccvm) public pure returns(bytes memory){
-         return abi.encodePacked(serializeAddress(_ccvm.currency),serializeUint64(_ccvm.amount));
+         return abi.encodePacked(_ccvm.currency, serializeInt64(_ccvm.amount));
     }
     
     function serializeCCurrencyValueMaps(VerusObjects.CCurrencyValueMap[] memory _ccvms) public pure returns(bytes memory){
         bytes memory inProgress;
-        inProgress = writeVarInt(_ccvms.length);
+        inProgress = writeVarInt(uint64(_ccvms.length));
         for(uint i=0; i < _ccvms.length; i++){
             inProgress = abi.encodePacked(inProgress,serializeCCurrencyValueMap(_ccvms[i]));
         }
@@ -231,17 +238,18 @@ contract VerusSerializer {
         
         bytes memory output =  abi.encodePacked(
             writeVarInt(ct.version),
-            abi.encodePacked(serializeAddress(ct.currencyvalue.currency),writeVarInt(ct.currencyvalue.amount)),//special interpretation of a ccurrencyvalue
+            ct.currencyvalue.currency, 
+            writeVarInt(uint64(ct.currencyvalue.amount)), //special interpretation of a ccurrencyvalue
             writeVarInt(ct.flags),
-            serializeAddress(ct.feecurrencyid),
-            writeVarInt(ct.fees),
+            ct.feecurrencyid,
+            writeVarInt(uint64(ct.fees)),
             serializeCTransferDestination(ct.destination),
-            serializeAddress(ct.destcurrencyid)
+            ct.destcurrencyid
            );
            
-        if((ct.flags & VerusConstants.RESERVE_TO_RESERVE )>0) output = abi.encodePacked(output,serializeAddress(ct.secondreserveid));           
+        if((ct.flags & VerusConstants.RESERVE_TO_RESERVE )>0) output = abi.encodePacked(output, ct.secondreserveid);           
          //see if it has a cross_system flag
-        if((ct.flags & VerusConstants.CROSS_SYSTEM)>0) output = abi.encodePacked(output,serializeAddress(ct.destsystemid));
+        if((ct.flags & VerusConstants.CROSS_SYSTEM)>0) output = abi.encodePacked(output, ct.destsystemid);
         
         return output;
     }
@@ -265,21 +273,29 @@ contract VerusSerializer {
     }
 
     function serializeCProofRoot(VerusObjectsNotarization.CProofRoot memory _cpr) public pure returns(bytes memory){
-        return abi.encodePacked(
-            serializeAddress(_cpr.systemid),
+        
+        bytes memory retval;
+
+        retval = abi.encodePacked(
+            _cpr.systemid,
             serializeInt16(_cpr.version),
             serializeInt16(_cpr.cprtype),
-            serializeAddress(_cpr.systemid),
+            _cpr.systemid,
             serializeUint32(_cpr.rootheight),
             serializeBytes32(_cpr.stateroot),
             serializeBytes32(_cpr.blockhash),
             serializeBytes32(_cpr.compactpower)
             );
+
+        if (_cpr.cprtype == TYPE_ETHEREUM)    
+            retval = abi.encodePacked(retval, serializeInt64(_cpr.gasprice));
+
+        return retval;
     }
 
     function serializeProofRoots(VerusObjectsNotarization.ProofRoots memory _prs) public pure returns(bytes memory){
         return abi.encodePacked(
-            serializeAddress(_prs.currencyid),
+            _prs.currencyid,
             serializeCProofRoot(_prs.proofroot)
         );  
     }
@@ -309,13 +325,13 @@ contract VerusSerializer {
         bytes memory part1 = abi.encodePacked(
             serializeUint16(_cccs.version),
             serializeUint16(_cccs.flags),
-            serializeAddress(_cccs.currencyid),
+            _cccs.currencyid,
             serializeUint160Array(_cccs.currencies),
             serializeInt32Array(_cccs.weights),
             serializeInt64Array(_cccs.reserves),
-            writeVarInt(uint256(int256(_cccs.initialsupply))),
-            writeVarInt(uint256(int256(_cccs.emitted))),
-            writeVarInt(uint256(int256(_cccs.supply)))
+            writeVarInt(uint64(_cccs.initialsupply)),
+            writeVarInt(uint64(_cccs.emitted)),
+            writeVarInt(uint64(_cccs.supply))
         );
         bytes memory part2 = abi.encodePacked(
             serializeInt64(_cccs.primarycurrencyout),
@@ -337,7 +353,7 @@ contract VerusSerializer {
 
     function serializeCurrencyStates(VerusObjectsNotarization.CurrencyStates memory _cs) public pure returns(bytes memory){
         return abi.encodePacked(
-            serializeAddress(_cs.currencyid),
+            _cs.currencyid,
             serializeCCoinbaseCurrencyState(_cs.currencystate)
         );
     }
@@ -356,7 +372,7 @@ contract VerusSerializer {
             writeVarInt(_not.version),
             writeVarInt(_not.flags),
             serializeCTransferDestination(_not.proposer),
-            serializeAddress(_not.currencyid),
+            _not.currencyid,
             serializeCCoinbaseCurrencyState(_not.currencystate),
             serializeUint32(_not.notarizationheight),
             serializeCUTXORef(_not.prevnotarization),
@@ -381,7 +397,7 @@ contract VerusSerializer {
         
         return abi.encodePacked(
             serializeString(_cnd.networkaddress),
-            serializeAddress(_cnd.nodeidentity)
+            _cnd.nodeidentity
         );
     }
 
@@ -389,10 +405,10 @@ contract VerusSerializer {
         bytes memory part1 = abi.encodePacked(
             serializeUint16(_ccce.version),
             serializeUint16(_ccce.flags),
-            serializeAddress(_ccce.sourcesystemid),
-            flipArray(serializeBytes32(_ccce.hashtransfers)),
-            serializeAddress(_ccce.destinationsystemid),
-            serializeAddress(_ccce.destinationcurrencyid));
+            _ccce.sourcesystemid,
+            _ccce.hashtransfers,
+            _ccce.destinationsystemid,
+            _ccce.destinationcurrencyid);
         bytes memory part2 = abi.encodePacked(
             bytes2(0x0000), //Ctransferdesination is 00 type and 00 length for exporter
             serializeInt32(_ccce.firstinput),
@@ -553,7 +569,7 @@ contract VerusSerializer {
                 }
                 else if (destinationType == VerusConstants.DEST_ETHNFT){  //assumes only other DEST is DEST_ETHNFT
 
-                    /// destination and flags = name + flags ... Native currency = NFT token address
+                    /// destination and flags = name + flags ... Native currency = NFT token address  currencyAndAmount == tokenid
                     (tempTransfers[counter].destinationAndFlags, tempTransfers[counter].nativeCurrency, tempTransfers[counter].currencyAndAmount) 
                         = currencyParser(tempCurrency);
                 }

@@ -15,7 +15,8 @@ library VerusObjectsNotarization {
         uint32 rootheight;                    // height (or sequence) of the notarization we certify
         bytes32 stateroot;                      // latest MMR root of the notarization height
         bytes32 blockhash;                      // combination of block hash, block MMR root, and compact power (or external proxy) for the notarization height
-        bytes32 compactpower;   
+        bytes32 compactpower;
+        int64 gasprice;   
     }
 
     struct CurrencyStates {

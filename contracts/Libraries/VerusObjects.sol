@@ -34,8 +34,8 @@ library VerusObjects {
         address launchsystemid;
         uint startblock;
         uint endblock;
-        uint256 initialsupply;
-        uint256 prelaunchcarveout;
+        uint64 initialsupply;
+        uint64 prelaunchcarveout;
         address gatewayid;
         address[] notaries;
         uint minnotariesconfirm;
@@ -43,7 +43,7 @@ library VerusObjects {
     
     struct CCurrencyValueMap {
         address currency;
-        uint64 amount;
+        int64 amount;
     }
 
     struct CReserveTransfer {
@@ -51,7 +51,7 @@ library VerusObjects {
         CCurrencyValueMap currencyvalue;
         uint32 flags;
         address feecurrencyid;
-        uint64 fees;
+        int64 fees;
         VerusObjectsCommon.CTransferDestination destination;
         address destcurrencyid;
         address destsystemid;
