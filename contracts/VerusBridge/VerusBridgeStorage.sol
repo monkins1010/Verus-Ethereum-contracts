@@ -58,11 +58,12 @@ contract VerusBridgeStorage {
         lastImportInfo[processedTXID] = VerusObjects.lastImportInfo(hashofTXs, processedTXID, uint32(CCEheightsandTXNum >> 64), uint32(CCEheightsandTXNum >> 32));
     } 
 
-    function getLastCceEndHeight() public view returns (uint32) {
+    function isLastCCEInOrder(uint32 height) public view returns (bool) {
         if(lastTxIdImport == bytes32(0)) {
-            return 1;
+            return true;
         }
-        return lastImportInfo[lastTxIdImport].height;
+
+        return ((lastImportInfo[lastTxIdImport].height + 1) == height);
     }
 
     function setReadyExportTransfers(uint _block, VerusObjects.CReserveTransfer memory reserveTransfer) public returns (bool){

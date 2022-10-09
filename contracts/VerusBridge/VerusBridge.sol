@@ -240,28 +240,24 @@ contract VerusBridge {
         // [0..139]address of reward recipricent and [140..203]int64 fees
         uint256 rewardDestinationPlusFees;
 
-        // [0..31]startheight [32..63]endheight [64..95]nIndex, packed into a uint128  
+        // [0..31]startheight [32..63]endheight [64..95]nIndex, [96..128] numberoftransfers packed into a uint128  
         uint128 CCEHeightsAndnIndex;
 
         hashOfTransfers = keccak256(_import.serializedTransfers);
 
         (rewardDestinationPlusFees, CCEHeightsAndnIndex) = verusProof.proveImports(_import, hashOfTransfers);
  
-        if (verusBridgeStorage.getLastCceEndHeight() > 1 && verusBridgeStorage.getLastCceEndHeight() + 1 != uint32(CCEHeightsAndnIndex)) {
+        if (verusBridgeStorage.isLastCCEInOrder(uint32(CCEHeightsAndnIndex)) ){
             revert("CCE Out of Order");
         }
 
-        uint32 txOutNum;
-        uint8 numberOfTransfers;
-        numberOfTransfers = uint8(CCEHeightsAndnIndex >> 96);
-        txOutNum = uint32((CCEHeightsAndnIndex >> 64) - (1 + (2 * nVins)));
-        CCEHeightsAndnIndex  &= 0xffffffffffffffff;
-        CCEHeightsAndnIndex |= uint128(txOutNum) << 64;
+        // clear bytes 4 above first 64 bits, i.e. clear the nIndex 32 bit number, then convert to correct nIndex
 
+        CCEHeightsAndnIndex  = (CCEHeightsAndnIndex & 0xffffffffffffffff00000000ffffffff) | (uint128(uint32(uint32(CCEHeightsAndnIndex >> 64) - (1 + (2 * nVins)))) << 64);  
         verusBridgeStorage.setLastImport(txidfound, hashOfTransfers, CCEHeightsAndnIndex);
         
-        // Deserialize transfers and pack into send arrays
-        verusBridgeMaster.sendEth(tokenManager.processTransactions(_import.serializedTransfers, numberOfTransfers));
+        // Deserialize transfers and pack into send arrays, also pass in no. of transfers to calculate array size
+        verusBridgeMaster.sendEth(tokenManager.processTransactions(_import.serializedTransfers, uint8(CCEHeightsAndnIndex >> 96)));
 
         
         if(uint160(rewardDestinationPlusFees) != uint160(0) && rewardDestinationPlusFees >> 160 != 0)
