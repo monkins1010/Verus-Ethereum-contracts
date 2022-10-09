@@ -216,6 +216,7 @@ contract VerusBridge {
     function _createImports(VerusObjects.CReserveTransferImport calldata _import, address bridgeKeeper) public returns(bool) {
         
         // prove MMR
+        require(msg.sender == address(verusBridgeMaster));
         bytes32 txidfound;
         bytes memory sliced = _import.partialtransactionproof.components[0].elVchObj;
         uint32 nVins;
@@ -247,13 +248,13 @@ contract VerusBridge {
 
         (rewardDestinationPlusFees, CCEHeightsAndnIndex) = verusProof.proveImports(_import, hashOfTransfers);
  
-        if (verusBridgeStorage.isLastCCEInOrder(uint32(CCEHeightsAndnIndex)) ){
+        if (!verusBridgeStorage.isLastCCEInOrder(uint32(CCEHeightsAndnIndex)) ){
             revert("CCE Out of Order");
         }
 
         // clear bytes 4 above first 64 bits, i.e. clear the nIndex 32 bit number, then convert to correct nIndex
 
-        CCEHeightsAndnIndex  = (CCEHeightsAndnIndex & 0xffffffffffffffff00000000ffffffff) | (uint128(uint32(uint32(CCEHeightsAndnIndex >> 64) - (1 + (2 * nVins)))) << 64);  
+        CCEHeightsAndnIndex  = (CCEHeightsAndnIndex & 0xffffffff00000000ffffffffffffffff) | (uint128(uint32(uint32(CCEHeightsAndnIndex >> 64) - (1 + (2 * nVins)))) << 64);  
         verusBridgeStorage.setLastImport(txidfound, hashOfTransfers, CCEHeightsAndnIndex);
         
         // Deserialize transfers and pack into send arrays, also pass in no. of transfers to calculate array size
