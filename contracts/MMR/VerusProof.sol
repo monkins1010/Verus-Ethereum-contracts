@@ -194,17 +194,17 @@ contract VerusProof {
         return (uint256(0), uint128(0));
     }
 
-    function checkCCEValues(bytes memory firstObj, uint32 nextOffset, bytes32 hashedTransfers, uint32 nIndex) public pure returns(uint256, uint128)
+    function checkCCEValues(bytes memory firstObj, uint32 nextOffset, bytes32 hashedTransfers, uint32 nIndex) public view returns(uint256, uint128)
     {
         bytes32 hashReserveTransfers;
         address systemSourceID;
         address destSystemID;
         address exporter;
         uint64 rewardFees;
-        uint32 startheight;
-        uint32 endheight;
-        uint256 rewardAddressPlusFees;
+        uint32 tempRegister;
         uint8 feeVectorSize;
+        uint128 packedRegister; //uint128(startheight) | (uint128(endheight) << 32) | (uint128(nIndex) << 64) | (uint128(numInputs) << 96));
+        uint256 rewardAddressPlusFees;
         
         assembly {
             systemSourceID := mload(add(firstObj, nextOffset))      // source system ID, which should match expected source (VRSC/VRSCTEST)
@@ -216,12 +216,18 @@ contract VerusProof {
             nextOffset := add(nextOffset, 2)                        // skip type and length 0x09 & 0x16
             nextOffset := add(nextOffset, CCE_DEST_CURRENCY_DELTA)
             exporter := mload(add(firstObj, nextOffset))            // exporter
-            nextOffset := add(nextOffset, 8)                        // skip firstinput + numinputs 
+            nextOffset := add(nextOffset, 4)                        // skip firstinput
+            tempRegister := mload(add(firstObj, nextOffset))           //number of transfers
+            nextOffset := add(nextOffset, 4)                        
         }
 
-        (startheight, nextOffset)  = readVarint(firstObj, nextOffset); 
-        (endheight, nextOffset)  = readVarint(firstObj, nextOffset); 
-
+        (packedRegister, nextOffset)  = readVarint(firstObj, nextOffset);  // put startheight at [0] 32bit chunk
+        tempRegister = verusSerializer.serializeUint32(tempRegister); // reverse endian of no. transfers
+        packedRegister  |= (uint128(tempRegister) << 96) ;  // put number of transfers at [3] 32-bit chunk     
+        
+        (tempRegister, nextOffset)  = readVarint(firstObj, nextOffset); 
+        packedRegister  |= (uint128(tempRegister) << 32) ;  // put endheight at [1] 32 bit chunk
+        packedRegister  |= (uint128(nIndex) << 64) ;  // put nindex at [2] 32 bit chunk
         assembly {
             nextOffset := add(nextOffset, 1)                        // itterate next byte for mapsize
             feeVectorSize := mload(add(firstObj, nextOffset)) 
@@ -230,11 +236,12 @@ contract VerusProof {
         if (feeVectorSize == 1) 
         {
             assembly {
-                nextOffset := add(nextOffset, CCE_DEST_CURRENCY_DELTA)
+                nextOffset := add(add(nextOffset, CCE_DEST_CURRENCY_DELTA), 8)  // move 20 + 8 bytes for (address + 64bit)
                 rewardFees := mload(add(firstObj, nextOffset))    
             }
                 // packed uint64 and uint160 into a uint256 for efficiency (fees and address)
                 rewardAddressPlusFees = uint256(uint160(exporter));
+                rewardFees = verusSerializer.serializeUint64(rewardFees);
                 rewardAddressPlusFees |= uint256(rewardFees) << 160;
         }
 
@@ -245,7 +252,7 @@ contract VerusProof {
             revert("CCE information does not checkout");
         }
 
-        return (rewardAddressPlusFees, uint128(startheight) | (uint128(endheight) << 32) | (uint128(nIndex) << 64) );
+        return (rewardAddressPlusFees, packedRegister); //uint128(startheight) | (uint128(endheight) << 32) | (uint128(nIndex) << 64) | (uint128(numInputs) << 96));
 
     }
 

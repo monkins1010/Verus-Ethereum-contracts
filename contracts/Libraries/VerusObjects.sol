@@ -43,7 +43,7 @@ library VerusObjects {
     
     struct CCurrencyValueMap {
         address currency;
-        int64 amount;
+        uint64 amount;
     }
 
     struct CReserveTransfer {
@@ -51,7 +51,7 @@ library VerusObjects {
         CCurrencyValueMap currencyvalue;
         uint32 flags;
         address feecurrencyid;
-        int64 fees;
+        uint64 fees;
         VerusObjectsCommon.CTransferDestination destination;
         address destcurrencyid;
         address destsystemid;
@@ -83,14 +83,15 @@ library VerusObjects {
     }
 
     struct PackedSend {
-        uint256 currencyAndAmount;
-        uint256 destinationAndFlags;
-        address nativeCurrency;
+        uint256 currencyAndAmount;    //tokenID
+        uint256 destinationAndFlags;  //iaddress + flags or name and flags
     }
 
-    struct DeserializedObject {
-        PackedSend[] transfers;
-        uint32 counter;
+    struct PackedCurrencyLaunch {
+        uint256 nameAndFlags;
+        uint256 tokenID;    
+        address ERCContract;  //erc address
+        address iaddress;
     }
 
     struct Buffer {
@@ -175,6 +176,7 @@ library VerusObjects {
         uint8 flags;
         string name;
         string ticker;
+        uint256 tokenID;
     }
 
     struct upgradeInfo {

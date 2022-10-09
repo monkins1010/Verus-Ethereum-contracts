@@ -102,11 +102,11 @@ contract VerusInfo {
         return abi.encode(returnCurrency);
     }
 
-    function launchTokens(VerusObjects.setupToken[] memory tokensToDeploy) public  {
+    function launchContractTokens(VerusObjects.setupToken[] memory tokensToDeploy) public  {
 
         require(msg.sender == contractOwner,"INFO:contractOwnerRequired");
 
-        tokenManager.launchTokens(tokensToDeploy);
+        tokenManager.launchContractTokens(tokensToDeploy);
 
         //blow the fuse
         contractOwner = address(0);

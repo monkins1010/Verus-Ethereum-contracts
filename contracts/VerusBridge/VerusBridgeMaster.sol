@@ -83,13 +83,18 @@ contract VerusBridgeMaster {
     {
          //only callable by verusbridge contract
         require( msg.sender == address(verusBridge));
+        uint256 totalsent;
         for(uint i = 0; i < _payments.length; i++)
         {
             address payable destination = payable(_payments[i].destination);
             if(destination != address(0))
+            {
                 destination.transfer(_payments[i].amount);
+                totalsent += _payments[i].amount;
+            }
 
         }
+        subtractFromEthHeld(totalsent);
     }
 
     function getcurrency(address _currencyid) public view returns(bytes memory)
@@ -153,10 +158,8 @@ contract VerusBridgeMaster {
         ethHeld += _ethAmount;
     }
 
-    function subtractFromEthHeld(uint256 _ethAmount) public {
+    function subtractFromEthHeld(uint256 _ethAmount) private {
 
-        UpgradeManager upgrademanager = UpgradeManager(upgradeContract);
-        require( msg.sender == address(verusBridge) || msg.sender == address(upgrademanager.contracts(uint(VerusConstants.ContractType.TokenManager))));
         ethHeld -= _ethAmount;
     }
 }

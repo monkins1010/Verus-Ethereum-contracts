@@ -107,16 +107,16 @@ contract VerusCrossChainExport{
             //add the fees into the totalamounts too 
             feeExistsInTotals = inCurrencies(transfers[i].feecurrencyid); 
             if(feeExistsInTotals > 0){
-                currencies[feeExistsInTotals - 1].amount += uint64(transfers[i].fees);
+                currencies[feeExistsInTotals - 1].amount += transfers[i].fees;
             } else {
-                currencies.push(VerusObjects.CCurrencyValueMap(transfers[i].feecurrencyid,uint64(transfers[i].fees)));
+                currencies.push(VerusObjects.CCurrencyValueMap(transfers[i].feecurrencyid, transfers[i].fees));
             }
 
             feeExists = inFees(transfers[i].feecurrencyid); 
             if(feeExists > 0){
-                fees[feeExists - 1].amount += uint64(transfers[i].fees);
+                fees[feeExists - 1].amount += transfers[i].fees;
             } else {
-                fees.push(VerusObjects.CCurrencyValueMap(transfers[i].feecurrencyid,uint64(transfers[i].fees)));
+                fees.push(VerusObjects.CCurrencyValueMap(transfers[i].feecurrencyid, transfers[i].fees));
             }
             
         }

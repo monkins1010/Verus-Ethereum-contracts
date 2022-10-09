@@ -63,22 +63,29 @@ contract TokenManager {
             address iAddress;
             iAddress = verusBridgeStorage.tokenList(i);
             recordedToken = verusBridgeStorage.getERCMapping(iAddress);
+            temp[i].iaddress = iAddress;
+            temp[i].flags = recordedToken.flags;
 
-            if(iAddress != VerusConstants.VEth )
+            if (iAddress == VerusConstants.VEth)
+            {
+                temp[i].erc20ContractAddress = address(0);
+                temp[i].name = "Testnet ETH";
+                temp[i].ticker = "ETH";
+            }
+            else if(recordedToken.flags & VerusConstants.TOKEN_LAUNCH == VerusConstants.TOKEN_LAUNCH )
             {
                 Token token = Token(recordedToken.erc20ContractAddress);
                 temp[i].erc20ContractAddress = address(token);
                 temp[i].name = recordedToken.name;
                 temp[i].ticker = token.symbol();
             }
-            else
+            else if(recordedToken.flags & VerusConstants.TOKEN_ETH_NFT_DEFINITION == VerusConstants.TOKEN_ETH_NFT_DEFINITION)
             {
-                temp[i].erc20ContractAddress = address(0);
-                temp[i].name = "Testnet ETH";
-                temp[i].ticker = "ETH";
+                temp[i].erc20ContractAddress = recordedToken.erc20ContractAddress;
+                temp[i].name = recordedToken.name;
+                temp[i].tokenID = recordedToken.tokenID;
             }
-            temp[i].iaddress = iAddress;
-            temp[i].flags = recordedToken.flags;
+            
         }
 
         return temp;
@@ -96,24 +103,17 @@ contract TokenManager {
         
     }
 
-    function getSymbol(string memory _text)
-        private
-        pure
-        returns (string memory)
-    {
-        bytes memory copy = new bytes(bytes(_text).length < VerusConstants.TICKER_LENGTH_MAX ? bytes(_text).length : VerusConstants.TICKER_LENGTH_MAX);
-        bytes memory textAsBytes = bytes(_text);
-        uint256 max = (
-            textAsBytes.length > VerusConstants.TICKER_LENGTH_MAX
-                ? VerusConstants.TICKER_LENGTH_MAX
-                : uint8(textAsBytes.length)
-        ) + 31;
-        for (uint256 i = 32; i <= max; i += 32) {
-            assembly {
-                mstore(add(copy, i), mload(add(textAsBytes, i)))
-            }
+    function byteSlice(bytes memory _data, uint256 _start, uint256 _end) internal pure returns(bytes memory result) {
+        
+        if(_end > _data.length) 
+        {
+            _end =_data.length;
         }
-        return string(copy);
+        result = new bytes(_end);
+
+        for (uint i = _start; i < _end; i++) {
+            result[i] = _data[i];
+        }
     }
 
     function sha256d(bytes32 _bytes) internal pure returns (bytes32) {
@@ -163,56 +163,57 @@ contract TokenManager {
         return ERC721(cont).name();
     }
 
-    function deployToken(VerusObjects.PackedSend memory _tx) private {
+    function launchToken(VerusObjects.PackedCurrencyLaunch[] memory _tx) private {
         
-        address destinationCurrencyID = address(uint160(_tx.currencyAndAmount));
-
-        if (ERC20Registered(destinationCurrencyID))
-            return;
-
-        uint8 nameLen;
-        nameLen = uint8(_tx.destinationAndFlags & 0xff);
-        bytes memory name = new bytes(nameLen);
-        string memory outputName;
-
-        for (uint i = 0; i< nameLen;i++)
+        for (uint j = 0; j < _tx.length; j++)
         {
-            name[i] = bytes1(uint8(_tx.destinationAndFlags >> ((i+1) * 8)));
-        }
+            if (ERC20Registered(_tx[j].iaddress))
+                continue;
 
-        //TODO: decide here whether, A) token ETH mapped using native B) verus token minted to new ERC20, c)NFT eth mapped d) NFT minted from tokenized ID.
+            uint8 nameLen;
+            nameLen = uint8(_tx[j].nameAndFlags & 0xff);
+            bytes memory name = new bytes(nameLen);
+            string memory outputName;
 
-        if (uint8(_tx.destinationAndFlags >> 160) == VerusConstants.MAPPING_ETHEREUM_OWNED + VerusConstants.TOKEN_LAUNCH)
-        {
-            try (this).getName(_tx.nativeCurrency) returns (string memory retval) 
+            for (uint i = 0; i< nameLen;i++)
             {
-                outputName = string(abi.encodePacked("[", retval, "] as ", name));
-            } 
-            catch 
-            {
-                return;
+                name[i] = bytes1(uint8(_tx[j].nameAndFlags >> ((i+1) * 8)));
             }
-        }
-        else if (uint8(_tx.destinationAndFlags >> 160) == VerusConstants.MAPPING_ETHEREUM_OWNED + VerusConstants.TOKEN_ETH_NFT_DEFINITION)
-        {
-            try (this).getNFTName(_tx.nativeCurrency) returns (string memory retval) 
-            {
-                outputName = string(abi.encodePacked("[", retval, "] as ", name));
-            } 
-            catch 
-            {
-                return;
-            }      
-        } 
-        else 
-        {
-            outputName = string(name);
-        }
 
-        recordToken(destinationCurrencyID, _tx.nativeCurrency, outputName, getSymbol(string(name)), uint8(_tx.destinationAndFlags >> 160), _tx.currencyAndAmount);
+            //TODO: decide here whether, A) token ETH mapped using native B) verus token minted to new ERC20, c)NFT eth mapped d) NFT minted from tokenized ID.
+
+            if (uint8(_tx[j].nameAndFlags >> 160) == VerusConstants.MAPPING_ETHEREUM_OWNED + VerusConstants.TOKEN_LAUNCH)
+            {
+                try (this).getName(_tx[j].ERCContract) returns (string memory retval) 
+                {
+                    outputName = string(abi.encodePacked("[", retval, "] as ", name));
+                } 
+                catch 
+                {
+                    continue;
+                }
+            }
+            else if (uint8(_tx[j].nameAndFlags >> 160) == VerusConstants.MAPPING_ETHEREUM_OWNED + VerusConstants.TOKEN_ETH_NFT_DEFINITION)
+            {
+                try (this).getNFTName(_tx[j].ERCContract) returns (string memory retval) 
+                {
+                    outputName = string(abi.encodePacked("[", retval, "] as ", name));
+                } 
+                catch 
+                {
+                    continue;
+                }     
+            } 
+            else 
+            {
+                outputName = string(name);
+            }
+
+            recordToken(_tx[j].iaddress, _tx[j].ERCContract, outputName, string(byteSlice(bytes(name), 0, 4)), uint8(_tx[j].nameAndFlags >> 160), _tx[j].tokenID);
+        }
     }
 
-    function launchTokens(VerusObjects.setupToken[] memory tokensToDeploy) public  {
+    function launchContractTokens(VerusObjects.setupToken[] memory tokensToDeploy) public  {
 
         require(verusBridgeStorage.getERCMapping(VerusConstants.VEth).erc20ContractAddress == address(0), "Launch tokens already set");
 
@@ -259,6 +260,7 @@ contract TokenManager {
                 ///TODO: call mint NFT contract
                 // ERCContract == NFTcontract;
             }
+            ERCContract = ethContractAddress;
         }
         
         verusBridgeStorage.RecordTokenmapping(_iaddress, VerusObjects.mappedToken(ERCContract, flags, verusBridgeStorage.getTokenListLength(), name, tokenID));
@@ -294,82 +296,50 @@ contract TokenManager {
         return c;
     }
 
-    function processTransactions(VerusObjects.DeserializedObject memory transfers) 
+    function processTransactions(bytes calldata serializedTransfers, uint8 numberOfTransfers) 
                 public returns (VerusObjects.ETHPayments[] memory)
     {
         require(msg.sender == verusBridge,"proctx's:vb_only" );
+        VerusObjects.PackedSend[] memory transfers;
+        VerusObjects.PackedCurrencyLaunch[] memory launchTxs;
+        uint32 counter;
+        (transfers, launchTxs, counter) = verusSerializer.deserializeTransfers(serializedTransfers, numberOfTransfers);
+
         // counter: 16bit packed 32bit number for efficency
-        uint8 ETHPaymentCounter = uint8((transfers.counter >> 16) & 0xff);
-        uint8 currencyCounter = uint8((transfers.counter >> 24) & 0xff);
-        uint8 transferCounter = uint8((transfers.counter & 0xff) - currencyCounter - ETHPaymentCounter);
+        uint8 ETHPaymentCounter = uint8((counter >> 16) & 0xff);
+        uint8 currencyCounter = uint8((counter >> 24) & 0xff);
+        uint8 transferCounter = uint8((counter & 0xff) - ETHPaymentCounter);
 
-        uint8[] memory transferLocations;
-        uint8[] memory currencyLocations;
         VerusObjects.ETHPayments[] memory payments;
-
-        if(transferCounter > 0 ) 
-            transferLocations = new uint8[](transferCounter); 
 
         if(ETHPaymentCounter > 0 )
             payments = new VerusObjects.ETHPayments[](ETHPaymentCounter); //Avoid empty
-        
-        if(currencyCounter > 0 ) 
-            currencyLocations = new uint8[](currencyCounter);
 
-        currencyCounter = 0;
         ETHPaymentCounter = 0;
-        transferCounter = 0;
-        for (uint8 i = 0; i< transfers.transfers.length; i++) {
+        for (uint8 i = 0; i< transfers.length; i++) {
 
-            uint8 flags = uint8((transfers.transfers[i].destinationAndFlags >> 160) & 0xff);
+            uint8 flags = uint8((transfers[i].destinationAndFlags >> 160));
             
             // Handle ETH Send
             if (flags & VerusConstants.TOKEN_ETH_SEND == VerusConstants.TOKEN_ETH_SEND) 
             {
                 // ETH is held in VerusBridgemaster, create array to bundle payments
                 payments[ETHPaymentCounter] = VerusObjects.ETHPayments(
-                    address(uint160(transfers.transfers[i].destinationAndFlags)), 
-                    (transfers.transfers[i].currencyAndAmount >> 160) * VerusConstants.SATS_TO_WEI_STD); //SATS to WEI (only for ETH)
-                ETHPaymentCounter++;                        
-        
-            } 
-            else if(flags & VerusConstants.TOKEN_ERC20_SEND == VerusConstants.TOKEN_ERC20_SEND)
-            { 
-                transferLocations[transferCounter] = i;
-                transferCounter++;
-                
-            } 
-            else if (flags & VerusConstants.TOKEN_LAUNCH == VerusConstants.TOKEN_LAUNCH || 
-                    flags & VerusConstants.TOKEN_ETH_NFT_DEFINITION == VerusConstants.TOKEN_ETH_NFT_DEFINITION) 
-            {                     
-                currencyLocations[currencyCounter] = i;
-                currencyCounter++;            
-            }
-                
+                    address(uint160(transfers[i].destinationAndFlags)), 
+                    (transfers[i].currencyAndAmount >> 160) * VerusConstants.SATS_TO_WEI_STD); //SATS to WEI (only for ETH)
+                ETHPaymentCounter++;                      
+            }               
         }
 
-        //send tokens
-        //TODO: HANDLE 0.00000001 NFT MINTS and send to address if a token send then use flags on ethereum to determine its a nft and handle
-        if(transferCounter > 0)
-            verusBridgeStorage.importTransactions(transfers.transfers, transferLocations);
+        if (transferCounter > 0)
+            verusBridgeStorage.importTransactions(transfers);
 
-        for(uint i = 0; i < currencyCounter; i++)
+        if (currencyCounter > 0)
         {
-            deployToken(transfers.transfers[currencyLocations[i]]);
+            launchToken(launchTxs);
         }
 
-        uint256 totalPayments;
-        if(ETHPaymentCounter > 0)
-        {
-            for(uint i = 0; i < ETHPaymentCounter; i++)
-            {
-                totalPayments += payments[i].amount;
-            }
-            
-            VerusBridgeMaster verusBridgeMaster = VerusBridgeMaster(upgradeManager.contracts(uint(VerusConstants.ContractType.VerusBridgeMaster)));
-            verusBridgeMaster.subtractFromEthHeld(totalPayments);
-        }
-        //return ETH and addresses to be sent to 
+        //return ETH and addresses to be sent to + total payments
         return payments;
 
     }

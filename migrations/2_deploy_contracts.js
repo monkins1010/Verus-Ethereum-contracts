@@ -28,10 +28,9 @@ const verusNotariserSigner = ["0xD010dEBcBf4183188B00cafd8902e34a2C1E9f41", "0xD
 const verusNotariserRevoker = ["0xD010dEBcBf4183188B00cafd8902e34a2C1E9f41", "0xD3258AD271066B7a780C68e527A6ee69ecA15b7F", "0x68f56bA248E23b7d5DE4Def67592a1366431d345"];
 const tokenmanvrsctest = ["0xA6ef9ea235635E328124Ff3429dB9F9E91b64e2d", "0x0000000000000000000000000000000000000000", "0x0000000000000000000000000000000000000000", MAPPING_VERUS_OWNED + MAPPING_PARTOF_BRIDGEVETH + TOKEN_LAUNCH, "vrsctest", "VRSC"];
 const tokenmanbeth = ["0xffEce948b8A38bBcC813411D2597f7f8485a0689", "0x0000000000000000000000000000000000000000", "0xA6ef9ea235635E328124Ff3429dB9F9E91b64e2d", MAPPING_VERUS_OWNED + MAPPING_ISBRIDGE_CURRENCY + TOKEN_LAUNCH, "bridge.vETH", "BETH"];
-const tokenmanUSDC = ["0xf0a1263056c30e221f0f851c36b767fff2544f7f", "0xeb8f08a975ab53e34d8a0330e0d34de942c95926", "0xA6ef9ea235635E328124Ff3429dB9F9E91b64e2d", MAPPING_ETHEREUM_OWNED + MAPPING_PARTOF_BRIDGEVETH + TOKEN_LAUNCH, "Testnet USDC", "USDC"];
+const tokenmanUSDC = ["0xf0a1263056c30e221f0f851c36b767fff2544f7f", "0x98339D8C260052B7ad81c28c16C0b98420f2B46a", "0xA6ef9ea235635E328124Ff3429dB9F9E91b64e2d", MAPPING_ETHEREUM_OWNED + MAPPING_PARTOF_BRIDGEVETH + TOKEN_LAUNCH, "Testnet USDC", "USDC"];
 const vETH = ["0x67460C2f56774eD27EeB8685f29f6CEC0B090B00", "0x06012c8cf97bead5deae237070f9587f8e7a266d", "0xA6ef9ea235635E328124Ff3429dB9F9E91b64e2d", MAPPING_ETHEREUM_OWNED + MAPPING_PARTOF_BRIDGEVETH + TOKEN_LAUNCH, "Testnet ETH", "ETH"];
 
-const USDCERC20GOERLI = "0x98339D8C260052B7ad81c28c16C0b98420f2B46a";
 
 module.exports = async function(deployer) {
 
@@ -99,10 +98,7 @@ module.exports = async function(deployer) {
     try {
         await UpgradeInst.setInitialContracts(allContracts);
         let launchCurrencies = [tokenmanvrsctest, tokenmanbeth, tokenmanUSDC, vETH];
-        if (deployer.network_id === 5) { // 5 is Goerli so replace the USDC contract.
-            launchCurrencies[2][1] = USDCERC20GOERLI;
-        }
-        await INFOInst.launchTokens(launchCurrencies);
+        await INFOInst.launchContractTokens(launchCurrencies);
 
     } catch (e) {
 

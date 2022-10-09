@@ -252,6 +252,8 @@ contract VerusBridge {
         }
 
         uint32 txOutNum;
+        uint8 numberOfTransfers;
+        numberOfTransfers = uint8(CCEHeightsAndnIndex >> 96);
         txOutNum = uint32((CCEHeightsAndnIndex >> 64) - (1 + (2 * nVins)));
         CCEHeightsAndnIndex  &= 0xffffffffffffffff;
         CCEHeightsAndnIndex |= uint128(txOutNum) << 64;
@@ -259,13 +261,8 @@ contract VerusBridge {
         verusBridgeStorage.setLastImport(txidfound, hashOfTransfers, CCEHeightsAndnIndex);
         
         // Deserialize transfers and pack into send arrays
-        VerusObjects.ETHPayments[] memory payments = 
-        tokenManager.processTransactions(verusSerializer.deserializeTransfers(_import.serializedTransfers));
+        verusBridgeMaster.sendEth(tokenManager.processTransactions(_import.serializedTransfers, numberOfTransfers));
 
-        if(payments.length > 0)
-        {
-            verusBridgeMaster.sendEth(payments);
-        }
         
         if(uint160(rewardDestinationPlusFees) != uint160(0) && rewardDestinationPlusFees >> 160 != 0)
         {

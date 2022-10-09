@@ -35,7 +35,7 @@ library VerusConstants {
     uint8 constant FLAG_DEST_GATEWAY = 128;
     uint8 constant CURRENT_VERSION = 1;
 
-    // deployTokens flags 
+    // deploy & launch Token flags 
     uint32 constant MAPPING_ETHEREUM_OWNED = 1;
     uint32 constant MAPPING_VERUS_OWNED = 2;
     uint32 constant MAPPING_PARTOF_BRIDGEVETH = 4;
