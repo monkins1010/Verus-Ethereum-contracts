@@ -105,8 +105,6 @@ contract VerusBridge {
             //transfer the tokens to the verusbridgemaster contract
             //total amount kept as wei until export to verus
             verusBridgeStorage.exportERC20Tokens(tokenAmount, token, mappedContract.flags & VerusConstants.MAPPING_VERUS_OWNED == VerusConstants.MAPPING_VERUS_OWNED, sender );
-            verusBridgeMaster.addToEthHeld(paidValue);
-            //verusBridgeStorage.addToFeesHeld(paidValue);
             
         } else if (transfer.destination.destinationtype == VerusConstants.DEST_ETHNFT){
             //handle a NFT Import
@@ -134,16 +132,12 @@ contract VerusBridge {
                 require (nft.getApproved(tokenId) == address(verusBridgeStorage), "NFT not approved");
 
                 nft.safeTransferFrom(sender, address(verusBridgeStorage), tokenId);
-                verusBridgeMaster.addToEthHeld(paidValue);
                 transfer.destination.destinationtype = desttype;
                 transfer.destination.destinationaddress = abi.encodePacked(destinationAddress);
             }
  
-        } else if (transfer.currencyvalue.currency == VerusConstants.VEth){
-            //handle a vEth transfer
-            verusBridgeMaster.addToEthHeld(paidValue);  // msg.value == fees + amount in transaction checked in checkExport()
-            //verusBridgeStorage.addToFeesHeld(fees); 
-        }
+        } 
+        verusBridgeMaster.addToEthHeld(paidValue); 
         _createExports(transfer, poolAvailable, block.number);
     }
 

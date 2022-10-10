@@ -37,8 +37,6 @@ contract VerusProof {
     uint32 constant SIZEOF_UINT64 = 8;
     address verusUpgradeContract;
 
-    event HashEvent(bytes32 newHash,uint8 eventType);
-
     constructor(address verusUpgradeAddress, address verusSerializerAddress, 
     address verusNotarizerAddress) 
     {
@@ -216,9 +214,8 @@ contract VerusProof {
             nextOffset := add(nextOffset, 2)                        // skip type and length 0x09 & 0x16
             nextOffset := add(nextOffset, CCE_DEST_CURRENCY_DELTA)
             exporter := mload(add(firstObj, nextOffset))            // exporter
-            nextOffset := add(nextOffset, 4)                        // skip firstinput
-            tempRegister := mload(add(firstObj, nextOffset))           //number of transfers
-            nextOffset := add(nextOffset, 4)                        
+            nextOffset := add(nextOffset, 8)                        // skip firstinput and go to no. transfers
+            tempRegister := mload(add(firstObj, nextOffset))           //number of transfers                  
         }
 
         (packedRegister, nextOffset)  = readVarint(firstObj, nextOffset);  // put startheight at [0] 32bit chunk
