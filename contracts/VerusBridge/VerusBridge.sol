@@ -218,13 +218,13 @@ contract VerusBridge {
         // prove MMR
         require(msg.sender == address(verusBridgeMaster));
         bytes32 txidfound;
-        bytes memory sliced = _import.partialtransactionproof.components[0].elVchObj;
+        bytes memory elVchObj = _import.partialtransactionproof.components[0].elVchObj;
         uint32 nVins;
 
         assembly 
         {
-            txidfound := mload(add(sliced, 32)) 
-            nVins := mload(add(sliced, 45)) 
+            txidfound := mload(add(elVchObj, 32)) 
+            nVins := mload(add(elVchObj, 45)) 
         }
         
         // reverse 32bit endianess
@@ -248,11 +248,9 @@ contract VerusBridge {
 
         (rewardDestinationPlusFees, CCEHeightsAndnIndex) = verusProof.proveImports(_import, hashOfTransfers);
  
-        if (!verusBridgeStorage.isLastCCEInOrder(uint32(CCEHeightsAndnIndex)) ){
-            revert("CCE Out of Order");
-        }
+        verusBridgeStorage.isLastCCEInOrder(uint32(CCEHeightsAndnIndex));
 
-        // clear bytes 4 above first 64 bits, i.e. clear the nIndex 32 bit number, then convert to correct nIndex
+        // clear 4 bytes above first 64 bits, i.e. clear the nIndex 32 bit number, then convert to correct nIndex
 
         CCEHeightsAndnIndex  = (CCEHeightsAndnIndex & 0xffffffff00000000ffffffffffffffff) | (uint128(uint32(uint32(CCEHeightsAndnIndex >> 64) - (1 + (2 * nVins)))) << 64);  
         verusBridgeStorage.setLastImport(txidfound, hashOfTransfers, CCEHeightsAndnIndex);
@@ -261,7 +259,7 @@ contract VerusBridge {
         verusBridgeMaster.sendEth(tokenManager.processTransactions(_import.serializedTransfers, uint8(CCEHeightsAndnIndex >> 96)));
 
         
-        if(uint160(rewardDestinationPlusFees) != uint160(0) && rewardDestinationPlusFees >> 160 != 0)
+        if(address(uint160(rewardDestinationPlusFees)) != address(0) && rewardDestinationPlusFees >> 160 != 0)
         {
            verusBridgeMaster.setClaimableFees(address(uint160(rewardDestinationPlusFees)), rewardDestinationPlusFees >> 160, bridgeKeeper);
         }

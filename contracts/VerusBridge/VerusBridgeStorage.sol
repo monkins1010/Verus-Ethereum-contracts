@@ -58,12 +58,19 @@ contract VerusBridgeStorage {
         lastImportInfo[processedTXID] = VerusObjects.lastImportInfo(hashofTXs, processedTXID, uint32(CCEheightsandTXNum >> 64), uint32(CCEheightsandTXNum >> 32));
     } 
 
-    function isLastCCEInOrder(uint32 height) public view returns (bool) {
-        if(lastTxIdImport == bytes32(0)) {
-            return true;
+    function isLastCCEInOrder(uint32 height) public view  {
+      
+        if ((lastImportInfo[lastTxIdImport].height + 1) == height)
+        {
+            return;
+        } 
+        else if (lastTxIdImport == bytes32(0))
+        {
+            return;
+        } 
+        else{
+            revert("CCE Out of order");
         }
-
-        return ((lastImportInfo[lastTxIdImport].height + 1) == height);
     }
 
     function setReadyExportTransfers(uint _block, VerusObjects.CReserveTransfer memory reserveTransfer) public returns (bool){

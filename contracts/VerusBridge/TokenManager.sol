@@ -103,15 +103,17 @@ contract TokenManager {
         
     }
 
-    function byteSlice(bytes memory _data, uint256 _start, uint256 _end) internal pure returns(bytes memory result) {
+    function byteSlice(bytes memory _data) internal pure returns(bytes memory result) {
         
-        if(_end > _data.length) 
+        uint256 length;
+        length = _data.length;
+        if (length > VerusConstants.TICKER_LENGTH_MAX) 
         {
-            _end =_data.length;
+            length = VerusConstants.TICKER_LENGTH_MAX;
         }
-        result = new bytes(_end);
+        result = new bytes(length);
 
-        for (uint i = _start; i < _end; i++) {
+        for (uint i = 0; i < length; i++) {
             result[i] = _data[i];
         }
     }
@@ -209,7 +211,7 @@ contract TokenManager {
                 outputName = string(name);
             }
 
-            recordToken(_tx[j].iaddress, _tx[j].ERCContract, outputName, string(byteSlice(bytes(name), 0, 4)), uint8(_tx[j].nameAndFlags >> 160), _tx[j].tokenID);
+            recordToken(_tx[j].iaddress, _tx[j].ERCContract, outputName, string(byteSlice(bytes(name))), uint8(_tx[j].nameAndFlags >> 160), _tx[j].tokenID);
         }
     }
 
