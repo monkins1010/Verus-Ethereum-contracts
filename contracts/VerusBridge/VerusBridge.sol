@@ -48,7 +48,7 @@ contract VerusBridge {
 
     }
 
-    function setContracts(address[12] memory contracts) public {
+    function setContracts(address[13] memory contracts) public {
 
         require(msg.sender == verusUpgradeContract);
 

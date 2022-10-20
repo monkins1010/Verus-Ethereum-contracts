@@ -9,9 +9,8 @@ var VerusNotarizer = artifacts.require("./VerusNotarizer/VerusNotarizer.sol");
 var VerusProof = artifacts.require("./MMR/VerusProof.sol");
 var VerusCCE = artifacts.require("./VerusBridge/VerusCrossChainExport.sol");
 var VerusBridge = artifacts.require("./VerusBridge/VerusBridge.sol");
-var Verusaddress = artifacts.require("./VerusBridge/VerusAddressCalculator.sol");
+var NotarizationSerializer = artifacts.require("./VerusNotarizer/NotarizationSerializer.sol");
 var VerusInfo = artifacts.require("./VerusBridge/VerusInfo.sol");
-var Token = artifacts.require("./VerusBridge/Token.sol");
 var ExportManager = artifacts.require("./VerusBridge/ExportManager.sol");
 var VerusBlake2b = artifacts.require("./MMR/VerusBlake2b.sol");
 var VerusMMR = artifacts.require("./MMR/VerusMMR.sol");
@@ -55,10 +54,13 @@ module.exports = async function(deployer) {
     await deployer.deploy(VerusSerializer);
     const serializerInst = await VerusSerializer.deployed();
 
+    await deployer.deploy(NotarizationSerializer, UpgradeInst.address, serializerInst.address );
+    const notarizationSerializerInst = await NotarizationSerializer.deployed();
+
     await deployer.deploy(VerusTokenManager, UpgradeInst.address, bridgeStorageInst.address, serializerInst.address)
     const tokenInst = await VerusTokenManager.deployed();
 
-    await deployer.deploy(VerusNotarizer, serializerInst.address, UpgradeInst.address, verusNotariserIDS, verusNotariserSigner, verusNotariserRevoker, NotarizerStorageInst.address, bridgeMasterInst.address);
+    await deployer.deploy(VerusNotarizer, serializerInst.address, UpgradeInst.address, verusNotariserIDS, verusNotariserSigner, verusNotariserRevoker, NotarizerStorageInst.address, bridgeMasterInst.address, notarizationSerializerInst.address);
     const notarizerInst = await VerusNotarizer.deployed();
 
     await deployer.deploy(VerusMMR);
@@ -91,7 +93,8 @@ module.exports = async function(deployer) {
         ExportManInst.address,
         bridgeStorageInst.address,
         NotarizerStorageInst.address,
-        bridgeMasterInst.address
+        bridgeMasterInst.address,
+        notarizationSerializerInst.address
 
     ];
 

@@ -10,6 +10,7 @@ import "../VerusBridge/VerusSerializer.sol";
 import "../VerusNotarizer/VerusNotarizerStorage.sol";
 import "../VerusBridge/VerusBridgeMaster.sol";
 import "@openzeppelin/contracts/utils/math/SafeMath.sol";
+import "./NotarizationSerializer.sol";
 
 contract VerusNotarizer {
         
@@ -23,6 +24,7 @@ contract VerusNotarizer {
     VerusSerializer verusSerializer;
     VerusNotarizerStorage verusNotarizerStorage;
     VerusBridgeMaster verusBridgeMaster;
+    NotarizationSerializer notarizationSerializer;
     address upgradeContract;
 
     // list of all notarizers mapped to allow for quick searching
@@ -33,17 +35,17 @@ contract VerusNotarizer {
 
     bool public poolAvailable;
     bytes[] public bestForks;
-    int32 lastForkIndex = -1;
     // Notifies when a new block hash is published
-    event NewNotarization(uint32 notarizedDataHeight);
+    event NewNotarization (bytes32);
 
     constructor(address _verusSerializerAddress, address upgradeContractAddress, 
     address[] memory _notaries, address[] memory _notariesEthAddress, address[] memory _notariesColdStoreEthAddress, 
-    address verusNotarizerStorageAddress, address verusBridgeMasterAddress) {
+    address verusNotarizerStorageAddress, address verusBridgeMasterAddress, address notarizationSerializerAddress) {
         verusSerializer = VerusSerializer(_verusSerializerAddress);
         upgradeContract = upgradeContractAddress;
         verusNotarizerStorage = VerusNotarizerStorage(verusNotarizerStorageAddress); 
         verusBridgeMaster = VerusBridgeMaster(verusBridgeMasterAddress);
+        notarizationSerializer = NotarizationSerializer(notarizationSerializerAddress);
 
         // when contract is launching/upgrading copy in to global bool pool available.
         if(verusNotarizerStorage.poolAvailable(VerusConstants.VerusBridgeAddress) > 0 )
@@ -53,14 +55,14 @@ contract VerusNotarizer {
             notaryAddressMapping[_notaries[i]] = VerusObjects.notarizer(_notariesEthAddress[i], _notariesColdStoreEthAddress[i], VerusConstants.NOTARY_VALID);
             notaries.push(_notaries[i]);
         }
-        lastForkIndex  = -1;
     }
 
-    function setContract(address contractAddress) public {
+    function setContract(address serializerAddress, address notarizationSerializerAddress) public {
 
         require(msg.sender == upgradeContract);
 
-        verusSerializer = VerusSerializer(contractAddress);
+        verusSerializer = VerusSerializer(serializerAddress);
+        notarizationSerializer = NotarizationSerializer(notarizationSerializerAddress);
 
     }
           
@@ -70,8 +72,8 @@ contract VerusNotarizer {
 
     }
  
-    function setLatestData(VerusObjectsNotarization.CPBaaSNotarization memory _pbaasNotarization, bytes memory data
-        ) public returns(bool output) {
+    function setLatestData(bytes calldata serializedNotarization, bytes32 txid, uint32 n, bytes calldata data
+        ) public returns(bool) {
 
        ( uint8[] memory _vs,
         bytes32[] memory _rs,
@@ -79,14 +81,12 @@ contract VerusNotarizer {
         uint32[] memory blockheights,
         address[] memory notaryAddresses) = abi.decode(data,(uint8[],bytes32[], bytes32[],uint32[],address[]));
 
-        bytes32 hashedNotarization;
         bytes32 keccakNotarizationHash;
         bytes32 txidHash;
         
-        txidHash = keccak256(abi.encodePacked(reversebytes32(_pbaasNotarization.txid.hash), verusSerializer.serializeUint32(_pbaasNotarization.txid.n)));
+        txidHash = keccak256(abi.encodePacked(reversebytes32(txid), verusSerializer.serializeUint32(n)));
 
-        // Notarizations are keyed by blake2b hash of notarization
-        (hashedNotarization, keccakNotarizationHash) = verusSerializer.returnNotarizationHashes(_pbaasNotarization);
+        keccakNotarizationHash = keccak256(serializedNotarization);
 
         uint validSignatures;
 
@@ -124,31 +124,35 @@ contract VerusNotarizer {
         {
             return false;
         }
-            
-        //valid amount of notarizations achieved
-        //loop through the currencystates and confirm if the bridge is active
-        for(uint k= 0; k < _pbaasNotarization.currencystates.length && !poolAvailable; k++)
-        {
-            if (!poolAvailable &&  _pbaasNotarization.currencystates[k].currencyid == VerusConstants.VerusBridgeAddress &&
-                _pbaasNotarization.currencystates[k].currencystate.flags & (FLAG_FRACTIONAL + FLAG_REFUNDING + FLAG_LAUNCHCONFIRMED + FLAG_LAUNCHCOMPLETEMARKER) == 
-                (FLAG_FRACTIONAL + FLAG_LAUNCHCONFIRMED + FLAG_LAUNCHCOMPLETEMARKER)) 
-            {
-                verusNotarizerStorage.setPoolAvailable();
-                poolAvailable = true;
-                verusBridgeMaster.sendVRSC();
-            }
-        }
 
-        setNotarizationProofRoot(_pbaasNotarization, hashedNotarization);
-        verusNotarizerStorage.setNotarization(_pbaasNotarization, hashedNotarization);
-
-        emit NewNotarization(_pbaasNotarization.notarizationheight);
-        
         return true;        
 
     }
 
-     function decodeNotarization(uint index) private view returns (VerusObjectsNotarization.NotarizationForks[] memory)
+    function checkNotarization(bytes calldata serializedNotarization, bytes32 txid, uint32 n ) public {
+
+        require(msg.sender == address(verusBridgeMaster), "WS");
+       
+        bytes32 blakeNotarizationHash;
+
+        blakeNotarizationHash = verusSerializer.notarizationBlakeHash(serializedNotarization);
+        
+        (uint64 packedPositions, bytes32 prevnotarizationtxid, bytes32 hashprevnotarization) = notarizationSerializer.deserilizeNotarization(serializedNotarization);
+
+        if (!poolAvailable && (((packedPositions >> 16) & 0xff) == 1)) { //shift 2 bytes to read if bridge launched in packed uint64
+            verusNotarizerStorage.setPoolAvailable();
+            poolAvailable = true;
+            verusBridgeMaster.sendVRSC();
+        }
+
+        verusNotarizerStorage.setNotarization(serializedNotarization);
+        setNotarizationProofRoot(serializedNotarization, blakeNotarizationHash, hashprevnotarization, txid, n, prevnotarizationtxid, packedPositions);
+
+        emit NewNotarization(blakeNotarizationHash);
+
+    }
+
+    function decodeNotarization(uint index) public view returns (VerusObjectsNotarization.NotarizationForks[] memory)
         {
             uint32 nextOffset;
 
@@ -157,8 +161,8 @@ contract VerusNotarizer {
             bytes32 hashOfNotarization;
             bytes32 txid;
             uint32 txidvout;
-            uint32 height;
-            uint192 forkIndex;
+            uint64 packedPositions;
+            uint160 forkIndex;
             bytes32 slotHash;
             VerusObjectsNotarization.NotarizationForks[] memory retval = new VerusObjectsNotarization.NotarizationForks[]((tempArray.length / 96) + 1);
             if (tempArray.length > 1)
@@ -175,11 +179,11 @@ contract VerusNotarizer {
                         txid := sload(add(slotHash,nextOffset))
                         nextOffset := add(nextOffset, 1)  
                         txidvout := shr(224,sload(add(slotHash,nextOffset)))
-                        height := shr(192,sload(add(slotHash,nextOffset)))
+                        packedPositions := shr(160,sload(add(slotHash,nextOffset)))
                         forkIndex := sload(add(slotHash,nextOffset))
                         nextOffset := add(nextOffset, 1)
                     }
-                    retval[uint(i)] =  VerusObjectsNotarization.NotarizationForks(hashOfNotarization, txid, txidvout, height, forkIndex);
+                    retval[uint(i)] =  VerusObjectsNotarization.NotarizationForks(hashOfNotarization, txid, txidvout, packedPositions, forkIndex);
                 }
             }
             return retval;
@@ -195,27 +199,27 @@ contract VerusNotarizer {
         bestForks[index] = abi.encodePacked(bestForks[index],notarizations.hashOfNotarization, 
                                             notarizations.txid,
                                             notarizations.n,
-                                            notarizations.height,
+                                            notarizations.proposerPosition,
                                             notarizations.forkIndex);
     }
 
     function encodeStandardNotarization(VerusObjectsNotarization.NotarizationForks[] memory notarizations)private  {
-
         
         bestForks[0] = abi.encodePacked(notarizations[1].hashOfNotarization, 
                                             notarizations[1].txid,
                                             notarizations[1].n,
-                                            notarizations[1].height,
+                                            notarizations[1].proposerPosition,
                                             notarizations[1].forkIndex,
                                             notarizations[2].hashOfNotarization, 
                                             notarizations[2].txid,
                                             notarizations[2].n,
-                                            notarizations[2].height,
+                                            notarizations[2].proposerPosition,
                                             notarizations[2].forkIndex);
 
     }
 
-    function setNotarizationProofRoot(VerusObjectsNotarization.CPBaaSNotarization memory _pbaasNotarization, bytes32 hashedNotarization) private 
+    function setNotarizationProofRoot(bytes memory serializedNotarization, bytes32 hashedNotarization, 
+            bytes32 hashprevnotarization, bytes32 txidHash, uint32 voutnum, bytes32 hashprevtxid, uint64 proposerPosition) private 
     {
         
         int forkIdx = -1;
@@ -227,8 +231,8 @@ contract VerusNotarizer {
             notarizations =  decodeNotarization(uint(i));
             for (int j = int(notarizations.length) - 2; j >= 0; j--)
             {
-                if (_pbaasNotarization.hashprevnotarization == notarizations[uint(j)].hashOfNotarization ||
-                    _pbaasNotarization.prevnotarization.hash == notarizations[uint(j)].txid)
+                if (hashprevnotarization == notarizations[uint(j)].hashOfNotarization ||
+                        hashprevtxid == notarizations[uint(j)].txid)
                 {
                     forkIdx = i;
                     forkPos = j;
@@ -245,13 +249,12 @@ contract VerusNotarizer {
         {
             revert("invalid notarization hash");
         }
-        lastForkIndex++;
 
         if (forkIdx == -1){
             forkIdx = 0;
         }
         
-        if (forkPos != int(notarizations.length) - 2 && lastForkIndex > 0)  
+        if (forkPos != int(notarizations.length) - 2 && bestForks.length != 0)  
         {
             forkIdx = int(bestForks.length);
             encodeNotarization(uint(forkIdx), notarizations[uint(forkPos)]);
@@ -260,22 +263,23 @@ contract VerusNotarizer {
         if(forkIdx == 0 && forkPos == 1)
         {
             notarizations[notarizations.length - 1] = VerusObjectsNotarization.NotarizationForks(reversebytes32(hashedNotarization), 
-            _pbaasNotarization.txid.hash, _pbaasNotarization.txid.n, _pbaasNotarization.notarizationheight, uint32(lastForkIndex));
+            txidHash, voutnum, proposerPosition, uint32(verusNotarizerStorage.nextNotarizationIndex()));
 
         }
         else{
 
         encodeNotarization(uint(forkIdx), VerusObjectsNotarization.NotarizationForks(reversebytes32(hashedNotarization),
-            _pbaasNotarization.txid.hash, _pbaasNotarization.txid.n, _pbaasNotarization.notarizationheight, uint32(lastForkIndex)));
+            txidHash, voutnum, proposerPosition, uint32(verusNotarizerStorage.nextNotarizationIndex())));
 
         }
-      
+     
         for (int i = 0; i < int(bestForks.length); i++) 
         {
             if(forkIdx != 0 && forkPos != 1 )
                 notarizations = decodeNotarization(uint(i));
             if (notarizations.length > 2)
             {
+                verusNotarizerStorage.resetNotarization(serializedNotarization, notarizations[1].forkIndex);
                 notarizations[1].forkIndex = 0;
                 notarizations[2].forkIndex = 1;
                 if (bestForks.length != 1)
@@ -284,10 +288,10 @@ contract VerusNotarizer {
                     bestForks.push("");
                 }
                 encodeStandardNotarization(notarizations);
-                lastForkIndex = 1;
-                break;
+                return;
             }
         } 
+        verusNotarizerStorage.setNotarization(serializedNotarization);
     }
 
     function checkunique(address[] memory ids) private
@@ -317,22 +321,26 @@ contract VerusNotarizer {
         return reversebytes32(hashOfNotarization);
     }
 
-    function getBestStateRoot() public view returns (bytes32)
-    {
-            return getVRSCStateRoot(verusNotarizerStorage.getNotarization(getLastConfirmedNotarizationHash()).proofroots);
-    }
+    function getLastConfirmedVRSCStateRoot() public view returns (bytes32) {
 
-    function getVRSCStateRoot(VerusObjectsNotarization.CProofRoot[] memory proofroots) private pure returns (bytes32) {
+        bytes32 stateRoot;
+        uint64 packedPositions;
+        bytes32 slotHash;
+        bytes storage tempArray = bestForks[0];
+        uint32 nextOffset;
 
-        for (uint i = 0; i < proofroots.length; i++) 
+        if (tempArray.length > 0)
         {
-            if (proofroots[i].systemid == VerusConstants.VerusCurrencyId) 
-            {
-                 return proofroots[i].stateroot;
+            assembly {
+                        slotHash := keccak256(add(tempArray.slot, 32), 32)
+                        nextOffset := add(nextOffset, 1)  
+                        nextOffset := add(nextOffset, 1)  
+                        packedPositions := shr(160,sload(add(slotHash,nextOffset)))
             }
-        }  
+        }
+        stateRoot = verusNotarizerStorage.getLastStateRoot(packedPositions >> 32);
 
-        return bytes32(0);
+        return stateRoot;
     }
 
     function updateNotarizer(address notarizer, address mainAddress, address revokeAddress, uint8 state) public

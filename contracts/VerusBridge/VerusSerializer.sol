@@ -398,11 +398,9 @@ contract VerusSerializer {
         );
     }
 
-    function returnNotarizationHashes(VerusObjectsNotarization.CPBaaSNotarization calldata _not) public view returns (bytes32 blake2bHash, bytes32 keccackHash)
+    function notarizationBlakeHash(bytes calldata _not) public view returns (bytes32)
     {
-        bytes memory serialized = serializeCPBaaSNotarization(_not);
-
-        return (serialized.createHash(), keccak256(serialized));
+        return _not.createHash();
 
     }
     

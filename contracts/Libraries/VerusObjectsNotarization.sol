@@ -62,8 +62,8 @@ library VerusObjectsNotarization {
         bytes32 hashOfNotarization;
         bytes32 txid;
         uint32 n;
-        uint32 height;
-        uint192 forkIndex;
+        uint64 proposerPosition;
+        uint160 forkIndex;
     }
 
     struct CNodeData {

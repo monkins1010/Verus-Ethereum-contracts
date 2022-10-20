@@ -66,6 +66,7 @@ library VerusConstants {
         VerusBridgeStorage,
         VerusNotarizerStorage,
         VerusBridgeMaster,
+        NotarizationSerializer,
         LastIndex
     }
         

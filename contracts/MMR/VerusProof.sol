@@ -50,7 +50,7 @@ contract VerusProof {
         verusNotarizer = VerusNotarizer(verusNotarizerAddress);
     }
 
-    function setContracts(address[12] memory contracts) public {
+    function setContracts(address[13] memory contracts) public {
 
         require(msg.sender == verusUpgradeContract);
 
@@ -304,7 +304,7 @@ contract VerusProof {
         }
 
         retStateRoot = checkProof(txRoot, _import.partialtransactionproof.txproof);
-        confirmedStateRoot = verusNotarizer.getBestStateRoot(); 
+        confirmedStateRoot = verusNotarizer.getLastConfirmedVRSCStateRoot();
 
         if (retStateRoot == bytes32(0) || retStateRoot != confirmedStateRoot) {
 

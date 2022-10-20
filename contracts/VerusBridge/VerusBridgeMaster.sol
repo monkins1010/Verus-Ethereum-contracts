@@ -29,7 +29,7 @@ contract VerusBridgeMaster {
         upgradeContract = upgradeContractAddress;      
     }
     
-   function setContracts(address[12] memory contracts) public {
+   function setContracts(address[13] memory contracts) public {
    
         require(msg.sender == upgradeContract);
         
@@ -66,10 +66,13 @@ contract VerusBridgeMaster {
         return verusNotarizer.poolAvailable();
     }
 
-    function setLatestData(VerusObjectsNotarization.CPBaaSNotarization memory _pbaasNotarization, bytes memory data) public returns(bool)
+    function setLatestData(bytes calldata serializedNotarization, bytes32 txid, uint32 n, bytes memory data) public 
     {
 
-        return verusNotarizer.setLatestData(_pbaasNotarization, data);
+        require(verusNotarizer.setLatestData(serializedNotarization, txid, n, data), "not enough notary signatures");
+
+        verusNotarizer.checkNotarization(serializedNotarization, txid, n);
+
     }
 
     /** VerusInfo pass through functions **/
@@ -132,10 +135,13 @@ contract VerusBridgeMaster {
         uint256 bridgekeeperFees;              
 
         address proposer;
-        bytes memory proposerBytes = verusNotarizerStorage.getNotarization(verusNotarizer.getLastConfirmedNotarizationHash()).proposer.destinationaddress;
+        bytes memory proposerBytes = verusNotarizerStorage.PBaaSNotarization(0);
+        uint64 proposerLocation = verusNotarizer.decodeNotarization(0)[0].proposerPosition;
+
+        proposerLocation &= 0xffff;
 
         assembly {
-                proposer := mload(add(proposerBytes,20))
+                proposer := mload(add(proposerBytes, proposerLocation))
         } 
 
         (notaryFees, exporterFees, proposerFees, bridgekeeperFees, LPFees) = verusInfo.setFeePercentages(_ethAmount);
