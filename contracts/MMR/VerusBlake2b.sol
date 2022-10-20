@@ -9,22 +9,8 @@ library VerusBlake2b {
     using Blake2b for Blake2b.Instance;
 
     function createHash(bytes memory input) public view returns (bytes32) {
-      Blake2b.Instance memory instance = Blake2b.init(hex"", 32, true);
-      return bytesToBytes32(instance.finalize(input));
+      Blake2b.Instance memory instance = Blake2b.init(hex"", 32);
+      return instance.finalize(input);
     }
-
-    function createDefaultHash(bytes memory input) public view returns (bytes32) {
-      Blake2b.Instance memory instance = Blake2b.init(hex"", 32, false);
-      return bytesToBytes32(instance.finalize(input));
-    }
-
-    function bytesToBytes32(bytes memory b) public pure returns (bytes32) {
-        bytes32 out;
-
-        assembly {
-            out := mload(add(b, 32))
-        }
-        return out;
-    }    
 
 }

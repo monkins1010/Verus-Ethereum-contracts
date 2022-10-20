@@ -35,6 +35,11 @@ contract VerusProof {
     uint32 constant SCRIPT_OP_PUSHDATA2 = 0x4d;
     uint32 constant TYPE_TX_OUTPUT = 4;
     uint32 constant SIZEOF_UINT64 = 8;
+    uint8 constant FLAG_FRACTIONAL = 1;
+    uint8 constant FLAG_REFUNDING = 4;
+    uint8 constant FLAG_LAUNCHCONFIRMED = 0x10;
+    uint8 constant FLAG_LAUNCHCOMPLETEMARKER = 0x20;
+
     address verusUpgradeContract;
 
     constructor(address verusUpgradeAddress, address verusSerializerAddress, 
@@ -299,9 +304,9 @@ contract VerusProof {
         }
 
         retStateRoot = checkProof(txRoot, _import.partialtransactionproof.txproof);
-        confirmedStateRoot = verusNotarizer.getBestNotarizationValue(true);
+        confirmedStateRoot = verusNotarizer.getBestStateRoot(); 
 
-        if (retStateRoot == bytes32(0) || retStateRoot != flipBytes32(confirmedStateRoot)) {
+        if (retStateRoot == bytes32(0) || retStateRoot != confirmedStateRoot) {
 
             revert("Stateroot does not match");
         }
@@ -351,7 +356,148 @@ contract VerusProof {
         }
         revert(); // i=10, invalid varint stream
     }
-  
+
+    function deserilizeNotarization(bytes memory notarization) public view returns (address, bytes32, bytes32, bytes32, bool )
+    {
+        uint32 nextOffset;
+        address proposer;
+        bytes32 prevnotarizationtxid;
+        bytes32 hashprevcrossnotarization; 
+        bytes32 stateroot;
+        bool bridgeLaunched;
+
+        VerusObjectsCommon.UintReader memory readerLen;
+
+        readerLen = readVarintStruct(notarization, 0);    // get the length of the varint version
+        readerLen = readVarintStruct(notarization, readerLen.offset);        // get the length of the flags
+
+        nextOffset = readerLen.offset;
+        assembly {
+                    nextOffset := add(nextOffset, 20) // CHECK: skip proposer type??
+                    proposer := mload(add(notarization, nextOffset))      // proposer 
+                 }
+
+        deserializeCoinbaseCurrencyState(notarization, nextOffset);
+
+        assembly {
+                    nextOffset := add(nextOffset, 4) // skip notarizationheight
+                    nextOffset := add(nextOffset, 32) // move to read prevnotarizationtxid
+                    prevnotarizationtxid := mload(add(notarization, nextOffset))      // prevnotarizationtxid 
+                    nextOffset := add(nextOffset, 4) //skip prevnotarizationout
+                    nextOffset := add(nextOffset, 32) // move to read hashprevcrossnotarization
+                    hashprevcrossnotarization := mload(add(notarization, nextOffset))      // hashprevcrossnotarization 
+                    nextOffset := add(nextOffset, 4) //skip prevheight
+                }
+
+        readerLen = verusSerializer.readCompactSizeLE(notarization, nextOffset);    // get the length of the currencyState
+
+        nextOffset = readerLen.offset;
+
+        for (uint i = 0; i < readerLen.value; i++)
+        {
+           bridgeLaunched = bridgeLaunched || deserializeCoinbaseCurrencyState(notarization, nextOffset);
+        }
+
+        readerLen = verusSerializer.readCompactSizeLE(notarization, nextOffset);    // get the length of proofroot array
+
+        stateroot = deserializeProofRoots(notarization, readerLen.value, nextOffset);
+
+        return (proposer, prevnotarizationtxid, hashprevcrossnotarization, stateroot, bridgeLaunched);
+    }
+
+    function deserializeCoinbaseCurrencyState(bytes memory notarization, uint32 nextOffset) private view returns (bool)
+    {
+        
+        address currencyid;
+        bool bridgeLaunched;
+        uint16 flags;
+        
+        assembly {
+            nextOffset := add(nextOffset, 20) // skip currencyid
+            currencyid := mload(add(notarization, nextOffset))      // currencyid 
+            nextOffset := add(nextOffset, 2) // skip version
+            nextOffset := add(nextOffset, 2) // move to flags
+            flags := mload(add(notarization, nextOffset))      // flags 
+        }
+        flags = (flags >> 8) | (flags << 8);
+        if ((currencyid == VerusConstants.VerusBridgeAddress) && flags & (FLAG_FRACTIONAL + FLAG_REFUNDING + FLAG_LAUNCHCONFIRMED + FLAG_LAUNCHCOMPLETEMARKER) == 
+            (FLAG_FRACTIONAL + FLAG_LAUNCHCONFIRMED + FLAG_LAUNCHCOMPLETEMARKER)) 
+        {
+            bridgeLaunched = true;
+        }
+        assembly {                    
+                    nextOffset := add(nextOffset, 20) //skip notarization currencystatecurrencyid
+                 }
+        
+        VerusObjectsCommon.UintReader memory readerLen;
+        readerLen = verusSerializer.readCompactSizeLE(notarization, nextOffset);        // get the length currencies
+
+        nextOffset = nextOffset + (readerLen.value * 32) + 2;       // currencys, wights, reserves arrarys
+
+        readerLen = readVarintStruct(notarization, readerLen.offset);        // get the length of the initialsupply
+        readerLen = readVarintStruct(notarization, readerLen.offset);        // get the length of the emitted
+        readerLen = readVarintStruct(notarization, readerLen.offset);        // get the length of the supply
+
+        assembly {
+                    nextOffset := add(nextOffset, 32) //skip coinbasecurrencystate first 4 items fixed at 4 x 8
+                }
+
+        readerLen = verusSerializer.readCompactSizeLE(notarization, nextOffset);    // get the length of the reservein array of uint64
+        nextOffset = readerLen.offset + (readerLen.value * 60) + 7;                 //skip 60 bytes of rest of state knowing array size always same as first
+
+        return bridgeLaunched;
+    }
+
+    function deserializeProofRoots (bytes memory notarization, uint32 size, uint32 nextOffset) private pure returns (bytes32)
+    {
+        for (uint i = 0; i < size; i++)
+        {
+            uint16 proofType;
+            address systemID;
+            bytes32 tempStateRoot;
+            assembly {
+                nextOffset := add(nextOffset, 20) // skip systemid
+                nextOffset := add(nextOffset, 2) // skip version
+                nextOffset := add(nextOffset, 2) // move to read type
+                proofType := mload(add(notarization, nextOffset))      // proofType 
+                nextOffset := add(nextOffset, 20) // move to read systemID
+                systemID := mload(add(notarization, nextOffset))  
+                nextOffset := add(nextOffset, 4) // skip height
+                nextOffset := add(nextOffset, 32) // move to read stateroot
+                tempStateRoot := mload(add(notarization, nextOffset))  
+                nextOffset := add(nextOffset, 32) // skip blockhash
+                nextOffset := add(nextOffset, 32) // skip power
+            }
+            if((proofType >> 8) == 2){
+                assembly {
+                nextOffset := add(nextOffset, 8) // skip gasprice
+                }
+
+            }
+            if(systemID == VerusConstants.VEth)
+            {
+                return tempStateRoot;
+            }
+
+        }
+        return bytes32(0);
+    }
+
+    function readVarintStruct(bytes memory buf, uint idx) public pure returns (VerusObjectsCommon.UintReader memory) {
+
+        uint8 b; // store current byte content
+        uint64 v; 
+
+        for (uint i = 0; i < 10; i++) {
+            b = uint8(buf[i+idx]);
+            v = (v << 7) | b & 0x7F;
+            if (b & 0x80 == 0x80)
+                v++;
+            else
+            return VerusObjectsCommon.UintReader(uint32(v), uint32(idx + i + 1));
+        }
+        revert(); // i=9, invalid varint stream
+    }
     
 }
 

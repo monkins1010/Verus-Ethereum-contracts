@@ -67,7 +67,7 @@ contract VerusInfo {
         returnCurrency.version = chainInfo.version;
         //if the _currencyid is null then return VEth
         address[] memory notaries = new address[](1);
-        uint8 minnotaries = verusNotarizer.currentNotariesRequired();
+        uint8 minnotaries = ((verusNotarizer.currentNotariesLength() >> 1) + 1);
         
         address currencyAddress;
         uint64 initialsupply;
@@ -110,6 +110,25 @@ contract VerusInfo {
 
         //blow the fuse
         contractOwner = address(0);
+    }
+
+    function setFeePercentages(uint256 _ethAmount)public pure returns (uint256,uint256,uint256,uint256,uint256)
+    {
+        uint256 notaryFees;
+        uint256 LPFees;
+        uint256 exporterFees;
+        uint256 proposerFees;  
+        uint256 bridgekeeperFees;     
+        
+        notaryFees = (_ethAmount / 10 ) * 3 ; 
+
+        exporterFees = _ethAmount / 10 ;
+        proposerFees = _ethAmount / 10 ;
+        bridgekeeperFees = (_ethAmount / 10 ) * 3 ;
+
+        LPFees = _ethAmount - (notaryFees + exporterFees + proposerFees + bridgekeeperFees);
+
+        return(notaryFees, exporterFees, proposerFees, bridgekeeperFees, LPFees);
     }
 
 }

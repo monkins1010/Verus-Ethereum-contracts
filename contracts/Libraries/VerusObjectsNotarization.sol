@@ -60,7 +60,6 @@ library VerusObjectsNotarization {
 
     struct NotarizationForks {
         bytes32 hashOfNotarization;
-        bytes32 stateRoot;
         bytes32 txid;
         uint32 n;
         uint32 height;

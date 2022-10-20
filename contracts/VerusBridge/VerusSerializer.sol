@@ -381,7 +381,7 @@ contract VerusSerializer {
         return inProgress;
     }
 
-    function serializeCPBaaSNotarization(VerusObjectsNotarization.CPBaaSNotarization memory _not) public pure returns(bytes memory){
+    function serializeCPBaaSNotarization(VerusObjectsNotarization.CPBaaSNotarization calldata _not) public pure returns(bytes memory){
         return abi.encodePacked(
             writeVarInt(_not.version),
             writeVarInt(_not.flags),
@@ -396,6 +396,14 @@ contract VerusSerializer {
             serializeCProofRootArray(_not.proofroots),
             serializeNodes(_not.nodes)
         );
+    }
+
+    function returnNotarizationHashes(VerusObjectsNotarization.CPBaaSNotarization calldata _not) public view returns (bytes32 blake2bHash, bytes32 keccackHash)
+    {
+        bytes memory serialized = serializeCPBaaSNotarization(_not);
+
+        return (serialized.createHash(), keccak256(serialized));
+
     }
     
     function serializeNodes(VerusObjectsNotarization.CNodeData[] memory _cnds) public pure returns(bytes memory){
@@ -652,11 +660,6 @@ contract VerusSerializer {
             return (((twoByte << 8) & 0xffff)  | twoByte >> 8, offset + 1);
         }
         return (0, offset);
-    }
-
-    function blake2bDefault(bytes memory incoming) public view returns (bytes32)
-    {
-        return incoming.createDefaultHash();
     }
 
 }

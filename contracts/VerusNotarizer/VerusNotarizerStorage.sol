@@ -7,7 +7,6 @@ import "../Libraries/VerusObjects.sol";
 import "../Libraries/VerusConstants.sol";
 import "../Libraries/VerusObjectsNotarization.sol";
 import "../VerusBridge/VerusBridgeMaster.sol";
-import "@openzeppelin/contracts/token/ERC721/ERC721.sol";
 import "../VerusNotarizer/VerusNotarizer.sol";
 import "@openzeppelin/contracts/utils/math/SafeMath.sol";
 
@@ -20,7 +19,6 @@ contract VerusNotarizerStorage {
 
     mapping (bytes32 => VerusObjectsNotarization.CPBaaSNotarization) public PBaaSNotarization;
     mapping (address => uint32) public poolAvailable;
-    mapping (bytes32 => bool) public notarizationHashes;
     mapping (address => uint256) public storageGlobal;
     
     constructor(address upgradeContractAddress)
@@ -60,6 +58,7 @@ contract VerusNotarizerStorage {
     function setNotarization(VerusObjectsNotarization.CPBaaSNotarization memory _notarization, bytes32 hashOfNotarization) public {
 
         require( msg.sender == verusNotarizer,"setNotarizedProof:callfromNotarizeronly");
+        require(!(PBaaSNotarization[hashOfNotarization].version > 0), "known hash of notarization");
         
         PBaaSNotarization[hashOfNotarization].version = _notarization.version; 
         PBaaSNotarization[hashOfNotarization].flags = _notarization.flags;
@@ -87,8 +86,7 @@ contract VerusNotarizerStorage {
             PBaaSNotarization[hashOfNotarization].nodes.push(_notarization.nodes[i]);
         }  
 
-        notarizationHashes[hashOfNotarization] = true;
-       
     }
+
 
 }

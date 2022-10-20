@@ -127,7 +127,7 @@ contract VerusCrossChainExport{
         workingCCE.totalamounts = currencies;
         workingCCE.totalfees = fees; 
 
-        VerusObjects.CCurrencyValueMap memory totalburnedCCVM = VerusObjects.CCurrencyValueMap(0x0000000000000000000000000000000000000000,0);
+        VerusObjects.CCurrencyValueMap memory totalburnedCCVM = VerusObjects.CCurrencyValueMap(address(0), 0);
 
         workingCCE.totalburned = new VerusObjects.CCurrencyValueMap[](1);
         workingCCE.totalburned[0] = totalburnedCCVM;

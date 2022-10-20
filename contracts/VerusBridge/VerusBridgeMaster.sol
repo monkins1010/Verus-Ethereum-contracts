@@ -110,7 +110,7 @@ contract VerusBridgeMaster {
         //exporter 10%
 
         uint256 LPFees;
-        LPFees = verusNotarizer.setClaimableFees(_feeRecipient, fees, bridgekeeper);
+        LPFees = setLPClaimableFees(_feeRecipient, fees, bridgekeeper);
 
         //NOTE:only execute the LP transfer if there is x10 the fee amount 
         if(LPFees > (VerusConstants.verusvETHTransactionFee * 10) && verusNotarizer.poolAvailable())
@@ -120,6 +120,44 @@ contract VerusBridgeMaster {
             verusBridge.sendToVRSC(uint64(LPFees), true);
             //verusBridge.export(LPtransfer, LPFees * VerusConstants.SATS_TO_WEI_STD, address(this) );
         }
+    }
+
+    function setLPClaimableFees(address _feeRecipient, uint256 _ethAmount, address bridgekeeper) private returns (uint256){
+
+       
+        uint256 notaryFees;
+        uint256 LPFees;
+        uint256 exporterFees;
+        uint256 proposerFees;  
+        uint256 bridgekeeperFees;              
+
+        address proposer;
+        bytes memory proposerBytes = verusNotarizerStorage.getNotarization(verusNotarizer.getLastConfirmedNotarizationHash()).proposer.destinationaddress;
+
+        assembly {
+                proposer := mload(add(proposerBytes,20))
+        } 
+
+        (notaryFees, exporterFees, proposerFees, bridgekeeperFees, LPFees) = verusInfo.setFeePercentages(_ethAmount);
+
+        setNotaryFees(notaryFees);
+        setClaimedFees(_feeRecipient, exporterFees);
+        setClaimedFees(proposer, proposerFees);
+        setClaimedFees(bridgekeeper, bridgekeeperFees);
+
+        //return total amount of unclaimed LP Fees accrued.  Verusnotarizer address is the key.
+        return setClaimedFees(address(verusNotarizer), LPFees);
+              
+    }
+
+
+    function setNotaryFees(uint256 notaryFees) public {
+        
+        uint32 psudorandom = uint32(uint(keccak256(abi.encodePacked(block.difficulty, block.timestamp))));
+
+        uint32 notaryTurn = uint32(psudorandom % (verusNotarizer.currentNotariesLength()));
+
+        setClaimedFees(verusNotarizer.notaries(notaryTurn), notaryFees);
     }
 
     function claimfees() public returns (bool) 
@@ -138,10 +176,8 @@ contract VerusBridgeMaster {
 
     }
         
-    function setClaimedFees(address _address, uint256 fees)public returns (uint256)
+    function setClaimedFees(address _address, uint256 fees) private returns (uint256)
     {
-        require(msg.sender == address(verusNotarizer));
-
         claimableFees[_address] += fees;
 
         return claimableFees[_address];

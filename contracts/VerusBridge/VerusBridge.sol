@@ -115,26 +115,23 @@ contract VerusBridge {
             uint256 tokenId;
             bytes memory serializedDest;
             serializedDest = transfer.destination.destinationaddress;  
-
-            if (transfer.flags == VerusConstants.VALID && transfer.destination.destinationtype == VerusConstants.DEST_ETHNFT)
+            // 1byte desttype + 20bytes destinationaddres + 20bytes NFT address + 32bytes NFTTokenI
+            assembly
             {
-
-                // 1byte desttype + 20bytes destinationaddres + 20bytes NFT address + 32bytes NFTTokenI
-                assembly
-                {
-                    desttype := mload(add(serializedDest, 1))
-                    destinationAddress := mload(add(serializedDest, 21))
-                    nftContract := mload(add(serializedDest, 41))
-                    tokenId := mload(add(serializedDest, 73))
-                }
-
-                ERC721 nft = ERC721(nftContract);
-                require (nft.getApproved(tokenId) == address(verusBridgeStorage), "NFT not approved");
-
-                nft.safeTransferFrom(sender, address(verusBridgeStorage), tokenId);
-                transfer.destination.destinationtype = desttype;
-                transfer.destination.destinationaddress = abi.encodePacked(destinationAddress);
+                desttype := mload(add(serializedDest, 1))
+                destinationAddress := mload(add(serializedDest, 21))
+                nftContract := mload(add(serializedDest, 41))
+                tokenId := mload(add(serializedDest, 73))
             }
+            require (serializedDest.length == 73 && (desttype == VerusConstants.DEST_PKH || desttype == VerusConstants.DEST_ID), "NFT packet wrong length/dest wrong");
+
+            ERC721 nft = ERC721(nftContract);
+            require (nft.getApproved(tokenId) == address(this), "NFT not approved");
+
+            nft.transferFrom(sender, address(this), tokenId);
+            nft.transferFrom(address(this), address(verusBridgeStorage), tokenId);
+            transfer.destination.destinationtype = desttype;
+            transfer.destination.destinationaddress = abi.encodePacked(destinationAddress);
  
         } 
         verusBridgeMaster.addToEthHeld(paidValue); 

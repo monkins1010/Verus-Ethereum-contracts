@@ -315,7 +315,7 @@ contract UpgradeManager {
         }
 
         // Return true if majority of notarized have transacted.
-        return pendingContractsSignatures.length >= verusNotarizer.currentNotariesRequired();
+        return pendingContractsSignatures.length >= ((verusNotarizer.currentNotariesLength() >> 1) + 1 );
 
     }
 

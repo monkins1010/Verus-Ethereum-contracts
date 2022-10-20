@@ -169,7 +169,7 @@ contract TokenManager {
         
         for (uint j = 0; j < _tx.length; j++)
         {
-            if (ERC20Registered(_tx[j].iaddress))
+            if (ERC20Registered(_tx[j].iaddress) || _tx[j].iaddress == address(0))
                 continue;
 
             uint8 nameLen;
