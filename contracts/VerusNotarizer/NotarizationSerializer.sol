@@ -65,13 +65,13 @@ contract NotarizationSerializer {
         readerLen = readVarintStruct(notarization, readerLen.offset);        // get the length of the flags
 
         nextOffset = readerLen.offset;
-        packedPositions = nextOffset + CURRENCY_LENGTH;
+        packedPositions = nextOffset + 22;  //set proposer byte position
         assembly {
-                    nextOffset := add(nextOffset, CURRENCY_LENGTH) // CHECK: skip proposer type??
+                    nextOffset := add(nextOffset, 22) // CHECK: skip proposer type??
                   //  proposer := mload(add(notarization, nextOffset))      // proposer 
                  }
 
-        deserializeCoinbaseCurrencyState(notarization, nextOffset);
+        (, nextOffset) = deserializeCoinbaseCurrencyState(notarization, nextOffset);
 
         assembly {
                     nextOffset := add(nextOffset, 4) // skip notarizationheight
@@ -81,29 +81,33 @@ contract NotarizationSerializer {
                     nextOffset := add(nextOffset, BYTES32_LENGTH) // move to read hashprevcrossnotarization
                     hashprevcrossnotarization := mload(add(notarization, nextOffset))      // hashprevcrossnotarization 
                     nextOffset := add(nextOffset, 4) //skip prevheight
+                    nextOffset := add(nextOffset, 1) //skip prevheight
                 }
 
         readerLen = verusSerializer.readCompactSizeLE(notarization, nextOffset);    // get the length of the currencyState
 
-        nextOffset = readerLen.offset;
+        nextOffset = readerLen.offset - 1;   //readCompactSizeLE returns 1 byte after and wants one byte after 
 
         for (uint i = 0; i < readerLen.value; i++)
         {
-           bridgeLaunched = bridgeLaunched | deserializeCoinbaseCurrencyState(notarization, nextOffset);
+            uint16 temp;
+            (temp, nextOffset) = deserializeCoinbaseCurrencyState(notarization, nextOffset);
+            bridgeLaunched = temp | bridgeLaunched;
         }
 
         packedPositions |= uint64(bridgeLaunched << 16);
 
+        nextOffset++; //move forwards to read le
         readerLen = verusSerializer.readCompactSizeLE(notarization, nextOffset);    // get the length of proofroot array
 
-        staterootposition = deserializeProofRoots(notarization, readerLen.value, nextOffset);
+        staterootposition = deserializeProofRoots(notarization, uint32(readerLen.value), nextOffset);
 
         packedPositions |= (uint64(staterootposition) << 32);
 
         return (packedPositions, prevnotarizationtxid, hashprevcrossnotarization);
     }
 
-    function deserializeCoinbaseCurrencyState(bytes memory notarization, uint32 nextOffset) private view returns (uint16)
+    function deserializeCoinbaseCurrencyState(bytes memory notarization, uint32 nextOffset) private view returns (uint16, uint32)
     {
         
         address currencyid;
@@ -125,25 +129,26 @@ contract NotarizationSerializer {
         }
         assembly {                    
                     nextOffset := add(nextOffset, CURRENCY_LENGTH) //skip notarization currencystatecurrencyid
-                 }
-        
+                    nextOffset := add(nextOffset, 1) // move to  read currency state length
+        }
         VerusObjectsCommon.UintReader memory readerLen;
+
         readerLen = verusSerializer.readCompactSizeLE(notarization, nextOffset);        // get the length currencies
 
-        nextOffset = nextOffset + (readerLen.value * BYTES32_LENGTH) + 2;       // currencys, wights, reserves arrarys
+        nextOffset = nextOffset + (uint32(readerLen.value) * BYTES32_LENGTH) + 2;       // currencys, wights, reserves arrarys
 
-        readerLen = readVarintStruct(notarization, readerLen.offset);        // get the length of the initialsupply
+        readerLen = readVarintStruct(notarization, nextOffset);        // get the length of the initialsupply
         readerLen = readVarintStruct(notarization, readerLen.offset);        // get the length of the emitted
         readerLen = readVarintStruct(notarization, readerLen.offset);        // get the length of the supply
-
+        nextOffset = readerLen.offset;
         assembly {
-                    nextOffset := add(nextOffset, BYTES32_LENGTH) //skip coinbasecurrencystate first 4 items fixed at 4 x 8
+                    nextOffset := add(nextOffset, 33) //skip coinbasecurrencystate first 4 items fixed at 4 x 8
                 }
 
         readerLen = verusSerializer.readCompactSizeLE(notarization, nextOffset);    // get the length of the reservein array of uint64
-        nextOffset = readerLen.offset + (readerLen.value * 60) + 7;                 //skip 60 bytes of rest of state knowing array size always same as first
+        nextOffset = readerLen.offset + (uint32(readerLen.value) * 60) + 6;                 //skip 60 bytes of rest of state knowing array size always same as first
 
-        return bridgeLaunched;
+        return (bridgeLaunched, nextOffset);
     }
 
     function deserializeProofRoots (bytes memory notarization, uint32 size, uint32 nextOffset) private pure returns (uint32 outputPosition)
@@ -152,7 +157,7 @@ contract NotarizationSerializer {
         {
             uint16 proofType;
             address systemID;
-            bytes32 tempStateRoot;
+           // bytes32 tempStateRoot;
             assembly {
                 nextOffset := add(nextOffset, CURRENCY_LENGTH) // skip systemid
                 nextOffset := add(nextOffset, 2) // skip version
@@ -162,10 +167,10 @@ contract NotarizationSerializer {
                 systemID := mload(add(notarization, nextOffset))  
                 nextOffset := add(nextOffset, 4) // skip height
                 nextOffset := add(nextOffset, BYTES32_LENGTH) // move to read stateroot
-                tempStateRoot := mload(add(notarization, nextOffset))  
+                //tempStateRoot := mload(add(notarization, nextOffset))  
                 nextOffset := add(nextOffset, TWO2BYTES32_LENGTH) // skip blockhash + power
             }
-            if(systemID == VerusConstants.VEth)
+            if(systemID == VerusConstants.VerusCurrencyId)
             {
                 outputPosition = nextOffset - TWO2BYTES32_LENGTH;
             }
@@ -191,7 +196,7 @@ contract NotarizationSerializer {
             if (b & 0x80 == 0x80)
                 v++;
             else
-            return VerusObjectsCommon.UintReader(uint32(v), uint32(idx + i + 1));
+            return VerusObjectsCommon.UintReader(uint32(idx + i + 1), v);
         }
         revert(); // i=9, invalid varint stream
     }

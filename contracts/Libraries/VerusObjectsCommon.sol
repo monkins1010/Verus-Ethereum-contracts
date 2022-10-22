@@ -22,6 +22,6 @@ library VerusObjectsCommon {
     
     struct UintReader {
         uint32 offset;
-        uint32 value;
+        uint64 value;
     }
 }
