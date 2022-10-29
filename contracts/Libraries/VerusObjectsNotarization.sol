@@ -61,9 +61,8 @@ library VerusObjectsNotarization {
     struct NotarizationForks {
         bytes32 hashOfNotarization;
         bytes32 txid;
-        uint32 n;
-        uint64 proposerPosition;
-        uint160 forkIndex;
+        bytes32 stateroot;
+        bytes32 proposerPacked;  //after 22 bytes the voutnum 32bit num resides << 176
     }
 
     struct CNodeData {

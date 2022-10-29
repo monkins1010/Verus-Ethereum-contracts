@@ -137,16 +137,15 @@ contract VerusNotarizer {
 
         blakeNotarizationHash = verusSerializer.notarizationBlakeHash(serializedNotarization);
         
-        (uint64 packedPositions, bytes32 prevnotarizationtxid, bytes32 hashprevnotarization) = notarizationSerializer.deserilizeNotarization(serializedNotarization);
+        (bytes32 launchedAndProposer, bytes32 prevnotarizationtxid, bytes32 hashprevnotarization, bytes32 stateRoot) = notarizationSerializer.deserilizeNotarization(serializedNotarization);
 
-        if (!poolAvailable && (((packedPositions >> 16) & 0xff) == 1)) { //shift 2 bytes to read if bridge launched in packed uint64
+        if (!poolAvailable && ((uint256(launchedAndProposer >> 176) & 0xff) == 1)) { //shift to read if bridge launched in packed uint256
             verusNotarizerStorage.setPoolAvailable();
             poolAvailable = true;
             verusBridgeMaster.sendVRSC();
         }
 
-        verusNotarizerStorage.setNotarization(serializedNotarization);
-        setNotarizationProofRoot(serializedNotarization, blakeNotarizationHash, hashprevnotarization, txid, n, prevnotarizationtxid, packedPositions);
+        setNotarizationProofRoot(blakeNotarizationHash, hashprevnotarization, txid, n, prevnotarizationtxid, launchedAndProposer, stateRoot);
 
         emit NewNotarization(blakeNotarizationHash);
 
@@ -160,11 +159,11 @@ contract VerusNotarizer {
 
             bytes32 hashOfNotarization;
             bytes32 txid;
-            uint32 txidvout;
-            uint64 packedPositions;
-            uint160 forkIndex;
+            bytes32 stateRoot;
+            bytes32 packedPositions;
+           // uint32 forkIndex;
             bytes32 slotHash;
-            VerusObjectsNotarization.NotarizationForks[] memory retval = new VerusObjectsNotarization.NotarizationForks[]((tempArray.length / 96) + 1);
+            VerusObjectsNotarization.NotarizationForks[] memory retval = new VerusObjectsNotarization.NotarizationForks[]((tempArray.length / 128) + 1);
             if (tempArray.length > 1)
             {
                 assembly {
@@ -177,13 +176,16 @@ contract VerusNotarizer {
                         hashOfNotarization := sload(add(slotHash,nextOffset))
                         nextOffset := add(nextOffset, 1)  
                         txid := sload(add(slotHash,nextOffset))
-                        nextOffset := add(nextOffset, 1)  
-                        txidvout := shr(224,sload(add(slotHash,nextOffset)))
-                        packedPositions := shr(160,sload(add(slotHash,nextOffset)))
-                        forkIndex := sload(add(slotHash,nextOffset))
+                        nextOffset := add(nextOffset, 1) 
+                        stateRoot := sload(add(slotHash,nextOffset))
+                        nextOffset := add(nextOffset, 1) 
+                        packedPositions :=sload(add(slotHash,nextOffset))
                         nextOffset := add(nextOffset, 1)
                     }
-                    retval[uint(i)] =  VerusObjectsNotarization.NotarizationForks(hashOfNotarization, txid, txidvout, packedPositions, forkIndex);
+
+                  //  forkIndex = (packedPositions >> 176) & 0xffffffff;
+
+                    retval[uint(i)] =  VerusObjectsNotarization.NotarizationForks(hashOfNotarization, txid, stateRoot, packedPositions);
                 }
             }
             return retval;
@@ -196,30 +198,24 @@ contract VerusNotarizer {
             bestForks.push("");  //initialize empty bytes array
         }
 
-        bestForks[index] = abi.encodePacked(bestForks[index],notarizations.hashOfNotarization, 
+        bestForks[index] = abi.encodePacked(notarizations.hashOfNotarization, 
                                             notarizations.txid,
-                                            notarizations.n,
-                                            notarizations.proposerPosition,
-                                            notarizations.forkIndex);
+                                            notarizations.stateroot,
+                                            notarizations.proposerPacked);
     }
 
-    function encodeStandardNotarization(VerusObjectsNotarization.NotarizationForks[] memory notarizations)private  {
+    function encodeStandardNotarization(VerusObjectsNotarization.NotarizationForks memory firstNotarization, bytes memory secondNotarization)private  {
         
-        bestForks[0] = abi.encodePacked(notarizations[1].hashOfNotarization, 
-                                            notarizations[1].txid,
-                                            notarizations[1].n,
-                                            notarizations[1].proposerPosition,
-                                            notarizations[1].forkIndex,
-                                            notarizations[2].hashOfNotarization, 
-                                            notarizations[2].txid,
-                                            notarizations[2].n,
-                                            notarizations[2].proposerPosition,
-                                            notarizations[2].forkIndex);
+        bestForks[0] = abi.encodePacked(firstNotarization.hashOfNotarization, 
+                                            firstNotarization.txid,
+                                            firstNotarization.stateroot,
+                                            firstNotarization.proposerPacked,
+                                            secondNotarization);
 
     }
 
-    function setNotarizationProofRoot(bytes memory serializedNotarization, bytes32 hashedNotarization, 
-            bytes32 hashprevnotarization, bytes32 txidHash, uint32 voutnum, bytes32 hashprevtxid, uint64 proposerPosition) private 
+    function setNotarizationProofRoot(bytes32 hashedNotarization, 
+            bytes32 hashprevnotarization, bytes32 txidHash, uint32 voutnum, bytes32 hashprevtxid, bytes32 proposer, bytes32 stateRoot) private 
     {
         
         int forkIdx = -1;
@@ -229,6 +225,7 @@ contract VerusNotarizer {
         for (int i = 0; i < int(bestForks.length) ; i++) 
         {
             notarizations =  decodeNotarization(uint(i));
+            // Notarization length alway +1 more as slot ready to be filled.
             for (int j = int(notarizations.length) - 2; j >= 0; j--)
             {
                 if (hashprevnotarization == notarizations[uint(j)].hashOfNotarization ||
@@ -257,41 +254,32 @@ contract VerusNotarizer {
         if (forkPos != int(notarizations.length) - 2 && bestForks.length != 0)  
         {
             forkIdx = int(bestForks.length);
-            encodeNotarization(uint(forkIdx), notarizations[uint(forkPos)]);
+            encodeNotarization(uint(forkIdx), notarizations[uint(0)]);
         }
 
-        if(forkIdx == 0 && forkPos == 1)
+        // If the position that is matched is the second stored one, then that becomes the new confirmed.
+        if(forkPos == 1)
         {
-            notarizations[notarizations.length - 1] = VerusObjectsNotarization.NotarizationForks(reversebytes32(hashedNotarization), 
-            txidHash, voutnum, proposerPosition, uint32(verusNotarizerStorage.nextNotarizationIndex()));
 
-        }
-        else{
-
-        encodeNotarization(uint(forkIdx), VerusObjectsNotarization.NotarizationForks(reversebytes32(hashedNotarization),
-            txidHash, voutnum, proposerPosition, uint32(verusNotarizerStorage.nextNotarizationIndex())));
-
-        }
-     
-        for (int i = 0; i < int(bestForks.length); i++) 
-        {
-            if(forkIdx != 0 && forkPos != 1 )
-                notarizations = decodeNotarization(uint(i));
-            if (notarizations.length > 2)
+            if (bestForks.length > 1)
             {
-                verusNotarizerStorage.resetNotarization(serializedNotarization, notarizations[1].forkIndex);
-                notarizations[1].forkIndex = 0;
-                notarizations[2].forkIndex = 1;
-                if (bestForks.length != 1)
-                {
-                    delete bestForks;
-                    bestForks.push("");
-                }
-                encodeStandardNotarization(notarizations);
-                return;
+                delete bestForks;
+                bestForks.push("");
             }
-        } 
-        verusNotarizerStorage.setNotarization(serializedNotarization);
+                //pack vout in at the end of the proposer 22 bytes ctransferdest
+                proposer |= bytes32(uint256(voutnum) << 176);
+            encodeStandardNotarization(notarizations[1], abi.encode(reversebytes32(hashedNotarization), 
+                txidHash, stateRoot, proposer));
+            return;
+
+        }
+        else
+        {
+            proposer |= bytes32(uint256(voutnum) << 176);
+            encodeNotarization(uint(forkIdx), VerusObjectsNotarization.NotarizationForks(reversebytes32(hashedNotarization),
+                txidHash, stateRoot, proposer));
+
+        }
     }
 
     function checkunique(address[] memory ids) private
@@ -324,7 +312,6 @@ contract VerusNotarizer {
     function getLastConfirmedVRSCStateRoot() public view returns (bytes32) {
 
         bytes32 stateRoot;
-        uint64 packedPositions;
         bytes32 slotHash;
         bytes storage tempArray = bestForks[0];
         uint32 nextOffset;
@@ -335,10 +322,9 @@ contract VerusNotarizer {
                         slotHash := keccak256(add(tempArray.slot, 32), 32)
                         nextOffset := add(nextOffset, 1)  
                         nextOffset := add(nextOffset, 1)  
-                        packedPositions := shr(160,sload(add(slotHash,nextOffset)))
+                        stateRoot := sload(add(slotHash, nextOffset))
             }
         }
-        stateRoot = verusNotarizerStorage.getLastStateRoot(packedPositions >> 32);
 
         return stateRoot;
     }
@@ -347,6 +333,12 @@ contract VerusNotarizer {
     {
         require(msg.sender == upgradeContract);
         notaryAddressMapping[notarizer] = VerusObjects.notarizer(mainAddress, revokeAddress, state);
+
+    }
+
+    function getNotaryETHAddress(uint number) public view returns (address)
+    {
+        return notaryAddressMapping[notaries[number]].main;
 
     }
 

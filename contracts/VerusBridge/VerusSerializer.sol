@@ -546,12 +546,12 @@ contract VerusSerializer {
 
             nextOffset += 20; //skip feecurrency id always vETH, variint already 1 byte in so 19
 
-            (temporaryRegister1, nextOffset) = readVarint(tempSerialized, nextOffset); //fees read into 'amount' but not used
+            (temporaryRegister1, nextOffset) = readVarint(tempSerialized, nextOffset); //fees read into 'temporaryRegister1' but not used
 
             assembly {
-                nextOffset := add(nextOffset, 1) 
+                nextOffset := add(nextOffset, 1) //move to read the destination type
                 destinationType := mload(add(tempSerialized, nextOffset))
-                nextOffset := add(nextOffset, 1) //skip feecurrency id always vETH
+                nextOffset := add(nextOffset, 1) //move to read destination vector length compactint
             }
 
             (temporaryRegister1, nextOffset) = readCompactSizeLE2(tempSerialized, nextOffset);    // get the length of the destination

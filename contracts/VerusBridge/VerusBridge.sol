@@ -162,7 +162,7 @@ contract VerusBridge {
 
     }
 
-    function sendToVRSC(uint64 LPFees, bool isBRIDGETx) public 
+    function sendToVRSC(uint64 LPFees, bool isBRIDGETx, address sendTo) public 
     {
         require(msg.sender == address(verusBridgeMaster));
 
@@ -172,11 +172,11 @@ contract VerusBridge {
         LPtransfer.version = 1;
         LPtransfer.currencyvalue.currency = isBRIDGETx ? VerusConstants.VEth : VerusConstants.VerusCurrencyId;
         LPtransfer.currencyvalue.amount = amount;
-        LPtransfer.flags = VerusConstants.VALID + VerusConstants.BURN_CHANGE_PRICE; 
+        LPtransfer.flags = sendTo == address(0) ? VerusConstants.VALID + VerusConstants.BURN_CHANGE_PRICE : VerusConstants.VALID; 
         LPtransfer.fees = isBRIDGETx ? VerusConstants.verusvETHTransactionFee : VerusConstants.verusTransactionFee;
         LPtransfer.feecurrencyid = isBRIDGETx ? VerusConstants.VEth : VerusConstants.VerusCurrencyId;
         LPtransfer.destination.destinationtype = VerusConstants.DEST_PKH;
-        LPtransfer.destination.destinationaddress = hex"B26820ee0C9b1276Aac834Cf457026a575dfCe84";
+        LPtransfer.destination.destinationaddress = sendTo == address(0) ? bytes(hex'B26820ee0C9b1276Aac834Cf457026a575dfCe84') : abi.encodePacked(sendTo);
         LPtransfer.destcurrencyid = VerusConstants.VerusBridgeAddress;
         LPtransfer.destsystemid = address(0);
         LPtransfer.secondreserveid = address(0);
@@ -204,7 +204,7 @@ contract VerusBridge {
         return txidList;
     }
 
-    function _createImports(VerusObjects.CReserveTransferImport calldata _import, address bridgeKeeper) public returns(bool) {
+    function _createImports(VerusObjects.CReserveTransferImport calldata _import, uint176 bridgeKeeper) public returns(bool) {
         
         // prove MMR
         require(msg.sender == address(verusBridgeMaster));
@@ -250,9 +250,9 @@ contract VerusBridge {
         verusBridgeMaster.sendEth(tokenManager.processTransactions(_import.serializedTransfers, uint8(CCEHeightsAndnIndex >> 96)));
 
         
-        if(address(uint160(rewardDestinationPlusFees)) != address(0) && rewardDestinationPlusFees >> 160 != 0)
+        if(address(uint160(rewardDestinationPlusFees)) != address(0) && rewardDestinationPlusFees >> 176 != 0)
         {
-           verusBridgeMaster.setClaimableFees(address(uint160(rewardDestinationPlusFees)), rewardDestinationPlusFees >> 160, bridgeKeeper);
+           verusBridgeMaster.setClaimableFees(bytes32(uint256(uint176(rewardDestinationPlusFees))), rewardDestinationPlusFees >> 176, bridgeKeeper);
         }
         return true;
     }

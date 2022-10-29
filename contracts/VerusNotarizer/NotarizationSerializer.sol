@@ -51,12 +51,9 @@ contract NotarizationSerializer {
         revert(); // i=10, invalid varint stream
     }
 
-    function deserilizeNotarization(bytes memory notarization) public view returns (uint64, bytes32, bytes32) {
+    function deserilizeNotarization(bytes memory notarization) public view returns (bytes32 proposerAndLaunched, bytes32 prevnotarizationtxid, bytes32 hashprevcrossnotarization, bytes32 stateRoot ) {
         uint32 nextOffset;
         uint64 packedPositions; // first 16bits proposer position, 2nd 16bits bridgelaunched 1 bit in 16bit uint, 3rd 16bits stateroot position
-        bytes32 prevnotarizationtxid;
-        bytes32 hashprevcrossnotarization; 
-        uint32 staterootposition;
         uint16 bridgeLaunched;
 
         VerusObjectsCommon.UintReader memory readerLen;
@@ -67,8 +64,8 @@ contract NotarizationSerializer {
         nextOffset = readerLen.offset;
         packedPositions = nextOffset + 22;  //set proposer byte position
         assembly {
-                    nextOffset := add(nextOffset, 22) // CHECK: skip proposer type??
-                  //  proposer := mload(add(notarization, nextOffset))      // proposer 
+                    nextOffset := add(nextOffset, 22) // CHECK: skip proposer type and vector length
+                    proposerAndLaunched := and(mload(add(nextOffset, notarization)), 0x00000000000000000000ffffffffffffffffffffffffffffffffffffffffffff)   // type+len+proposer 22bytes
                  }
 
         (, nextOffset) = deserializeCoinbaseCurrencyState(notarization, nextOffset);
@@ -95,16 +92,13 @@ contract NotarizationSerializer {
             bridgeLaunched = temp | bridgeLaunched;
         }
 
-        packedPositions |= uint64(bridgeLaunched << 16);
+        proposerAndLaunched |= bytes32(uint256(bridgeLaunched << 176));  // Shift 16bit value 22 bytes to pack in bytes32
 
         nextOffset++; //move forwards to read le
         readerLen = verusSerializer.readCompactSizeLE(notarization, nextOffset);    // get the length of proofroot array
 
-        staterootposition = deserializeProofRoots(notarization, uint32(readerLen.value), nextOffset);
+        stateRoot = deserializeProofRoots(notarization, uint32(readerLen.value), nextOffset);
 
-        packedPositions |= (uint64(staterootposition) << 32);
-
-        return (packedPositions, prevnotarizationtxid, hashprevcrossnotarization);
     }
 
     function deserializeCoinbaseCurrencyState(bytes memory notarization, uint32 nextOffset) private view returns (uint16, uint32)
@@ -151,13 +145,13 @@ contract NotarizationSerializer {
         return (bridgeLaunched, nextOffset);
     }
 
-    function deserializeProofRoots (bytes memory notarization, uint32 size, uint32 nextOffset) private pure returns (uint32 outputPosition)
+    function deserializeProofRoots (bytes memory notarization, uint32 size, uint32 nextOffset) private pure returns (bytes32 stateRoot)
     {
         for (uint i = 0; i < size; i++)
         {
             uint16 proofType;
             address systemID;
-           // bytes32 tempStateRoot;
+            bytes32 tempStateRoot;
             assembly {
                 nextOffset := add(nextOffset, CURRENCY_LENGTH) // skip systemid
                 nextOffset := add(nextOffset, 2) // skip version
@@ -167,12 +161,12 @@ contract NotarizationSerializer {
                 systemID := mload(add(notarization, nextOffset))  
                 nextOffset := add(nextOffset, 4) // skip height
                 nextOffset := add(nextOffset, BYTES32_LENGTH) // move to read stateroot
-                //tempStateRoot := mload(add(notarization, nextOffset))  
+                tempStateRoot := mload(add(notarization, nextOffset))  
                 nextOffset := add(nextOffset, TWO2BYTES32_LENGTH) // skip blockhash + power
             }
             if(systemID == VerusConstants.VerusCurrencyId)
             {
-                outputPosition = nextOffset - TWO2BYTES32_LENGTH;
+                stateRoot = tempStateRoot;
             }
             if((proofType >> 8) == 2){
                 assembly {

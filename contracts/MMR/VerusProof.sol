@@ -202,7 +202,7 @@ contract VerusProof {
         bytes32 hashReserveTransfers;
         address systemSourceID;
         address destSystemID;
-        address exporter;
+        uint176 exporter;
         uint64 rewardFees;
         uint32 tempRegister;
         uint8 feeVectorSize;
@@ -242,9 +242,9 @@ contract VerusProof {
                 rewardFees := mload(add(firstObj, nextOffset))    
             }
                 // packed uint64 and uint160 into a uint256 for efficiency (fees and address)
-                rewardAddressPlusFees = uint256(uint160(exporter));
+                rewardAddressPlusFees = uint256(exporter);
                 rewardFees = verusSerializer.serializeUint64(rewardFees);
-                rewardAddressPlusFees |= uint256(rewardFees) << 160;
+                rewardAddressPlusFees |= uint256(rewardFees) << 176;
         }
 
         if (!(hashedTransfers == hashReserveTransfers &&
