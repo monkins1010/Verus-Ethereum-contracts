@@ -177,7 +177,7 @@ contract VerusBridgeMaster {
         setClaimedFees(bytes32(uint256(notary)), notaryFees);
     }
 
-    function claimfees() public returns (bool) 
+    function claimfees() public
     {
         uint256 claimAmount;
         uint256 claiment;
@@ -195,15 +195,21 @@ contract VerusBridgeMaster {
             subtractFromEthHeld(claimAmount * VerusConstants.SATS_TO_WEI_STD);
             claimableFees[bytes32(claiment)] = 0;
         }
-
-        return false;
+        else
+        {
+            revert("No fees avaiable");
+        }
 
     }
 
-    function sendfees(bytes memory pubKey) public 
+    function sendfees(bytes32 publicKeyX, bytes32 publicKeyY) public 
     {
-        address rAddress = address(ripemd160(abi.encodePacked(sha256(pubKey))));
-        address ethAddress = address(uint160(uint256(keccak256(pubKey))));
+        uint8 leadingByte;
+
+        leadingByte = (uint256(publicKeyY) & 1) == 1 ? 0x03 : 0x02;
+
+        address rAddress = address(ripemd160(abi.encodePacked(sha256(abi.encodePacked(leadingByte, publicKeyX)))));
+        address ethAddress = address(uint160(uint256(keccak256(abi.encodePacked(publicKeyX, publicKeyY)))));
 
         uint256 claiment; 
 
