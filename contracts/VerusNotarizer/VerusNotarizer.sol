@@ -75,6 +75,8 @@ contract VerusNotarizer {
     function setLatestData(bytes calldata serializedNotarization, bytes32 txid, uint32 n, bytes calldata data
         ) public returns(bool) {
 
+        require(msg.sender == address(verusBridgeMaster), "SLD");
+
        ( uint8[] memory _vs,
         bytes32[] memory _rs,
         bytes32[] memory _ss,
@@ -84,7 +86,7 @@ contract VerusNotarizer {
         bytes32 keccakNotarizationHash;
         bytes32 txidHash;
         
-        txidHash = keccak256(abi.encodePacked(reversebytes32(txid), verusSerializer.serializeUint32(n)));
+        txidHash = keccak256(abi.encodePacked(txid, verusSerializer.serializeUint32(n)));
 
         keccakNotarizationHash = keccak256(serializedNotarization);
 
@@ -257,28 +259,25 @@ contract VerusNotarizer {
             encodeNotarization(uint(forkIdx), notarizations[uint(0)]);
         }
 
+        proposer |= bytes32(uint256(voutnum) << 192);
+
         // If the position that is matched is the second stored one, then that becomes the new confirmed.
         if(forkPos == 1)
         {
-
             if (bestForks.length > 1)
             {
                 delete bestForks;
                 bestForks.push("");
             }
-                //pack vout in at the end of the proposer 22 bytes ctransferdest
-                proposer |= bytes32(uint256(voutnum) << 176);
-            encodeStandardNotarization(notarizations[1], abi.encode(reversebytes32(hashedNotarization), 
+            
+            //pack vout in at the end of the proposer 22 bytes ctransferdest
+            encodeStandardNotarization(notarizations[1], abi.encode(hashedNotarization, 
                 txidHash, stateRoot, proposer));
-            return;
-
         }
         else
         {
-            proposer |= bytes32(uint256(voutnum) << 176);
-            encodeNotarization(uint(forkIdx), VerusObjectsNotarization.NotarizationForks(reversebytes32(hashedNotarization),
+            encodeNotarization(uint(forkIdx), VerusObjectsNotarization.NotarizationForks(hashedNotarization,
                 txidHash, stateRoot, proposer));
-
         }
     }
 
@@ -293,20 +292,6 @@ contract VerusNotarizer {
     function recoverSigner(bytes32 _h, uint8 _v, bytes32 _r, bytes32 _s) private pure returns (address) {
 
         return ecrecover(_h, _v, _r, _s);
-    }
-
-    function getLastConfirmedNotarizationHash() public view returns (bytes32)
-    {
-        bytes memory input = bestForks[0];
-        bytes32 hashOfNotarization;
-
-        if (input.length > 0)
-        {
-            assembly {
-                        hashOfNotarization := mload(add(input, 32))
-            }
-        }
-        return reversebytes32(hashOfNotarization);
     }
 
     function getLastConfirmedVRSCStateRoot() public view returns (bytes32) {
@@ -342,31 +327,6 @@ contract VerusNotarizer {
 
     }
 
-    function reversebytes32(bytes32 input) private pure returns (bytes32) {
 
-        uint256 v;
-        v = uint256(input);
-    
-        // swap bytes
-        v = ((v & 0xFF00FF00FF00FF00FF00FF00FF00FF00FF00FF00FF00FF00FF00FF00FF00FF00) >> 8) |
-            ((v & 0x00FF00FF00FF00FF00FF00FF00FF00FF00FF00FF00FF00FF00FF00FF00FF00FF) << 8);
-    
-        // swap 2-byte long pairs
-        v = ((v & 0xFFFF0000FFFF0000FFFF0000FFFF0000FFFF0000FFFF0000FFFF0000FFFF0000) >> 16) |
-            ((v & 0x0000FFFF0000FFFF0000FFFF0000FFFF0000FFFF0000FFFF0000FFFF0000FFFF) << 16);
-    
-        // swap 4-byte long pairs
-        v = ((v & 0xFFFFFFFF00000000FFFFFFFF00000000FFFFFFFF00000000FFFFFFFF00000000) >> 32) |
-            ((v & 0x00000000FFFFFFFF00000000FFFFFFFF00000000FFFFFFFF00000000FFFFFFFF) << 32);
-    
-        // swap 8-byte long pairs
-        v = ((v & 0xFFFFFFFFFFFFFFFF0000000000000000FFFFFFFFFFFFFFFF0000000000000000) >> 64) |
-            ((v & 0x0000000000000000FFFFFFFFFFFFFFFF0000000000000000FFFFFFFFFFFFFFFF) << 64);
-    
-        // swap 16-byte long pairs
-        v = (v >> 128) | (v << 128);
-        
-        return bytes32(v);
-    }
 
 }

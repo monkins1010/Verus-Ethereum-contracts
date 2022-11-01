@@ -52,8 +52,8 @@ contract NotarizationSerializer {
     }
 
     function deserilizeNotarization(bytes memory notarization) public view returns (bytes32 proposerAndLaunched, bytes32 prevnotarizationtxid, bytes32 hashprevcrossnotarization, bytes32 stateRoot ) {
+        
         uint32 nextOffset;
-        uint64 packedPositions; // first 16bits proposer position, 2nd 16bits bridgelaunched 1 bit in 16bit uint, 3rd 16bits stateroot position
         uint16 bridgeLaunched;
 
         VerusObjectsCommon.UintReader memory readerLen;
@@ -62,10 +62,11 @@ contract NotarizationSerializer {
         readerLen = readVarintStruct(notarization, readerLen.offset);        // get the length of the flags
 
         nextOffset = readerLen.offset;
-        packedPositions = nextOffset + 22;  //set proposer byte position
+
         assembly {
                     nextOffset := add(nextOffset, 22) // CHECK: skip proposer type and vector length
                     proposerAndLaunched := and(mload(add(nextOffset, notarization)), 0x00000000000000000000ffffffffffffffffffffffffffffffffffffffffffff)   // type+len+proposer 22bytes
+                    nextOffset := add(nextOffset, CURRENCY_LENGTH) //skip currencyid
                  }
 
         (, nextOffset) = deserializeCoinbaseCurrencyState(notarization, nextOffset);
@@ -109,11 +110,11 @@ contract NotarizationSerializer {
         uint16 flags;
         
         assembly {
-            nextOffset := add(nextOffset, CURRENCY_LENGTH) // skip currencyid
-            currencyid := mload(add(notarization, nextOffset))      // currencyid 
             nextOffset := add(nextOffset, 2) // skip version
             nextOffset := add(nextOffset, 2) // move to flags
             flags := mload(add(notarization, nextOffset))      // flags 
+            nextOffset := add(nextOffset, CURRENCY_LENGTH) //skip notarization currencystatecurrencyid
+            currencyid := mload(add(notarization, nextOffset))      // currencyid 
         }
         flags = (flags >> 8) | (flags << 8);
         if ((currencyid == VerusConstants.VerusBridgeAddress) && flags & (FLAG_FRACTIONAL + FLAG_REFUNDING + FLAG_LAUNCHCONFIRMED + FLAG_LAUNCHCOMPLETEMARKER) == 
@@ -122,7 +123,7 @@ contract NotarizationSerializer {
             bridgeLaunched = 1;
         }
         assembly {                    
-                    nextOffset := add(nextOffset, CURRENCY_LENGTH) //skip notarization currencystatecurrencyid
+                    
                     nextOffset := add(nextOffset, 1) // move to  read currency state length
         }
         VerusObjectsCommon.UintReader memory readerLen;
@@ -153,7 +154,6 @@ contract NotarizationSerializer {
             address systemID;
             bytes32 tempStateRoot;
             assembly {
-                nextOffset := add(nextOffset, CURRENCY_LENGTH) // skip systemid
                 nextOffset := add(nextOffset, 2) // skip version
                 nextOffset := add(nextOffset, 2) // move to read type
                 proofType := mload(add(notarization, nextOffset))      // proofType 
@@ -164,11 +164,14 @@ contract NotarizationSerializer {
                 tempStateRoot := mload(add(notarization, nextOffset))  
                 nextOffset := add(nextOffset, TWO2BYTES32_LENGTH) // skip blockhash + power
             }
+            
             if(systemID == VerusConstants.VerusCurrencyId)
             {
                 stateRoot = tempStateRoot;
             }
-            if((proofType >> 8) == 2){
+
+            //swap 16bit endian
+            if(((proofType >> 8) | (proofType << 8)) == 2){
                 assembly {
                 nextOffset := add(nextOffset, 8) // skip gasprice
                 }
