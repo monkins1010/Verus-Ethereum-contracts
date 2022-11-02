@@ -381,23 +381,6 @@ contract VerusSerializer {
         return inProgress;
     }
 
-    function serializeCPBaaSNotarization(VerusObjectsNotarization.CPBaaSNotarization calldata _not) public pure returns(bytes memory){
-        return abi.encodePacked(
-            writeVarInt(_not.version),
-            writeVarInt(_not.flags),
-            serializeCTransferDestination(_not.proposer),
-            _not.currencyid,
-            serializeCCoinbaseCurrencyState(_not.currencystate),
-            serializeUint32(_not.notarizationheight),
-            serializeCUTXORef(_not.prevnotarization),
-            serializeBytes32(_not.hashprevnotarization),
-            serializeUint32(_not.prevheight),
-            serializeCurrencyStatesArray(_not.currencystates),
-            serializeCProofRootArray(_not.proofroots),
-            serializeNodes(_not.nodes)
-        );
-    }
-
     function notarizationBlakeHash(bytes calldata _not) public view returns (bytes32)
     {
         return _not.createHash();

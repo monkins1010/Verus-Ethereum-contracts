@@ -130,7 +130,7 @@ contract VerusNotarizer {
             return 0;
         }
 
-        return blockheights[0];        
+        return uint16(blockheights[0]);
 
     }
 

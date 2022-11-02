@@ -145,16 +145,6 @@ contract TokenManager {
         return string(bLower);
     }
 
-    function getIAddress(VerusObjects.CcurrencyDefinition memory _ccd) public pure returns (address){
-
-        if(_ccd.parent == address(0)) {
-            return address(ripemd160(abi.encodePacked(sha256(abi.encodePacked(sha256d(_toLower(_ccd.name)))))));
-        }
-        else {
-            return address(ripemd160(abi.encodePacked(sha256(abi.encodePacked(sha256d(abi.encodePacked(_ccd.parent,sha256d(_toLower(_ccd.name)))))))));
-        }
-    }
-
     function getName(address cont) public view returns (string memory)
     {
         return ERC20(cont).name();

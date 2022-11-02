@@ -67,21 +67,6 @@ library VerusObjects {
         CReserveTransfer[] transfers;
     }
 
-    struct LastImport {
-        uint height;
-        bytes32 txid;                                   // this is actually the hash of the transfers that can be used for proof
-    }
-
-    struct SimpleTransfer {
-        address currency;
-        uint64 currencyvalue;
-        uint32 flags;
-        uint256 fees;
-        bytes destination;
-        uint8 destinationType;
-
-    }
-
     struct PackedSend {
         uint256 currencyAndAmount;    //tokenID
         uint256 destinationAndFlags;  //iaddress + flags or name and flags
@@ -92,11 +77,6 @@ library VerusObjects {
         uint256 tokenID;    
         address ERCContract;  //erc address
         address iaddress;
-    }
-
-    struct Buffer {
-        uint256 idx;  // the start index of next read. when idx=b.length, we're done
-        bytes b;   // hold serialized data readonly
     }
 
     struct ETHPayments {
@@ -125,14 +105,6 @@ library VerusObjects {
         VerusObjectsCommon.CTransferDestination rewardaddress; //reward address
         int32 firstinput;
     }
-
-    struct CcurrencyDefinition {
-         address parent;
-         string name;
-         address launchSystemID;
-         address systemID;
-         address nativeCurrencyID;
-     }
 
     struct CMerkleBranch {
         uint8  CMerkleBranchBase;
@@ -182,7 +154,7 @@ library VerusObjects {
     struct upgradeInfo {
         uint8 _vs;
         bytes32 _rs;
-        bytes32  _ss;
+        bytes32 _ss;
         address[] contracts;
         uint8 upgradeType;
         bytes32 salt;
