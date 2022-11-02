@@ -93,7 +93,7 @@ contract NotarizationSerializer {
             bridgeLaunched = temp | bridgeLaunched;
         }
 
-        proposerAndLaunched |= bytes32(uint256(bridgeLaunched << 176));  // Shift 16bit value 22 bytes to pack in bytes32
+        proposerAndLaunched |= bytes32(uint256(bridgeLaunched) << 176);  // Shift 16bit value 22 bytes to pack in bytes32
 
         nextOffset++; //move forwards to read le
         readerLen = verusSerializer.readCompactSizeLE(notarization, nextOffset);    // get the length of proofroot array

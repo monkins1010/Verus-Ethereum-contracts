@@ -30,6 +30,7 @@ contract VerusNotarizer {
     // list of all notarizers mapped to allow for quick searching
     mapping (address => VerusObjects.notarizer ) public notaryAddressMapping;
     mapping (address => uint) sigCheck;
+    mapping (bytes32 => bool) knownNotarizationTxids;
 
     address[] public notaries;
 
@@ -73,9 +74,11 @@ contract VerusNotarizer {
     }
  
     function setLatestData(bytes calldata serializedNotarization, bytes32 txid, uint32 n, bytes calldata data
-        ) public returns(bool) {
+        ) public returns(uint16) {
 
         require(msg.sender == address(verusBridgeMaster), "SLD");
+        require(!knownNotarizationTxids[txid], "known TXID");
+        knownNotarizationTxids[txid] = true;
 
        ( uint8[] memory _vs,
         bytes32[] memory _rs,
@@ -124,10 +127,10 @@ contract VerusNotarizer {
 
         if(validSignatures < ((notaries.length >> 1) + 1 ))
         {
-            return false;
+            return 0;
         }
 
-        return true;        
+        return blockheights[0];        
 
     }
 
@@ -141,7 +144,7 @@ contract VerusNotarizer {
         
         (bytes32 launchedAndProposer, bytes32 prevnotarizationtxid, bytes32 hashprevnotarization, bytes32 stateRoot) = notarizationSerializer.deserilizeNotarization(serializedNotarization);
 
-        if (!poolAvailable && ((uint256(launchedAndProposer >> 176) & 0xff) == 1)) { //shift to read if bridge launched in packed uint256
+        if (!poolAvailable && (((uint256(launchedAndProposer) >> 176) & 0xff) == 1)) { //shift to read if bridge launched in packed uint256
             verusNotarizerStorage.setPoolAvailable();
             poolAvailable = true;
             verusBridgeMaster.sendVRSC();
@@ -163,13 +166,14 @@ contract VerusNotarizer {
             bytes32 txid;
             bytes32 stateRoot;
             bytes32 packedPositions;
-           // uint32 forkIndex;
             bytes32 slotHash;
             VerusObjectsNotarization.NotarizationForks[] memory retval = new VerusObjectsNotarization.NotarizationForks[]((tempArray.length / 128) + 1);
             if (tempArray.length > 1)
             {
+                bytes32 slot;
                 assembly {
-                            slotHash := keccak256(add(tempArray.slot, 32), 32)
+                            mstore(add(slot, 32),tempArray.slot)
+                            slotHash := keccak256(add(slot, 32), 32)
                          }
 
                 for (int i = 0; i < int(tempArray.length / 128); i++) 
@@ -185,8 +189,6 @@ contract VerusNotarizer {
                         nextOffset := add(nextOffset, 1)
                     }
 
-                  //  forkIndex = (packedPositions >> 176) & 0xffffffff;
-
                     retval[uint(i)] =  VerusObjectsNotarization.NotarizationForks(hashOfNotarization, txid, stateRoot, packedPositions);
                 }
             }
@@ -200,7 +202,7 @@ contract VerusNotarizer {
             bestForks.push("");  //initialize empty bytes array
         }
 
-        bestForks[index] = abi.encodePacked(notarizations.hashOfNotarization, 
+        bestForks[index] = abi.encodePacked(bestForks[index], notarizations.hashOfNotarization, 
                                             notarizations.txid,
                                             notarizations.stateroot,
                                             notarizations.proposerPacked);
@@ -259,6 +261,7 @@ contract VerusNotarizer {
             encodeNotarization(uint(forkIdx), notarizations[uint(0)]);
         }
 
+        // Pack the voutnum in the bytes32 variable after the CReserveDestination 22 bytes and bridge launched 2 bytes
         proposer |= bytes32(uint256(voutnum) << 192);
 
         // If the position that is matched is the second stored one, then that becomes the new confirmed.
@@ -303,8 +306,10 @@ contract VerusNotarizer {
 
         if (tempArray.length > 0)
         {
+            bytes32 slot;
             assembly {
-                        slotHash := keccak256(add(tempArray.slot, 32), 32)
+                        mstore(add(slot, 32),tempArray.slot)
+                        slotHash := keccak256(add(slot, 32), 32)
                         nextOffset := add(nextOffset, 1)  
                         nextOffset := add(nextOffset, 1)  
                         stateRoot := sload(add(slotHash, nextOffset))

@@ -76,7 +76,10 @@ contract VerusBridgeMaster {
     function setLatestData(bytes calldata serializedNotarization, bytes32 txid, uint32 n, bytes memory data) public 
     {
 
-        require(verusNotarizer.setLatestData(serializedNotarization, txid, n, data), "not enough notary signatures");
+        uint16 notaryHeight = verusNotarizer.setLatestData(serializedNotarization, txid, n, data);
+        require(notaryHeight > 0, "not enough notary signatures");
+
+        n |= uint32(notaryHeight) << 16;
 
         verusNotarizer.checkNotarization(serializedNotarization, txid, n);
 
