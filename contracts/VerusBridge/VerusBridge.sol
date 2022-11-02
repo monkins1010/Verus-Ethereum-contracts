@@ -186,24 +186,6 @@ contract VerusBridge {
 
     }
 
-    /***
-     * Import from Verus functions
-     ***/
-    function checkImports(bytes32[] memory _imports) public view returns(bytes32[] memory) {
-        //loop through the transfers and return a list of unprocessed
-        bytes32[] memory txidList = new bytes32[](_imports.length);
-        uint iterator;
-        for(uint i = 0; i < _imports.length; i++)
-        {
-            if(verusBridgeStorage.processedTxids(_imports[i]) != true)
-            {
-                txidList[iterator] = _imports[i];
-                iterator++;
-            }
-        }
-        return txidList;
-    }
-
     function _createImports(VerusObjects.CReserveTransferImport calldata _import, uint176 bridgeKeeper) public returns(bool) {
         
         // prove MMR
@@ -258,7 +240,7 @@ contract VerusBridge {
     }
     
     function getReadyExportsByRange(uint _startBlock,uint _endBlock) public view returns(VerusObjects.CReserveTransferSet[] memory returnedExports){
-        //calculate the size that the return array will be to initialise it
+    
         uint outputSize = 0;
         if (_startBlock < firstBlock) 
         {
@@ -282,6 +264,5 @@ contract VerusBridge {
         }
         return output;      
     }
-
 
 }

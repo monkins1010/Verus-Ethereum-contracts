@@ -118,40 +118,15 @@ contract TokenManager {
         }
     }
 
-    function sha256d(bytes32 _bytes) internal pure returns (bytes32) {
-        return sha256(abi.encodePacked(sha256(abi.encodePacked(_bytes))));
-    }
-
-    function sha256d(string memory _string) internal pure returns (bytes32) {
-        return sha256(abi.encodePacked(sha256(abi.encodePacked(_string))));
-    }
-
-    function sha256d(bytes memory _bytes) internal pure returns (bytes32) {
-        return sha256(abi.encodePacked(sha256(abi.encodePacked(_bytes))));
-    }
-
-    function _toLower(string memory str) internal pure returns (string memory) {
-        bytes memory bStr = bytes(str);
-        bytes memory bLower = new bytes(bStr.length);
-        for (uint256 i = 0; i < bStr.length; i++) {
-            // Uppercase character...
-            if ((uint8(bStr[i]) >= 65) && (uint8(bStr[i]) <= 90)) {
-                // So we add 32 to make it lowercase
-                bLower[i] = bytes1(uint8(bStr[i]) + 32);
-            } else {
-                bLower[i] = bStr[i];
-            }
-        }
-        return string(bLower);
-    }
-
     function getName(address cont) public view returns (string memory)
     {
+        // Wrapper functions to enable try catch to work
         return ERC20(cont).name();
     }
 
     function getNFTName(address cont) public view returns (string memory)
     {
+        // Wrapper functions to enable try catch to work
         return ERC721(cont).name();
     }
 
@@ -171,8 +146,6 @@ contract TokenManager {
             {
                 name[i] = bytes1(uint8(_tx[j].nameAndFlags >> ((i+1) * 8)));
             }
-
-            //TODO: decide here whether, A) token ETH mapped using native B) verus token minted to new ERC20, c)NFT eth mapped d) NFT minted from tokenized ID.
 
             if (uint8(_tx[j].nameAndFlags >> 160) == VerusConstants.MAPPING_ETHEREUM_OWNED + VerusConstants.TOKEN_LAUNCH)
             {
@@ -217,7 +190,6 @@ contract TokenManager {
                 tokensToDeploy[i].ticker,
                 tokensToDeploy[i].flags,
                 uint256(0)
-
             );
         }
     }
@@ -291,7 +263,7 @@ contract TokenManager {
     function processTransactions(bytes calldata serializedTransfers, uint8 numberOfTransfers) 
                 public returns (VerusObjects.ETHPayments[] memory)
     {
-        require(msg.sender == verusBridge,"proctx's:vb_only" );
+        require(msg.sender == verusBridge, "pt:vb_only");
         VerusObjects.PackedSend[] memory transfers;
         VerusObjects.PackedCurrencyLaunch[] memory launchTxs;
         uint32 counter;
@@ -331,8 +303,7 @@ contract TokenManager {
             launchToken(launchTxs);
         }
 
-        //return ETH and addresses to be sent to + total payments
+        //return ETH and addresses to be sent ETH to + payment details
         return payments;
-
     }
 }

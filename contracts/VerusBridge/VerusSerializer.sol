@@ -18,27 +18,6 @@ contract VerusSerializer {
     int16 constant TYPE_ETHEREUM = 2;
     using VerusBlake2b for bytes;
 
-    function readVarUintLE(bytes memory incoming, uint32 offset) public pure returns(VerusObjectsCommon.UintReader memory) {
-        uint32 retVal = 0;
-        while (true)
-        {
-            uint8 oneByte;
-            assembly {
-                oneByte := mload(add(incoming, offset))
-            }
-            retVal += (uint32)(oneByte & 0x7f) << (offset * 7);
-            offset++;
-            if (oneByte <= 0x7f)
-            {
-                break;
-            }
-        }
-        return VerusObjectsCommon.UintReader(offset, retVal);
-    }
-
-    // uses the encoding from Bitcoin script pushes
-    // this does not support numbers larger than uint16, and if it encounters one or any invalid data, it returns a value of 
-    // zero and the original offset
     function readCompactSizeLE(bytes memory incoming, uint32 offset) public pure returns(VerusObjectsCommon.UintReader memory) {
 
         uint8 oneByte;
@@ -76,7 +55,6 @@ contract VerusSerializer {
         }
         return output;
     }
-
    
     function writeCompactSize(uint newNumber) public pure returns(bytes memory) {
         bytes memory output;
@@ -98,47 +76,9 @@ contract VerusSerializer {
         }
         return output;
     }
-
-  
+ 
     //serialize functions
-    
-    function serializeString(string memory anyString) public pure returns(bytes memory){
-        //naturally BigEndian
-        bytes memory be;
-        be = abi.encodePacked(anyString);
-        return abi.encodePacked(writeCompactSize(be.length),anyString);
-        //return abi.encodePacked(anyString);
-    }
 
-
-    function serializeBytes32(bytes32 anyBytes32) public pure returns(bytes32){
-        //naturally BigEndian
-        uint256 v;
-        v = uint256(anyBytes32);
-    
-        // swap bytes
-        v = ((v & 0xFF00FF00FF00FF00FF00FF00FF00FF00FF00FF00FF00FF00FF00FF00FF00FF00) >> 8) |
-            ((v & 0x00FF00FF00FF00FF00FF00FF00FF00FF00FF00FF00FF00FF00FF00FF00FF00FF) << 8);
-    
-        // swap 2-byte long pairs
-        v = ((v & 0xFFFF0000FFFF0000FFFF0000FFFF0000FFFF0000FFFF0000FFFF0000FFFF0000) >> 16) |
-            ((v & 0x0000FFFF0000FFFF0000FFFF0000FFFF0000FFFF0000FFFF0000FFFF0000FFFF) << 16);
-    
-        // swap 4-byte long pairs
-        v = ((v & 0xFFFFFFFF00000000FFFFFFFF00000000FFFFFFFF00000000FFFFFFFF00000000) >> 32) |
-            ((v & 0x00000000FFFFFFFF00000000FFFFFFFF00000000FFFFFFFF00000000FFFFFFFF) << 32);
-    
-        // swap 8-byte long pairs
-        v = ((v & 0xFFFFFFFFFFFFFFFF0000000000000000FFFFFFFFFFFFFFFF0000000000000000) >> 64) |
-            ((v & 0x0000000000000000FFFFFFFFFFFFFFFF0000000000000000FFFFFFFFFFFFFFFF) << 64);
-    
-        // swap 16-byte long pairs
-        v = (v >> 128) | (v << 128);
-            
-        return bytes32(v);
-    }
-
-    
     function serializeUint16(uint16 number) public pure returns(uint16){
         number = (number << 8) | (number >> 8) ;
         return number;
@@ -278,132 +218,13 @@ contract VerusSerializer {
         }
         return inProgress;
     }
-
-    function serializeCUTXORef(VerusObjectsNotarization.CUTXORef memory _cutxo) public pure returns(bytes memory){
-        return abi.encodePacked(
-            serializeBytes32(_cutxo.hash),
-            serializeUint32(_cutxo.n)
-        );
-    }
-
-    function serializeCProofRoot(VerusObjectsNotarization.CProofRoot memory _cpr) public pure returns(bytes memory){
-        
-        bytes memory retval;
-
-        retval = abi.encodePacked(
-            _cpr.systemid,
-            serializeInt16(_cpr.version),
-            serializeInt16(_cpr.cprtype),
-            _cpr.systemid,
-            serializeUint32(_cpr.rootheight),
-            serializeBytes32(_cpr.stateroot),
-            serializeBytes32(_cpr.blockhash),
-            serializeBytes32(_cpr.compactpower)
-            );
-
-        if (_cpr.cprtype == TYPE_ETHEREUM)    
-            retval = abi.encodePacked(retval, serializeInt64(_cpr.gasprice));
-
-        return retval;
-    }
-
-    function serializeProofRoots(VerusObjectsNotarization.ProofRoots memory _prs) public pure returns(bytes memory){
-        return abi.encodePacked(
-            _prs.currencyid,
-            serializeCProofRoot(_prs.proofroot)
-        );  
-    }
-
-    function serializeProofRootsArray(VerusObjectsNotarization.ProofRoots[] memory _prsa) public pure returns(bytes memory){
-        bytes memory inProgress;
-        
-        inProgress = writeCompactSize(_prsa.length);
-        for(uint i=0; i < _prsa.length; i++){
-            inProgress = abi.encodePacked(inProgress,serializeProofRoots(_prsa[i]));
-        }
-        return inProgress;
-    }
-    
-    function serializeCProofRootArray(VerusObjectsNotarization.CProofRoot[] memory _prsa) public pure returns(bytes memory){
-        bytes memory inProgress;
-        
-        inProgress = writeCompactSize(_prsa.length);
-        for(uint i=0; i < _prsa.length; i++){
-            inProgress = abi.encodePacked(inProgress,serializeCProofRoot(_prsa[i]));
-        }
-        return inProgress;
-    }
-    
-
-    function serializeCCoinbaseCurrencyState(VerusObjectsNotarization.CCoinbaseCurrencyState memory _cccs) public pure returns(bytes memory){
-        bytes memory part1 = abi.encodePacked(
-            serializeUint16(_cccs.version),
-            serializeUint16(_cccs.flags),
-            _cccs.currencyid,
-            serializeUint160Array(_cccs.currencies),
-            serializeInt32Array(_cccs.weights),
-            serializeInt64Array(_cccs.reserves),
-            writeVarInt(uint64(_cccs.initialsupply)),
-            writeVarInt(uint64(_cccs.emitted)),
-            writeVarInt(uint64(_cccs.supply))
-        );
-        bytes memory part2 = abi.encodePacked(
-            serializeInt64(_cccs.primarycurrencyout),
-            serializeInt64(_cccs.preconvertedout),
-            serializeInt64(_cccs.primarycurrencyfees),
-            serializeInt64(_cccs.primarycurrencyconversionfees),
-            serializeInt64Array(_cccs.reservein),
-            serializeInt64Array(_cccs.primarycurrencyin),
-            serializeInt64Array(_cccs.reserveout),
-            serializeInt64Array(_cccs.conversionprice),
-            serializeInt64Array(_cccs.viaconversionprice),
-            serializeInt64Array(_cccs.fees),
-            serializeInt32Array(_cccs.priorweights),
-            serializeInt64Array(_cccs.conversionfees)
-        );
-        
-        return abi.encodePacked(part1,part2);
-    }
-
-    function serializeCurrencyStates(VerusObjectsNotarization.CurrencyStates memory _cs) public pure returns(bytes memory){
-        return abi.encodePacked(
-            _cs.currencyid,
-            serializeCCoinbaseCurrencyState(_cs.currencystate)
-        );
-    }
-
-    function serializeCurrencyStatesArray(VerusObjectsNotarization.CurrencyStates[] memory _csa) public pure returns(bytes memory){
-        bytes memory inProgress;
-        inProgress = writeCompactSize(_csa.length);
-        for(uint i=0; i < _csa.length; i++){
-            inProgress = abi.encodePacked(inProgress,serializeCurrencyStates(_csa[i]));
-        }
-        return inProgress;
-    }
-
+  
     function notarizationBlakeHash(bytes calldata _not) public view returns (bytes32)
     {
         return _not.createHash();
 
     }
     
-    function serializeNodes(VerusObjectsNotarization.CNodeData[] memory _cnds) public pure returns(bytes memory){
-        bytes memory inProgress;
-        inProgress = writeCompactSize(_cnds.length);
-        for(uint i=0; i < _cnds.length; i++){
-            inProgress = abi.encodePacked(inProgress,serializeCNodeData(_cnds[i]));
-        }
-        return inProgress;
-    }
-
-    function serializeCNodeData(VerusObjectsNotarization.CNodeData memory _cnd) public pure returns(bytes memory){
-        
-        return abi.encodePacked(
-            serializeString(_cnd.networkaddress),
-            _cnd.nodeidentity
-        );
-    }
-
     function serializeCCrossChainExport(VerusObjects.CCrossChainExport memory _ccce) public pure returns(bytes memory){
         bytes memory part1 = abi.encodePacked(
             serializeUint16(_ccce.version),

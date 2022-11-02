@@ -59,11 +59,6 @@ contract VerusProof {
         
     }
 
-    function hashTransfers(VerusObjects.CReserveTransfer[] memory _transfers) public view returns (bytes32){
-        bytes memory sTransfers = verusSerializer.serializeCReserveTransfers(_transfers, false);
-        return keccak256(sTransfers);
-    }
-
     function checkProof(bytes32 hashToProve, VerusObjects.CTXProof[] memory _branches) public view returns(bytes32){
         //loop through the branches from bottom to top
         bytes32 hashInProgress = hashToProve;
@@ -75,7 +70,6 @@ contract VerusProof {
 
     function checkBranch(bytes32 _hashToCheck,VerusObjects.CMerkleBranch memory _branch) public view returns(bytes32){
         
-        require(_branch.nIndex >= 0,"Index cannot be less than 0");
         require(_branch.branch.length > 0,"Branch must be longer than 0");
         uint branchLength = _branch.branch.length;
         bytes32 hashInProgress = _hashToCheck;
@@ -315,33 +309,6 @@ contract VerusProof {
  
     }
 
-    function flipBytes32(bytes32 input) public pure returns (bytes32){
-        return bytes32(reverseuint256(uint256(input)));
-    }
-    
-    function reverseuint256(uint256 input) internal pure returns (uint256 v) {
-        v = input;
-    
-        // swap bytes
-        v = ((v & 0xFF00FF00FF00FF00FF00FF00FF00FF00FF00FF00FF00FF00FF00FF00FF00FF00) >> 8) |
-            ((v & 0x00FF00FF00FF00FF00FF00FF00FF00FF00FF00FF00FF00FF00FF00FF00FF00FF) << 8);
-    
-        // swap 2-byte long pairs
-        v = ((v & 0xFFFF0000FFFF0000FFFF0000FFFF0000FFFF0000FFFF0000FFFF0000FFFF0000) >> 16) |
-            ((v & 0x0000FFFF0000FFFF0000FFFF0000FFFF0000FFFF0000FFFF0000FFFF0000FFFF) << 16);
-    
-        // swap 4-byte long pairs
-        v = ((v & 0xFFFFFFFF00000000FFFFFFFF00000000FFFFFFFF00000000FFFFFFFF00000000) >> 32) |
-            ((v & 0x00000000FFFFFFFF00000000FFFFFFFF00000000FFFFFFFF00000000FFFFFFFF) << 32);
-    
-        // swap 8-byte long pairs
-        v = ((v & 0xFFFFFFFFFFFFFFFF0000000000000000FFFFFFFFFFFFFFFF0000000000000000) >> 64) |
-            ((v & 0x0000000000000000FFFFFFFFFFFFFFFF0000000000000000FFFFFFFFFFFFFFFF) << 64);
-    
-        // swap 16-byte long pairs
-        v = (v >> 128) | (v << 128);
-    }
-    
     function readVarint(bytes memory buf, uint32 idx) public pure returns (uint32 v, uint32 retidx) {
 
         uint8 b; // store current byte content

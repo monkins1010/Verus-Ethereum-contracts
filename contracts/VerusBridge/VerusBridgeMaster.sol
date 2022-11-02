@@ -82,10 +82,7 @@ contract VerusBridgeMaster {
         n |= uint32(notaryHeight) << 16;
 
         verusNotarizer.checkNotarization(serializedNotarization, txid, n);
-
     }
-
-    /** VerusInfo pass through functions **/
 
     function getinfo() public view returns(bytes memory)
     {
@@ -142,7 +139,6 @@ contract VerusBridgeMaster {
         uint256 exporterFees;
         uint256 proposerFees;  
         uint256 bridgekeeperFees;              
-
         uint176 proposer;
         bytes memory proposerBytes = verusNotarizer.bestForks(0);
 
@@ -168,14 +164,12 @@ contract VerusBridgeMaster {
     function setNotaryFees(uint256 notaryFees) public {
         
         uint32 psudorandom = uint32(uint(keccak256(abi.encodePacked(block.difficulty, block.timestamp))));
-
         uint32 notaryTurn = uint32(psudorandom % (verusNotarizer.currentNotariesLength()));
-
         uint176 notary;
 
         notary = uint176(uint160(verusNotarizer.getNotaryETHAddress(notaryTurn)));
 
-        notary |= (uint176(0x0c14) << 160); 
+        notary |= (uint176(0x0c14) << 160);
 
         setClaimedFees(bytes32(uint256(notary)), notaryFees);
     }
@@ -187,7 +181,7 @@ contract VerusBridgeMaster {
 
         claiment = uint256(uint160(msg.sender));
 
-        // Check claiment is type eth with length 20
+        // Check claiment is type eth with length 20 and has fees to be got.
         claiment |= (uint256(0x0c14) << 160);
         claimAmount = claimableFees[bytes32(claiment)];
 

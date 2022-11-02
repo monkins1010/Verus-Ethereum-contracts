@@ -41,7 +41,6 @@ contract VerusBridgeStorage {
         require(msg.sender == upgradeContract);
 
         tokenManager = contracts[uint(VerusConstants.ContractType.TokenManager)];
-
         verusBridge = contracts[uint(VerusConstants.ContractType.VerusBridge)];
     }
 
@@ -81,7 +80,6 @@ contract VerusBridgeStorage {
         _readyExports[_block].transfers.push(reserveTransfer);
 
         return (_readyExports[_block].transfers.length == 1);
-    
     }
 
     function setReadyExportTxid(bytes32 txidhash, bytes32 prevTxidHash, uint _block) public {
@@ -95,7 +93,6 @@ contract VerusBridgeStorage {
             _readyExports[_block].prevExportHash = prevTxidHash;
             lastCCEExportHeight = uint32(_block);
         }
-    
     }
 
     function getCreatedExport(uint createdBlock) public view returns (address) {
@@ -104,24 +101,22 @@ contract VerusBridgeStorage {
             return  _readyExports[createdBlock].transfers[0].destcurrencyid;
         else
             return address(0);
-        
     }
 
     function getERCMapping(address iaddress)public view returns (VerusObjects.mappedToken memory) {
 
         return verusToERC20mapping[iaddress];
-
     }
+
     function RecordTokenmapping(address iaddress, VerusObjects.mappedToken memory mappedToken) public {
 
         require( msg.sender == address(tokenManager));
         tokenList.push(iaddress);
         verusToERC20mapping[iaddress] = mappedToken;
-
     }
 
     function getReadyExports(uint _block) public view
-        returns(VerusObjects.CReserveTransferSet memory){
+        returns(VerusObjects.CReserveTransferSet memory) {
         
         VerusObjects.CReserveTransferSet memory exportSet = _readyExports[_block];
 
@@ -131,7 +126,6 @@ contract VerusBridgeStorage {
     function getTokenListLength() public view returns(uint) {
 
         return tokenList.length;
-
     }
 
     function ERC20Registered(address _iaddress) public view returns (bool) {
@@ -143,13 +137,11 @@ contract VerusBridgeStorage {
     function checkiaddresses(VerusObjects.CReserveTransfer memory transfer) public view {
 
         require(ERC20Registered(transfer.currencyvalue.currency) && 
-        ERC20Registered(transfer.feecurrencyid) &&
-        ERC20Registered(transfer.destcurrencyid) &&
-        (ERC20Registered(transfer.secondreserveid) || 
-        transfer.secondreserveid == address(0)) &&
-        transfer.destsystemid == address(0));
+            ERC20Registered(transfer.feecurrencyid) &&
+            ERC20Registered(transfer.destcurrencyid) &&
+            (ERC20Registered(transfer.secondreserveid) || transfer.secondreserveid == address(0)) &&
+            transfer.destsystemid == address(0));
     }
-
 
     function emitNewToken(string memory name, string memory ticker) public returns (address){
 
@@ -157,12 +149,9 @@ contract VerusBridgeStorage {
         Token t = new Token(name, ticker);   
         // emit TokenCreated(address(t));
         return address(t);
-
     }
 
-    function importTransactions(
-        VerusObjects.PackedSend[] calldata trans) public  
-    {
+    function importTransactions(VerusObjects.PackedSend[] calldata trans) public {
       
         require(address(tokenManager) == msg.sender);
 
@@ -170,6 +159,7 @@ contract VerusBridgeStorage {
         uint32 sendFlags;
         address ERCAddress;
         Token token;
+
         for(uint256 i = 0; i < trans.length; i++)
         {
             ERCflags = verusToERC20mapping[address(uint160(trans[i].currencyAndAmount))].flags;
@@ -199,12 +189,15 @@ contract VerusBridgeStorage {
                         token.transfer(destinationAddress, converted);
                     }
                 }
-            } else if (ERCflags & VerusConstants.TOKEN_ETH_NFT_DEFINITION == VerusConstants.TOKEN_ETH_NFT_DEFINITION)
+            } 
+            else if (ERCflags & VerusConstants.TOKEN_ETH_NFT_DEFINITION == VerusConstants.TOKEN_ETH_NFT_DEFINITION)
             {
                 uint256 tokenID = verusToERC20mapping[address(uint160(trans[i].currencyAndAmount))].tokenID;
-                if(destinationAddress != address(0))
-                    ERC721(ERCAddress).transferFrom(address(this), destinationAddress, tokenID);
 
+                if(destinationAddress != address(0))
+                {
+                    ERC721(ERCAddress).transferFrom(address(this), destinationAddress, tokenID);
+                }
             }
         } 
     }
@@ -235,5 +228,4 @@ contract VerusBridgeStorage {
       
         return c;
     }
-
 }

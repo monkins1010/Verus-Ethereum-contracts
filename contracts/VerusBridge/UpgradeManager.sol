@@ -206,7 +206,6 @@ contract UpgradeManager {
         verusNotarizer.updateNotarizer(_revokePacket.notaryID, address(0), notary.recovery, VerusConstants.NOTARY_REVOKED);
         emit contractUpdated(true);
 
-        //Incase of Notary trying upgrade
         delete pendingContracts;
         delete pendingContractsSignatures;
 
@@ -221,11 +220,9 @@ contract UpgradeManager {
         delete pendingContracts;
         delete pendingContractsSignatures;
         return 2;
-    
     }
 
-    // TODO: change function to be only callable from notaries
-    function checkMultiSigContracts(VerusObjects.upgradeInfo memory _newContractPackage) public returns(bool)
+    function checkMultiSigContracts(VerusObjects.upgradeInfo memory _newContractPackage) private returns(bool)
     {
         bytes memory be; 
 
@@ -278,7 +275,7 @@ contract UpgradeManager {
  
     }
 
-    function bytesToString (bytes memory input) public pure returns (bytes memory output)
+    function bytesToString (bytes memory input) private pure returns (bytes memory output)
     {
         bytes memory _string = new bytes(input.length * 2);
         bytes memory HEX = "0123456789abcdef";
@@ -291,7 +288,7 @@ contract UpgradeManager {
         return _string;
     }
 
-    function setPendingUpgrade(address notaryAddress, uint8 upgradeType) public returns (bool) { //TODO: change to private
+    function setPendingUpgrade(address notaryAddress, uint8 upgradeType) private returns (bool) { //TODO: change to private
   
         // build the pending upgrade array until it is complete with enough signatures.
         if(pendingContractsSignatures.length == 0)
@@ -328,7 +325,7 @@ contract UpgradeManager {
 
     }
 
-    function recoverSigner(bytes32 _h, uint8 _v, bytes32 _r, bytes32 _s) public pure returns (address) {
+    function recoverSigner(bytes32 _h, uint8 _v, bytes32 _r, bytes32 _s) private pure returns (address) {
 
         return ecrecover(_h, _v, _r, _s);
     }

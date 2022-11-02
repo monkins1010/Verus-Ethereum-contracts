@@ -18,7 +18,7 @@ contract VerusNotarizerStorage {
     using SafeMath for uint;
 
     mapping (address => uint32) public poolAvailable;
-    mapping (address => uint256) public storageGlobal;
+    mapping (bytes32 => bytes32) public storageGlobal;
     
     constructor(address upgradeContractAddress)
     {
@@ -40,11 +40,12 @@ contract VerusNotarizerStorage {
 
     }
 
-    function pushStorageGlobal(address iaddress,uint256 data) public {
+    // Generic Storage global for future Expansion
+    function pushStorageGlobal(bytes32 key, bytes32 data) public {
 
         require(msg.sender == address(verusBridge));
 
-        storageGlobal[iaddress] = data;
+        storageGlobal[key] = data;
 
     }
 
