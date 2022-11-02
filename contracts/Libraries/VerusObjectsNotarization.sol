@@ -2,7 +2,7 @@
 // Bridge between ethereum and verus
 
 pragma solidity >=0.6.0 < 0.9.0;
-pragma experimental ABIEncoderV2;
+pragma abicoder v2;
 
 import "./VerusObjectsCommon.sol";
 
@@ -15,7 +15,8 @@ library VerusObjectsNotarization {
         uint32 rootheight;                    // height (or sequence) of the notarization we certify
         bytes32 stateroot;                      // latest MMR root of the notarization height
         bytes32 blockhash;                      // combination of block hash, block MMR root, and compact power (or external proxy) for the notarization height
-        bytes32 compactpower;   
+        bytes32 compactpower;
+        int64 gasprice;   
     }
 
     struct CurrencyStates {
@@ -59,9 +60,9 @@ library VerusObjectsNotarization {
 
     struct NotarizationForks {
         bytes32 hashOfNotarization;
-        CUTXORef txid;
-        uint32 height;
-        bytes32 stateRoot;
+        bytes32 txid;
+        bytes32 stateroot;
+        bytes32 proposerPacked;  //after 22 bytes the voutnum 32bit num resides << 176
     }
 
     struct CNodeData {
@@ -85,20 +86,5 @@ library VerusObjectsNotarization {
         CUTXORef txid;
     }
 
-    //represents the output from the pbaas rpc
-    struct Notarization {
-        uint32 index;
-        bytes32 txid;
-        uint32 vout;
-        CPBaaSNotarization notarization;
-        CNodeData[] nodes;
-    }
 
-    struct CChainNotarizationData {
-        uint32 version;
-        Notarization[] notarizations;
-        int32[][] forks; // chains that represent alternate branches from the last confirmed notarization
-        int32 lastConfirmedHeight; // last confirmed notarization
-        int32 bestChain; // index in forks of the chain, beginning with the last confirmed notarization, that has the most power
-    }
 }

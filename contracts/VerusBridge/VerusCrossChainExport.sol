@@ -2,7 +2,7 @@
 // Bridge between ethereum and verus
 
 pragma solidity >=0.6.0 <0.9.0;
-pragma experimental ABIEncoderV2;
+pragma abicoder v2;
 
 import "../Libraries/VerusObjects.sol";
 import "../Libraries/VerusConstants.sol";
@@ -107,16 +107,16 @@ contract VerusCrossChainExport{
             //add the fees into the totalamounts too 
             feeExistsInTotals = inCurrencies(transfers[i].feecurrencyid); 
             if(feeExistsInTotals > 0){
-                currencies[feeExistsInTotals - 1].amount += uint64(transfers[i].fees);
+                currencies[feeExistsInTotals - 1].amount += transfers[i].fees;
             } else {
-                currencies.push(VerusObjects.CCurrencyValueMap(transfers[i].feecurrencyid,uint64(transfers[i].fees)));
+                currencies.push(VerusObjects.CCurrencyValueMap(transfers[i].feecurrencyid, transfers[i].fees));
             }
 
             feeExists = inFees(transfers[i].feecurrencyid); 
             if(feeExists > 0){
-                fees[feeExists - 1].amount += uint64(transfers[i].fees);
+                fees[feeExists - 1].amount += transfers[i].fees;
             } else {
-                fees.push(VerusObjects.CCurrencyValueMap(transfers[i].feecurrencyid,uint64(transfers[i].fees)));
+                fees.push(VerusObjects.CCurrencyValueMap(transfers[i].feecurrencyid, transfers[i].fees));
             }
             
         }
@@ -127,19 +127,18 @@ contract VerusCrossChainExport{
         workingCCE.totalamounts = currencies;
         workingCCE.totalfees = fees; 
 
-        VerusObjects.CCurrencyValueMap memory totalburnedCCVM = VerusObjects.CCurrencyValueMap(0x0000000000000000000000000000000000000000,0);
+        VerusObjects.CCurrencyValueMap memory totalburnedCCVM = VerusObjects.CCurrencyValueMap(address(0), 0);
 
         workingCCE.totalburned = new VerusObjects.CCurrencyValueMap[](1);
         workingCCE.totalburned[0] = totalburnedCCVM;
-        //TODO: Finalize export when someone gets 
-        workingCCE.rewardaddress = VerusObjectsCommon.CTransferDestination(VerusConstants.RewardAddressType, abi.encodePacked(VerusConstants.RewardAddress));
+        //workingCCE.rewardaddress is left empty as it is serialized to 0x0000
+
         workingCCE.firstinput = 1;
 
         // clear the arrays
         delete currencies;
         delete fees;
 
-        // emit test1(workingCCE);
         return workingCCE;
 
     }

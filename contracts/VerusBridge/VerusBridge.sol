@@ -2,7 +2,7 @@
 // Bridge between ethereum and verus
 
 pragma solidity >=0.6.0 <0.9.0;
-pragma experimental ABIEncoderV2;
+pragma abicoder v2;
 
 import "../Libraries/VerusObjects.sol";
 import "../Libraries/VerusConstants.sol";
@@ -28,12 +28,13 @@ contract VerusBridge {
     address verusUpgradeContract;
 
     uint32 public firstBlock;
+    uint64 poolSize;  
 
     // Global storage is located in VerusBridgeStorage contract
 
     constructor(address verusBridgeMasterAddress, address verusBridgeStorageAddress,
                 address tokenManagerAddress, address verusSerializerAddress, address verusProofAddress,
-                address verusCCEAddress, address exportManagerAddress, address verusUpgradeAddress, uint firstblock) {
+                address verusCCEAddress, address exportManagerAddress, address verusUpgradeAddress, uint firstblock, uint64 _poolSize) {
         verusBridgeMaster = VerusBridgeMaster(verusBridgeMasterAddress); 
         verusBridgeStorage = VerusBridgeStorage(verusBridgeStorageAddress); 
         tokenManager = TokenManager(tokenManagerAddress);
@@ -43,10 +44,11 @@ contract VerusBridge {
         exportManager = ExportManager(exportManagerAddress);
         verusUpgradeContract = verusUpgradeAddress;
         firstBlock = uint32(firstblock);
+        poolSize = _poolSize;
 
     }
 
-    function setContracts(address[12] memory contracts) public {
+    function setContracts(address[13] memory contracts) public {
 
         require(msg.sender == verusUpgradeContract);
 
@@ -68,6 +70,13 @@ contract VerusBridge {
             exportManager = ExportManager(contracts[uint(VerusConstants.ContractType.ExportManager)]);
 
     }
+
+    function subtractPoolSize(uint64 _amount) private returns (bool) {
+
+        if(_amount > poolSize) return false;
+        poolSize -= _amount;
+        return true;
+    }
  
     function export(VerusObjects.CReserveTransfer memory transfer, uint256 paidValue, address sender) public {
 
@@ -82,10 +91,10 @@ contract VerusBridge {
 
         if(!poolAvailable)
         {
-            require (verusBridgeStorage.subtractPoolSize(transfer.fees));
+            require (subtractPoolSize(uint64(transfer.fees)));
         }
 
-        if (transfer.currencyvalue.currency != VerusConstants.VEth) {
+        if (transfer.currencyvalue.currency != VerusConstants.VEth && transfer.destination.destinationtype != VerusConstants.DEST_ETHNFT) {
 
             VerusObjects.mappedToken memory mappedContract = verusBridgeStorage.getERCMapping(transfer.currencyvalue.currency);
             Token token = Token(mappedContract.erc20ContractAddress); 
@@ -96,32 +105,36 @@ contract VerusBridge {
             //transfer the tokens to the verusbridgemaster contract
             //total amount kept as wei until export to verus
             verusBridgeStorage.exportERC20Tokens(tokenAmount, token, mappedContract.flags & VerusConstants.MAPPING_VERUS_OWNED == VerusConstants.MAPPING_VERUS_OWNED, sender );
-            verusBridgeStorage.addToEthHeld(paidValue);
-            //verusBridgeStorage.addToFeesHeld(paidValue);
             
-        } else if (transfer.flags == VerusConstants.CURRENCY_EXPORT){
+        } else if (transfer.destination.destinationtype == VerusConstants.DEST_ETHNFT){
             //handle a NFT Import
                 
-            bytes memory NFTInfo = transfer.destination.destinationaddress;
-            address NFTAddress;
-            uint256 NFTID;
+            address destinationAddress;
+            uint8 desttype;
+            address nftContract;
+            uint256 tokenId;
+            bytes memory serializedDest;
+            serializedDest = transfer.destination.destinationaddress;  
+            // 1byte desttype + 20bytes destinationaddres + 20bytes NFT address + 32bytes NFTTokenI
+            assembly
+            {
+                desttype := mload(add(serializedDest, 1))
+                destinationAddress := mload(add(serializedDest, 21))
+                nftContract := mload(add(serializedDest, 41))
+                tokenId := mload(add(serializedDest, 73))
+            }
+            require (serializedDest.length == 73 && (desttype == VerusConstants.DEST_PKH || desttype == VerusConstants.DEST_ID), "NFT packet wrong length/dest wrong");
 
-            // 20bytes destinationaddres + 20bytes NFT address + 32bytes NFTTokenID
-            assembly {
-                        NFTAddress := mload(add(NFTInfo, 40))
-                        NFTID := mload(add(NFTInfo, 72))
-                     }
+            ERC721 nft = ERC721(nftContract);
+            require (nft.getApproved(tokenId) == address(this), "NFT not approved");
 
-            // ERC721 NFT = ERC721(NFTAddress);
-
-            //TODO: add verusBridgeStorage.transferFromERC721(address(verusBridgeStorage), sender, NFT, NFTID );
-            verusBridgeStorage.addToEthHeld(paidValue);
+            nft.transferFrom(sender, address(this), tokenId);
+            nft.transferFrom(address(this), address(verusBridgeStorage), tokenId);
+            transfer.destination.destinationtype = desttype;
+            transfer.destination.destinationaddress = abi.encodePacked(destinationAddress);
  
-        } else if (transfer.currencyvalue.currency == VerusConstants.VEth){
-            //handle a vEth transfer
-            verusBridgeStorage.addToEthHeld(paidValue);  // msg.value == fees + amount in transaction checked in checkExport()
-            //verusBridgeStorage.addToFeesHeld(fees); 
-        }
+        } 
+        verusBridgeMaster.addToEthHeld(paidValue); 
         _createExports(transfer, poolAvailable, block.number);
     }
 
@@ -149,26 +162,26 @@ contract VerusBridge {
 
     }
 
-    function sendToVRSC(uint64 LPFees, bool isBRIDGETx) public 
+    function sendToVRSC(uint64 LPFees, bool isBRIDGETx, address sendTo) public 
     {
         require(msg.sender == address(verusBridgeMaster));
 
-        uint64 amount = isBRIDGETx ? uint64(LPFees - VerusConstants.verusvETHTransactionFee) : uint64(verusBridgeStorage.poolSize() - VerusConstants.verusTransactionFee);
+        uint64 amount = isBRIDGETx ? uint64(LPFees - VerusConstants.verusvETHTransactionFee) : uint64(poolSize - VerusConstants.verusTransactionFee);
 
         VerusObjects.CReserveTransfer memory LPtransfer;
         LPtransfer.version = 1;
         LPtransfer.currencyvalue.currency = isBRIDGETx ? VerusConstants.VEth : VerusConstants.VerusCurrencyId;
         LPtransfer.currencyvalue.amount = amount;
-        LPtransfer.flags = VerusConstants.VALID + VerusConstants.BURN_CHANGE_PRICE; 
+        LPtransfer.flags = sendTo == address(0) ? VerusConstants.VALID + VerusConstants.BURN_CHANGE_PRICE : VerusConstants.VALID; 
         LPtransfer.fees = isBRIDGETx ? VerusConstants.verusvETHTransactionFee : VerusConstants.verusTransactionFee;
         LPtransfer.feecurrencyid = isBRIDGETx ? VerusConstants.VEth : VerusConstants.VerusCurrencyId;
         LPtransfer.destination.destinationtype = VerusConstants.DEST_PKH;
-        LPtransfer.destination.destinationaddress = hex"B26820ee0C9b1276Aac834Cf457026a575dfCe84";
+        LPtransfer.destination.destinationaddress = sendTo == address(0) ? bytes(hex'B26820ee0C9b1276Aac834Cf457026a575dfCe84') : abi.encodePacked(sendTo);
         LPtransfer.destcurrencyid = VerusConstants.VerusBridgeAddress;
         LPtransfer.destsystemid = address(0);
         LPtransfer.secondreserveid = address(0);
 
-        // When the bridge launches to make sure a fresh block with no pending transfers is used to insert the CCX
+        // When the bridge launches to make sure a fresh block with no pending transfers is used to insert the CCE
         _createExports(LPtransfer, true, block.number + 1);
 
     }
@@ -191,66 +204,55 @@ contract VerusBridge {
         return txidList;
     }
 
-    function submitImports(VerusObjects.CReserveTransferImport[] calldata _imports) public {
-        //loop through the transfers and process
-        for(uint i = 0; i < _imports.length; i++)
-        {
-           _createImports(_imports[i]);
-        }
-    }
-
-
-    function _createImports(VerusObjects.CReserveTransferImport calldata _import) public returns(bool) {
+    function _createImports(VerusObjects.CReserveTransferImport calldata _import, uint176 bridgeKeeper) public returns(bool) {
         
         // prove MMR
+        require(msg.sender == address(verusBridgeMaster));
         bytes32 txidfound;
-        bytes memory sliced = _import.partialtransactionproof.components[0].elVchObj;
+        bytes memory elVchObj = _import.partialtransactionproof.components[0].elVchObj;
+        uint32 nVins;
 
         assembly 
         {
-            txidfound := mload(add(sliced, 32)) 
+            txidfound := mload(add(elVchObj, 32)) 
+            nVins := mload(add(elVchObj, 45)) 
         }
+        
+        // reverse 32bit endianess
+        nVins = ((nVins & 0xFF00FF00) >> 8) |  ((nVins & 0x00FF00FF) << 8);
+        nVins = (nVins >> 16) | (nVins << 16);
 
         if (verusBridgeStorage.processedTxids(txidfound)) 
         {
-            return false;
+            revert("Known txid");
         } 
 
         bytes32 hashOfTransfers;
 
+        // [0..139]address of reward recipricent and [140..203]int64 fees
+        uint256 rewardDestinationPlusFees;
+
+        // [0..31]startheight [32..63]endheight [64..95]nIndex, [96..128] numberoftransfers packed into a uint128  
+        uint128 CCEHeightsAndnIndex;
+
         hashOfTransfers = keccak256(_import.serializedTransfers);
 
-        bool proven = verusProof.proveImports(_import, hashOfTransfers);
+        (rewardDestinationPlusFees, CCEHeightsAndnIndex) = verusProof.proveImports(_import, hashOfTransfers);
+ 
+        verusBridgeStorage.isLastCCEInOrder(uint32(CCEHeightsAndnIndex));
 
-        require(proven);
-        verusBridgeStorage.setProcessedTxids(txidfound);
+        // clear 4 bytes above first 64 bits, i.e. clear the nIndex 32 bit number, then convert to correct nIndex
 
-        if (verusBridgeStorage.lastTxImportHeight() < _import.height)
-        {
-            verusBridgeStorage.setlastTxImportHeight(_import.height);
-        }   
-
-        verusBridgeStorage.setLastImport(hashOfTransfers, txidfound, uint32(_import.txoutnum));
+        CCEHeightsAndnIndex  = (CCEHeightsAndnIndex & 0xffffffff00000000ffffffffffffffff) | (uint128(uint32(uint32(CCEHeightsAndnIndex >> 64) - (1 + (2 * nVins)))) << 64);  
+        verusBridgeStorage.setLastImport(txidfound, hashOfTransfers, CCEHeightsAndnIndex);
         
-        // Deserialize transfers and pack into send arrays
-        VerusObjects.ETHPayments[] memory payments = 
-        tokenManager.processTransactions(verusSerializer.deserializeTransfers(_import.serializedTransfers));
+        // Deserialize transfers and pack into send arrays, also pass in no. of transfers to calculate array size
+        verusBridgeMaster.sendEth(tokenManager.processTransactions(_import.serializedTransfers, uint8(CCEHeightsAndnIndex >> 96)));
 
-        if(payments.length > 0)
-        {
-            verusBridgeMaster.sendEth(payments);
-        }
         
-        address rewardDestination;
-        bytes memory destHex = _import.exportinfo.rewardaddress.destinationaddress;
-        assembly 
+        if(address(uint160(rewardDestinationPlusFees)) != address(0) && rewardDestinationPlusFees >> 176 != 0)
         {
-            rewardDestination := mload(add(destHex, 20))
-        }
-
-        if(_import.exportinfo.totalfees[0].currency == VerusConstants.VEth)
-        {
-           verusBridgeMaster.setClaimableFees(rewardDestination, _import.exportinfo.totalfees[0].amount);
+           verusBridgeMaster.setClaimableFees(bytes32(uint256(uint176(rewardDestinationPlusFees))), rewardDestinationPlusFees >> 176, bridgeKeeper);
         }
         return true;
     }

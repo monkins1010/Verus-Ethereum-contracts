@@ -2,7 +2,7 @@
 // Bridge between ethereum and verus
 
 pragma solidity >=0.6.0 <0.9.0;
-pragma experimental ABIEncoderV2;
+pragma abicoder v2;
 
 library VerusObjectsCommon {
     enum TransferDestinationType {
@@ -22,6 +22,6 @@ library VerusObjectsCommon {
     
     struct UintReader {
         uint32 offset;
-        uint32 value;
+        uint64 value;
     }
 }

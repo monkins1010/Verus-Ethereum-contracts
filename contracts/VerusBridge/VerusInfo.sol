@@ -9,7 +9,7 @@ import "../VerusBridge/VerusBridgeMaster.sol";
 import "../VerusBridge/TokenManager.sol";
 
 pragma solidity >=0.6.0 <0.9.0;
-pragma experimental ABIEncoderV2;
+pragma abicoder v2;
 
 contract VerusInfo {
 
@@ -37,7 +37,7 @@ contract VerusInfo {
         contractOwner = msg.sender;
     }
 
-    function setContracts(address[12] memory contracts) public {
+    function setContracts(address[13] memory contracts) public {
 
         require(msg.sender == upgradeContract);
 
@@ -66,14 +66,14 @@ contract VerusInfo {
         VerusObjects.currencyDetail memory returnCurrency;
         returnCurrency.version = chainInfo.version;
         //if the _currencyid is null then return VEth
-        address[] memory notaries = verusNotarizer.getNotaries();
-        uint8 minnotaries = verusNotarizer.currentNotariesRequired();
+        address[] memory notaries = new address[](1);
+        uint8 minnotaries = ((verusNotarizer.currentNotariesLength() >> 1) + 1);
         
         address currencyAddress;
-        uint256 initialsupply;
+        uint64 initialsupply;
         if(_currencyid == VerusConstants.VEth){
             currencyAddress = VerusConstants.VEth;
-            initialsupply = 72000000;
+            initialsupply = 0;
         } else {
             currencyAddress = _currencyid;
             initialsupply = 0;
@@ -102,14 +102,33 @@ contract VerusInfo {
         return abi.encode(returnCurrency);
     }
 
-    function launchTokens(VerusObjects.setupToken[] memory tokensToDeploy) public  {
+    function launchContractTokens(VerusObjects.setupToken[] memory tokensToDeploy) public  {
 
         require(msg.sender == contractOwner,"INFO:contractOwnerRequired");
 
-        tokenManager.launchTokens(tokensToDeploy);
+        tokenManager.launchContractTokens(tokensToDeploy);
 
         //blow the fuse
         contractOwner = address(0);
+    }
+
+    function setFeePercentages(uint256 _ethAmount)public pure returns (uint256,uint256,uint256,uint256,uint256)
+    {
+        uint256 notaryFees;
+        uint256 LPFees;
+        uint256 exporterFees;
+        uint256 proposerFees;  
+        uint256 bridgekeeperFees;     
+        
+        notaryFees = (_ethAmount / 10 ) * 3 ; 
+
+        exporterFees = _ethAmount / 10 ;
+        proposerFees = _ethAmount / 10 ;
+        bridgekeeperFees = (_ethAmount / 10 ) * 3 ;
+
+        LPFees = _ethAmount - (notaryFees + exporterFees + proposerFees + bridgekeeperFees);
+
+        return(notaryFees, exporterFees, proposerFees, bridgekeeperFees, LPFees);
     }
 
 }

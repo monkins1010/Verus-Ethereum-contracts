@@ -2,14 +2,21 @@
 // Bridge between ethereum and verus
 
 pragma solidity >=0.6.0 < 0.9.0;
-pragma experimental ABIEncoderV2;   
+pragma abicoder v2;   
 import "../Libraries/VerusObjects.sol";
 import "../Libraries/VerusObjectsNotarization.sol";
 import "../Libraries/VerusConstants.sol";
+import "../MMR/VerusBlake2b.sol";
 
 contract VerusSerializer {
 
     uint constant ETH_ADDRESS_SIZE_BYTES = 20;
+    uint32 constant CCC_PREFIX_TO_NAME_LEN = 4 + 4 + 20;
+    uint32 constant CCC_ID_LEN = 20;
+    uint32 constant CCC_NATIVE_OFFSET = 4 + 4 + 1;
+    uint32 constant CCC_TOKENID_OFFSET = 32;
+    int16 constant TYPE_ETHEREUM = 2;
+    using VerusBlake2b for bytes;
 
     function readVarUintLE(bytes memory incoming, uint32 offset) public pure returns(VerusObjectsCommon.UintReader memory) {
         uint32 retVal = 0;
@@ -56,18 +63,18 @@ contract VerusSerializer {
         return VerusObjectsCommon.UintReader(offset, 0);
     }
 
-    function writeVarInt(uint256 incoming) public pure returns(bytes memory) {
+    function writeVarInt(uint64 incoming) public pure returns(bytes memory) {
         bytes1 inProgress;
         bytes memory output;
         uint len = 0;
         while(true){
             inProgress = bytes1(uint8(incoming & 0x7f) | (len!=0 ? 0x80:0x00));
-            output = abi.encodePacked(output,inProgress);
+            output = abi.encodePacked(inProgress,output);
             if(incoming <= 0x7f) break;
             incoming = (incoming >> 7) -1;
             len++;
         }
-        return flipArray(output);
+        return output;
     }
 
    
@@ -92,16 +99,8 @@ contract VerusSerializer {
         return output;
     }
 
-    
-    function verusHashPrefix(string memory prefix,address systemID,int64 blockHeight,address signingID, bytes memory messageToHash) public pure returns(bytes memory){
-        return abi.encodePacked(serializeString(prefix),serializeAddress(systemID),serializeInt64(blockHeight),serializeAddress(signingID),messageToHash);    
-    }
-    
+  
     //serialize functions
-
-    function serializeBool(bool anyBool) public pure returns(bytes memory){
-        return abi.encodePacked(anyBool);
-    }
     
     function serializeString(string memory anyString) public pure returns(bytes memory){
         //naturally BigEndian
@@ -111,50 +110,93 @@ contract VerusSerializer {
         //return abi.encodePacked(anyString);
     }
 
-    function serializeBytes20(bytes20 anyBytes20) public pure returns(bytes memory){
+
+    function serializeBytes32(bytes32 anyBytes32) public pure returns(bytes32){
         //naturally BigEndian
-        return abi.encodePacked(anyBytes20);
-    }
-    function serializeBytes32(bytes32 anyBytes32) public pure returns(bytes memory){
-        //naturally BigEndian
-        return flipArray(abi.encodePacked(anyBytes32));
+        uint256 v;
+        v = uint256(anyBytes32);
+    
+        // swap bytes
+        v = ((v & 0xFF00FF00FF00FF00FF00FF00FF00FF00FF00FF00FF00FF00FF00FF00FF00FF00) >> 8) |
+            ((v & 0x00FF00FF00FF00FF00FF00FF00FF00FF00FF00FF00FF00FF00FF00FF00FF00FF) << 8);
+    
+        // swap 2-byte long pairs
+        v = ((v & 0xFFFF0000FFFF0000FFFF0000FFFF0000FFFF0000FFFF0000FFFF0000FFFF0000) >> 16) |
+            ((v & 0x0000FFFF0000FFFF0000FFFF0000FFFF0000FFFF0000FFFF0000FFFF0000FFFF) << 16);
+    
+        // swap 4-byte long pairs
+        v = ((v & 0xFFFFFFFF00000000FFFFFFFF00000000FFFFFFFF00000000FFFFFFFF00000000) >> 32) |
+            ((v & 0x00000000FFFFFFFF00000000FFFFFFFF00000000FFFFFFFF00000000FFFFFFFF) << 32);
+    
+        // swap 8-byte long pairs
+        v = ((v & 0xFFFFFFFFFFFFFFFF0000000000000000FFFFFFFFFFFFFFFF0000000000000000) >> 64) |
+            ((v & 0x0000000000000000FFFFFFFFFFFFFFFF0000000000000000FFFFFFFFFFFFFFFF) << 64);
+    
+        // swap 16-byte long pairs
+        v = (v >> 128) | (v << 128);
+            
+        return bytes32(v);
     }
 
-    function serializeUint8(uint8 number) public pure returns(bytes memory){
-        bytes memory be = abi.encodePacked(number);
-        return(flipArray(be));
+    
+    function serializeUint16(uint16 number) public pure returns(uint16){
+        number = (number << 8) | (number >> 8) ;
+        return number;
     }
     
-    function serializeUint16(uint16 number) public pure returns(bytes memory){
-        bytes memory be = abi.encodePacked(number);
-        return(flipArray(be));
-    }
-    
-    function serializeUint32(uint32 number) public pure returns(bytes memory){
-        bytes memory be = abi.encodePacked(number);
-        return(flipArray(be));
+    function serializeUint32(uint32 number) public pure returns(uint32){
+        // swap bytes
+        number = ((number & 0xFF00FF00) >> 8) | ((number & 0x00FF00FF) << 8);
+        number = (number >> 16) | (number << 16);
+        return number;
     }
 
-    function serializeInt16(int16 number) public pure returns(bytes memory){
-        bytes memory be = abi.encodePacked(number);
-        return(flipArray(be));
+    function serializeInt16(int16 number) public pure returns(int16){
+        number = (number << 8) | (number >> 8) ;
+        return number;
     }
     
-    function serializeInt32(int32 number) public pure returns(bytes memory){
-        bytes memory be = abi.encodePacked(number);
-        return(flipArray(be));
+    function serializeInt32(int32 inval) public pure returns(uint32){
+        uint32 number = uint32(inval);
+        number = ((number & 0xFF00FF00) >> 8) | ((number & 0x00FF00FF) << 8);
+        number = (number >> 16) | (number << 16);
+        return number;
     }
     
-    function serializeInt64(int64 number) public pure returns(bytes memory){
-        bytes memory be = abi.encodePacked(number);
-        return(flipArray(be));
+    function serializeInt64(int64 number) public pure returns(uint64){
+        
+        uint64 v = uint64(number);
+        v = ((v & 0xFF00FF00FF00FF00) >> 8) |
+        ((v & 0x00FF00FF00FF00FF) << 8);
+
+        // swap 2-byte long pairs
+        v = ((v & 0xFFFF0000FFFF0000) >> 16) |
+            ((v & 0x0000FFFF0000FFFF) << 16);
+
+        // swap 4-byte long pairs
+        v = (v >> 32) | (v << 32);
+        return v;
+    }
+
+    function serializeUint64(uint64 v) public pure returns(uint64){
+        
+        v = ((v & 0xFF00FF00FF00FF00) >> 8) |
+        ((v & 0x00FF00FF00FF00FF) << 8);
+
+        // swap 2-byte long pairs
+        v = ((v & 0xFFFF0000FFFF0000) >> 16) |
+            ((v & 0x0000FFFF0000FFFF) << 16);
+
+        // swap 4-byte long pairs
+        v = (v >> 32) | (v << 32);
+        return v;
     }
 
     function serializeInt32Array(int32[] memory numbers) public pure returns(bytes memory){
         bytes memory be;
         be = writeCompactSize((numbers.length));
         for(uint i = 0;i < numbers.length; i++){
-            be = abi.encodePacked(be,serializeInt32(numbers[i]));
+            be = abi.encodePacked(be, serializeInt32(numbers[i]));
         }
         return be;
     }
@@ -163,35 +205,20 @@ contract VerusSerializer {
         bytes memory be;
         be = writeCompactSize((numbers.length));
         for(uint i = 0;i < numbers.length; i++){
-            be = abi.encodePacked(be,flipArray(abi.encodePacked(numbers[i])));
+            be = abi.encodePacked(be, serializeInt64(numbers[i]));
         }
         return be;
     }
 
-    function serializeUint64(uint64 number) public pure returns(bytes memory){
-        bytes memory be = abi.encodePacked(number);
-        return(flipArray(be));
-    }
-
-    function serializeAddress(address number) public pure returns(bytes memory){
-        bytes memory be = abi.encodePacked(number);
-        return be;
-    }
-    
     function serializeUint160Array(uint160[] memory numbers) public pure returns(bytes memory){
         bytes memory be;
         be = writeCompactSize((numbers.length));
         for(uint i = 0;i < numbers.length; i++){
             be = abi.encodePacked(be,abi.encodePacked(numbers[i]));
         }
-        return(be);
+        return be;
     }
 
-    function serializeUint256(uint256 number) public pure returns(bytes memory){
-        bytes memory be = abi.encodePacked(number);
-        return(flipArray(be));
-    }
-    
     function serializeCTransferDestination(VerusObjectsCommon.CTransferDestination memory ctd) public pure returns(bytes memory){
 
         uint256 destinationSize;
@@ -205,16 +232,16 @@ contract VerusSerializer {
             destinationSize = ETH_ADDRESS_SIZE_BYTES;
         }
 
-        return abi.encodePacked(serializeUint8(ctd.destinationtype),writeCompactSize(destinationSize),ctd.destinationaddress);
+        return abi.encodePacked(ctd.destinationtype, writeCompactSize(destinationSize),ctd.destinationaddress);
     }    
 
     function serializeCCurrencyValueMap(VerusObjects.CCurrencyValueMap memory _ccvm) public pure returns(bytes memory){
-         return abi.encodePacked(serializeAddress(_ccvm.currency),serializeUint64(_ccvm.amount));
+         return abi.encodePacked(_ccvm.currency, serializeUint64(_ccvm.amount));
     }
     
     function serializeCCurrencyValueMaps(VerusObjects.CCurrencyValueMap[] memory _ccvms) public pure returns(bytes memory){
         bytes memory inProgress;
-        inProgress = writeVarInt(_ccvms.length);
+        inProgress = writeVarInt(uint64(_ccvms.length));
         for(uint i=0; i < _ccvms.length; i++){
             inProgress = abi.encodePacked(inProgress,serializeCCurrencyValueMap(_ccvms[i]));
         }
@@ -225,17 +252,18 @@ contract VerusSerializer {
         
         bytes memory output =  abi.encodePacked(
             writeVarInt(ct.version),
-            abi.encodePacked(serializeAddress(ct.currencyvalue.currency),writeVarInt(ct.currencyvalue.amount)),//special interpretation of a ccurrencyvalue
+            ct.currencyvalue.currency, 
+            writeVarInt(uint64(ct.currencyvalue.amount)), //special interpretation of a ccurrencyvalue
             writeVarInt(ct.flags),
-            serializeAddress(ct.feecurrencyid),
-            writeVarInt(ct.fees),
+            ct.feecurrencyid,
+            writeVarInt(uint64(ct.fees)),
             serializeCTransferDestination(ct.destination),
-            serializeAddress(ct.destcurrencyid)
+            ct.destcurrencyid
            );
            
-        if((ct.flags & VerusConstants.RESERVE_TO_RESERVE )>0) output = abi.encodePacked(output,serializeAddress(ct.secondreserveid));           
+        if((ct.flags & VerusConstants.RESERVE_TO_RESERVE )>0) output = abi.encodePacked(output, ct.secondreserveid);           
          //see if it has a cross_system flag
-        if((ct.flags & VerusConstants.CROSS_SYSTEM)>0) output = abi.encodePacked(output,serializeAddress(ct.destsystemid));
+        if((ct.flags & VerusConstants.CROSS_SYSTEM)>0) output = abi.encodePacked(output, ct.destsystemid);
         
         return output;
     }
@@ -259,21 +287,29 @@ contract VerusSerializer {
     }
 
     function serializeCProofRoot(VerusObjectsNotarization.CProofRoot memory _cpr) public pure returns(bytes memory){
-        return abi.encodePacked(
-            serializeAddress(_cpr.systemid),
+        
+        bytes memory retval;
+
+        retval = abi.encodePacked(
+            _cpr.systemid,
             serializeInt16(_cpr.version),
             serializeInt16(_cpr.cprtype),
-            serializeAddress(_cpr.systemid),
+            _cpr.systemid,
             serializeUint32(_cpr.rootheight),
             serializeBytes32(_cpr.stateroot),
             serializeBytes32(_cpr.blockhash),
             serializeBytes32(_cpr.compactpower)
             );
+
+        if (_cpr.cprtype == TYPE_ETHEREUM)    
+            retval = abi.encodePacked(retval, serializeInt64(_cpr.gasprice));
+
+        return retval;
     }
 
     function serializeProofRoots(VerusObjectsNotarization.ProofRoots memory _prs) public pure returns(bytes memory){
         return abi.encodePacked(
-            serializeAddress(_prs.currencyid),
+            _prs.currencyid,
             serializeCProofRoot(_prs.proofroot)
         );  
     }
@@ -303,13 +339,13 @@ contract VerusSerializer {
         bytes memory part1 = abi.encodePacked(
             serializeUint16(_cccs.version),
             serializeUint16(_cccs.flags),
-            serializeAddress(_cccs.currencyid),
+            _cccs.currencyid,
             serializeUint160Array(_cccs.currencies),
             serializeInt32Array(_cccs.weights),
             serializeInt64Array(_cccs.reserves),
-            writeVarInt(uint256(int256(_cccs.initialsupply))),
-            writeVarInt(uint256(int256(_cccs.emitted))),
-            writeVarInt(uint256(int256(_cccs.supply)))
+            writeVarInt(uint64(_cccs.initialsupply)),
+            writeVarInt(uint64(_cccs.emitted)),
+            writeVarInt(uint64(_cccs.supply))
         );
         bytes memory part2 = abi.encodePacked(
             serializeInt64(_cccs.primarycurrencyout),
@@ -331,7 +367,7 @@ contract VerusSerializer {
 
     function serializeCurrencyStates(VerusObjectsNotarization.CurrencyStates memory _cs) public pure returns(bytes memory){
         return abi.encodePacked(
-            serializeAddress(_cs.currencyid),
+            _cs.currencyid,
             serializeCCoinbaseCurrencyState(_cs.currencystate)
         );
     }
@@ -345,12 +381,12 @@ contract VerusSerializer {
         return inProgress;
     }
 
-    function serializeCPBaaSNotarization(VerusObjectsNotarization.CPBaaSNotarization memory _not) public pure returns(bytes memory){
+    function serializeCPBaaSNotarization(VerusObjectsNotarization.CPBaaSNotarization calldata _not) public pure returns(bytes memory){
         return abi.encodePacked(
             writeVarInt(_not.version),
             writeVarInt(_not.flags),
             serializeCTransferDestination(_not.proposer),
-            serializeAddress(_not.currencyid),
+            _not.currencyid,
             serializeCCoinbaseCurrencyState(_not.currencystate),
             serializeUint32(_not.notarizationheight),
             serializeCUTXORef(_not.prevnotarization),
@@ -360,6 +396,12 @@ contract VerusSerializer {
             serializeCProofRootArray(_not.proofroots),
             serializeNodes(_not.nodes)
         );
+    }
+
+    function notarizationBlakeHash(bytes calldata _not) public view returns (bytes32)
+    {
+        return _not.createHash();
+
     }
     
     function serializeNodes(VerusObjectsNotarization.CNodeData[] memory _cnds) public pure returns(bytes memory){
@@ -375,7 +417,7 @@ contract VerusSerializer {
         
         return abi.encodePacked(
             serializeString(_cnd.networkaddress),
-            serializeAddress(_cnd.nodeidentity)
+            _cnd.nodeidentity
         );
     }
 
@@ -383,20 +425,20 @@ contract VerusSerializer {
         bytes memory part1 = abi.encodePacked(
             serializeUint16(_ccce.version),
             serializeUint16(_ccce.flags),
-            serializeAddress(_ccce.sourcesystemid),
-            flipArray(serializeBytes32(_ccce.hashtransfers)),
-            serializeAddress(_ccce.destinationsystemid),
-            serializeAddress(_ccce.destinationcurrencyid));
+            _ccce.sourcesystemid,
+            _ccce.hashtransfers,
+            _ccce.destinationsystemid,
+            _ccce.destinationcurrencyid);
         bytes memory part2 = abi.encodePacked(
+            bytes2(0x0000), //Ctransferdesination is 00 type and 00 length for exporter
+            serializeInt32(_ccce.firstinput),
+            serializeUint32(_ccce.numinputs),
             writeVarInt(_ccce.sourceheightstart),
             writeVarInt(_ccce.sourceheightend),
-            serializeUint32(_ccce.numinputs),
-            serializeCCurrencyValueMaps(_ccce.totalamounts),
             serializeCCurrencyValueMaps(_ccce.totalfees),
+            serializeCCurrencyValueMaps(_ccce.totalamounts),
             serializeCCurrencyValueMaps(_ccce.totalburned),
-            serializeCTransferDestination(_ccce.rewardaddress),
-            serializeInt32(_ccce.firstinput),
-            bytes1(0x00));
+            bytes1(0x00)); // Reservetransfers 
             
         return abi.encodePacked(part1,part2);
 
@@ -414,131 +456,81 @@ contract VerusSerializer {
         return output;
     }
 
-    function deSerializeCurrencyDefinition(bytes memory input)
-         public
-         pure
-         returns (
-             VerusObjects.CcurrencyDefinition memory ccurrencyDefinition
-         )
+    function currencyParser(bytes memory input, uint256 offset) public pure
+                    returns (VerusObjects.PackedCurrencyLaunch memory returnCurrency)
     {
         uint32 nextOffset;
         uint8 nameStringLength;
-        address parent;
-        address launchSystemID;
-        address systemID;
         address nativeCurrencyID;
-        uint32 CCC_PREFIX_TO_PARENT = 4 + 4 + 20;
-        uint32 CCC_ID_LEN = 20;
-        uint32 CCC_NATIVE_OFFSET = CCC_ID_LEN + 4 + 4;
+        uint256 nftID;
+        uint8 NativeCurrencyType;
 
-        nextOffset = CCC_PREFIX_TO_PARENT;
-
-        assembly {
-            parent := mload(add(input, nextOffset)) // this should be parent ID
-            nextOffset := add(nextOffset, 1) // and after that...
-            nameStringLength := mload(add(input, nextOffset)) // string length MAX 64 so will always be a byte
-        }
-
-        ccurrencyDefinition.parent = parent;
-
-        bytes memory name = new bytes(nameStringLength);
-
-        for (uint256 i = 0; i < nameStringLength; i++) {
-            name[i] = input[i + nextOffset];
-        }
-
-        ccurrencyDefinition.name = string(name);
-        nextOffset = nextOffset + nameStringLength + CCC_ID_LEN;
-
-        assembly {
-            launchSystemID := mload(add(input, nextOffset)) // this should be launchsysemID
-            nextOffset := add(nextOffset, CCC_ID_LEN)
-            systemID := mload(add(input, nextOffset)) // this should be systemID 
-            nextOffset := add(nextOffset, CCC_NATIVE_OFFSET)
-            nativeCurrencyID := mload(add(input, nextOffset)) //TODO:When example available to test, fix this
-        }
-
-        ccurrencyDefinition.launchSystemID = launchSystemID;
-        ccurrencyDefinition.systemID = systemID;
-        ccurrencyDefinition.nativeCurrencyID = nativeCurrencyID;
-    }
-
-    function simpleCurrencyDef(bytes memory input) public pure
-                    returns (uint256, address)
-    {
-        uint32 nextOffset;
-        uint8 nameStringLength;
-        address systemID;
-        address nativeCurrencyID;
-        uint32 CCC_PREFIX_TO_PARENT = 4 + 4 + 20 + 1;
-        uint32 CCC_ID_LEN = 20;
-        uint32 CCC_NATIVE_OFFSET = CCC_ID_LEN + 4 + 4;
-
-        uint256 destinationAndFlags;
-
-        nextOffset = CCC_PREFIX_TO_PARENT;
+        nextOffset = CCC_PREFIX_TO_NAME_LEN + uint32(offset);
 
         assembly {
             nameStringLength := mload(add(input, nextOffset)) // string length MAX 64 so will always be a byte
         }
 
-        destinationAndFlags = nameStringLength > 19 ? 19 : nameStringLength; //first byte is length 
+        returnCurrency.nameAndFlags = nameStringLength > 19 ? 19 : nameStringLength; //first byte is length 
 
         for (uint32 i = 0; i < nameStringLength; i++) { //pack a max of 19 bytes of the id name into token name
-            destinationAndFlags |= uint256(uint8(input[i + nextOffset])) << ((i+1)*8);
+            returnCurrency.nameAndFlags |= uint256(uint8(input[i + nextOffset])) << ((i+1)*8);
         }
         
-        nextOffset = nextOffset + nameStringLength + CCC_ID_LEN;
+        nextOffset += nameStringLength + CCC_ID_LEN ; // skip launchsysemID
 
         assembly {
-            //   launchSystemID := mload(add(input, nextOffset)) // this should be launchsysemID
             nextOffset := add(nextOffset, CCC_ID_LEN)
-            systemID := mload(add(input, nextOffset)) // this should be systemID 
             nextOffset := add(nextOffset, CCC_NATIVE_OFFSET)
-            nativeCurrencyID := mload(add(input, nextOffset)) 
+            NativeCurrencyType := mload(add(input, nextOffset)) 
         }
-
-        //if first 2 bytes blank then nativecurrency is empty
-        if ((uint160(nativeCurrencyID) >> 144) & 0xffff == 0)
-        {
-            nativeCurrencyID = address(0);
-        }
-        else 
+   
+    
+        if (NativeCurrencyType == VerusConstants.DEST_ETHNFT)
         {
             assembly {
-                nativeCurrencyID := mload(add(add(input, nextOffset), 2) )
+                nextOffset := add(add(nextOffset, CCC_ID_LEN), 1) //skip vector length 
+                nativeCurrencyID := mload(add(input, nextOffset))
+                nextOffset := add(nextOffset, CCC_TOKENID_OFFSET)
+                nftID := mload(add(input, nextOffset))
             }
-
+            returnCurrency.nameAndFlags |= uint256(VerusConstants.TOKEN_ETH_NFT_DEFINITION) << 160;
+            returnCurrency.nameAndFlags |= uint256(VerusConstants.MAPPING_ETHEREUM_OWNED) << 160;
         }
-
-        destinationAndFlags |= uint256(VerusConstants.TOKEN_LAUNCH) << 160;
-
-        if(systemID == VerusConstants.VEth)
+        else if (NativeCurrencyType == VerusConstants.DEST_ETH)
         {
-            destinationAndFlags |= uint256(VerusConstants.TOKEN_MAPPED_ERC20) << 160;
+            assembly {
+                nextOffset := add(add(nextOffset, CCC_ID_LEN), 1) //skip vector length 
+                nativeCurrencyID := mload(add(input, nextOffset))
+            }
+            returnCurrency.nameAndFlags |= uint256(VerusConstants.TOKEN_LAUNCH) << 160;
+            returnCurrency.nameAndFlags |= uint256(VerusConstants.MAPPING_ETHEREUM_OWNED) << 160;
+        }
+        else if (NativeCurrencyType == 0x00)
+        {
+            returnCurrency.nameAndFlags |= uint256(VerusConstants.TOKEN_LAUNCH) << 160;
+            returnCurrency.nameAndFlags |= uint256(VerusConstants.MAPPING_VERUS_OWNED) << 160;
         }
 
-        return (destinationAndFlags, nativeCurrencyID);
+        returnCurrency.tokenID = nftID;
+        returnCurrency.ERCContract = nativeCurrencyID;
+
+        return returnCurrency;
 
     }
 
-        function deserializeTransfers(bytes calldata serializedData) public pure
-        returns (VerusObjects.DeserializedObject memory)
-    {
-        
-
-        bytes memory tempSerialized;
-        VerusObjects.PackedSend[] memory tempTransfers = new VerusObjects.PackedSend[]((serializedData.length / 111) +1); //min size of transfer 222 bytes
-        tempSerialized = serializedData;
+    function deserializeTransfers(bytes memory tempSerialized, uint8 numberOfTransfers) public pure
+        returns (VerusObjects.PackedSend[] memory, VerusObjects.PackedCurrencyLaunch[] memory, uint32 counter)
+    { 
+        // return value counter is a packed 32bit number first bytes is number of transfers, 3rd byte number of ETH sends 4th byte number of currencey launches
+              
+        VerusObjects.PackedSend[] memory tempTransfers = new VerusObjects.PackedSend[](numberOfTransfers); 
+        VerusObjects.PackedCurrencyLaunch[] memory launchTxs = new VerusObjects.PackedCurrencyLaunch[](2); //max to Currency launches
         address tempaddress;
-        uint64 amount;
-        uint64 flags;
+        uint64 temporaryRegister1;
         uint8 destinationType;
-        uint64 readerLen;
-        uint8 ETHCounter; 
-        uint8 currencyCounter;
-        uint32 counter;
         uint256 nextOffset = 21;
+        uint64 flags;
 
         while (nextOffset <= tempSerialized.length) {
             
@@ -546,59 +538,61 @@ contract VerusSerializer {
                 tempaddress := mload(add(tempSerialized, nextOffset)) // skip version 0x01 (1 byte)
             }
 
-            (amount, nextOffset)  = readVarint(tempSerialized, nextOffset);  //readvarint returns next idx position
-            (flags , nextOffset) = readVarint(tempSerialized, nextOffset);
+            (temporaryRegister1, nextOffset)  = readVarint(tempSerialized, nextOffset);  //readvarint returns next idx position
+            (flags, nextOffset) = readVarint(tempSerialized, nextOffset);
 
-            tempTransfers[counter].currencyAndAmount = uint256(amount) << 160; //shift amount and pack
-            tempTransfers[counter].currencyAndAmount |= uint256(uint160(tempaddress));
+            tempTransfers[uint8(counter)].currencyAndAmount = uint256(temporaryRegister1) << 160; //shift amount and pack
+            tempTransfers[uint8(counter)].currencyAndAmount |= uint256(uint160(tempaddress));
 
             nextOffset += 20; //skip feecurrency id always vETH, variint already 1 byte in so 19
 
-            (amount, nextOffset) = readVarint(tempSerialized, nextOffset); //fees read into 'amount' but not used
+            (temporaryRegister1, nextOffset) = readVarint(tempSerialized, nextOffset); //fees read into 'temporaryRegister1' but not used
 
             assembly {
-                nextOffset := add(nextOffset, 1) 
+                nextOffset := add(nextOffset, 1) //move to read the destination type
                 destinationType := mload(add(tempSerialized, nextOffset))
-                nextOffset := add(nextOffset, 1) //skip feecurrency id always vETH
+                nextOffset := add(nextOffset, 1) //move to read destination vector length compactint
             }
 
-            (readerLen, nextOffset) = readCompactSizeLE2(tempSerialized, nextOffset);    // get the length of the destination
+            (temporaryRegister1, nextOffset) = readCompactSizeLE2(tempSerialized, nextOffset);    // get the length of the destination
 
             // if destination an address read 
-            if(readerLen == 20)
+            if (destinationType & VerusConstants.DEST_ETH == VerusConstants.DEST_ETH)
             {
                 if (tempaddress == VerusConstants.VEth)
                 {
-                    tempTransfers[counter].destinationAndFlags = uint256(VerusConstants.TOKEN_ETH_SEND) << 160;
+                    tempTransfers[uint8(counter)].destinationAndFlags = uint256(VerusConstants.TOKEN_ETH_SEND) << 160;
+                    counter |= (uint32((counter >> 16 & 0xff) + 1) << 16); //This is the ETH currency counter packed into the 3rd byte
                 }
                 else
                 {
-                    tempTransfers[counter].destinationAndFlags = uint256(VerusConstants.TOKEN_SEND) << 160;
+                    tempTransfers[uint8(counter)].destinationAndFlags = uint256(VerusConstants.TOKEN_ERC20_SEND) << 160;
                 }
 
                 assembly {
-                    tempaddress := mload(sub(add(add(tempSerialized, nextOffset), readerLen), 1))
+                    tempaddress := mload(sub(add(add(tempSerialized, nextOffset), temporaryRegister1), 1))
                 }
-                tempTransfers[counter].destinationAndFlags |= uint256(uint160(tempaddress));
+                tempTransfers[uint8(counter)].destinationAndFlags |= uint256(uint160(tempaddress));
+                counter++;
             }
-            else
-            {
-                bytes memory tempCurrency = serializedData[nextOffset - 1 : nextOffset + readerLen - 1];
-                
-                (tempTransfers[counter].destinationAndFlags, tempTransfers[counter].nativeCurrency) = 
-                simpleCurrencyDef(tempCurrency);
+            else if (destinationType == VerusConstants.DEST_REGISTERCURRENCY || destinationType == VerusConstants.DEST_ETHNFT)
+            { 
+                launchTxs[(counter >> 24 & 0xff)] = currencyParser(tempSerialized, nextOffset);
+                launchTxs[(counter >> 24 & 0xff)].iaddress = address(uint160(tempTransfers[uint8(counter)].currencyAndAmount));
+                counter |= (uint32((counter >> 24 & 0xff) + 1) << 24); //This is the Launch currency counter packed into the 4th byte
+               
             }
 
-            nextOffset += readerLen ;
+            nextOffset += temporaryRegister1;
 
-            if(destinationType & VerusConstants.FLAG_DEST_AUX == VerusConstants.FLAG_DEST_AUX )
+            if (destinationType & VerusConstants.FLAG_DEST_AUX == VerusConstants.FLAG_DEST_AUX)
             {
-                 (readerLen, nextOffset) = readCompactSizeLE2(tempSerialized, nextOffset);    // get the length of the auxDest
-                 uint arraySize = readerLen;
+                 (temporaryRegister1, nextOffset) = readCompactSizeLE2(tempSerialized, nextOffset);    // get the length of the auxDest
+                 uint arraySize = temporaryRegister1;
                  for (uint i = 0; i < arraySize; i++)
                  {
-                     (readerLen, nextOffset) = readCompactSizeLE2(tempSerialized, nextOffset);    // get the length of the auxDest sub array
-                     nextOffset += readerLen;
+                     (temporaryRegister1, nextOffset) = readCompactSizeLE2(tempSerialized, nextOffset);    // get the length of the auxDest sub array
+                     nextOffset += temporaryRegister1;
                  }
             }
 
@@ -619,26 +613,12 @@ contract VerusSerializer {
                  nextOffset += 20; 
             }
 
-            if (address(uint160(tempTransfers[counter].currencyAndAmount)) == VerusConstants.VEth)
-            {
-                ETHCounter++;
-            }
-
-            if (destinationType  == VerusConstants.DEST_REGISTERCURRENCY)
-            {
-                currencyCounter++;
-            }
-            counter++;
-            nextOffset += 20; //offsetready for next read (skip )
+            
+            nextOffset += 20; //offset ready for next address deserilization
 
         }
-        //pack 32Bit counter with 1 16bit and two 8bit numbers
-        
-        counter |= (uint32(ETHCounter) << 16);
-        counter |= (uint32(currencyCounter) << 24);
 
-        
-        return VerusObjects.DeserializedObject(tempTransfers, counter);
+        return (tempTransfers, launchTxs, counter);
 
     }
         
@@ -646,7 +626,7 @@ contract VerusSerializer {
 
         uint8 b; // store current byte content
 
-        for (uint i=0; i<10; i++) {
+        for (uint i = 0; i < 10; i++) {
             b = uint8(buf[i+idx]);
             v = (v << 7) | b & 0x7F;
             if (b & 0x80 == 0x80)
@@ -654,7 +634,7 @@ contract VerusSerializer {
             else
             return (v, idx + i + 1);
         }
-        revert(); // i=10, invalid varint stream
+        revert(); // i=9, invalid varint stream
     }
 
    function readCompactSizeLE2(bytes memory incoming, uint256 offset) public pure returns(uint64 v, uint retidx) {

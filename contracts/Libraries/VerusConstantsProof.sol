@@ -2,7 +2,7 @@
 // Bridge between ethereum and verus
 
 pragma solidity >=0.6.0 < 0.9.0;
-pragma experimental ABIEncoderV2;
+pragma abicoder v2;
 
 import "./VerusObjectsCommon.sol";
 
@@ -13,6 +13,7 @@ library VerusObjectsProof {
         uint8  CMerkleBranchBase;
         uint32 nIndex;
         uint32 nSize;
+        uint8 extraHashes;
         bytes32[] branch;
     }
 

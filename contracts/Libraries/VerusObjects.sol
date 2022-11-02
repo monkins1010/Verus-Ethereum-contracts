@@ -2,7 +2,7 @@
 // Bridge between ethereum and verus
 
 pragma solidity >=0.6.0 <0.9.0;
-pragma experimental ABIEncoderV2;
+pragma abicoder v2;
 
 import "./VerusObjectsCommon.sol";
 
@@ -34,8 +34,8 @@ library VerusObjects {
         address launchsystemid;
         uint startblock;
         uint endblock;
-        uint256 initialsupply;
-        uint256 prelaunchcarveout;
+        uint64 initialsupply;
+        uint64 prelaunchcarveout;
         address gatewayid;
         address[] notaries;
         uint minnotariesconfirm;
@@ -51,7 +51,7 @@ library VerusObjects {
         CCurrencyValueMap currencyvalue;
         uint32 flags;
         address feecurrencyid;
-        uint256 fees;
+        uint64 fees;
         VerusObjectsCommon.CTransferDestination destination;
         address destcurrencyid;
         address destsystemid;
@@ -83,14 +83,15 @@ library VerusObjects {
     }
 
     struct PackedSend {
-        uint256 currencyAndAmount;
-        uint256 destinationAndFlags;
-        address nativeCurrency;
+        uint256 currencyAndAmount;    //tokenID
+        uint256 destinationAndFlags;  //iaddress + flags or name and flags
     }
 
-    struct DeserializedObject {
-        PackedSend[] transfers;
-        uint32 counter;
+    struct PackedCurrencyLaunch {
+        uint256 nameAndFlags;
+        uint256 tokenID;    
+        address ERCContract;  //erc address
+        address iaddress;
     }
 
     struct Buffer {
@@ -103,12 +104,8 @@ library VerusObjects {
         uint256 amount;   // hold serialized data readonly
     }
 
-    struct CReserveTransferImport {
-        uint height;
-        bytes32 txid;                                   // when from ETH, this is hash of the serialized CCrossChainExport that can be used for proof
-        uint txoutnum;                                  // index of the transfers in the exports array
-        CCrossChainExport exportinfo;
-        CPtransactionproof partialtransactionproof;     // partial transaction proof is for the 
+    struct CReserveTransferImport {          
+        CPtransactionproof partialtransactionproof;     
         bytes serializedTransfers;
     }
 
@@ -116,7 +113,7 @@ library VerusObjects {
         uint16 version;
         uint16 flags;
         address sourcesystemid;
-        bytes32 hashtransfers;                          // hashtransfers
+        bytes32 hashtransfers;                        
         uint32 sourceheightstart;
         uint32 sourceheightend;
         address destinationsystemid;
@@ -141,6 +138,7 @@ library VerusObjects {
         uint8  CMerkleBranchBase;
         uint32 nIndex;
         uint32 nSize;
+        uint8 extraHashes;
         bytes32[] branch;
     }
 
@@ -168,6 +166,7 @@ library VerusObjects {
         uint8 flags;
         uint tokenIndex;
         string name;
+        uint256 tokenID;
     }
 
     struct setupToken {
@@ -177,6 +176,7 @@ library VerusObjects {
         uint8 flags;
         string name;
         string ticker;
+        uint256 tokenID;
     }
 
     struct upgradeInfo {
@@ -212,5 +212,6 @@ library VerusObjects {
         bytes32 hashOfTransfers;
         bytes32 exporttxid;
         uint32 exporttxoutnum;
+        uint32 height;
     }
  }

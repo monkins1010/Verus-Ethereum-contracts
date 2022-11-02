@@ -1,6 +1,6 @@
 // SPDX-License-Identifier: MIT
 pragma solidity >=0.6.0 <0.9.0;
-pragma experimental ABIEncoderV2;
+pragma abicoder v2;
 
 import "../Libraries/VerusObjects.sol";
 import "../Libraries/VerusObjectsNotarization.sol";
@@ -15,6 +15,7 @@ import "../VerusNotarizer/VerusNotarizerStorage.sol";
 import "./ExportManager.sol";
 import "../VerusBridge/VerusCrossChainExport.sol";
 import "../VerusBridge/VerusSerializer.sol";
+import "../VerusNotarizer/NotarizationSerializer.sol";
 
 contract UpgradeManager {
 
@@ -28,9 +29,10 @@ contract UpgradeManager {
     VerusNotarizerStorage verusNotarizerStorage;
     VerusBridgeMaster verusBridgeMaster;
     VerusCrossChainExport verusCrossChainExport;
+    NotarizationSerializer notarizationSerializer;
             
     // Total amount of contracts.
-    address[12] public contracts;
+    address[13] public contracts;
     address[] public pendingContracts;
 
     address contractOwner;
@@ -68,6 +70,7 @@ contract UpgradeManager {
             verusInfo = VerusInfo(_newContractAddress[uint(VerusConstants.ContractType.VerusInfo)]);
             exportManager = ExportManager(contracts[uint(VerusConstants.ContractType.ExportManager)]);
             verusCrossChainExport = VerusCrossChainExport(_newContractAddress[uint(VerusConstants.ContractType.VerusCrossChainExport)]);
+            notarizationSerializer = NotarizationSerializer(_newContractAddress[uint(VerusConstants.ContractType.NotarizationSerializer)]);
             
             verusBridgeStorage = VerusBridgeStorage(_newContractAddress[uint(VerusConstants.ContractType.VerusBridgeStorage)]);
             verusNotarizerStorage = VerusNotarizerStorage(_newContractAddress[uint(VerusConstants.ContractType.VerusNotarizerStorage)]);
@@ -88,9 +91,9 @@ contract UpgradeManager {
         //require(msg.sender == contractOwner);
         if (!checkMultiSigContracts(_newContractPackage)) return 1; 
 
-        address[12] memory tempcontracts;
+        address[13] memory tempcontracts;
 
-        for (uint i = 0; i < uint(VerusConstants.ContractType.LastIndex); i++) 
+        for (uint i = 0; i < uint(VerusConstants.ContractType.LastIndex); i++)
         {
             tempcontracts[i] = _newContractPackage.contracts[i];
         }
@@ -116,6 +119,7 @@ contract UpgradeManager {
             verusBridgeMaster.setContracts(tempcontracts);
             verusInfo.setContracts(tempcontracts);
             verusNotarizerStorage.setContracts(tempcontracts);
+            verusProof.setContracts(tempcontracts);
         }
 
         if(tempcontracts[uint(VerusConstants.ContractType.VerusBridge)] != address(verusBridge)) {
@@ -138,11 +142,18 @@ contract UpgradeManager {
         }
 
         if(tempcontracts[uint(VerusConstants.ContractType.VerusSerializer)] != contracts[uint(VerusConstants.ContractType.VerusSerializer)])  {   
-           verusCrossChainExport.setContract(tempcontracts[uint(VerusConstants.ContractType.VerusSerializer)]);
-           tokenManager.setContracts(tempcontracts[uint(VerusConstants.ContractType.VerusSerializer)], 
+            verusCrossChainExport.setContract(tempcontracts[uint(VerusConstants.ContractType.VerusSerializer)]);
+            tokenManager.setContracts(tempcontracts[uint(VerusConstants.ContractType.VerusSerializer)], 
                                     tempcontracts[uint(VerusConstants.ContractType.VerusBridge)]);
-           verusBridge.setContracts(tempcontracts);  
+            verusBridge.setContracts(tempcontracts);  
+            verusProof.setContracts(tempcontracts);
+            verusNotarizer.setContract(tempcontracts[uint(VerusConstants.ContractType.VerusSerializer)], tempcontracts[uint(VerusConstants.ContractType.VerusProof)]);
+            notarizationSerializer.setContract(tempcontracts[uint(VerusConstants.ContractType.VerusSerializer)]);
+        }
 
+        if(tempcontracts[uint(VerusConstants.ContractType.NotarizationSerializer)] != contracts[uint(VerusConstants.ContractType.NotarizationSerializer)])  {   
+            notarizationSerializer = NotarizationSerializer(tempcontracts[uint(VerusConstants.ContractType.NotarizationSerializer)]);
+            verusNotarizer.setContract(tempcontracts[uint(VerusConstants.ContractType.VerusSerializer)], tempcontracts[uint(VerusConstants.ContractType.NotarizationSerializer)]);
         }
 
         // Once all the contracts are set copy the new values to the global
@@ -313,7 +324,7 @@ contract UpgradeManager {
         }
 
         // Return true if majority of notarized have transacted.
-        return pendingContractsSignatures.length >= verusNotarizer.currentNotariesRequired();
+        return pendingContractsSignatures.length >= ((verusNotarizer.currentNotariesLength() >> 1) + 1 );
 
     }
 

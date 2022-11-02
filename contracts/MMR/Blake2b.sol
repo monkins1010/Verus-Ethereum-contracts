@@ -9,7 +9,7 @@
 // SPDX-License-Identifier: MIT
 
 pragma solidity >=0.6.0 <0.9.0;
-pragma experimental ABIEncoderV2;
+pragma abicoder v2;
 
 library Blake2b {
     struct Instance {
@@ -31,7 +31,7 @@ library Blake2b {
     }
 
     // Initialise the state with a given `key` and required `out_len` hash length.
-    function init(bytes memory key, uint out_len, bool useVerusPersonal)
+    function init(bytes memory key, uint out_len)
         internal
         view
         returns (Instance memory instance)
@@ -42,11 +42,11 @@ library Blake2b {
         //    if eq(extcodehash(0x09), 0) { revert(0, 0) }
         //}
 
-        reset(instance, key, out_len, useVerusPersonal);
+        reset(instance, key, out_len);
     }
 
     // Initialise the state with a given `key` and required `out_len` hash length.
-    function reset(Instance memory instance, bytes memory key, uint out_len, bool useVerusPersonal)
+    function reset(Instance memory instance, bytes memory key, uint out_len)
         internal
         view
     {
@@ -57,11 +57,9 @@ library Blake2b {
         // It is byteswapped for the encoding requirements, additionally
         // the IV has the initial parameter block 0 XOR constant applied, but
         // not the key and output length.
-        if(useVerusPersonal)
-            instance.state = hex"0000000c08c9bdf267e6096a3ba7ca8485ae67bb2bf894fe72f36e3cf1361d5f3af54fa5d182e6ad7f520e511f6c3e2b8c68059b3DD8338ED89DE6791854126751AC933300000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000";
-        else
-            instance.state = hex"0000000c08c9bdf267e6096a3ba7ca8485ae67bb2bf894fe72f36e3cf1361d5f3af54fa5d182e6ad7f520e511f6c3e2b8c68059b6bbd41fbabd9831f79217e1319cde05b00000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000";
-        
+
+        instance.state = hex"0000000c08c9bdf267e6096a3ba7ca8485ae67bb2bf894fe72f36e3cf1361d5f3af54fa5d182e6ad7f520e511f6c3e2b8c68059b3DD8338ED89DE6791854126751AC933300000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000";
+
         bytes memory state = instance.state;
 
         // Update parameter block 0 with key length and output length.
@@ -191,7 +189,7 @@ library Blake2b {
     function finalize(Instance memory instance, bytes memory data)
         internal
         view
-        returns (bytes memory output)
+        returns (bytes32 output)
     {
         // FIXME: support incomplete blocks (zero pad them)
         uint input_length = data.length;
@@ -205,17 +203,11 @@ library Blake2b {
         // require(instance.out_len == 64);
 
         bytes memory state = instance.state;
-        output = new bytes(instance.out_len);
-        if(instance.out_len == 32) {
-            assembly {
-                mstore(add(output, 32), mload(add(state, 36)))
-            }
-        } else {
-            assembly {
-                mstore(add(output, 32), mload(add(state, 36)))
-                mstore(add(output, 64), mload(add(state, 68)))
-            }
+
+        assembly {
+            output := mload(add(state, 36))
         }
+
     }
 
     function concat(
