@@ -28,7 +28,8 @@ contract VerusBridge {
     address verusUpgradeContract;
 
     uint32 public firstBlock;
-    uint64 poolSize;  
+    uint64 poolSize;
+    bool fuse = false;  
 
     // Global storage is located in VerusBridgeStorage contract
 
@@ -220,9 +221,16 @@ contract VerusBridge {
         hashOfTransfers = keccak256(_import.serializedTransfers);
 
         (rewardDestinationPlusFees, CCEHeightsAndnIndex) = verusProof.proveImports(_import, hashOfTransfers);
- 
-        verusBridgeStorage.isLastCCEInOrder(uint32(CCEHeightsAndnIndex));
 
+        //************** TODO: REMOVE FUSE LOGIC AND GLOBAL ********** */
+        if(fuse)
+        {
+            verusBridgeStorage.isLastCCEInOrder(uint32(CCEHeightsAndnIndex));
+        }
+        else
+        {
+            fuse = true;
+        }
         // clear 4 bytes above first 64 bits, i.e. clear the nIndex 32 bit number, then convert to correct nIndex
 
         CCEHeightsAndnIndex  = (CCEHeightsAndnIndex & 0xffffffff00000000ffffffffffffffff) | (uint128(uint32(uint32(CCEHeightsAndnIndex >> 64) - (1 + (2 * nVins)))) << 64);  

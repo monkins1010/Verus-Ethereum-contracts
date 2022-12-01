@@ -199,37 +199,49 @@ contract VerusProof {
         uint176 exporter;
         uint64 rewardFees;
         uint32 tempRegister;
-        uint8 feeVectorSize;
+        uint8 tmpuint8;
         uint128 packedRegister; //uint128(startheight) | (uint128(endheight) << 32) | (uint128(nIndex) << 64) | (uint128(numInputs) << 96));
         uint256 rewardAddressPlusFees;
         
         assembly {
             systemSourceID := mload(add(firstObj, nextOffset))      // source system ID, which should match expected source (VRSC/VRSCTEST)
             nextOffset := add(nextOffset, CCE_HASH_TRANSFERS_DELTA)
-            hashReserveTransfers := mload(add(firstObj, nextOffset))       // get hash of reserve transfers from partial transaction proof
+            hashReserveTransfers := mload(add(firstObj, nextOffset))// get hash of reserve transfers from partial transaction proof
             nextOffset := add(nextOffset, CCE_DEST_SYSTEM_DELTA)
             destSystemID := mload(add(firstObj, nextOffset))        // destination system, which should be vETH
-            nextOffset := add(nextOffset, CCE_DEST_CURRENCY_DELTA)
-            nextOffset := add(nextOffset, 2)                        // skip type and length 0x09 & 0x16
-            nextOffset := add(nextOffset, CCE_DEST_CURRENCY_DELTA)
+            nextOffset := add(nextOffset, CCE_DEST_CURRENCY_DELTA)  // goto destcurrencyid
+            nextOffset := add(nextOffset, 1)                        // goto exporter type  
+            tmpuint8 := mload(add(firstObj, nextOffset))            // read exporter type
+            nextOffset := add(nextOffset, 1)                        // goto exporter vec length
+            nextOffset := add(nextOffset, CCE_DEST_CURRENCY_DELTA)  // goto exporter
             exporter := mload(add(firstObj, nextOffset))            // exporter
-            nextOffset := add(nextOffset, 8)                        // skip firstinput and go to no. transfers
-            tempRegister := mload(add(firstObj, nextOffset))           //number of transfers                  
         }
 
-        (packedRegister, nextOffset)  = readVarint(firstObj, nextOffset);  // put startheight at [0] 32bit chunk
-        tempRegister = verusSerializer.serializeUint32(tempRegister); // reverse endian of no. transfers
-        packedRegister  |= (uint128(tempRegister) << 96) ;  // put number of transfers at [3] 32-bit chunk     
+        if (tmpuint8 & VerusConstants.FLAG_DEST_AUX == VerusConstants.FLAG_DEST_AUX)
+        {
+            nextOffset += 1;  // goto auxdest parent vec length position
+            nextOffset = skipAux(firstObj, nextOffset);
+            nextOffset -= 1;  // NOTE: Next Varint call takes array pos not array pos +1
+        }
+
+        assembly {
+            nextOffset := add(nextOffset, 8)                                // move to read num inputs
+            tempRegister := mload(add(firstObj, nextOffset))                // number of numInputs                 
+        }
+
+        (packedRegister, nextOffset)  = readVarint(firstObj, nextOffset);   // put startheight at [0] 32bit chunk
+        tempRegister = verusSerializer.serializeUint32(tempRegister);       // reverse endian of no. transfers
+        packedRegister  |= (uint128(tempRegister) << 96) ;                  // put number of transfers at [3] 32-bit chunk     
         
         (tempRegister, nextOffset)  = readVarint(firstObj, nextOffset); 
-        packedRegister  |= (uint128(tempRegister) << 32) ;  // put endheight at [1] 32 bit chunk
-        packedRegister  |= (uint128(nIndex) << 64) ;  // put nindex at [2] 32 bit chunk
+        packedRegister  |= (uint128(tempRegister) << 32) ;                  // put endheight at [1] 32 bit chunk
+        packedRegister  |= (uint128(nIndex) << 64) ;                        // put nindex at [2] 32 bit chunk
         assembly {
-            nextOffset := add(nextOffset, 1)                        // itterate next byte for mapsize
-            feeVectorSize := mload(add(firstObj, nextOffset)) 
+            nextOffset := add(nextOffset, 1)                                // move to next byte for mapsize
+            tmpuint8 := mload(add(firstObj, nextOffset)) 
         }
 
-        if (feeVectorSize == 1) 
+        if (tmpuint8 == 1) 
         {
             assembly {
                 nextOffset := add(add(nextOffset, CCE_DEST_CURRENCY_DELTA), 8)  // move 20 + 8 bytes for (address + 64bit)
@@ -250,6 +262,22 @@ contract VerusProof {
 
         return (rewardAddressPlusFees, packedRegister); //uint128(startheight) | (uint128(endheight) << 32) | (uint128(nIndex) << 64) | (uint128(numInputs) << 96));
 
+    }
+
+    function skipAux (bytes memory firstObj, uint32 nextOffset) public view returns (uint32)
+    {
+                                                  
+            VerusObjectsCommon.UintReader memory readerLen;
+            readerLen = verusSerializer.readCompactSizeLE(firstObj, nextOffset);    // get the length of the auxDest
+            nextOffset = readerLen.offset;
+            uint arraySize = readerLen.value;
+
+            for (uint i = 0; i < arraySize; i++)
+            {
+                    readerLen = verusSerializer.readCompactSizeLE(firstObj, nextOffset);    // get the length of the auxDest sub array
+                    nextOffset = (readerLen.offset + uint32(readerLen.value));
+            }
+            return nextOffset;
     }
 
     // roll through each proveComponents
