@@ -14,7 +14,8 @@ contract ExportManager {
     TokenManager tokenManager;
     VerusBridgeStorage verusBridgeStorage;
     address verusUpgradeContract;
-    uint8 constant  FEE_OFFSET = 20 + 20 + 20 + 8; // 3 x 20bytes address + 64bit uint
+    uint8 constant FEE_OFFSET = 20 + 20 + 20 + 8; // 3 x 20bytes address + 64bit uint
+    uint8 constant AUX_DEST_LENGTH = 24;
 
     constructor(address verusBridgeStorageAddress, address tokenManagerAddress, address verusUpgradeAddress)
     {
@@ -38,8 +39,7 @@ contract ExportManager {
 
         verusBridgeStorage.checkiaddresses(transfer);
 
-
-        uint256 requiredFees =  VerusConstants.transactionFee;  //0.003 eth in WEI
+        uint256 requiredFees =  VerusConstants.transactionFee;  //0.003 eth in WEI (To vrsc)
         uint64 bounceBackFee;
         uint64 transferFee;
         bytes memory serializedDest;
@@ -112,11 +112,12 @@ contract ExportManager {
                 require(transfer.destcurrencyid == VerusConstants.VerusBridgeAddress);
             }
 
-            if (transfer.destination.destinationtype == (VerusConstants.FLAG_DEST_GATEWAY + VerusConstants.DEST_ETH )) {
+            if ((transfer.destination.destinationtype & ~VerusConstants.FLAG_DEST_AUX) == (VerusConstants.FLAG_DEST_GATEWAY + VerusConstants.DEST_ETH)) {
 
                 //destination is concatenated with the gateway back address (bridge.veth) + (gatewayCode) + 0.003 ETH in fees uint64LE
                 
-                require (transfer.destination.destinationaddress.length == FEE_OFFSET, "destination address not 68 bytes");
+                require (transfer.destination.destinationaddress.length == (FEE_OFFSET + AUX_DEST_LENGTH) ||
+                        transfer.destination.destinationaddress.length == (FEE_OFFSET), "destination address not 68 or (+ 24 bytes)");
                 require (transfer.currencyvalue.currency != transfer.secondreserveid, "Bounce back type not allowed");
                 assembly 
                 {
@@ -129,10 +130,10 @@ contract ExportManager {
                 require (gatewayCode == address(0), "GatewayCODE must be empty");
 
                 bounceBackFee = reverse(bounceBackFee);
-                require (tokenManager.convertFromVerusNumber(bounceBackFee, 18) >= requiredFees, "Return fee not >=0.003ETH");
+                require (bounceBackFee >= VerusConstants.verusvETHReturnFee, "Return fee not >= 0.01ETH");
 
                 transferFee += bounceBackFee;
-                requiredFees += requiredFees;  //bounceback fees required as well as send fees
+                requiredFees += tokenManager.convertFromVerusNumber(bounceBackFee, 18);  //bounceback fees required as well as send fees
 
             } else if (!(transfer.destination.destinationtype == VerusConstants.DEST_PKH || transfer.destination.destinationtype == VerusConstants.DEST_ID 
                         || transfer.destination.destinationtype == VerusConstants.DEST_SH || transfer.destination.destinationtype == VerusConstants.DEST_ETHNFT)) {
@@ -154,12 +155,12 @@ contract ExportManager {
                 revert ("ETH Fees to Low");
             }            
             else if (transfer.currencyvalue.currency == VerusConstants.VEth && 
-                (tokenManager.convertFromVerusNumber(amount + transferFee, 18) != ETHSent) )
+                ETHSent < tokenManager.convertFromVerusNumber(amount + transferFee, 18))
             {
-                revert ("ETH sent != (amount + fees)");
+                revert ("ETH sent <= (amount + fees)");
             } 
             else if (transfer.currencyvalue.currency != VerusConstants.VEth &&
-                     tokenManager.convertFromVerusNumber(transferFee, 18) != ETHSent)
+                    ETHSent < tokenManager.convertFromVerusNumber(transferFee, 18))
             {
                 revert ("ETH fee sent < fees for token");
             } 
@@ -181,13 +182,9 @@ contract ExportManager {
             {
                 revert ("ETH Fee to low (token)");
             }
-
-        
         } 
         return requiredFees;
-
     }
-
 
     function checkTransferFlags(VerusObjects.CReserveTransfer memory transfer) public view returns(bool) {
 
@@ -202,21 +199,20 @@ contract ExportManager {
         if (transfer.destination.destinationtype == (VerusConstants.DEST_ETH + VerusConstants.FLAG_DEST_GATEWAY)
                 && (transfer.flags & VerusConstants.CURRENCY_EXPORT  != VerusConstants.CURRENCY_EXPORT))
         {
-
-            if (transfer.flags ==  (VerusConstants.VALID + VerusConstants.CONVERT + VerusConstants.RESERVE_TO_RESERVE))
+            if (transfer.flags == (VerusConstants.VALID + VerusConstants.CONVERT + VerusConstants.RESERVE_TO_RESERVE))
             {
                 require(sendingCurrency.flags & VerusConstants.MAPPING_PARTOF_BRIDGEVETH == VerusConstants.MAPPING_PARTOF_BRIDGEVETH &&
                         destinationCurrency.flags & VerusConstants.MAPPING_ISBRIDGE_CURRENCY == VerusConstants.MAPPING_ISBRIDGE_CURRENCY &&
                         verusBridgeStorage.getERCMapping(transfer.secondreserveid).flags & VerusConstants.MAPPING_PARTOF_BRIDGEVETH == VerusConstants.MAPPING_PARTOF_BRIDGEVETH,
                          "Cannot convert non bridge reserves");
             }
-            else if (transfer.flags ==  (VerusConstants.VALID + VerusConstants.CONVERT + VerusConstants.IMPORT_TO_SOURCE))
+            else if (transfer.flags == (VerusConstants.VALID + VerusConstants.CONVERT + VerusConstants.IMPORT_TO_SOURCE))
             {
                 require(sendingCurrency.flags & VerusConstants.MAPPING_ISBRIDGE_CURRENCY == VerusConstants.MAPPING_ISBRIDGE_CURRENCY  &&
                         destinationCurrency.flags & VerusConstants.MAPPING_PARTOF_BRIDGEVETH == VerusConstants.MAPPING_PARTOF_BRIDGEVETH,
                          "Cannot import non reserve to source");
             }
-            else if (transfer.flags ==  (VerusConstants.VALID + VerusConstants.CONVERT))
+            else if (transfer.flags == (VerusConstants.VALID + VerusConstants.CONVERT))
             {
                 require(sendingCurrency.flags & VerusConstants.MAPPING_PARTOF_BRIDGEVETH == VerusConstants.MAPPING_PARTOF_BRIDGEVETH  &&
                         destinationCurrency.flags & VerusConstants.MAPPING_ISBRIDGE_CURRENCY == VerusConstants.MAPPING_ISBRIDGE_CURRENCY,
@@ -237,10 +233,10 @@ contract ExportManager {
             // can be sent to DEST_ID / DEST_PKH / DEST_SH
             return false; /* NFTS NOT CURRENCTLY ACTIVATED */
         }
-        else if ((transferType != VerusConstants.DEST_ID && 
-                transferType != VerusConstants.DEST_PKH && 
-                transferType != VerusConstants.DEST_SH &&
-                transferType != VerusConstants.DEST_ETHNFT) )
+        else if (transferType != VerusConstants.DEST_ID && 
+                 transferType != VerusConstants.DEST_PKH && 
+                 transferType != VerusConstants.DEST_SH &&
+                 transferType != VerusConstants.DEST_ETHNFT)
         {
             return false;
         }
@@ -277,19 +273,19 @@ contract ExportManager {
         }  
     }
 
-    function reverse(uint64 input) internal pure returns (uint64 v) {
-    v = input;
+    function reverse(uint64 input) internal pure returns (uint64 v) 
+    {
+        v = input;
 
-    // swap bytes
-    v = ((v & 0xFF00FF00FF00FF00) >> 8) |
-        ((v & 0x00FF00FF00FF00FF) << 8);
+        // swap bytes
+        v = ((v & 0xFF00FF00FF00FF00) >> 8) |
+            ((v & 0x00FF00FF00FF00FF) << 8);
 
-    // swap 2-byte long pairs
-    v = ((v & 0xFFFF0000FFFF0000) >> 16) |
-        ((v & 0x0000FFFF0000FFFF) << 16);
+        // swap 2-byte long pairs
+        v = ((v & 0xFFFF0000FFFF0000) >> 16) |
+            ((v & 0x0000FFFF0000FFFF) << 16);
 
-    // swap 4-byte long pairs
-    v = (v >> 32) | (v << 32);
-}
-
+        // swap 4-byte long pairs
+        v = (v >> 32) | (v << 32);
+    }
 }

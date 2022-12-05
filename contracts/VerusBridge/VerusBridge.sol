@@ -123,7 +123,7 @@ contract VerusBridge {
                 nftContract := mload(add(serializedDest, 41))
                 tokenId := mload(add(serializedDest, 73))
             }
-            require (serializedDest.length == 73 && (desttype == VerusConstants.DEST_PKH || desttype == VerusConstants.DEST_ID), "NFT packet wrong length/dest wrong");
+            require (serializedDest.length == 73 && (desttype == VerusConstants.DEST_PKH || desttype == VerusConstants.DEST_ID) && destinationAddress != address(0), "NFT packet wrong length/dest wrong");
 
             ERC721 nft = ERC721(nftContract);
             require (nft.getApproved(tokenId) == address(this), "NFT not approved");
