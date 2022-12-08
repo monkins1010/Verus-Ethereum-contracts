@@ -281,15 +281,14 @@ contract VerusSerializer {
             returnCurrency.nameAndFlags |= uint256(uint8(input[i + nextOffset])) << ((i+1)*8);
         }
         
-        nextOffset += nameStringLength + CCC_ID_LEN ; // skip launchsysemID
-
         assembly {
-            nextOffset := add(nextOffset, CCC_ID_LEN)
+            nextOffset := add(nextOffset, nameStringLength)
+            nextOffset := add(nextOffset, CCC_ID_LEN) // move to read launchsysemID
+            nextOffset := add(nextOffset, CCC_ID_LEN) // move to read Native currency
             nextOffset := add(nextOffset, CCC_NATIVE_OFFSET)
             NativeCurrencyType := mload(add(input, nextOffset)) 
         }
-   
-    
+       
         if (NativeCurrencyType == VerusConstants.DEST_ETHNFT)
         {
             assembly {
@@ -339,10 +338,10 @@ contract VerusSerializer {
         while (nextOffset <= tempSerialized.length) {
             
             assembly {
-                tempaddress := mload(add(tempSerialized, nextOffset)) // skip version 0x01 (1 byte)
+                tempaddress := mload(add(tempSerialized, nextOffset)) // skip version 0x01 (1 byte) and read currency being sent
             }
 
-            (temporaryRegister1, nextOffset)  = readVarint(tempSerialized, nextOffset);  //readvarint returns next idx position
+            (temporaryRegister1, nextOffset)  = readVarint(tempSerialized, nextOffset);  // read varint (amount) returns next idx position
             (flags, nextOffset) = readVarint(tempSerialized, nextOffset);
 
             tempTransfers[uint8(counter)].currencyAndAmount = uint256(temporaryRegister1) << 160; //shift amount and pack
@@ -374,7 +373,7 @@ contract VerusSerializer {
                 }
 
                 assembly {
-                    tempaddress := mload(sub(add(add(tempSerialized, nextOffset), temporaryRegister1), 1))
+                    tempaddress := mload(sub(add(add(tempSerialized, nextOffset), temporaryRegister1), 1)) //skip type +1 byte to read address
                 }
                 tempTransfers[uint8(counter)].destinationAndFlags |= uint256(uint160(tempaddress));
                 counter++;

@@ -221,8 +221,6 @@ contract VerusBridge {
 
         (rewardDestinationPlusFees, CCEHeightsAndnIndex) = verusProof.proveImports(_import, hashOfTransfers);
 
-        //************** TODO: REMOVE FUSE LOGIC AND GLOBAL ********** */
-
         verusBridgeStorage.isLastCCEInOrder(uint32(CCEHeightsAndnIndex));
    
         // clear 4 bytes above first 64 bits, i.e. clear the nIndex 32 bit number, then convert to correct nIndex
