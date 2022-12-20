@@ -283,13 +283,13 @@ contract VerusSerializer {
         
         assembly {
             nextOffset := add(nextOffset, nameStringLength)
-            nextOffset := add(nextOffset, CCC_ID_LEN) // move to read launchsysemID
+            nextOffset := add(nextOffset, CCC_ID_LEN) // move to read launchsystemID
             nextOffset := add(nextOffset, CCC_ID_LEN) // move to read Native currency
             nextOffset := add(nextOffset, CCC_NATIVE_OFFSET)
             NativeCurrencyType := mload(add(input, nextOffset)) 
         }
        
-        if (NativeCurrencyType == VerusConstants.DEST_ETHNFT)
+        if (NativeCurrencyType & VerusConstants.DEST_ETHNFT == VerusConstants.DEST_ETHNFT)
         {
             assembly {
                 nextOffset := add(add(nextOffset, CCC_ID_LEN), 1) //skip vector length 
@@ -300,7 +300,7 @@ contract VerusSerializer {
             returnCurrency.nameAndFlags |= uint256(VerusConstants.TOKEN_ETH_NFT_DEFINITION) << 160;
             returnCurrency.nameAndFlags |= uint256(VerusConstants.MAPPING_ETHEREUM_OWNED) << 160;
         }
-        else if (NativeCurrencyType == VerusConstants.DEST_ETH)
+        else if (NativeCurrencyType & VerusConstants.DEST_ETH == VerusConstants.DEST_ETH)
         {
             assembly {
                 nextOffset := add(add(nextOffset, CCC_ID_LEN), 1) //skip vector length 
@@ -378,7 +378,8 @@ contract VerusSerializer {
                 tempTransfers[uint8(counter)].destinationAndFlags |= uint256(uint160(tempaddress));
                 counter++;
             }
-            else if (destinationType == VerusConstants.DEST_REGISTERCURRENCY || destinationType == VerusConstants.DEST_ETHNFT)
+            else if (destinationType & VerusConstants.DEST_REGISTERCURRENCY == VerusConstants.DEST_REGISTERCURRENCY || 
+                                destinationType & VerusConstants.DEST_ETHNFT == VerusConstants.DEST_ETHNFT)
             { 
                 launchTxs[(counter >> 24 & 0xff)] = currencyParser(tempSerialized, nextOffset);
                 launchTxs[(counter >> 24 & 0xff)].iaddress = address(uint160(tempTransfers[uint8(counter)].currencyAndAmount));

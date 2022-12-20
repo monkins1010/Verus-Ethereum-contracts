@@ -91,6 +91,9 @@ contract VerusBridgeStorage {
         if (_readyExports[_block].transfers.length == 1)
         {
             _readyExports[_block].prevExportHash = prevTxidHash;
+            
+            // To stop out of order blocks
+            require(_block >= lastCCEExportHeight);
             lastCCEExportHeight = uint32(_block);
         }
     }

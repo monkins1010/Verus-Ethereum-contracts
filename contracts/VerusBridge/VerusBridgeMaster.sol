@@ -51,7 +51,7 @@ contract VerusBridgeMaster {
         return verusBridgeStorage.processedTxids(_imports);
     }
 
-    function submitImports(VerusObjects.CReserveTransferImport calldata _imports) public {
+    function submitImports(VerusObjects.CReserveTransferImport calldata _imports) external {
 
         uint176 bridgeKeeper;
 
@@ -214,7 +214,7 @@ contract VerusBridgeMaster {
 
         claiment |= (uint256(0x0214) << 160);  // is Claimient type R address and 20 bytes.
 
-        if ((claimableFees[bytes32(claiment)] > 0) && msg.sender == ethAddress)
+        if ((claimableFees[bytes32(claiment)] > VerusConstants.verusvETHTransactionFee) && msg.sender == ethAddress)
         {
             verusBridge.sendToVRSC(uint64(claimableFees[bytes32(claiment)]), true, rAddress);
             claimableFees[bytes32(claiment)] = 0;

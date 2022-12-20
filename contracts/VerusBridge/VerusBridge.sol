@@ -139,13 +139,12 @@ contract VerusBridge {
     }
 
     function _createExports(VerusObjects.CReserveTransfer memory newTransaction, bool poolAvailable, uint blockNumber) private {
-        uint currentHeight = blockNumber;
 
         //check if the current block height has a set of transfers associated with it if so add to the existing array
         bool newBlock;
-        newBlock = verusBridgeStorage.setReadyExportTransfers(currentHeight, newTransaction);
+        newBlock = verusBridgeStorage.setReadyExportTransfers(blockNumber, newTransaction);
 
-        bytes memory serializedCCE = verusSerializer.serializeCCrossChainExport(verusCCE.generateCCE(verusBridgeStorage.getReadyExports(currentHeight).transfers, poolAvailable, currentHeight));
+        bytes memory serializedCCE = verusSerializer.serializeCCrossChainExport(verusCCE.generateCCE(verusBridgeStorage.getReadyExports(blockNumber).transfers, poolAvailable, blockNumber));
 
         bytes32 prevHash;
  
@@ -155,10 +154,10 @@ contract VerusBridge {
         } 
         else 
         {
-            prevHash = verusBridgeStorage.getReadyExports(currentHeight).prevExportHash;
+            prevHash = verusBridgeStorage.getReadyExports(blockNumber).prevExportHash;
         }
           
-        verusBridgeStorage.setReadyExportTxid(keccak256(abi.encodePacked(serializedCCE, prevHash)), prevHash, currentHeight);
+        verusBridgeStorage.setReadyExportTxid(keccak256(abi.encodePacked(serializedCCE, prevHash)), prevHash, blockNumber);
 
     }
 
