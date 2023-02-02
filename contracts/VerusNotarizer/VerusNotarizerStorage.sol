@@ -19,6 +19,7 @@ contract VerusNotarizerStorage {
 
     mapping (address => uint32) public poolAvailable;
     mapping (bytes32 => bytes32) public storageGlobal;
+    mapping (bytes32 => bytes) private proofs;
     
     constructor(address upgradeContractAddress)
     {
@@ -35,7 +36,7 @@ contract VerusNotarizerStorage {
 
     function setPoolAvailable() public {
 
-        require( msg.sender == verusNotarizer,"setNotarizedProof:callfromNotarizeronly");
+        require( msg.sender == verusNotarizer,"setpool:callfromNotarizeronly");
         poolAvailable[VerusConstants.VerusBridgeAddress] = uint32(block.number); 
 
     }
@@ -46,6 +47,21 @@ contract VerusNotarizerStorage {
         require(msg.sender == address(verusBridge));
 
         storageGlobal[key] = data;
+
+    }
+
+    function pushNewProof(bytes memory data, uint32 height) public {
+
+        require( msg.sender == verusNotarizer,"pushNotarizedProof:callfromNotarizeronly");
+        proofs[bytes32(uint256(height))] = data;
+
+    }
+
+    function getProof(bytes32 key) public view returns (bytes memory){
+
+        require( msg.sender == verusNotarizer,"getProof:callfromNotarizeronly");
+
+        return proofs[key];
 
     }
 

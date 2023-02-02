@@ -6,7 +6,6 @@ pragma abicoder v2;
 import "../Libraries/VerusObjects.sol";
 import "../Libraries/VerusObjectsNotarization.sol";
 import "../Libraries/VerusConstants.sol";
-import "../MMR/VerusBlake2b.sol";
 
 contract VerusSerializer {
 
@@ -16,7 +15,6 @@ contract VerusSerializer {
     uint32 constant CCC_NATIVE_OFFSET = 4 + 4 + 1;
     uint32 constant CCC_TOKENID_OFFSET = 32;
     int16 constant TYPE_ETHEREUM = 2;
-    using VerusBlake2b for bytes;
 
     function readCompactSizeLE(bytes memory incoming, uint32 offset) public pure returns(VerusObjectsCommon.UintReader memory) {
 
@@ -217,12 +215,6 @@ contract VerusSerializer {
             inProgress = abi.encodePacked(inProgress,serializeCReserveTransfer(_bts[i]));
         }
         return inProgress;
-    }
-  
-    function notarizationBlakeHash(bytes calldata _not) public view returns (bytes32)
-    {
-        return _not.createHash();
-
     }
     
     function serializeCCrossChainExport(VerusObjects.CCrossChainExport memory _ccce) public pure returns(bytes memory){

@@ -11,6 +11,7 @@ import "../VerusNotarizer/VerusNotarizerStorage.sol";
 import "../VerusBridge/VerusBridgeMaster.sol";
 import "@openzeppelin/contracts/utils/math/SafeMath.sol";
 import "./NotarizationSerializer.sol";
+import "../MMR/VerusBlake2b.sol";
 
 contract VerusNotarizer {
         
@@ -37,6 +38,7 @@ contract VerusNotarizer {
     bytes[] public bestForks;
     // Notifies when a new block hash is published
     event NewNotarization (bytes32);
+    using VerusBlake2b for bytes;
 
     constructor(address _verusSerializerAddress, address upgradeContractAddress, 
         address[] memory _notaries, address[] memory _notariesEthAddress, address[] memory _notariesColdStoreEthAddress, 
@@ -73,7 +75,7 @@ contract VerusNotarizer {
     }
  
     function setLatestData(bytes calldata serializedNotarization, bytes32 txid, uint32 n, bytes calldata data
-        ) public {
+        ) external {
 
         require(!knownNotarizationTxids[txid], "known TXID");
         knownNotarizationTxids[txid] = true;
@@ -134,9 +136,12 @@ contract VerusNotarizer {
        
         bytes32 blakeNotarizationHash;
 
-        blakeNotarizationHash = verusSerializer.notarizationBlakeHash(serializedNotarization);
+        blakeNotarizationHash = serializedNotarization.createHash();
         
-        (bytes32 launchedAndProposer, bytes32 prevnotarizationtxid, bytes32 hashprevnotarization, bytes32 stateRoot) = notarizationSerializer.deserilizeNotarization(serializedNotarization);
+        (bytes32 launchedAndProposer, bytes32 prevnotarizationtxid, bytes32 hashprevnotarization, bytes32 stateRoot, bytes32 blockHash, 
+                uint32 height) = notarizationSerializer.deserilizeNotarization(serializedNotarization);
+
+        verusNotarizerStorage.pushNewProof(abi.encode(stateRoot, blockHash), height);
 
         if (!poolAvailable && (((uint256(launchedAndProposer) >> 176) & 0xff) == 1)) { //shift to read if bridge launched in packed uint256
             verusNotarizerStorage.setPoolAvailable();
@@ -326,6 +331,17 @@ contract VerusNotarizer {
 
     }
 
+    function getProof(uint height) public view returns (bytes memory) {
 
+        require(msg.sender == address(verusBridgeMaster));
+
+        return verusNotarizerStorage.getProof(bytes32(height));
+    }
+
+    function getProofCost() public pure returns (uint256) {
+
+        return 0.1 ether;
+
+    }
 
 }

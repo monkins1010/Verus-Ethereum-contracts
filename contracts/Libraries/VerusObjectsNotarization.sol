@@ -66,12 +66,9 @@ library VerusObjectsNotarization {
     }
 
     struct storedCProofRoot{
-        bytes32 hashOfNotarization;
-        bytes32 txid;
-        bytes32 stateroot;                      // latest MMR root of the notarization height
-        bytes32 blockhash;                      // combination of block hash, block MMR root, and compact power (or external proxy) for the notarization height
+        bytes32 stateroot;            
+        bytes32 blockhash;              
         bytes32 compactpower;
-        uint32 rootheight;                    // height (or sequence) of the notarization we certify
     }
 
     struct CNodeData {

@@ -51,7 +51,8 @@ contract NotarizationSerializer {
         revert(); // i=10, invalid varint stream
     }
 
-    function deserilizeNotarization(bytes memory notarization) public view returns (bytes32 proposerAndLaunched, bytes32 prevnotarizationtxid, bytes32 hashprevcrossnotarization, bytes32 stateRoot ) {
+    function deserilizeNotarization(bytes memory notarization) public view returns (bytes32 proposerAndLaunched, bytes32 prevnotarizationtxid, bytes32 hashprevcrossnotarization, bytes32 stateRoot
+                                                                                        , bytes32 blockHash , uint32 height  ) {
         
         uint32 nextOffset;
         uint16 bridgeLaunched;
@@ -98,7 +99,7 @@ contract NotarizationSerializer {
         nextOffset++; //move forwards to read le
         readerLen = verusSerializer.readCompactSizeLE(notarization, nextOffset);    // get the length of proofroot array
 
-        stateRoot = deserializeProofRoots(notarization, uint32(readerLen.value), nextOffset);
+        (stateRoot, blockHash, height) = deserializeProofRoots(notarization, uint32(readerLen.value), nextOffset);
 
     }
 
@@ -146,32 +147,40 @@ contract NotarizationSerializer {
         return (bridgeLaunched, nextOffset);
     }
 
-    function deserializeProofRoots (bytes memory notarization, uint32 size, uint32 nextOffset) private pure returns (bytes32 stateRoot)
+    function deserializeProofRoots (bytes memory notarization, uint32 size, uint32 nextOffset) private view returns (bytes32 stateRoot, bytes32 blockHash, uint32 height)
     {
         for (uint i = 0; i < size; i++)
         {
             uint16 proofType;
             address systemID;
             bytes32 tempStateRoot;
+            bytes32 tempBlockHash;
+            uint32 tempHeight;
+
             assembly {
-                nextOffset := add(nextOffset, 2) // skip version
+                nextOffset := add(nextOffset, 2) // move to version
                 nextOffset := add(nextOffset, 2) // move to read type
-                proofType := mload(add(notarization, nextOffset))      // proofType 
+                proofType := mload(add(notarization, nextOffset))      // read proofType 
                 nextOffset := add(nextOffset, CURRENCY_LENGTH) // move to read systemID
                 systemID := mload(add(notarization, nextOffset))  
-                nextOffset := add(nextOffset, 4) // skip height
+                nextOffset := add(nextOffset, 4) // move to height
+                tempHeight := mload(add(notarization, nextOffset))  
                 nextOffset := add(nextOffset, BYTES32_LENGTH) // move to read stateroot
                 tempStateRoot := mload(add(notarization, nextOffset))  
-                nextOffset := add(nextOffset, TWO2BYTES32_LENGTH) // skip blockhash + power
+                nextOffset := add(nextOffset, BYTES32_LENGTH) // move to read blockhash
+                tempBlockHash := mload(add(notarization, nextOffset))  
+                nextOffset := add(nextOffset, TWO2BYTES32_LENGTH) // move to power
             }
             
             if(systemID == VerusConstants.VerusCurrencyId)
             {
                 stateRoot = tempStateRoot;
+                blockHash = tempBlockHash;
+                height = verusSerializer.serializeUint32(tempHeight); //swapendian
             }
 
             //swap 16bit endian
-            if(((proofType >> 8) | (proofType << 8)) == 2){
+            if((proofType >> 8) == 2){ //IF TYPE ETHEREUM 
                 assembly {
                 nextOffset := add(nextOffset, 8) // skip gasprice
                 }
