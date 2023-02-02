@@ -11,7 +11,7 @@ import "../MMR/VerusBlake2b.sol";
 contract VerusSerializer {
 
     uint constant ETH_ADDRESS_SIZE_BYTES = 20;
-    uint32 constant CCC_PREFIX_TO_NAME_LEN = 4 + 4 + 20;
+    uint32 constant CCC_PREFIX_TO_OPTIONS = 3 + 4; // already starts on the byte so 3 first
     uint32 constant CCC_ID_LEN = 20;
     uint32 constant CCC_NATIVE_OFFSET = 4 + 4 + 1;
     uint32 constant CCC_TOKENID_OFFSET = 32;
@@ -265,22 +265,32 @@ contract VerusSerializer {
     {
         uint32 nextOffset;
         uint8 nameStringLength;
+        address parent;
         address nativeCurrencyID;
         uint256 nftID;
         uint8 NativeCurrencyType;
+        uint32 options;
 
-        nextOffset = CCC_PREFIX_TO_NAME_LEN + uint32(offset);
+        nextOffset = CCC_PREFIX_TO_OPTIONS + uint32(offset);
 
         assembly {
+            options := mload(add(input, nextOffset))
+            nextOffset := add(nextOffset, CCC_ID_LEN)
+            parent := mload(add(input, nextOffset))
+            nextOffset := add(nextOffset, 1)  // one byte for name string length
             nameStringLength := mload(add(input, nextOffset)) // string length MAX 64 so will always be a byte
         }
 
-        returnCurrency.nameAndFlags = nameStringLength > 19 ? 19 : nameStringLength; //first byte is length 
+        options = serializeUint32(options);  //reverse endian
+        returnCurrency.parent = parent;
+        bytes memory tempname = new bytes(nameStringLength);
 
         for (uint32 i = 0; i < nameStringLength; i++) { //pack a max of 19 bytes of the id name into token name
-            returnCurrency.nameAndFlags |= uint256(uint8(input[i + nextOffset])) << ((i+1)*8);
+            tempname[i] = input[i + nextOffset];
         }
         
+        returnCurrency.name = string(tempname);
+
         assembly {
             nextOffset := add(nextOffset, nameStringLength)
             nextOffset := add(nextOffset, CCC_ID_LEN) // move to read launchsystemID
@@ -289,7 +299,7 @@ contract VerusSerializer {
             NativeCurrencyType := mload(add(input, nextOffset)) 
         }
        
-        if (NativeCurrencyType & VerusConstants.DEST_ETHNFT == VerusConstants.DEST_ETHNFT)
+        if (NativeCurrencyType & VerusConstants.DEST_ETHNFT == VerusConstants.DEST_ETHNFT) //mapped ETH NFT
         {
             assembly {
                 nextOffset := add(add(nextOffset, CCC_ID_LEN), 1) //skip vector length 
@@ -297,25 +307,31 @@ contract VerusSerializer {
                 nextOffset := add(nextOffset, CCC_TOKENID_OFFSET)
                 nftID := mload(add(input, nextOffset))
             }
-            returnCurrency.nameAndFlags |= uint256(VerusConstants.TOKEN_ETH_NFT_DEFINITION) << 160;
-            returnCurrency.nameAndFlags |= uint256(VerusConstants.MAPPING_ETHEREUM_OWNED) << 160;
+            returnCurrency.flags |= uint8(VerusConstants.TOKEN_ETH_NFT_DEFINITION);
+            returnCurrency.flags |= uint8(VerusConstants.MAPPING_ETHEREUM_OWNED);
+            returnCurrency.tokenID = nftID;
         }
-        else if (NativeCurrencyType & VerusConstants.DEST_ETH == VerusConstants.DEST_ETH)
+        else if (NativeCurrencyType & VerusConstants.DEST_ETH == VerusConstants.DEST_ETH) //mapped ETH token
         {
             assembly {
                 nextOffset := add(add(nextOffset, CCC_ID_LEN), 1) //skip vector length 
                 nativeCurrencyID := mload(add(input, nextOffset))
             }
-            returnCurrency.nameAndFlags |= uint256(VerusConstants.TOKEN_LAUNCH) << 160;
-            returnCurrency.nameAndFlags |= uint256(VerusConstants.MAPPING_ETHEREUM_OWNED) << 160;
+            returnCurrency.flags |= uint8(VerusConstants.TOKEN_LAUNCH);
+            returnCurrency.flags |= uint8(VerusConstants.MAPPING_ETHEREUM_OWNED);
         }
-        else if (NativeCurrencyType == 0x00)
+        else if (options & VerusConstants.OPTION_NFT_TOKEN == VerusConstants.OPTION_NFT_TOKEN) //minted NFT from verus
         {
-            returnCurrency.nameAndFlags |= uint256(VerusConstants.TOKEN_LAUNCH) << 160;
-            returnCurrency.nameAndFlags |= uint256(VerusConstants.MAPPING_VERUS_OWNED) << 160;
+            returnCurrency.flags |= uint8(VerusConstants.TOKEN_ETH_NFT_DEFINITION);
+            returnCurrency.flags |= uint8(VerusConstants.MAPPING_VERUS_OWNED);
+            nativeCurrencyID = VerusConstants.VerusNFTID;
+        }
+        else if (NativeCurrencyType == 0x00) //minted ERC20 from verus
+        {
+            returnCurrency.flags |= uint8(VerusConstants.TOKEN_LAUNCH);
+            returnCurrency.flags |= uint8(VerusConstants.MAPPING_VERUS_OWNED);
         }
 
-        returnCurrency.tokenID = nftID;
         returnCurrency.ERCContract = nativeCurrencyID;
 
         return returnCurrency;

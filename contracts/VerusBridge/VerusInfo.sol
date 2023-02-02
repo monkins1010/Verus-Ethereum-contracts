@@ -112,23 +112,20 @@ contract VerusInfo {
         contractOwner = address(0);
     }
 
-    function setFeePercentages(uint256 _ethAmount)public pure returns (uint256,uint256,uint256,uint256,uint256)
+    function setFeePercentages(uint256 _ethAmount)public pure returns (uint256,uint256,uint256,uint256)
     {
         uint256 notaryFees;
         uint256 LPFees;
-        uint256 exporterFees;
         uint256 proposerFees;  
         uint256 bridgekeeperFees;     
         
-        notaryFees = (_ethAmount / 10 ) * 3 ; 
+        notaryFees = (_ethAmount / 4 ); 
+        proposerFees = _ethAmount / 4 ;
+        bridgekeeperFees = (_ethAmount / 4 );
 
-        exporterFees = _ethAmount / 10 ;
-        proposerFees = _ethAmount / 10 ;
-        bridgekeeperFees = (_ethAmount / 10 ) * 3 ;
+        LPFees = _ethAmount - (notaryFees + proposerFees + bridgekeeperFees);
 
-        LPFees = _ethAmount - (notaryFees + exporterFees + proposerFees + bridgekeeperFees);
-
-        return(notaryFees, exporterFees, proposerFees, bridgekeeperFees, LPFees);
+        return(notaryFees, proposerFees, bridgekeeperFees, LPFees);
     }
 
 }

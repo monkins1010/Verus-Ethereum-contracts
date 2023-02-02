@@ -73,16 +73,16 @@ contract VerusBridgeMaster {
         return verusNotarizer.poolAvailable();
     }
 
-    function setLatestData(bytes calldata serializedNotarization, bytes32 txid, uint32 n, bytes memory data) public 
-    {
+    // function setLatestData(bytes calldata serializedNotarization, bytes32 txid, uint64 n, bytes memory data) public 
+    // {
 
-        uint16 notaryHeight = verusNotarizer.setLatestData(serializedNotarization, txid, n, data);
-        require(notaryHeight > 0, "not enough notary signatures");
+    //     uint16 notaryHeight = verusNotarizer.setLatestData(serializedNotarization, txid, uint32(n), data);
+    //     require(notaryHeight > 0, "not enough notary signatures");
 
-        n |= uint32(notaryHeight) << 16;
+    //     n |= uint64(notaryHeight) << 32;
 
-        verusNotarizer.checkNotarization(serializedNotarization, txid, n);
-    }
+    //     verusNotarizer.checkNotarization(serializedNotarization, txid, n);
+    // }
 
     function getinfo() public view returns(bytes memory)
     {
@@ -112,14 +112,14 @@ contract VerusBridgeMaster {
         return verusInfo.getcurrency(_currencyid);
     }
 
-    function setClaimableFees(bytes32 _feeRecipient, uint256 fees, uint176 bridgekeeper) public
+    function setClaimableFees(uint64 fees, uint176 bridgekeeper) public
     {
         require(msg.sender == address(verusBridge));
         
         //exporter 10%
 
         uint256 LPFees;
-        LPFees = setLPClaimableFees(_feeRecipient, fees, bridgekeeper);
+        LPFees = setLPClaimableFees(fees, bridgekeeper);
 
         setClaimedFees(bytes32(uint256(uint160(address(verusNotarizer)))), LPFees);
 
@@ -132,11 +132,10 @@ contract VerusBridgeMaster {
         }
     }
 
-    function setLPClaimableFees(bytes32 _feeRecipient, uint256 _ethAmount, uint176 bridgekeeper) private returns (uint256)
+    function setLPClaimableFees(uint256 _ethAmount, uint176 bridgekeeper) private returns (uint256)
     {       
         uint256 notaryFees;
         uint256 LPFees;
-        uint256 exporterFees;
         uint256 proposerFees;  
         uint256 bridgekeeperFees;              
         uint176 proposer;
@@ -146,10 +145,9 @@ contract VerusBridgeMaster {
                 proposer := mload(add(proposerBytes, 128))
         } 
 
-        (notaryFees, exporterFees, proposerFees, bridgekeeperFees, LPFees) = verusInfo.setFeePercentages(_ethAmount);
+        (notaryFees, proposerFees, bridgekeeperFees, LPFees) = verusInfo.setFeePercentages(_ethAmount);
 
         setNotaryFees(notaryFees);
-        setClaimedFees(_feeRecipient, exporterFees);
 
         setClaimedFees(bytes32(uint256(proposer)), proposerFees);
         
@@ -163,7 +161,7 @@ contract VerusBridgeMaster {
 
     function setNotaryFees(uint256 notaryFees) public {
         
-        uint32 psudorandom = uint32(uint(keccak256(abi.encodePacked(block.difficulty, block.timestamp))));
+        uint32 psudorandom = uint32(uint(keccak256(abi.encodePacked(block.prevrandao, block.timestamp))));
         uint32 notaryTurn = uint32(psudorandom % (verusNotarizer.currentNotariesLength()));
         uint176 notary;
 

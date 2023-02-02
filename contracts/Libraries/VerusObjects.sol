@@ -73,10 +73,12 @@ library VerusObjects {
     }
 
     struct PackedCurrencyLaunch {
-        uint256 nameAndFlags;
         uint256 tokenID;    
         address ERCContract;  //erc address
         address iaddress;
+        address parent;
+        uint8 flags;
+        string name;
     }
 
     struct ETHPayments {

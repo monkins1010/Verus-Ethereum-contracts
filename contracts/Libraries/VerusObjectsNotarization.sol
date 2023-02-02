@@ -65,6 +65,15 @@ library VerusObjectsNotarization {
         bytes32 proposerPacked;  //after 22 bytes the voutnum 32bit num resides << 176
     }
 
+    struct storedCProofRoot{
+        bytes32 hashOfNotarization;
+        bytes32 txid;
+        bytes32 stateroot;                      // latest MMR root of the notarization height
+        bytes32 blockhash;                      // combination of block hash, block MMR root, and compact power (or external proxy) for the notarization height
+        bytes32 compactpower;
+        uint32 rootheight;                    // height (or sequence) of the notarization we certify
+    }
+
     struct CNodeData {
         string networkaddress;
         address nodeidentity;

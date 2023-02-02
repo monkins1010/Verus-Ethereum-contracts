@@ -14,7 +14,6 @@ import "./Token.sol";
 import "./VerusSerializer.sol";
 import "./VerusCrossChainExport.sol";
 import "./ExportManager.sol";
-import "@openzeppelin/contracts/token/ERC721/ERC721.sol";
 
 contract VerusBridge {
 
@@ -125,11 +124,19 @@ contract VerusBridge {
             }
             require (serializedDest.length == 73 && (desttype == VerusConstants.DEST_PKH || desttype == VerusConstants.DEST_ID) && destinationAddress != address(0), "NFT packet wrong length/dest wrong");
 
-            ERC721 nft = ERC721(nftContract);
+            VerusNft nft = VerusNft(nftContract);
             require (nft.getApproved(tokenId) == address(this), "NFT not approved");
 
             nft.transferFrom(sender, address(this), tokenId);
-            nft.transferFrom(address(this), address(verusBridgeStorage), tokenId);
+            
+            if(nftContract == VerusConstants.VerusNFTID)
+            {
+                nft.burn(tokenId);
+            }
+            else
+            {
+                nft.transferFrom(address(this), address(verusBridgeStorage), tokenId);
+            }
             transfer.destination.destinationtype = desttype;
             transfer.destination.destinationaddress = abi.encodePacked(destinationAddress);
  
@@ -211,14 +218,14 @@ contract VerusBridge {
         bytes32 hashOfTransfers;
 
         // [0..139]address of reward recipricent and [140..203]int64 fees
-        uint256 rewardDestinationPlusFees;
+        uint64 Fees;
 
         // [0..31]startheight [32..63]endheight [64..95]nIndex, [96..128] numberoftransfers packed into a uint128  
         uint128 CCEHeightsAndnIndex;
 
         hashOfTransfers = keccak256(_import.serializedTransfers);
 
-        (rewardDestinationPlusFees, CCEHeightsAndnIndex) = verusProof.proveImports(_import, hashOfTransfers);
+        (Fees, CCEHeightsAndnIndex) = verusProof.proveImports(_import, hashOfTransfers); 
 
         verusBridgeStorage.isLastCCEInOrder(uint32(CCEHeightsAndnIndex));
    
@@ -231,9 +238,9 @@ contract VerusBridge {
         verusBridgeMaster.sendEth(tokenManager.processTransactions(_import.serializedTransfers, uint8(CCEHeightsAndnIndex >> 96)));
 
         
-        if(address(uint160(rewardDestinationPlusFees)) != address(0) && rewardDestinationPlusFees >> 176 != 0)
+        if(Fees >> 176 != 0)
         {
-           verusBridgeMaster.setClaimableFees(bytes32(uint256(uint176(rewardDestinationPlusFees))), rewardDestinationPlusFees >> 176, bridgeKeeper);
+           verusBridgeMaster.setClaimableFees(Fees, bridgeKeeper);
         }
         return true;
     }

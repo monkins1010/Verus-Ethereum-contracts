@@ -93,7 +93,7 @@ contract VerusProof {
 
     }
     
-    function checkTransfers(VerusObjects.CReserveTransferImport calldata _import, bytes32 hashedTransfers) public view returns (uint256, uint128) {
+    function checkTransfers(VerusObjects.CReserveTransferImport calldata _import, bytes32 hashedTransfers) public view returns (uint64, uint128) {
 
         // the first component of the import partial transaction proof is the transaction header, for each version of
         // transaction header, we have a specific offset for the hash of transfers. if we change this, we must
@@ -126,7 +126,7 @@ contract VerusProof {
             // all we do here is ensure that is the case and skip master
             if (readerLen.value == 0 || readerLen.value > 0x4b)
             {
-                return (uint256(0), uint128(0));
+                return (uint64(0), uint128(0));
             }
 
             nextOffset = uint32(readerLen.offset + readerLen.value);        // add the length of the push of master to point to cc opcode
@@ -141,7 +141,7 @@ contract VerusProof {
             if (var1 != SCRIPT_OP_CHECKCRYPTOCONDITION ||
                 (opCode2 != SCRIPT_OP_PUSHDATA1 && opCode2 != SCRIPT_OP_PUSHDATA2))
             {
-                return (uint256(0), uint128(0));
+                return (uint64(0), uint128(0));
             }
 
             if (opCode2 == SCRIPT_OP_PUSHDATA1)
@@ -168,7 +168,7 @@ contract VerusProof {
 
             if (var1 != CCE_EVAL_EXPORT)
             {
-                return (uint256(0), uint128(0));
+                return (uint64(0), uint128(0));
             }
 
             nextOffset += CCE_SOURCE_SYSTEM_OFFSET;
@@ -188,20 +188,18 @@ contract VerusProof {
             return (checkCCEValues(firstObj, nextOffset, hashedTransfers, nIndex));
         
         }
-        return (uint256(0), uint128(0));
+        return (uint64(0), uint128(0));
     }
 
-    function checkCCEValues(bytes memory firstObj, uint32 nextOffset, bytes32 hashedTransfers, uint32 nIndex) public view returns(uint256, uint128)
+    function checkCCEValues(bytes memory firstObj, uint32 nextOffset, bytes32 hashedTransfers, uint32 nIndex) public view returns(uint64, uint128)
     {
         bytes32 hashReserveTransfers;
         address systemSourceID;
         address destSystemID;
-        uint176 exporter;
         uint64 rewardFees;
         uint32 tempRegister;
         uint8 tmpuint8;
         uint128 packedRegister; //uint128(startheight) | (uint128(endheight) << 32) | (uint128(nIndex) << 64) | (uint128(numInputs) << 96));
-        uint256 rewardAddressPlusFees;
         
         assembly {
             systemSourceID := mload(add(firstObj, nextOffset))      // source system ID, which should match expected source (VRSC/VRSCTEST)
@@ -214,7 +212,6 @@ contract VerusProof {
             tmpuint8 := mload(add(firstObj, nextOffset))            // read exporter type
             nextOffset := add(nextOffset, 1)                        // goto exporter vec length
             nextOffset := add(nextOffset, CCE_DEST_CURRENCY_DELTA)  // goto exporter
-            exporter := mload(add(firstObj, nextOffset))            // exporter
         }
 
         if (tmpuint8 & VerusConstants.FLAG_DEST_AUX == VerusConstants.FLAG_DEST_AUX)
@@ -248,9 +245,7 @@ contract VerusProof {
                 rewardFees := mload(add(firstObj, nextOffset))    
             }
                 // packed uint64 and uint160 into a uint256 for efficiency (fees and address)
-                rewardAddressPlusFees = uint256(exporter);
                 rewardFees = verusSerializer.serializeUint64(rewardFees);
-                rewardAddressPlusFees |= uint256(rewardFees) << 176;
         }
 
         if (!(hashedTransfers == hashReserveTransfers &&
@@ -260,7 +255,7 @@ contract VerusProof {
             revert("CCE information does not checkout");
         }
 
-        return (rewardAddressPlusFees, packedRegister); //uint128(startheight) | (uint128(endheight) << 32) | (uint128(nIndex) << 64) | (uint128(numInputs) << 96));
+        return (rewardFees, packedRegister); //uint128(startheight) | (uint128(endheight) << 32) | (uint128(nIndex) << 64) | (uint128(numInputs) << 96));
 
     }
 
@@ -309,14 +304,14 @@ contract VerusProof {
         return txRoot;
     }
     
-    function proveImports(VerusObjects.CReserveTransferImport calldata _import, bytes32 hashOfTransfers) public view returns(uint256, uint128){
+    function proveImports(VerusObjects.CReserveTransferImport calldata _import, bytes32 hashOfTransfers) public view returns(uint64, uint128){
         
         bytes32 confirmedStateRoot;
         bytes32 retStateRoot;
-        uint256 rewardAddPlusFees;
+        uint64 fees;
         uint128 heightsAndTXNum;
 
-        (rewardAddPlusFees, heightsAndTXNum) = checkTransfers(_import, hashOfTransfers);
+        (fees, heightsAndTXNum) = checkTransfers(_import, hashOfTransfers);
         
         bytes32 txRoot = proveComponents(_import);
 
@@ -333,7 +328,7 @@ contract VerusProof {
             revert("Stateroot does not match");
         }
         //truncate to only return heights as, contract will revert if issue with proofs.
-        return (rewardAddPlusFees, heightsAndTXNum);
+        return (fees, heightsAndTXNum);
  
     }
 

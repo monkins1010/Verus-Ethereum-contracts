@@ -8,8 +8,6 @@ import "../Libraries/VerusConstants.sol";
 import "../Libraries/VerusObjectsNotarization.sol";
 import "@openzeppelin/contracts/token/ERC721/ERC721.sol";
 
-
-
 contract VerusBridgeStorage {
 
     mapping (uint => VerusObjects.CReserveTransferSet) public _readyExports;
@@ -18,22 +16,24 @@ contract VerusBridgeStorage {
     address verusBridge;
     address tokenManager;
 
-   // VRSC pool size in sats
-
     mapping (bytes32 => bool) public processedTxids;
     mapping (address => VerusObjects.mappedToken) public verusToERC20mapping;
     mapping (bytes32 => VerusObjects.lastImportInfo) public lastImportInfo;
-    address[] public tokenList;
     
+    address[] public tokenList;
     bytes32 public lastTxIdImport;
-
     uint32 public lastCCEExportHeight;
    
-    //  contract allows the contracts to be set and reset
-    constructor(
-        address upgradeContractAddress){
-        upgradeContract = upgradeContractAddress;     
+    constructor (address upgradeContractAddress){
 
+        upgradeContract = upgradeContractAddress;
+        VerusNft t = new VerusNft(); 
+
+        verusToERC20mapping[VerusConstants.VerusNFTID] = 
+            VerusObjects.mappedToken(address(t), uint8(VerusConstants.MAPPING_VERUS_OWNED + VerusConstants.TOKEN_ETH_NFT_DEFINITION),
+                0, "VerusNFT", uint256(0));  
+
+        tokenList.push(VerusConstants.VerusNFTID);
     }
 
     function setContracts(address[13] memory contracts) public {
@@ -46,7 +46,7 @@ contract VerusBridgeStorage {
 
     function isSenderBridgeContract(address sender) private view {
 
-        require( sender == verusBridge);
+        require(sender == verusBridge);
     }
 
     function setLastImport(bytes32 processedTXID, bytes32 hashofTXs, uint128 CCEheightsandTXNum ) public {
@@ -154,62 +154,39 @@ contract VerusBridgeStorage {
         return address(t);
     }
 
-    function importTransactions(VerusObjects.PackedSend[] calldata trans) public {
-      
+    function mintNFT(address tokenId, string memory tokenURI, address recipient) public  {
+        
+        require(msg.sender == address(tokenManager));
+        VerusNft t = VerusNft(verusToERC20mapping[VerusConstants.VerusNFTID].erc20ContractAddress);
+        t.mint(tokenId, tokenURI, recipient);
+    }
+
+    function mintOrTransferToken(Token token, address destinationAddress, uint256 amount, bool mint ) public {
+
         require(address(tokenManager) == msg.sender);
 
-        uint32 ERCflags;
-        uint32 sendFlags;
-        address ERCAddress;
-        Token token;
-
-        for(uint256 i = 0; i < trans.length; i++)
-        {
-            ERCflags = verusToERC20mapping[address(uint160(trans[i].currencyAndAmount))].flags;
-            ERCAddress = verusToERC20mapping[address(uint160(trans[i].currencyAndAmount))].erc20ContractAddress;
-            //TODO: The token could be a NFT so mint or send it. add in logic to handle
-            address destinationAddress;
-            destinationAddress  = address(uint160(trans[i].destinationAndFlags));
-            sendFlags = uint32(trans[i].destinationAndFlags >> 160);
-
-            if (sendFlags & VerusConstants.TOKEN_ERC20_SEND == VerusConstants.TOKEN_ERC20_SEND  &&
-                   ERCflags & VerusConstants.TOKEN_LAUNCH == VerusConstants.TOKEN_LAUNCH )
-            {
-                token = Token(ERCAddress);
-                
-                if(destinationAddress != address(0))
-                {
-                    uint256 converted;
-
-                    converted = convertFromVerusNumber(trans[i].currencyAndAmount >> 160, token.decimals());
-
-                    if (ERCflags & VerusConstants.MAPPING_VERUS_OWNED == VerusConstants.MAPPING_VERUS_OWNED) 
-                    {   
-                        token.mint(destinationAddress, converted);
-                    } 
-                    else 
-                    {
-                        token.transfer(destinationAddress, converted);
-                    }
-                }
+            if (mint) 
+            {   
+                token.mint(destinationAddress, amount);
             } 
-            else if (ERCflags & VerusConstants.TOKEN_ETH_NFT_DEFINITION == VerusConstants.TOKEN_ETH_NFT_DEFINITION)
+            else 
             {
-                uint256 tokenID = verusToERC20mapping[address(uint160(trans[i].currencyAndAmount))].tokenID;
-
-                if(destinationAddress != address(0))
-                {
-                    ERC721(ERCAddress).transferFrom(address(this), destinationAddress, tokenID);
-                }
+                (bool success, ) = address(token).call(abi.encodeWithSignature("transfer(address,uint256)", destinationAddress, amount));
+                require(success, "transfer of token failed");
             }
-        } 
     }
-    
+
+    function transferETHNft (address ercContractAddress, address destination, uint256 tokenID) public {
+        
+        require(address(tokenManager) == msg.sender);
+        ERC721(ercContractAddress).transferFrom(address(this), destination, tokenID);
+    }
+
     function exportERC20Tokens(uint256 _tokenAmount, Token token, bool burn, address sender ) public {
         
         require(msg.sender == verusBridge);
-
-        token.transferFrom(sender, address(this), _tokenAmount);
+        (bool success, ) = address(token).call(abi.encodeWithSignature("transferFrom(address,address,uint256)", sender, address(this), _tokenAmount));
+        require(success, "transferfrom of token failed");
 
         if (burn) 
         {
@@ -217,18 +194,4 @@ contract VerusBridgeStorage {
         }
     }
 
-    function convertFromVerusNumber(uint256 a,uint8 decimals) public pure returns (uint256) {
-        uint8 power = 10; //default value for 18
-        uint256 c = a;
-
-        if(decimals > 8 ) {
-            power = decimals - 8;// number of decimals in verus
-            c = a * (10 ** power);
-        }else if(decimals < 8){
-            power = 8 - decimals;// number of decimals in verus
-            c = a / (10 ** power);
-        }
-      
-        return c;
-    }
 }

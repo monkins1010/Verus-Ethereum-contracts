@@ -48,7 +48,7 @@ module.exports = async function(deployer) {
     const NotarizerStorageInst = await VerusNotarizerStorage.deployed();
 
     await deployer.deploy(VerusBlake2b);
-    const blakeInst = await VerusBlake2b.deployed();
+    await VerusBlake2b.deployed();
 
     await deployer.link(VerusBlake2b, VerusSerializer);
     await deployer.deploy(VerusSerializer);

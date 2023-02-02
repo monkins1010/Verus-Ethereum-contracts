@@ -40,22 +40,22 @@ contract VerusNotarizer {
     event NewNotarization (bytes32);
 
     constructor(address _verusSerializerAddress, address upgradeContractAddress, 
-    address[] memory _notaries, address[] memory _notariesEthAddress, address[] memory _notariesColdStoreEthAddress, 
-    address verusNotarizerStorageAddress, address verusBridgeMasterAddress, address notarizationSerializerAddress) {
-        verusSerializer = VerusSerializer(_verusSerializerAddress);
-        upgradeContract = upgradeContractAddress;
-        verusNotarizerStorage = VerusNotarizerStorage(verusNotarizerStorageAddress); 
-        verusBridgeMaster = VerusBridgeMaster(verusBridgeMasterAddress);
-        notarizationSerializer = NotarizationSerializer(notarizationSerializerAddress);
+        address[] memory _notaries, address[] memory _notariesEthAddress, address[] memory _notariesColdStoreEthAddress, 
+        address verusNotarizerStorageAddress, address verusBridgeMasterAddress, address notarizationSerializerAddress) {
+            verusSerializer = VerusSerializer(_verusSerializerAddress);
+            upgradeContract = upgradeContractAddress;
+            verusNotarizerStorage = VerusNotarizerStorage(verusNotarizerStorageAddress); 
+            verusBridgeMaster = VerusBridgeMaster(verusBridgeMasterAddress);
+            notarizationSerializer = NotarizationSerializer(notarizationSerializerAddress);
 
-        // when contract is launching/upgrading copy in to global bool pool available.
-        if(verusNotarizerStorage.poolAvailable(VerusConstants.VerusBridgeAddress) > 0 )
-            poolAvailable = true;
+            // when contract is launching/upgrading copy in to global bool pool available.
+            if(verusNotarizerStorage.poolAvailable(VerusConstants.VerusBridgeAddress) > 0 )
+                poolAvailable = true;
 
-        for(uint i =0; i < _notaries.length; i++){
-            notaryAddressMapping[_notaries[i]] = VerusObjects.notarizer(_notariesEthAddress[i], _notariesColdStoreEthAddress[i], VerusConstants.NOTARY_VALID);
-            notaries.push(_notaries[i]);
-        }
+            for(uint i =0; i < _notaries.length; i++){
+                notaryAddressMapping[_notaries[i]] = VerusObjects.notarizer(_notariesEthAddress[i], _notariesColdStoreEthAddress[i], VerusConstants.NOTARY_VALID);
+                notaries.push(_notaries[i]);
+            }
     }
 
     function setContract(address serializerAddress, address notarizationSerializerAddress) public {
@@ -74,9 +74,8 @@ contract VerusNotarizer {
     }
  
     function setLatestData(bytes calldata serializedNotarization, bytes32 txid, uint32 n, bytes calldata data
-        ) public returns(uint16) {
+        ) public {
 
-        require(msg.sender == address(verusBridgeMaster), "SLD");
         require(!knownNotarizationTxids[txid], "known TXID");
         knownNotarizationTxids[txid] = true;
 
@@ -93,11 +92,10 @@ contract VerusNotarizer {
 
         keccakNotarizationHash = keccak256(serializedNotarization);
 
-        uint validSignatures;
-
         checkunique(notaryAddresses);
+        uint i;
 
-        for(uint i = 0; i < notaryAddresses.length; i++)
+        for(; i < notaryAddresses.length; i++)
         {
             bytes32 hashedNotarizationByID;
             // hash the notarizations with the vdxf key, system, height & NotaryID
@@ -120,21 +118,18 @@ contract VerusNotarizer {
             {
                 revert("Notary revoked"); 
             }
-
-            validSignatures++;
-            
         }
 
-        if(validSignatures < ((notaries.length >> 1) + 1 ))
+        if(i < ((notaries.length >> 1) + 1 ))
         {
-            return 0;
+            revert("not enough notary signatures");
         }
 
-        return uint16(blockheights[0]);
+        checkNotarization(serializedNotarization, txid, uint64(n) | uint64(blockheights[0]) << 32 );
 
     }
 
-    function checkNotarization(bytes calldata serializedNotarization, bytes32 txid, uint32 n ) public {
+    function checkNotarization(bytes calldata serializedNotarization, bytes32 txid, uint64 n ) public {
 
         require(msg.sender == address(verusBridgeMaster), "WS");
        
@@ -219,7 +214,7 @@ contract VerusNotarizer {
     }
 
     function setNotarizationProofRoot(bytes32 hashedNotarization, 
-            bytes32 hashprevnotarization, bytes32 txidHash, uint32 voutnum, bytes32 hashprevtxid, bytes32 proposer, bytes32 stateRoot) private 
+            bytes32 hashprevnotarization, bytes32 txidHash, uint64 voutnum, bytes32 hashprevtxid, bytes32 proposer, bytes32 stateRoot) private 
     {
         
         int forkIdx = -1;
