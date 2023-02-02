@@ -29,7 +29,6 @@ contract VerusNotarizer {
 
     // list of all notarizers mapped to allow for quick searching
     mapping (address => VerusObjects.notarizer ) public notaryAddressMapping;
-    mapping (address => uint) sigCheck;
     mapping (bytes32 => bool) knownNotarizationTxids;
 
     address[] public notaries;
@@ -110,7 +109,7 @@ contract VerusNotarizer {
                     notaryAddresses[i], 
                     keccakNotarizationHash));
 
-            if (recoverSigner(hashedNotarizationByID, _vs[i]-4, _rs[i], _ss[i]) != notaryAddressMapping[notaryAddresses[i]].main || sigCheck[notaryAddresses[i]] != i)
+            if (ecrecover(hashedNotarizationByID, _vs[i]-4, _rs[i], _ss[i]) != notaryAddressMapping[notaryAddresses[i]].main)
             {
                 revert("Invalid notary signature");  
             }
@@ -279,17 +278,17 @@ contract VerusNotarizer {
         }
     }
 
-    function checkunique(address[] memory ids) private
+    function checkunique(address[] memory ids) private pure
     {
-        for (uint i = 0; i < ids.length; i++)
+
+        for (uint i = 0; i < ids.length - 1; i++)
         {
-            sigCheck[ids[i]] = i;
+                for (uint j = i + 1; j < ids.length; j++)
+                {
+                    if (ids[i] == ids[j])
+                        revert("duplicate signatures found");
+                }
         }
-    }
-
-    function recoverSigner(bytes32 _h, uint8 _v, bytes32 _r, bytes32 _s) private pure returns (address) {
-
-        return ecrecover(_h, _v, _r, _s);
     }
 
     function getLastConfirmedVRSCStateRoot() public view returns (bytes32) {
