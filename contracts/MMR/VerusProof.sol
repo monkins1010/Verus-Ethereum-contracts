@@ -39,6 +39,7 @@ contract VerusProof {
     uint8 constant FLAG_REFUNDING = 4;
     uint8 constant FLAG_LAUNCHCONFIRMED = 0x10;
     uint8 constant FLAG_LAUNCHCOMPLETEMARKER = 0x20;
+    uint8 constant AUX_DEST_ETH_VEC_LENGTH = 22;
 
     address verusUpgradeContract;
 
@@ -217,7 +218,7 @@ contract VerusProof {
         if (tmpuint8 & VerusConstants.FLAG_DEST_AUX == VerusConstants.FLAG_DEST_AUX)
         {
             nextOffset += 1;  // goto auxdest parent vec length position
-            nextOffset = skipAux(firstObj, nextOffset);
+            (nextOffset, ) = skipAux(firstObj, nextOffset);
             nextOffset -= 1;  // NOTE: Next Varint call takes array pos not array pos +1
         }
 
@@ -259,20 +260,27 @@ contract VerusProof {
 
     }
 
-    function skipAux (bytes memory firstObj, uint32 nextOffset) public view returns (uint32)
+    function skipAux (bytes memory firstObj, uint32 nextOffset) public view returns (uint32, uint176 auxDest)
     {
                                                   
             VerusObjectsCommon.UintReader memory readerLen;
             readerLen = verusSerializer.readCompactSizeLE(firstObj, nextOffset);    // get the length of the auxDest
             nextOffset = readerLen.offset;
             uint arraySize = readerLen.value;
-
+            
             for (uint i = 0; i < arraySize; i++)
             {
                     readerLen = verusSerializer.readCompactSizeLE(firstObj, nextOffset);    // get the length of the auxDest sub array
+                    if (readerLen.value == AUX_DEST_ETH_VEC_LENGTH)
+                    {
+                         assembly {
+                            auxDest := mload(add(add(firstObj, nextOffset),AUX_DEST_ETH_VEC_LENGTH))
+                         }
+                    }
+
                     nextOffset = (readerLen.offset + uint32(readerLen.value));
             }
-            return nextOffset;
+            return (nextOffset, auxDest);
     }
 
     // roll through each proveComponents
@@ -280,19 +288,17 @@ contract VerusProof {
      
         bytes32 hashInProgress;
         bytes32 testHash;
-
-        if (_import.partialtransactionproof.components.length > 0)
-        {   
-            hashInProgress = _import.partialtransactionproof.components[0].elVchObj.createHash();
-            if (_import.partialtransactionproof.components[0].elType == 1 )
-            {
-                txRoot = checkProof(hashInProgress,_import.partialtransactionproof.components[0].elProof);           
-            }
+  
+        hashInProgress = _import.partialtransactionproof.components[0].elVchObj.createHash();
+        if (_import.partialtransactionproof.components[0].elType == 1 )
+        {
+            txRoot = checkProof(hashInProgress, _import.partialtransactionproof.components[0].elProof);           
         }
-
+        
         for (uint i = 1; i < _import.partialtransactionproof.components.length; i++) {
+
             hashInProgress = _import.partialtransactionproof.components[i].elVchObj.createHash();
-            testHash = checkProof(hashInProgress,_import.partialtransactionproof.components[i].elProof);
+            testHash = checkProof(hashInProgress, _import.partialtransactionproof.components[i].elProof);
         
             if (txRoot != testHash) 
             {

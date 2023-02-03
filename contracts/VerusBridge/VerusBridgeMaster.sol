@@ -23,6 +23,8 @@ contract VerusBridgeMaster {
     address upgradeContract;
     mapping (bytes32 => uint256) public claimableFees;
     uint256 ethHeld = 0;
+    uint32 constant CONFIRMED_PROPOSER = 128;
+    uint32 constant LATEST_PROPOSER = 256;
      
     constructor(address upgradeContractAddress)
     {
@@ -197,20 +199,40 @@ contract VerusBridgeMaster {
 
     }
 
-    function getProof(uint height) public payable returns (bytes memory) {
+    function getNewProof(bool latest) public payable returns (bytes memory) {
 
-        uint256 feeCost = verusNotarizer.getProofCost();
+        uint256 feeCost;
+
+        feeCost = verusNotarizer.getProofCosts(latest);
+
         require(msg.value >= feeCost, "Not enough fee");
 
-        setNotaryFees(msg.value / VerusConstants.SATS_TO_WEI_STD);
+        uint256 feeShare = msg.value / VerusConstants.SATS_TO_WEI_STD / 2;
+        setNotaryFees(feeShare);
+
+        uint256 proposerAndHeight;
+        bytes memory proposerBytes = verusNotarizer.bestForks(0);
+
+        uint32 proposeroffset = latest ? LATEST_PROPOSER : CONFIRMED_PROPOSER;
+
+        assembly {
+                proposerAndHeight := mload(add(proposerBytes, proposeroffset))
+        } 
+
+        setClaimedFees(bytes32(uint256(uint176(proposerAndHeight))), feeShare);
         ethHeld += msg.value;
+
+        return verusNotarizer.getNewProofs(latest, bytes32(proposerAndHeight));
+    }
+
+    function getProofByHeight(uint height) public payable returns (bytes memory) {
 
         return verusNotarizer.getProof(height);
     }
 
-    function getProofCost() public view returns (uint256) {
+    function getProofCost(bool latest) public view returns (uint256) {
 
-        return verusNotarizer.getProofCost();
+        return verusNotarizer.getProofCosts(latest);
     }
 
     function sendfees(bytes32 publicKeyX, bytes32 publicKeyY) public 

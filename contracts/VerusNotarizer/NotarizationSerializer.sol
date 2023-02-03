@@ -19,6 +19,7 @@ contract NotarizationSerializer {
     uint8 constant FLAG_REFUNDING = 4;
     uint8 constant FLAG_LAUNCHCONFIRMED = 0x10;
     uint8 constant FLAG_LAUNCHCOMPLETEMARKER = 0x20;
+    uint8 constant AUX_DEST_ETH_VEC_LENGTH = 22;
 
     address verusUpgradeContract;
 
@@ -51,11 +52,17 @@ contract NotarizationSerializer {
         revert(); // i=10, invalid varint stream
     }
 
-    function deserilizeNotarization(bytes memory notarization) public view returns (bytes32 proposerAndLaunched, bytes32 prevnotarizationtxid, bytes32 hashprevcrossnotarization, bytes32 stateRoot
-                                                                                        , bytes32 blockHash , uint32 height  ) {
+    function deserilizeNotarization(bytes memory notarization) public view returns (bytes32 proposerAndLaunched, 
+                                                                                    bytes32 prevnotarizationtxid, 
+                                                                                    bytes32 hashprevcrossnotarization, 
+                                                                                    bytes32 stateRoot, 
+                                                                                    bytes32 blockHash, 
+                                                                                    uint32 height) {
         
         uint32 nextOffset;
         uint16 bridgeLaunched;
+        uint176 auxProposer;
+        uint8 proposerFlags;
 
         VerusObjectsCommon.UintReader memory readerLen;
 
@@ -65,8 +72,21 @@ contract NotarizationSerializer {
         nextOffset = readerLen.offset;
 
         assembly {
-                    nextOffset := add(nextOffset, 22) // CHECK: skip proposer type and vector length
+                    nextOffset := add(nextOffset, 1)  // move to read type
+                    proposerFlags := mload(add(nextOffset, notarization))
+                    nextOffset := add(nextOffset, 21) // move to proposer, type and vector length
                     proposerAndLaunched := and(mload(add(nextOffset, notarization)), 0x00000000000000000000ffffffffffffffffffffffffffffffffffffffffffff)   // type+len+proposer 22bytes
+                 }
+
+        if (proposerFlags & VerusConstants.FLAG_DEST_AUX == VerusConstants.FLAG_DEST_AUX)
+        {
+            nextOffset += 1;  // goto auxdest parent vec length position
+            (nextOffset, auxProposer) = skipAux(notarization, nextOffset);
+            nextOffset -= 1;  // NOTE: Next Varint call takes array pos not array pos +1
+            proposerAndLaunched = bytes32(uint256(auxProposer));
+        }
+
+        assembly {
                     nextOffset := add(nextOffset, CURRENCY_LENGTH) //skip currencyid
                  }
 
@@ -111,7 +131,7 @@ contract NotarizationSerializer {
         uint16 flags;
         
         assembly {
-            nextOffset := add(nextOffset, 2) // skip version
+            nextOffset := add(nextOffset, 2) // move to version
             nextOffset := add(nextOffset, 2) // move to flags
             flags := mload(add(notarization, nextOffset))      // flags 
             nextOffset := add(nextOffset, CURRENCY_LENGTH) //skip notarization currencystatecurrencyid
@@ -207,6 +227,52 @@ contract NotarizationSerializer {
         revert(); // i=9, invalid varint stream
     }
     
+    function skipAux (bytes memory firstObj, uint32 nextOffset) public pure returns (uint32, uint176 auxDest)
+    {
+                                                  
+            VerusObjectsCommon.UintReader memory readerLen;
+            readerLen = readCompactSizeLE(firstObj, nextOffset);    // get the length of the auxDest
+            nextOffset = readerLen.offset;
+            uint arraySize = readerLen.value;
+            
+            for (uint i = 0; i < arraySize; i++)
+            {
+                    readerLen = readCompactSizeLE(firstObj, nextOffset);    // get the length of the auxDest sub array
+                    if (readerLen.value == AUX_DEST_ETH_VEC_LENGTH)
+                    {
+                         assembly {
+                            auxDest := mload(add(add(firstObj, nextOffset),AUX_DEST_ETH_VEC_LENGTH))
+                         }
+                    }
+
+                    nextOffset = (readerLen.offset + uint32(readerLen.value));
+            }
+            return (nextOffset, auxDest);
+    }
+
+    function readCompactSizeLE(bytes memory incoming, uint32 offset) public pure returns(VerusObjectsCommon.UintReader memory) {
+
+        uint8 oneByte;
+        assembly {
+            oneByte := mload(add(incoming, offset))
+        }
+        offset++;
+        if (oneByte < 253)
+        {
+            return VerusObjectsCommon.UintReader(offset, oneByte);
+        }
+        else if (oneByte == 253)
+        {
+            offset++;
+            uint16 twoByte;
+            assembly {
+                twoByte := mload(add(incoming, offset))
+            }
+ 
+            return VerusObjectsCommon.UintReader(offset + 1, ((twoByte << 8) & 0xffff)  | twoByte >> 8);
+        }
+        return VerusObjectsCommon.UintReader(offset, 0);
+    }
 }
 
 

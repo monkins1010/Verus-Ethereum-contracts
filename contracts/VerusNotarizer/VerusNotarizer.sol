@@ -19,6 +19,7 @@ contract VerusNotarizer {
     uint8 constant FLAG_REFUNDING = 4;
     uint8 constant FLAG_LAUNCHCONFIRMED = 0x10;
     uint8 constant FLAG_LAUNCHCOMPLETEMARKER = 0x20;
+    uint8 constant OFFSET_FOR_HEIGHT = 224;
     // notarization vdxf key
     bytes20 constant vdxfcode = bytes20(0x367Eaadd291E1976ABc446A143f83c2D4D2C5a84);
 
@@ -80,7 +81,7 @@ contract VerusNotarizer {
         require(!knownNotarizationTxids[txid], "known TXID");
         knownNotarizationTxids[txid] = true;
 
-       ( uint8[] memory _vs,
+        (uint8[] memory _vs,
         bytes32[] memory _rs,
         bytes32[] memory _ss,
         uint32[] memory blockheights,
@@ -126,11 +127,11 @@ contract VerusNotarizer {
             revert("not enough notary signatures");
         }
 
-        checkNotarization(serializedNotarization, txid, uint64(n) | uint64(blockheights[0]) << 32 );
+        checkNotarization(serializedNotarization, txid, uint64(n));
 
     }
 
-    function checkNotarization(bytes calldata serializedNotarization, bytes32 txid, uint64 n ) public {
+    function checkNotarization(bytes calldata serializedNotarization, bytes32 txid, uint64 voutAndHeight ) public {
 
         require(msg.sender == address(verusBridgeMaster), "WS");
        
@@ -139,9 +140,9 @@ contract VerusNotarizer {
         blakeNotarizationHash = serializedNotarization.createHash();
         
         (bytes32 launchedAndProposer, bytes32 prevnotarizationtxid, bytes32 hashprevnotarization, bytes32 stateRoot, bytes32 blockHash, 
-                uint32 height) = notarizationSerializer.deserilizeNotarization(serializedNotarization);
+                uint32 verusProofheight) = notarizationSerializer.deserilizeNotarization(serializedNotarization);
 
-        verusNotarizerStorage.pushNewProof(abi.encode(stateRoot, blockHash), height);
+        verusNotarizerStorage.pushNewProof(abi.encode(stateRoot, blockHash), verusProofheight);
 
         if (!poolAvailable && (((uint256(launchedAndProposer) >> 176) & 0xff) == 1)) { //shift to read if bridge launched in packed uint256
             verusNotarizerStorage.setPoolAvailable();
@@ -149,7 +150,10 @@ contract VerusNotarizer {
             verusBridgeMaster.sendVRSC();
         }
 
-        setNotarizationProofRoot(blakeNotarizationHash, hashprevnotarization, txid, n, prevnotarizationtxid, launchedAndProposer, stateRoot);
+        voutAndHeight |= uint64(verusProofheight) << 32;
+        launchedAndProposer |= bytes32(uint256(voutAndHeight) << 192); //also pack in the voutnum
+
+        setNotarizationProofRoot(blakeNotarizationHash, hashprevnotarization, txid, prevnotarizationtxid, launchedAndProposer, stateRoot);
 
         emit NewNotarization(blakeNotarizationHash);
 
@@ -218,7 +222,7 @@ contract VerusNotarizer {
     }
 
     function setNotarizationProofRoot(bytes32 hashedNotarization, 
-            bytes32 hashprevnotarization, bytes32 txidHash, uint64 voutnum, bytes32 hashprevtxid, bytes32 proposer, bytes32 stateRoot) private 
+            bytes32 hashprevnotarization, bytes32 txidHash, bytes32 hashprevtxid, bytes32 proposer, bytes32 stateRoot) private 
     {
         
         int forkIdx = -1;
@@ -259,9 +263,6 @@ contract VerusNotarizer {
             forkIdx = int(bestForks.length);
             encodeNotarization(uint(forkIdx), notarizations[uint(0)]);
         }
-
-        // Pack the voutnum in the bytes32 variable after the CReserveDestination 22 bytes and bridge launched 2 bytes
-        proposer |= bytes32(uint256(voutnum) << 192);
 
         // If the position that is matched is the second stored one, then that becomes the new confirmed.
         if(forkPos == 1)
@@ -331,17 +332,30 @@ contract VerusNotarizer {
 
     }
 
+    function getNewProofs (bool latestRequested, bytes32 height) public view returns (bytes memory) {
+        
+        require(msg.sender == address(verusBridgeMaster));
+
+        return verusNotarizerStorage.getProof(bytes32(height >> OFFSET_FOR_HEIGHT));
+
+    }
+
     function getProof(uint height) public view returns (bytes memory) {
 
         require(msg.sender == address(verusBridgeMaster));
+        
+        VerusObjectsNotarization.NotarizationForks[] memory latestForks;
+
+        latestForks = decodeNotarization(0);
+
+        require(height < uint256(latestForks[0].proposerPacked >> OFFSET_FOR_HEIGHT), "Latest proofs require paid service");
 
         return verusNotarizerStorage.getProof(bytes32(height));
     }
 
-    function getProofCost() public pure returns (uint256) {
+    function getProofCosts(bool latest) public pure returns (uint256) {
 
-        return 0.1 ether;
-
+        return latest ? (0.0125 ether) : (0.00625 ether);
     }
 
 }
