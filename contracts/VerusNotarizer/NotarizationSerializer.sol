@@ -189,7 +189,7 @@ contract NotarizationSerializer {
                 tempStateRoot := mload(add(notarization, nextOffset))  
                 nextOffset := add(nextOffset, BYTES32_LENGTH) // move to read blockhash
                 tempBlockHash := mload(add(notarization, nextOffset))  
-                nextOffset := add(nextOffset, TWO2BYTES32_LENGTH) // move to power
+                nextOffset := add(nextOffset, BYTES32_LENGTH) // move to power
             }
             
             if(systemID == VerusConstants.VerusCurrencyId)
