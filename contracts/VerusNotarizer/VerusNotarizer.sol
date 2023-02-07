@@ -131,10 +131,9 @@ contract VerusNotarizer {
 
     }
 
-    function checkNotarization(bytes calldata serializedNotarization, bytes32 txid, uint64 voutAndHeight ) public {
+    function checkNotarization(bytes calldata serializedNotarization, bytes32 txid, uint64 voutAndHeight ) private {
 
-        require(msg.sender == address(verusBridgeMaster), "WS");
-       
+    
         bytes32 blakeNotarizationHash;
 
         blakeNotarizationHash = serializedNotarization.createHash();
