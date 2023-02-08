@@ -256,7 +256,7 @@ contract VerusSerializer {
                     returns (VerusObjects.PackedCurrencyLaunch memory returnCurrency)
     {
         uint32 nextOffset;
-        uint8 nameStringLength;
+        uint32 nameStringLength;
         address parent;
         address nativeCurrencyID;
         uint256 nftID;
@@ -270,7 +270,7 @@ contract VerusSerializer {
             nextOffset := add(nextOffset, CCC_ID_LEN)
             parent := mload(add(input, nextOffset))
             nextOffset := add(nextOffset, 1)  // one byte for name string length
-            nameStringLength := mload(add(input, nextOffset)) // string length MAX 64 so will always be a byte
+            nameStringLength := and(mload(add(input, nextOffset)), 0x000000ff) // string length MAX 64 so will always be a byte
         }
 
         options = serializeUint32(options);  //reverse endian
@@ -392,7 +392,6 @@ contract VerusSerializer {
                 launchTxs[(counter >> 24 & 0xff)] = currencyParser(tempSerialized, nextOffset);
                 launchTxs[(counter >> 24 & 0xff)].iaddress = address(uint160(tempTransfers[uint8(counter)].currencyAndAmount));
                 counter |= (uint32((counter >> 24 & 0xff) + 1) << 24); //This is the Launch currency counter packed into the 4th byte
-               
             }
 
             nextOffset += temporaryRegister1;
