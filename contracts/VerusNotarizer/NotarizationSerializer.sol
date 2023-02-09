@@ -6,7 +6,6 @@ pragma abicoder v2;
 import "../Libraries/VerusObjects.sol";
 import "../VerusBridge/VerusSerializer.sol";
 import "../Libraries/VerusObjectsCommon.sol";
-import "../VerusNotarizer/VerusNotarizer.sol";
 
 contract NotarizationSerializer {
 

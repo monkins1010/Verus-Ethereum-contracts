@@ -222,7 +222,7 @@ contract VerusBridgeMaster {
         setClaimedFees(bytes32(uint256(uint176(proposerAndHeight))), feeShare);
         ethHeld += msg.value;
 
-        return verusNotarizer.getNewProofs(latest, bytes32(proposerAndHeight));
+        return verusNotarizer.getNewProofs(bytes32(proposerAndHeight));
     }
 
     function getProofByHeight(uint height) public payable returns (bytes memory) {

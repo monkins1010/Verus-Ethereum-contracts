@@ -132,8 +132,8 @@ contract UpgradeManager {
         }
 
         if(tempcontracts[uint(VerusConstants.ContractType.VerusInfo)] != address(verusInfo)) {
-            verusBridgeMaster.setContracts(tempcontracts);
             verusInfo = VerusInfo(tempcontracts[uint(VerusConstants.ContractType.VerusInfo)]);
+            verusBridgeMaster.setContracts(tempcontracts);
         }
         
         if(tempcontracts[uint(VerusConstants.ContractType.ExportManager)] != address(exportManager))  {    
@@ -147,7 +147,7 @@ contract UpgradeManager {
                                     tempcontracts[uint(VerusConstants.ContractType.VerusBridge)]);
             verusBridge.setContracts(tempcontracts);  
             verusProof.setContracts(tempcontracts);
-            verusNotarizer.setContract(tempcontracts[uint(VerusConstants.ContractType.VerusSerializer)], tempcontracts[uint(VerusConstants.ContractType.VerusProof)]);
+            verusNotarizer.setContract(tempcontracts[uint(VerusConstants.ContractType.VerusSerializer)], tempcontracts[uint(VerusConstants.ContractType.NotarizationSerializer)]);
             notarizationSerializer.setContract(tempcontracts[uint(VerusConstants.ContractType.VerusSerializer)]);
         }
 

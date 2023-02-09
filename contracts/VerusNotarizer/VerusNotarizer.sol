@@ -331,7 +331,7 @@ contract VerusNotarizer {
 
     }
 
-    function getNewProofs (bool latestRequested, bytes32 height) public view returns (bytes memory) {
+    function getNewProofs (bytes32 height) public view returns (bytes memory) {
         
         require(msg.sender == address(verusBridgeMaster));
 

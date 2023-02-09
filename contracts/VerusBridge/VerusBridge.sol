@@ -86,7 +86,7 @@ contract VerusBridge {
 
         fees = exportManager.checkExport(transfer, paidValue, poolAvailable);
 
-        require(fees != 0); 
+        require(fees != 0, "CheckExport Failed Checks"); 
 
         if(!poolAvailable)
         {
