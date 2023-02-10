@@ -83,12 +83,11 @@ contract UpgradeManager {
                                      _newContractAddress[uint(VerusConstants.ContractType.VerusBridge)]);
         } 
        
-        // TODO: Reactivate when multisig active contractOwner = address(0);  //Blow the fuse i.e. make it one time only.
+        contractOwner = address(0);  //Blow the fuse i.e. make it one time only.
     }
 
     function upgradeContracts(VerusObjects.upgradeInfo memory _newContractPackage) public returns (uint8) {
 
-        //require(msg.sender == contractOwner);
         if (!checkMultiSigContracts(_newContractPackage)) return 1; 
 
         address[13] memory tempcontracts;
@@ -147,13 +146,22 @@ contract UpgradeManager {
                                     tempcontracts[uint(VerusConstants.ContractType.VerusBridge)]);
             verusBridge.setContracts(tempcontracts);  
             verusProof.setContracts(tempcontracts);
-            verusNotarizer.setContract(tempcontracts[uint(VerusConstants.ContractType.VerusSerializer)], tempcontracts[uint(VerusConstants.ContractType.NotarizationSerializer)]);
+            verusNotarizer.setContracts(tempcontracts);
             notarizationSerializer.setContract(tempcontracts[uint(VerusConstants.ContractType.VerusSerializer)]);
         }
 
         if(tempcontracts[uint(VerusConstants.ContractType.NotarizationSerializer)] != contracts[uint(VerusConstants.ContractType.NotarizationSerializer)])  {   
             notarizationSerializer = NotarizationSerializer(tempcontracts[uint(VerusConstants.ContractType.NotarizationSerializer)]);
-            verusNotarizer.setContract(tempcontracts[uint(VerusConstants.ContractType.VerusSerializer)], tempcontracts[uint(VerusConstants.ContractType.NotarizationSerializer)]);
+            verusNotarizer.setContracts(tempcontracts);
+        }
+
+        if(tempcontracts[uint(VerusConstants.ContractType.VerusBridgeMaster)] != contracts[uint(VerusConstants.ContractType.VerusBridgeMaster)])  {  
+
+            verusBridgeMaster.transferETH(tempcontracts[uint(VerusConstants.ContractType.VerusBridgeMaster)]);
+            verusBridgeMaster = VerusBridgeMaster(tempcontracts[uint(VerusConstants.ContractType.VerusBridgeMaster)]);
+            verusBridge.setContracts(tempcontracts);
+            verusNotarizer.setContracts(tempcontracts);
+            verusNotarizerStorage.setContracts(tempcontracts);  
         }
 
         // Once all the contracts are set copy the new values to the global

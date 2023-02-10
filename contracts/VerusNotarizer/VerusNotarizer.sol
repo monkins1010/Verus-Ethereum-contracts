@@ -60,12 +60,20 @@ contract VerusNotarizer {
             }
     }
 
-    function setContract(address serializerAddress, address notarizationSerializerAddress) public {
+    function setContracts(address[13] memory contracts) public {
 
         require(msg.sender == upgradeContract);
 
-        verusSerializer = VerusSerializer(serializerAddress);
-        notarizationSerializer = NotarizationSerializer(notarizationSerializerAddress);
+        if(contracts[uint(VerusConstants.ContractType.NotarizationSerializer)] != address(notarizationSerializer)) {
+            notarizationSerializer = NotarizationSerializer(contracts[uint(VerusConstants.ContractType.NotarizationSerializer)]);
+        }
+        
+        if(contracts[uint(VerusConstants.ContractType.VerusSerializer)] != address(verusSerializer)) {
+            verusSerializer = VerusSerializer(contracts[uint(VerusConstants.ContractType.VerusSerializer)]);
+        }
+        
+        if(contracts[uint(VerusConstants.ContractType.VerusBridgeMaster)] != address(verusBridgeMaster))     
+            verusBridgeMaster = VerusBridgeMaster(contracts[uint(VerusConstants.ContractType.VerusBridgeMaster)]);
 
     }
           

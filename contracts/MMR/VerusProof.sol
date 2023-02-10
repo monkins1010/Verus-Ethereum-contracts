@@ -245,7 +245,6 @@ contract VerusProof {
                 nextOffset := add(add(nextOffset, CCE_DEST_CURRENCY_DELTA), 8)  // move 20 + 8 bytes for (address + 64bit)
                 rewardFees := mload(add(firstObj, nextOffset))    
             }
-                // packed uint64 and uint160 into a uint256 for efficiency (fees and address)
                 rewardFees = verusSerializer.serializeUint64(rewardFees);
         }
 

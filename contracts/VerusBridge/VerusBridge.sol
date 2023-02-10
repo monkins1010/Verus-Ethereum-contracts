@@ -68,6 +68,9 @@ contract VerusBridge {
         if(contracts[uint(VerusConstants.ContractType.ExportManager)] != address(exportManager))     
             exportManager = ExportManager(contracts[uint(VerusConstants.ContractType.ExportManager)]);
 
+        if(contracts[uint(VerusConstants.ContractType.VerusBridgeMaster)] != address(verusBridgeMaster))     
+            verusBridgeMaster = VerusBridgeMaster(contracts[uint(VerusConstants.ContractType.VerusBridgeMaster)]);
+
     }
 
     function subtractPoolSize(uint64 _amount) private returns (bool) {
@@ -141,7 +144,6 @@ contract VerusBridge {
             transfer.destination.destinationaddress = abi.encodePacked(destinationAddress);
  
         } 
-        verusBridgeMaster.addToEthHeld(paidValue); 
         _createExports(transfer, poolAvailable, block.number);
     }
 
@@ -192,7 +194,7 @@ contract VerusBridge {
 
     }
 
-    function _createImports(VerusObjects.CReserveTransferImport calldata _import, uint176 bridgeKeeper) public returns(bool) {
+    function _createImports(VerusObjects.CReserveTransferImport calldata _import) public returns(uint64) {
         
         // prove MMR
         require(msg.sender == address(verusBridgeMaster));
@@ -237,12 +239,8 @@ contract VerusBridge {
         // Deserialize transfers and pack into send arrays, also pass in no. of transfers to calculate array size
         verusBridgeMaster.sendEth(tokenManager.processTransactions(_import.serializedTransfers, uint8(CCEHeightsAndnIndex >> 96)));
 
-        
-        if(Fees >> 176 != 0)
-        {
-           verusBridgeMaster.setClaimableFees(Fees, bridgeKeeper);
-        }
-        return true;
+        return Fees;
+
     }
     
     function getReadyExportsByRange(uint _startBlock,uint _endBlock) public view returns(VerusObjects.CReserveTransferSet[] memory returnedExports){
@@ -255,7 +253,10 @@ contract VerusBridge {
 
         for(uint i = _startBlock; i <= _endBlock; i++)
         {
-            if (verusBridgeStorage.getReadyExports(i).exportHash != bytes32(0))  outputSize += 1;
+            if (verusBridgeStorage.getReadyExports(i).exportHash != bytes32(0)) 
+            {
+                outputSize += 1;
+            }
         }
 
         VerusObjects.CReserveTransferSet[] memory output = new VerusObjects.CReserveTransferSet[](outputSize);

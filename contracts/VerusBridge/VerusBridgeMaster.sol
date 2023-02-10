@@ -21,8 +21,6 @@ contract VerusBridgeMaster {
     VerusNotarizerStorage verusNotarizerStorage;
 
     address upgradeContract;
-    mapping (bytes32 => uint256) public claimableFees;
-    uint256 ethHeld = 0;
     uint32 constant CONFIRMED_PROPOSER = 128;
     uint32 constant LATEST_PROPOSER = 256;
      
@@ -41,6 +39,11 @@ contract VerusBridgeMaster {
         verusBridgeStorage = VerusBridgeStorage(contracts[uint(VerusConstants.ContractType.VerusBridgeStorage)]);
         verusNotarizerStorage = VerusNotarizerStorage(contracts[uint(VerusConstants.ContractType.VerusNotarizerStorage)]);
 
+    }
+
+    function transferETH (address newMasterAddress) public {
+        require(msg.sender == upgradeContract);
+        payable(newMasterAddress).transfer(address(this).balance);
     }
     
     /** VerusBridge pass through functions **/
@@ -61,7 +64,8 @@ contract VerusBridgeMaster {
 
         bridgeKeeper |= (uint176(0x0c14) << 160); //make ETH type and length 20
 
-        verusBridge._createImports(_imports, bridgeKeeper);
+        uint64 fees = verusBridge._createImports(_imports);
+        setClaimableFees(fees, bridgeKeeper);
     }
 
     function getReadyExportsByRange(uint _startBlock, uint _endBlock) public view 
@@ -74,17 +78,6 @@ contract VerusBridgeMaster {
     function isPoolAvailable() public view returns(bool){
         return verusNotarizer.poolAvailable();
     }
-
-    // function setLatestData(bytes calldata serializedNotarization, bytes32 txid, uint64 n, bytes memory data) public 
-    // {
-
-    //     uint16 notaryHeight = verusNotarizer.setLatestData(serializedNotarization, txid, uint32(n), data);
-    //     require(notaryHeight > 0, "not enough notary signatures");
-
-    //     n |= uint64(notaryHeight) << 32;
-
-    //     verusNotarizer.checkNotarization(serializedNotarization, txid, n);
-    // }
 
     function getinfo() public view returns(bytes memory)
     {
@@ -104,9 +97,7 @@ contract VerusBridgeMaster {
                 destination.transfer(_payments[i].amount);
                 totalsent += _payments[i].amount;
             }
-
         }
-        subtractFromEthHeld(totalsent);
     }
 
     function getcurrency(address _currencyid) public view returns(bytes memory)
@@ -114,30 +105,10 @@ contract VerusBridgeMaster {
         return verusInfo.getcurrency(_currencyid);
     }
 
-    function setClaimableFees(uint64 fees, uint176 bridgekeeper) public
+    function setClaimableFees(uint64 fees, uint176 bridgekeeper) private
     {
-        require(msg.sender == address(verusBridge));
-        
-        //exporter 10%
-
-        uint256 LPFees;
-        LPFees = setLPClaimableFees(fees, bridgekeeper);
-
-        setClaimedFees(bytes32(uint256(uint160(address(verusNotarizer)))), LPFees);
-
-        //NOTE:only execute the LP transfer if there is x10 the fee amount 
-        if(LPFees > (VerusConstants.verusvETHTransactionFee * 10) && verusNotarizer.poolAvailable())
-        {
-            //make a transfer for the LP fees back to Verus
-            verusBridge.sendToVRSC(uint64(LPFees), true, address(0));
-            claimableFees[bytes32(uint256(uint160(address(verusNotarizer))))] = 0;
-        }
-    }
-
-    function setLPClaimableFees(uint256 _ethAmount, uint176 bridgekeeper) private returns (uint256)
-    {       
         uint256 notaryFees;
-        uint256 LPFees;
+        uint256 LPFee;
         uint256 proposerFees;  
         uint256 bridgekeeperFees;              
         uint176 proposer;
@@ -147,21 +118,27 @@ contract VerusBridgeMaster {
                 proposer := mload(add(proposerBytes, 128))
         } 
 
-        (notaryFees, proposerFees, bridgekeeperFees, LPFees) = verusInfo.setFeePercentages(_ethAmount);
+        (notaryFees, proposerFees, bridgekeeperFees, LPFee) = verusInfo.setFeePercentages(fees);
 
-        setNotaryFees(notaryFees);
+        // Any remainder from Notaries shared fees is put into the LPFees pot.
+        LPFee += setNotaryFees(notaryFees);
 
         setClaimedFees(bytes32(uint256(proposer)), proposerFees);
-        
         setClaimedFees(bytes32(uint256(bridgekeeper)), bridgekeeperFees);
 
-        //return total amount of unclaimed LP Fees accrued.  Verusnotarizer address is the key.
-        return LPFees;
-              
+        //NOTE: LP fees to be sent to vrsc to be burnt held at the verusNotarizerStorage address as a unique key
+        uint256 totalLPFees = setClaimedFees(bytes32(uint256(uint160(address(verusNotarizerStorage)))), LPFee);
+        
+        //NOTE:only execute the LP transfer if there is x10 the fee amount 
+        if(totalLPFees > (VerusConstants.verusvETHTransactionFee * 10) && verusNotarizer.poolAvailable())
+        {
+            //make a transfer for the LP fees back to Verus
+            verusBridge.sendToVRSC(uint64(totalLPFees), true, address(0));
+            verusNotarizerStorage.setClaimableFees(bytes32(uint256(uint160(address(verusNotarizerStorage)))), 0);
+        }
     }
 
-
-    function setNotaryFees(uint256 notaryFees) private {  //sent in as SATS
+    function setNotaryFees(uint256 notaryFees) private returns (uint64 remainder){  //sent in as SATS
       
         uint256 numOfNotaries = verusNotarizer.currentNotariesLength();
         uint64 notariesShare = uint64(notaryFees / numOfNotaries);
@@ -172,6 +149,7 @@ contract VerusBridgeMaster {
             notary |= (uint176(0x0c14) << 160); //set at type eth
             setClaimedFees(bytes32(uint256(notary)), notariesShare);
         }
+        remainder = uint64(notaryFees % numOfNotaries);
     }
 
     function claimfees() public
@@ -183,20 +161,18 @@ contract VerusBridgeMaster {
 
         // Check claiment is type eth with length 20 and has fees to be got.
         claiment |= (uint256(0x0c14) << 160);
-        claimAmount = claimableFees[bytes32(claiment)];
+        claimAmount = verusNotarizerStorage.claimableFees(bytes32(claiment));
 
         if(claimAmount > 0)
         {
             //stored as SATS convert to WEI
             payable(msg.sender).transfer(claimAmount * VerusConstants.SATS_TO_WEI_STD);
-            subtractFromEthHeld(claimAmount * VerusConstants.SATS_TO_WEI_STD);
-            claimableFees[bytes32(claiment)] = 0;
+            verusNotarizerStorage.setClaimableFees(bytes32(claiment),  0);
         }
         else
         {
             revert("No fees avaiable");
         }
-
     }
 
     function getNewProof(bool latest) public payable returns (bytes memory) {
@@ -205,10 +181,10 @@ contract VerusBridgeMaster {
 
         feeCost = verusNotarizer.getProofCosts(latest);
 
-        require(msg.value >= feeCost, "Not enough fee");
+        require(msg.value == feeCost, "Not enough fee");
 
         uint256 feeShare = msg.value / VerusConstants.SATS_TO_WEI_STD / 2;
-        setNotaryFees(feeShare);
+        uint256 remainder = (msg.value / VerusConstants.SATS_TO_WEI_STD) % 2;
 
         uint256 proposerAndHeight;
         bytes memory proposerBytes = verusNotarizer.bestForks(0);
@@ -218,9 +194,11 @@ contract VerusBridgeMaster {
         assembly {
                 proposerAndHeight := mload(add(proposerBytes, proposeroffset))
         } 
-
-        setClaimedFees(bytes32(uint256(uint176(proposerAndHeight))), feeShare);
-        ethHeld += msg.value;
+        
+        // Proposer and notaries get share of fees
+        // any remainder from divide by 2 or divide by notaries gets added
+        feeShare += setNotaryFees(feeShare);
+        setClaimedFees(bytes32(uint256(uint176(proposerAndHeight))), (feeShare + remainder));
 
         return verusNotarizer.getNewProofs(bytes32(proposerAndHeight));
     }
@@ -250,10 +228,10 @@ contract VerusBridgeMaster {
 
         claiment |= (uint256(0x0214) << 160);  // is Claimient type R address and 20 bytes.
 
-        if ((claimableFees[bytes32(claiment)] > VerusConstants.verusvETHTransactionFee) && msg.sender == ethAddress)
+        if ((verusNotarizerStorage.claimableFees(bytes32(claiment)) > VerusConstants.verusvETHTransactionFee) && msg.sender == ethAddress)
         {
-            verusBridge.sendToVRSC(uint64(claimableFees[bytes32(claiment)]), true, rAddress); //sent in as SATS
-            claimableFees[bytes32(claiment)] = 0;
+            verusBridge.sendToVRSC(uint64(verusNotarizerStorage.claimableFees(bytes32(claiment))), true, rAddress); //sent in as SATS
+            verusNotarizerStorage.setClaimableFees(bytes32(claiment),  0);
         }
         else
         {
@@ -264,9 +242,7 @@ contract VerusBridgeMaster {
         
     function setClaimedFees(bytes32 _address, uint256 fees) private returns (uint256)
     {
-        claimableFees[_address] += fees;
-
-        return claimableFees[_address];
+        return verusNotarizerStorage.appendClaimableFees(_address, fees);
     }
 
     function sendVRSC() public 
@@ -275,13 +251,4 @@ contract VerusBridgeMaster {
         verusBridge.sendToVRSC(0, false, address(0));
     }
 
-    function addToEthHeld(uint256 _ethAmount) public {  //sent in as WEI
-        require( msg.sender == address(verusBridge));
-        ethHeld += _ethAmount;
-    }
-
-    function subtractFromEthHeld(uint256 _ethAmount) private {  //sent in as WEI
-
-        ethHeld -= _ethAmount;
-    }
 }

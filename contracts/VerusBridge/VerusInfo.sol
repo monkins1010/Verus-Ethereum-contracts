@@ -5,7 +5,6 @@ import "../Libraries/VerusObjects.sol";
 import "../Libraries/VerusObjectsCommon.sol";
 import "../Libraries/VerusConstants.sol";
 import "../VerusNotarizer/VerusNotarizer.sol";
-import "../VerusBridge/VerusBridgeMaster.sol";
 import "../VerusBridge/TokenManager.sol";
 
 pragma solidity >=0.6.0 <0.9.0;

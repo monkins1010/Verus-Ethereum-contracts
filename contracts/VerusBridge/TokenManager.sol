@@ -9,12 +9,10 @@ import "../Libraries/VerusConstants.sol";
 import "../Libraries/VerusObjects.sol";
 import "./VerusSerializer.sol";
 import "../VerusBridge/VerusBridge.sol";
-
 import "../VerusBridge/VerusBridgeStorage.sol";
 import "../VerusBridge/UpgradeManager.sol";
 import "../Libraries/VerusObjectsCommon.sol";
 import "@openzeppelin/contracts/token/ERC721/ERC721.sol";
-import "./VerusBridgeMaster.sol";
 
 contract TokenManager {
 
