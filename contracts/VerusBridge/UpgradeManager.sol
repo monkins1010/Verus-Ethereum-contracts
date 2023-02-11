@@ -218,13 +218,13 @@ contract UpgradeManager {
         delete pendingContractsSignatures;
 
         return true;
-    
     }
+
     function recover(VerusObjects.upgradeInfo memory _newContractPackage) public returns (uint8) {
 
         if (!checkMultiSigContracts(_newContractPackage)) return 1; 
         verusNotarizer.updateNotarizer(_newContractPackage.contracts[0], _newContractPackage.contracts[1], 
-        _newContractPackage.contracts[2], VerusConstants.NOTARY_VALID);
+                                       _newContractPackage.contracts[2], VerusConstants.NOTARY_VALID);
         delete pendingContracts;
         delete pendingContractsSignatures;
         return 2;

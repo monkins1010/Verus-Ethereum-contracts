@@ -122,17 +122,19 @@ contract VerusBridge {
             {
                 desttype := mload(add(serializedDest, 1))
                 destinationAddress := mload(add(serializedDest, 21))
-                nftContract := mload(add(serializedDest, 41))
-                tokenId := mload(add(serializedDest, 73))
+                tokenId := mload(add(serializedDest, 53))  // cant have constant in assebmly == VerusConstants.VERUS_NFT_DEST_LENGTH
             }
-            require (serializedDest.length == 73 && (desttype == VerusConstants.DEST_PKH || desttype == VerusConstants.DEST_ID) && destinationAddress != address(0), "NFT packet wrong length/dest wrong");
+
+            VerusObjects.mappedToken memory mappedContract = verusBridgeStorage.getERCMapping(transfer.currencyvalue.currency);
+            nftContract = mappedContract.erc20ContractAddress;
+            require (serializedDest.length == VerusConstants.VERUS_NFT_DEST_LENGTH && (desttype == VerusConstants.DEST_PKH || desttype == VerusConstants.DEST_ID) && destinationAddress != address(0), "NFT packet wrong length/dest wrong");
 
             VerusNft nft = VerusNft(nftContract);
             require (nft.getApproved(tokenId) == address(this), "NFT not approved");
 
             nft.transferFrom(sender, address(this), tokenId);
             
-            if(nftContract == VerusConstants.VerusNFTID)
+            if(transfer.currencyvalue.currency == VerusConstants.VerusNFTID)
             {
                 nft.burn(tokenId);
             }

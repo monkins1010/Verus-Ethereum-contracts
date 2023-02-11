@@ -62,14 +62,18 @@ contract VerusBridgeMaster {
 
         bridgeKeeper = uint176(uint160(msg.sender));
 
-        bridgeKeeper |= (uint176(0x0c14) << 160); //make ETH type and length 20
+        bridgeKeeper |= (uint176(0x0c14) << 160); //make ETH type '0c' and length 20 '14'
 
         uint64 fees = verusBridge._createImports(_imports);
-        setClaimableFees(fees, bridgeKeeper);
+        if (fees >  0)
+        {
+            setClaimableFees(fees, bridgeKeeper);
+        }
     }
 
     function getReadyExportsByRange(uint _startBlock, uint _endBlock) public view 
-        returns(VerusObjects.CReserveTransferSet[] memory){
+            returns(VerusObjects.CReserveTransferSet[] memory){
+
         return verusBridge.getReadyExportsByRange(_startBlock,_endBlock);
     }
 

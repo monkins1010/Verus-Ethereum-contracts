@@ -56,6 +56,7 @@ library VerusConstants {
 
     //cCurrencydefintion constants
     uint32 constant OPTION_NFT_TOKEN = 0x800;
+    uint8 constant VERUS_NFT_DEST_LENGTH = 53;
 
     uint constant SATS_TO_WEI_STD = 10000000000;
 

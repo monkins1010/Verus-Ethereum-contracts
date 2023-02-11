@@ -68,7 +68,7 @@ contract ExportManager {
         else
         {
             // Custom destination for NFT  = 1byte desttype + 20bytes destinationaddres + 20bytes NFT address + 32bytes NFTTokenID
-            require (transfer.destination.destinationaddress.length == 73, "NFT destination address not 73 bytes");
+            require (transfer.destination.destinationaddress.length == VerusConstants.VERUS_NFT_DEST_LENGTH, "NFT destination address not 53 bytes");
             require (transfer.flags == VerusConstants.VALID, "Invalid flags for NFT transfer");
             require (transfer.currencyvalue.amount == 1, "Currency value must be 1 Satoshi");
             assembly 
@@ -157,7 +157,7 @@ contract ExportManager {
             else if (transfer.currencyvalue.currency == VerusConstants.VEth && 
                 ETHSent < tokenManager.convertFromVerusNumber(amount + transferFee, 18))
             {
-                revert ("ETH sent <= (amount + fees)");
+                revert ("ETH sent < (amount + fees)");
             } 
             else if (transfer.currencyvalue.currency != VerusConstants.VEth &&
                     ETHSent < tokenManager.convertFromVerusNumber(transferFee, 18))
