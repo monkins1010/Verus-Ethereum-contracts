@@ -188,4 +188,9 @@ library VerusObjects {
         uint32 exporttxoutnum;
         uint32 height;
     }
+
+    struct voteState {
+        uint32 agree;
+        uint32 count;
+    }
  }

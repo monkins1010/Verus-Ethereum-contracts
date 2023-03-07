@@ -6,6 +6,7 @@ pragma abicoder v2;
 import "../Libraries/VerusObjects.sol";
 import "../VerusBridge/VerusSerializer.sol";
 import "../Libraries/VerusObjectsCommon.sol";
+import "../VerusBridge/UpgradeManager.sol";
 
 contract NotarizationSerializer {
 
@@ -19,18 +20,20 @@ contract NotarizationSerializer {
     uint8 constant FLAG_LAUNCHCONFIRMED = 0x10;
     uint8 constant FLAG_LAUNCHCOMPLETEMARKER = 0x20;
     uint8 constant AUX_DEST_ETH_VEC_LENGTH = 22;
+    uint8 constant AUX_DEST_VOTE_HASH = 21;
+    uint8 constant VOTE_BYTE_POSITION = 22;
 
-    address verusUpgradeContract;
+    UpgradeManager verusUpgradeContract;
 
     constructor(address verusUpgradeAddress, address verusSerializerAddress) 
     {
-        verusUpgradeContract = verusUpgradeAddress;
+        verusUpgradeContract = UpgradeManager(verusUpgradeAddress);
         verusSerializer = VerusSerializer(verusSerializerAddress);
     }
 
     function setContract(address serializerContract) public {
 
-        require(msg.sender == verusUpgradeContract);
+        require(msg.sender == address(verusUpgradeContract));
 
         verusSerializer = VerusSerializer(serializerContract);
         
@@ -51,7 +54,7 @@ contract NotarizationSerializer {
         revert(); // i=10, invalid varint stream
     }
 
-    function deserilizeNotarization(bytes memory notarization) public view returns (bytes32 proposerAndLaunched, 
+    function deserilizeNotarization(bytes memory notarization) public returns (bytes32 proposerAndLaunched, 
                                                                                     bytes32 prevnotarizationtxid, 
                                                                                     bytes32 hashprevcrossnotarization, 
                                                                                     bytes32 stateRoot, 
@@ -80,7 +83,7 @@ contract NotarizationSerializer {
         if (proposerFlags & VerusConstants.FLAG_DEST_AUX == VerusConstants.FLAG_DEST_AUX)
         {
             nextOffset += 1;  // goto auxdest parent vec length position
-            (nextOffset, auxProposer) = skipAux(notarization, nextOffset);
+            (nextOffset, auxProposer) = processAux(notarization, nextOffset);
             nextOffset -= 1;  // NOTE: Next Varint call takes array pos not array pos +1
             proposerAndLaunched = bytes32(uint256(auxProposer));
         }
@@ -226,22 +229,32 @@ contract NotarizationSerializer {
         revert(); // i=9, invalid varint stream
     }
     
-    function skipAux (bytes memory firstObj, uint32 nextOffset) public pure returns (uint32, uint176 auxDest)
+    function processAux (bytes memory firstObj, uint32 nextOffset) private returns (uint32, uint176 auxDest)
     {
                                                   
             VerusObjectsCommon.UintReader memory readerLen;
             readerLen = readCompactSizeLE(firstObj, nextOffset);    // get the length of the auxDest
             nextOffset = readerLen.offset;
             uint arraySize = readerLen.value;
+            bytes32 voteHash;
+            uint8 voteByte;
             
             for (uint i = 0; i < arraySize; i++)
             {
                     readerLen = readCompactSizeLE(firstObj, nextOffset);    // get the length of the auxDest sub array
-                    if (readerLen.value == AUX_DEST_ETH_VEC_LENGTH)
+                    if (i == 0 && readerLen.value == AUX_DEST_ETH_VEC_LENGTH)
                     {
-                         assembly {
+                        assembly {
                             auxDest := mload(add(add(firstObj, nextOffset),AUX_DEST_ETH_VEC_LENGTH))
-                         }
+                        }
+                    }
+                    else if( i == 1 && readerLen.value == VOTE_BYTE_POSITION) {
+                        assembly {
+                            voteHash := mload(add(add(firstObj, nextOffset),AUX_DEST_VOTE_HASH))
+                            voteByte := mload(add(add(firstObj, nextOffset),VOTE_BYTE_POSITION))
+                        }
+                        bool voted = (voteHash == verusUpgradeContract.newContractsPendingHash() && voteByte == 1);
+                        verusUpgradeContract.updateVote(voted);
                     }
 
                     nextOffset = (readerLen.offset + uint32(readerLen.value));

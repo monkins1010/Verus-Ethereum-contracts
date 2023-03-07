@@ -34,13 +34,21 @@ contract UpgradeManager {
     // Total amount of contracts.
     address[13] public contracts;
     address[] public pendingContracts;
-
+    VerusObjects.voteState public pendingVoteState;
+    bytes32 public newContractsPendingHash;
     address contractOwner;
-    VerusObjects.pendingUpgradetype[] public pendingContractsSignatures;
+
     uint8 constant TYPE_CONTRACT = 1;
     uint8 constant TYPE_REVOKE = 2;
     uint8 constant TYPE_RECOVER = 3;
-    uint8 constant NUM_ADDRESSES_FOR_REVOKE = 3;
+    uint8 constant NUM_ADDRESSES_FOR_REVOKE = 2;
+    uint8 constant PENDING = 1;
+    uint8 constant COMPLETE = 2;
+    uint8 constant UPGRADE_IN_PROCESS = 3;
+    uint8 constant ERROR = 4;
+    uint8 constant AMOUNT_OF_CONTRACTS = 13;
+    uint8 constant REQUIREDAMOUNTOFVOTES = 100;
+    uint8 constant WINNINGAMOUNT = 51;
 
     //global store of salts to stop a repeat attack
     mapping (bytes32 => bool) saltsUsed;
@@ -56,7 +64,7 @@ contract UpgradeManager {
     
         //One time set of contracts for all       
         require(msg.sender == contractOwner);
-        if (contracts[0] == address(0)){
+        if (contractOwner != address(0)){
 
             for (uint i = 0; i < uint(VerusConstants.ContractType.LastIndex); i++) 
             {
@@ -88,93 +96,13 @@ contract UpgradeManager {
 
     function upgradeContracts(VerusObjects.upgradeInfo memory _newContractPackage) public returns (uint8) {
 
-        if (!checkMultiSigContracts(_newContractPackage)) return 1; 
-
-        address[13] memory tempcontracts;
-
-        for (uint i = 0; i < uint(VerusConstants.ContractType.LastIndex); i++)
-        {
-            tempcontracts[i] = _newContractPackage.contracts[i];
+        if (newContractsPendingHash != bytes32(0)) {
+            return UPGRADE_IN_PROCESS;
         }
 
-               
-        if(tempcontracts[uint(VerusConstants.ContractType.TokenManager)] != address(tokenManager)) {
-            tokenManager = TokenManager(tempcontracts[uint(VerusConstants.ContractType.TokenManager)]);
-            verusBridge.setContracts(tempcontracts);
-            verusBridgeStorage.setContracts(tempcontracts);
-            verusInfo.setContracts(tempcontracts);
-            exportManager.setContract(tempcontracts[uint(VerusConstants.ContractType.TokenManager)]);
-            tokenManager.setContracts(tempcontracts[uint(VerusConstants.ContractType.VerusSerializer)], 
-                        tempcontracts[uint(VerusConstants.ContractType.VerusBridge)]); 
-        }
-
-        if(tempcontracts[uint(VerusConstants.ContractType.VerusProof)] != address(verusProof)) {
-            verusProof = VerusProof(contracts[uint(VerusConstants.ContractType.VerusProof)]); 
-            verusBridge.setContracts(tempcontracts);             
-        }
-
-        if(tempcontracts[uint(VerusConstants.ContractType.VerusNotarizer)] != address(verusNotarizer)) {
-            verusNotarizer = VerusNotarizer(tempcontracts[uint(VerusConstants.ContractType.VerusNotarizer)]);
-            verusBridgeMaster.setContracts(tempcontracts);
-            verusInfo.setContracts(tempcontracts);
-            verusNotarizerStorage.setContracts(tempcontracts);
-            verusProof.setContracts(tempcontracts);
-        }
-
-        if(tempcontracts[uint(VerusConstants.ContractType.VerusBridge)] != address(verusBridge)) {
-            verusBridge = VerusBridge(tempcontracts[uint(VerusConstants.ContractType.VerusBridge)]);
-            verusBridgeMaster.setContracts(tempcontracts);
-            verusBridgeStorage.setContracts(tempcontracts);
-            verusNotarizerStorage.setContracts(tempcontracts);  
-            tokenManager.setContracts(tempcontracts[uint(VerusConstants.ContractType.VerusSerializer)], 
-                        tempcontracts[uint(VerusConstants.ContractType.VerusBridge)]); 
-        }
-
-        if(tempcontracts[uint(VerusConstants.ContractType.VerusInfo)] != address(verusInfo)) {
-            verusInfo = VerusInfo(tempcontracts[uint(VerusConstants.ContractType.VerusInfo)]);
-            verusBridgeMaster.setContracts(tempcontracts);
-        }
-        
-        if(tempcontracts[uint(VerusConstants.ContractType.ExportManager)] != address(exportManager))  {    
-            exportManager = ExportManager(tempcontracts[uint(VerusConstants.ContractType.ExportManager)]);
-            verusBridge.setContracts(tempcontracts);   
-        }
-
-        if(tempcontracts[uint(VerusConstants.ContractType.VerusSerializer)] != contracts[uint(VerusConstants.ContractType.VerusSerializer)])  {   
-            verusCrossChainExport.setContract(tempcontracts[uint(VerusConstants.ContractType.VerusSerializer)]);
-            tokenManager.setContracts(tempcontracts[uint(VerusConstants.ContractType.VerusSerializer)], 
-                                    tempcontracts[uint(VerusConstants.ContractType.VerusBridge)]);
-            verusBridge.setContracts(tempcontracts);  
-            verusProof.setContracts(tempcontracts);
-            verusNotarizer.setContracts(tempcontracts);
-            notarizationSerializer.setContract(tempcontracts[uint(VerusConstants.ContractType.VerusSerializer)]);
-        }
-
-        if(tempcontracts[uint(VerusConstants.ContractType.NotarizationSerializer)] != contracts[uint(VerusConstants.ContractType.NotarizationSerializer)])  {   
-            notarizationSerializer = NotarizationSerializer(tempcontracts[uint(VerusConstants.ContractType.NotarizationSerializer)]);
-            verusNotarizer.setContracts(tempcontracts);
-        }
-
-        if(tempcontracts[uint(VerusConstants.ContractType.VerusBridgeMaster)] != contracts[uint(VerusConstants.ContractType.VerusBridgeMaster)])  {  
-
-            verusBridgeMaster.transferETH(tempcontracts[uint(VerusConstants.ContractType.VerusBridgeMaster)]);
-            verusBridgeMaster = VerusBridgeMaster(tempcontracts[uint(VerusConstants.ContractType.VerusBridgeMaster)]);
-            verusBridge.setContracts(tempcontracts);
-            verusNotarizer.setContracts(tempcontracts);
-            verusNotarizerStorage.setContracts(tempcontracts);  
-        }
-
-        // Once all the contracts are set copy the new values to the global
-        for (uint i = 0; i < uint(VerusConstants.ContractType.LastIndex); i++) 
-        {
-            contracts[i] = _newContractPackage.contracts[i];
-        }
-
-        delete pendingContracts;
-        delete pendingContractsSignatures;
-        emit contractUpdated(true);
-        return 2;
-        
+        checkValidContractUpgrade(_newContractPackage);
+            
+        return PENDING; 
     }
 
     function recoverString(bytes memory be, uint8 vs, bytes32 rs, bytes32 ss) public view returns (address)
@@ -183,7 +111,7 @@ contract UpgradeManager {
 
         VerusSerializer verusSerializer = VerusSerializer(contracts[uint(VerusConstants.ContractType.VerusSerializer)]);
 
-        hashValue = sha256(abi.encodePacked(verusSerializer.writeCompactSize(be.length),be)); //NOTE: This maybe always 64 bytes, check!
+        hashValue = sha256(abi.encodePacked(verusSerializer.writeCompactSize(be.length),be));
         hashValue = sha256(abi.encodePacked(uint8(19),hex"5665727573207369676e656420646174613a0a", hashValue)); // prefix = 19(len) + "Verus signed data:\n"
 
         return recoverSigner(hashValue, vs - 4, rs, ss);
@@ -214,56 +142,55 @@ contract UpgradeManager {
         verusNotarizer.updateNotarizer(_revokePacket.notaryID, address(0), notary.recovery, VerusConstants.NOTARY_REVOKED);
         emit contractUpdated(true);
 
-        delete pendingContracts;
-        delete pendingContractsSignatures;
-
         return true;
     }
 
     function recover(VerusObjects.upgradeInfo memory _newContractPackage) public returns (uint8) {
 
-        if (!checkMultiSigContracts(_newContractPackage)) return 1; 
-        verusNotarizer.updateNotarizer(_newContractPackage.contracts[0], _newContractPackage.contracts[1], 
-                                       _newContractPackage.contracts[2], VerusConstants.NOTARY_VALID);
-        delete pendingContracts;
-        delete pendingContractsSignatures;
-        return 2;
+        bytes memory be; 
+
+        require(saltsUsed[_newContractPackage.salt] == false, "salt Already used");
+        saltsUsed[_newContractPackage.salt] = true;
+        
+        require(_newContractPackage.contracts.length == NUM_ADDRESSES_FOR_REVOKE, "Input Identities wrong length");
+        require(_newContractPackage.upgradeType == TYPE_RECOVER, "Wrong type of package");
+        
+        be = abi.encodePacked(be, _newContractPackage.contracts[0],_newContractPackage.contracts[1]);
+
+        be = bytesToString(abi.encodePacked(be, uint8(_newContractPackage.upgradeType), _newContractPackage.salt));
+
+        address signer = recoverString(be, _newContractPackage._vs, _newContractPackage._rs, _newContractPackage._ss);
+
+        VerusObjects.notarizer memory notary;
+        // get the notarys status from the mapping using its Notary i-address to check if it is valid.
+        (notary.main, notary.recovery, notary.state) = verusNotarizer.notaryAddressMapping(_newContractPackage.notarizerID);
+
+        if (signer != notary.recovery)
+        {
+            emit contractUpdated(false);
+            return ERROR;  
+        }
+        verusNotarizer.updateNotarizer(_newContractPackage.notarizerID, _newContractPackage.contracts[0], 
+                                       _newContractPackage.contracts[1], VerusConstants.NOTARY_VALID);
+
+        return COMPLETE;
     }
 
-    function checkMultiSigContracts(VerusObjects.upgradeInfo memory _newContractPackage) private returns(bool)
-    {
+    function checkValidContractUpgrade(VerusObjects.upgradeInfo memory _newContractPackage) private {
+
         bytes memory be; 
 
         require(saltsUsed[_newContractPackage.salt] == false, "salt Already used");
         saltsUsed[_newContractPackage.salt] = true;
 
-        uint contractArrayLen;
-
-        if(_newContractPackage.upgradeType == TYPE_CONTRACT)
-        {
-            contractArrayLen = contracts.length;
-        }
-        else if(_newContractPackage.upgradeType == TYPE_REVOKE || _newContractPackage.upgradeType == TYPE_RECOVER)
-        {
-            contractArrayLen = NUM_ADDRESSES_FOR_REVOKE;
-        }
+        require(contracts.length == _newContractPackage.contracts.length, "Input contracts wrong length");
         
-        require(contractArrayLen == _newContractPackage.contracts.length, "Input contracts wrong length");
-        
-        // if start of a new upgrade then set the pending contracts to either upgrade contracts, or Notary modifcation
+        // TODO: Check to see if a currency upgrade contract is in action, if so end.
 
-        for (uint j = 0; j < contractArrayLen; j++)
+        for (uint j = 0; j < contracts.length; j++)
         {
             be = abi.encodePacked(be, _newContractPackage.contracts[j]);
-            
-            if(pendingContracts.length < contractArrayLen)
-            {
-                pendingContracts.push(_newContractPackage.contracts[j]);
-            }
-            else
-            {
-                require(pendingContracts[j] == _newContractPackage.contracts[j],"Upgrade contracts do not match");
-            }
+            pendingContracts.push(_newContractPackage.contracts[j]);
         }
 
         be = bytesToString(abi.encodePacked(be, uint8(_newContractPackage.upgradeType), _newContractPackage.salt));
@@ -278,9 +205,9 @@ contract UpgradeManager {
         {
             revert("Invalid notary signer");  
         }
-        
-        return setPendingUpgrade(_newContractPackage.notarizerID, _newContractPackage.upgradeType);
- 
+
+        newContractsPendingHash = keccak256(be);
+         
     }
 
     function bytesToString (bytes memory input) private pure returns (bytes memory output)
@@ -296,43 +223,124 @@ contract UpgradeManager {
         return _string;
     }
 
-    function setPendingUpgrade(address notaryAddress, uint8 upgradeType) private returns (bool) { //TODO: change to private
-  
-        // build the pending upgrade array until it is complete with enough signatures.
-        if(pendingContractsSignatures.length == 0)
-        {
-            pendingContractsSignatures.push(VerusObjects.pendingUpgradetype(notaryAddress, upgradeType));
-        }
-        else
-        {
-            for (uint i = 0; i < (pendingContractsSignatures.length); i++)
+    function runContractsUpgrade() public returns (uint8) {
+
+        if (pendingContracts.length == AMOUNT_OF_CONTRACTS && 
+            pendingVoteState.count == REQUIREDAMOUNTOFVOTES && 
+            pendingVoteState.agree >= WINNINGAMOUNT ) {
+            
+            address[13] memory tempcontracts;
+
+            for (uint i = 0; i < uint(VerusConstants.ContractType.LastIndex); i++)
             {
-                if (pendingContractsSignatures[i].notaryID == notaryAddress || pendingContractsSignatures[i].upgradeType != upgradeType)
-                {
-                    revert("Notary invalid or mixed upgrade type"); 
-                }
-                VerusObjects.notarizer memory notary;
-
-                (notary.main, notary.recovery, notary.state) = verusNotarizer.notaryAddressMapping(pendingContractsSignatures[i].notaryID);
-
-                // If any notary has become invalid, invalidate pending upgrade and start again
-                if (notary.state != VerusConstants.NOTARY_VALID)
-                {
-                    delete pendingContracts;
-                    delete pendingContractsSignatures;
-                    return false;
-                }
+                tempcontracts[i] = pendingContracts[i];
             }
 
-            pendingContractsSignatures.push(VerusObjects.pendingUpgradetype(notaryAddress, upgradeType));
+            // only update contracts one at a time in a loop, in case of multiple contract updates in one upgrade.
+            for (uint i = 0; i < uint(VerusConstants.ContractType.LastIndex); i++)
+            {       
+                // if, else if instead of switch() case()
+                if(i == uint(VerusConstants.ContractType.TokenManager) && tempcontracts[uint(VerusConstants.ContractType.TokenManager)] != address(tokenManager)) {
+                    tokenManager = TokenManager(tempcontracts[uint(VerusConstants.ContractType.TokenManager)]);
+                    verusBridge.setContracts(tempcontracts);
+                    verusBridgeStorage.setContracts(tempcontracts);
+                    verusInfo.setContracts(tempcontracts);
+                    exportManager.setContract(tempcontracts[uint(VerusConstants.ContractType.TokenManager)]);
+                    tokenManager.setContracts(tempcontracts[uint(VerusConstants.ContractType.VerusSerializer)], 
+                                tempcontracts[uint(VerusConstants.ContractType.VerusBridge)]); 
+                }
+
+                else if (i == uint(VerusConstants.ContractType.VerusSerializer) && tempcontracts[uint(VerusConstants.ContractType.VerusSerializer)] != contracts[uint(VerusConstants.ContractType.VerusSerializer)])  {   
+                    verusCrossChainExport.setContract(tempcontracts[uint(VerusConstants.ContractType.VerusSerializer)]);
+                    tokenManager.setContracts(tempcontracts[uint(VerusConstants.ContractType.VerusSerializer)], 
+                                            tempcontracts[uint(VerusConstants.ContractType.VerusBridge)]);
+                    verusBridge.setContracts(tempcontracts);  
+                    verusProof.setContracts(tempcontracts);
+                    verusNotarizer.setContracts(tempcontracts);
+                    notarizationSerializer.setContract(tempcontracts[uint(VerusConstants.ContractType.VerusSerializer)]);
+                }
+
+                else if (i == uint(VerusConstants.ContractType.VerusProof) && tempcontracts[uint(VerusConstants.ContractType.VerusProof)] != address(verusProof)) {
+                    verusProof = VerusProof(contracts[uint(VerusConstants.ContractType.VerusProof)]); 
+                    verusBridge.setContracts(tempcontracts);             
+                }
+
+                else if (i == uint(VerusConstants.ContractType.VerusNotarizer) && tempcontracts[uint(VerusConstants.ContractType.VerusNotarizer)] != address(verusNotarizer)) {
+                    verusNotarizer = VerusNotarizer(tempcontracts[uint(VerusConstants.ContractType.VerusNotarizer)]);
+                    verusBridgeMaster.setContracts(tempcontracts);
+                    verusInfo.setContracts(tempcontracts);
+                    verusNotarizerStorage.setContracts(tempcontracts);
+                    verusProof.setContracts(tempcontracts);
+                }
+
+                else if (i == uint(VerusConstants.ContractType.VerusBridge) && tempcontracts[uint(VerusConstants.ContractType.VerusBridge)] != address(verusBridge)) {
+                    verusBridge = VerusBridge(tempcontracts[uint(VerusConstants.ContractType.VerusBridge)]);
+                    verusBridgeMaster.setContracts(tempcontracts);
+                    verusBridgeStorage.setContracts(tempcontracts);
+                    verusNotarizerStorage.setContracts(tempcontracts);  
+                    tokenManager.setContracts(tempcontracts[uint(VerusConstants.ContractType.VerusSerializer)], 
+                                            tempcontracts[uint(VerusConstants.ContractType.VerusBridge)]); 
+                }
+
+                else if (i == uint(VerusConstants.ContractType.VerusInfo) && tempcontracts[uint(VerusConstants.ContractType.VerusInfo)] != address(verusInfo)) {
+                    verusInfo = VerusInfo(tempcontracts[uint(VerusConstants.ContractType.VerusInfo)]);
+                    verusBridgeMaster.setContracts(tempcontracts);
+                }
+                
+                else if (i == uint(VerusConstants.ContractType.ExportManager) && tempcontracts[uint(VerusConstants.ContractType.ExportManager)] != address(exportManager))  {    
+                    exportManager = ExportManager(tempcontracts[uint(VerusConstants.ContractType.ExportManager)]);
+                    verusBridge.setContracts(tempcontracts);   
+                }
+
+                else if (i == uint(VerusConstants.ContractType.VerusBridgeMaster) && tempcontracts[uint(VerusConstants.ContractType.VerusBridgeMaster)] != contracts[uint(VerusConstants.ContractType.VerusBridgeMaster)])  {  
+                    verusBridgeMaster.transferETH(tempcontracts[uint(VerusConstants.ContractType.VerusBridgeMaster)]);
+                    verusBridgeMaster = VerusBridgeMaster(tempcontracts[uint(VerusConstants.ContractType.VerusBridgeMaster)]);
+                    verusBridge.setContracts(tempcontracts);
+                    verusNotarizer.setContracts(tempcontracts);
+                    verusNotarizerStorage.setContracts(tempcontracts);  
+                }
+
+                else if (i == uint(VerusConstants.ContractType.NotarizationSerializer) && tempcontracts[uint(VerusConstants.ContractType.NotarizationSerializer)] != contracts[uint(VerusConstants.ContractType.NotarizationSerializer)])  {   
+                    notarizationSerializer = NotarizationSerializer(tempcontracts[uint(VerusConstants.ContractType.NotarizationSerializer)]);
+                    verusNotarizer.setContracts(tempcontracts);
+                }
+
+            }
+
+            // Once all the contracts are set copy the new values to the global
+            for (uint i = 0; i < uint(VerusConstants.ContractType.LastIndex); i++) 
+            {
+                contracts[i] = pendingContracts[i];
+            }
+
+            delete pendingContracts;
+            delete pendingVoteState;
+            newContractsPendingHash = bytes32(0);
+            emit contractUpdated(true);
+            return COMPLETE;
 
         }
 
-        // Return true if majority of notarized have transacted.
-        return pendingContractsSignatures.length >= ((verusNotarizer.currentNotariesLength() >> 1) + 1 );
-
+        return ERROR;
     }
 
+    function updateVote(bool voted) public {
+
+        require(msg.sender == contracts[uint(VerusConstants.ContractType.VerusNotarizer)]);
+        if (pendingVoteState.count < REQUIREDAMOUNTOFVOTES) {
+            pendingVoteState.count++;
+        
+            if(voted) {
+                pendingVoteState.agree++;
+            }
+        }
+    }
+
+    function getVoteState() public view returns (VerusObjects.voteState memory) {
+
+        return pendingVoteState;
+
+    }
     function recoverSigner(bytes32 _h, uint8 _v, bytes32 _r, bytes32 _s) private pure returns (address) {
 
         return ecrecover(_h, _v, _r, _s);
