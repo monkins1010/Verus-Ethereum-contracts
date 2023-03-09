@@ -389,7 +389,7 @@ contract VerusNotarizer {
         require(verusUpgradeContract.saltsUsed(_revokePacket.salt) == false, "salt Already used");
         verusUpgradeContract.setSaltsUsed(_revokePacket.salt);
 
-        be = bytesToString(abi.encodePacked(_revokePacket.salt));
+        be = bytesToString(abi.encodePacked(uint8(TYPE_REVOKE), _revokePacket.salt));
 
         address signer = recoverString(be, _revokePacket._vs, _revokePacket._rs, _revokePacket._ss);
 
@@ -413,9 +413,7 @@ contract VerusNotarizer {
         require(_newContractPackage.contracts.length == NUM_ADDRESSES_FOR_REVOKE, "Input Identities wrong length");
         require(_newContractPackage.upgradeType == TYPE_RECOVER, "Wrong type of package");
         
-        be = abi.encodePacked(_newContractPackage.contracts[0],_newContractPackage.contracts[1]);
-
-        be = bytesToString(abi.encodePacked(be, uint8(_newContractPackage.upgradeType), _newContractPackage.salt));
+        be = bytesToString(abi.encodePacked(_newContractPackage.contracts[0],_newContractPackage.contracts[1], uint8(_newContractPackage.upgradeType), _newContractPackage.salt));
 
         address signer = recoverString(be, _newContractPackage._vs, _newContractPackage._rs, _newContractPackage._ss);
 
