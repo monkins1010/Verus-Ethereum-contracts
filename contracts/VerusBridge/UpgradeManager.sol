@@ -51,7 +51,7 @@ contract UpgradeManager {
     uint8 constant WINNINGAMOUNT = 51;
 
     //global store of salts to stop a repeat attack
-    mapping (bytes32 => bool) saltsUsed;
+    mapping (bytes32 => bool) public saltsUsed;
 
     event contractUpdated(bool);
     
@@ -116,64 +116,6 @@ contract UpgradeManager {
 
         return recoverSigner(hashValue, vs - 4, rs, ss);
 
-    }
-
-    function revoke(VerusObjects.revokeInfo memory _revokePacket) public returns (bool) {
-
-        bytes memory be; 
-
-        require(saltsUsed[_revokePacket.salt] == false, "salt Already used");
-        saltsUsed[_revokePacket.salt] = true;
-
-        be = bytesToString(abi.encodePacked(_revokePacket.salt));
-
-        address signer = recoverString(be, _revokePacket._vs, _revokePacket._rs, _revokePacket._ss);
-        
-        VerusObjects.notarizer memory notary;
-        // get the notarys status from the mapping using its Notary i-address to check if it is valid.
-        (notary.main, notary.recovery, notary.state) = verusNotarizer.notaryAddressMapping(_revokePacket.notaryID);
-
-        if (notary.main != signer || notary.state == VerusConstants.NOTARY_REVOKED)
-        {
-            emit contractUpdated(false);
-            return false;  
-        }
-
-        verusNotarizer.updateNotarizer(_revokePacket.notaryID, address(0), notary.recovery, VerusConstants.NOTARY_REVOKED);
-        emit contractUpdated(true);
-
-        return true;
-    }
-
-    function recover(VerusObjects.upgradeInfo memory _newContractPackage) public returns (uint8) {
-
-        bytes memory be; 
-
-        require(saltsUsed[_newContractPackage.salt] == false, "salt Already used");
-        saltsUsed[_newContractPackage.salt] = true;
-        
-        require(_newContractPackage.contracts.length == NUM_ADDRESSES_FOR_REVOKE, "Input Identities wrong length");
-        require(_newContractPackage.upgradeType == TYPE_RECOVER, "Wrong type of package");
-        
-        be = abi.encodePacked(be, _newContractPackage.contracts[0],_newContractPackage.contracts[1]);
-
-        be = bytesToString(abi.encodePacked(be, uint8(_newContractPackage.upgradeType), _newContractPackage.salt));
-
-        address signer = recoverString(be, _newContractPackage._vs, _newContractPackage._rs, _newContractPackage._ss);
-
-        VerusObjects.notarizer memory notary;
-        // get the notarys status from the mapping using its Notary i-address to check if it is valid.
-        (notary.main, notary.recovery, notary.state) = verusNotarizer.notaryAddressMapping(_newContractPackage.notarizerID);
-
-        if (signer != notary.recovery)
-        {
-            emit contractUpdated(false);
-            return ERROR;  
-        }
-        verusNotarizer.updateNotarizer(_newContractPackage.notarizerID, _newContractPackage.contracts[0], 
-                                       _newContractPackage.contracts[1], VerusConstants.NOTARY_VALID);
-
-        return COMPLETE;
     }
 
     function checkValidContractUpgrade(VerusObjects.upgradeInfo memory _newContractPackage) private {
@@ -349,5 +291,11 @@ contract UpgradeManager {
     function getBridgeAddress() public view returns (address)
     {
         return contracts[uint(VerusConstants.ContractType.VerusBridge)];
+    }
+
+    function setSaltsUsed(bytes32 salt) public {
+        require(msg.sender == contracts[uint(VerusConstants.ContractType.VerusNotarizer)]);
+        saltsUsed[salt] = true;
+
     }
 }
