@@ -34,7 +34,7 @@ contract VerusBridge {
     constructor(address verusBridgeMasterAddress, address verusBridgeStorageAddress,
                 address tokenManagerAddress, address verusSerializerAddress, address verusProofAddress,
                 address verusCCEAddress, address exportManagerAddress, address verusUpgradeAddress, uint firstblock, uint64 _poolSize) {
-        verusBridgeMaster = VerusBridgeMaster(verusBridgeMasterAddress); 
+        verusBridgeMaster = VerusBridgeMaster(payable(verusBridgeMasterAddress)); 
         verusBridgeStorage = VerusBridgeStorage(verusBridgeStorageAddress); 
         tokenManager = TokenManager(tokenManagerAddress);
         verusSerializer = VerusSerializer(verusSerializerAddress);
@@ -69,7 +69,7 @@ contract VerusBridge {
             exportManager = ExportManager(contracts[uint(VerusConstants.ContractType.ExportManager)]);
 
         if(contracts[uint(VerusConstants.ContractType.VerusBridgeMaster)] != address(verusBridgeMaster))     
-            verusBridgeMaster = VerusBridgeMaster(contracts[uint(VerusConstants.ContractType.VerusBridgeMaster)]);
+            verusBridgeMaster = VerusBridgeMaster(payable(contracts[uint(VerusConstants.ContractType.VerusBridgeMaster)]));
 
     }
 

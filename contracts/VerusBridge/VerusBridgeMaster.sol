@@ -28,6 +28,10 @@ contract VerusBridgeMaster {
     {
         upgradeContract = upgradeContractAddress;      
     }
+
+    receive() external payable {
+        
+    }
     
    function setContracts(address[13] memory contracts) public {
    
@@ -43,7 +47,7 @@ contract VerusBridgeMaster {
 
     function transferETH (address newMasterAddress) public {
         require(msg.sender == upgradeContract);
-        payable(newMasterAddress).transfer(address(this).balance);
+        payable(newMasterAddress).send(address(this).balance);
     }
     
     /** VerusBridge pass through functions **/
@@ -98,7 +102,7 @@ contract VerusBridgeMaster {
             address payable destination = payable(_payments[i].destination);
             if(destination != address(0))
             {
-                destination.transfer(_payments[i].amount);
+                destination.send(_payments[i].amount);
                 totalsent += _payments[i].amount;
             }
         }

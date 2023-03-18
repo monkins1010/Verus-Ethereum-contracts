@@ -82,7 +82,7 @@ contract UpgradeManager {
             
             verusBridgeStorage = VerusBridgeStorage(_newContractAddress[uint(VerusConstants.ContractType.VerusBridgeStorage)]);
             verusNotarizerStorage = VerusNotarizerStorage(_newContractAddress[uint(VerusConstants.ContractType.VerusNotarizerStorage)]);
-            verusBridgeMaster = VerusBridgeMaster(_newContractAddress[uint(VerusConstants.ContractType.VerusBridgeMaster)]);
+            verusBridgeMaster = VerusBridgeMaster(payable(_newContractAddress[uint(VerusConstants.ContractType.VerusBridgeMaster)]));
 
             verusBridgeStorage.setContracts(contracts); 
             verusNotarizerStorage.setContracts(contracts); 
@@ -236,7 +236,7 @@ contract UpgradeManager {
 
                 else if (i == uint(VerusConstants.ContractType.VerusBridgeMaster) && tempcontracts[uint(VerusConstants.ContractType.VerusBridgeMaster)] != contracts[uint(VerusConstants.ContractType.VerusBridgeMaster)])  {  
                     verusBridgeMaster.transferETH(tempcontracts[uint(VerusConstants.ContractType.VerusBridgeMaster)]);
-                    verusBridgeMaster = VerusBridgeMaster(tempcontracts[uint(VerusConstants.ContractType.VerusBridgeMaster)]);
+                    verusBridgeMaster = VerusBridgeMaster(payable(tempcontracts[uint(VerusConstants.ContractType.VerusBridgeMaster)]));
                     verusBridge.setContracts(tempcontracts);
                     verusNotarizer.setContracts(tempcontracts);
                     verusNotarizerStorage.setContracts(tempcontracts);  

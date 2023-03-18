@@ -55,7 +55,7 @@ contract VerusNotarizer {
             verusSerializer = VerusSerializer(_verusSerializerAddress);
             verusUpgradeContract = UpgradeManager(upgradeContractAddress);
             verusNotarizerStorage = VerusNotarizerStorage(verusNotarizerStorageAddress); 
-            verusBridgeMaster = VerusBridgeMaster(verusBridgeMasterAddress);
+            verusBridgeMaster = VerusBridgeMaster(payable(verusBridgeMasterAddress));
             notarizationSerializer = NotarizationSerializer(notarizationSerializerAddress);
 
             // when contract is launching/upgrading copy in to global bool pool available.
@@ -81,7 +81,7 @@ contract VerusNotarizer {
         }
         
         if(contracts[uint(VerusConstants.ContractType.VerusBridgeMaster)] != address(verusBridgeMaster))     
-            verusBridgeMaster = VerusBridgeMaster(contracts[uint(VerusConstants.ContractType.VerusBridgeMaster)]);
+            verusBridgeMaster = VerusBridgeMaster(payable(contracts[uint(VerusConstants.ContractType.VerusBridgeMaster)]));
 
     }
           

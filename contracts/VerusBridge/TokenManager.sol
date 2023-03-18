@@ -286,8 +286,9 @@ contract TokenManager {
 
             uint8 flags = uint8((transfers[i].destinationAndFlags >> 160));
             
-            // Handle ETH Send
-            if (flags & VerusConstants.TOKEN_ETH_SEND == VerusConstants.TOKEN_ETH_SEND) 
+            // Handle ETH Send, check address will not revert
+            if (flags & VerusConstants.TOKEN_ETH_SEND == VerusConstants.TOKEN_ETH_SEND &&
+                payable(address(uint160(transfers[i].destinationAndFlags))).send(0)) 
             {
                 // ETH is held in VerusBridgemaster, create array to bundle payments
                 payments[ETHPaymentCounter] = VerusObjects.ETHPayments(
