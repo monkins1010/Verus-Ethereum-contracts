@@ -47,7 +47,7 @@ contract VerusBridgeMaster {
 
     function transferETH (address newMasterAddress) public {
         require(msg.sender == upgradeContract);
-        payable(newMasterAddress).send(address(this).balance);
+        payable(newMasterAddress).transfer(address(this).balance);
     }
     
     /** VerusBridge pass through functions **/
@@ -102,7 +102,7 @@ contract VerusBridgeMaster {
             address payable destination = payable(_payments[i].destination);
             if(destination != address(0))
             {
-                destination.send(_payments[i].amount);
+                destination.transfer(_payments[i].amount);
                 totalsent += _payments[i].amount;
             }
         }
@@ -141,7 +141,7 @@ contract VerusBridgeMaster {
         if(totalLPFees > (VerusConstants.verusvETHTransactionFee * 10) && verusNotarizer.poolAvailable())
         {
             //make a transfer for the LP fees back to Verus
-            verusBridge.sendToVRSC(uint64(totalLPFees), true, address(0));
+            verusBridge.sendToVRSC(uint64(totalLPFees), true, address(0), VerusConstants.DEST_PKH);
             verusNotarizerStorage.setClaimableFees(bytes32(uint256(uint160(address(verusNotarizerStorage)))), 0);
         }
     }
@@ -176,6 +176,22 @@ contract VerusBridgeMaster {
             //stored as SATS convert to WEI
             payable(msg.sender).transfer(claimAmount * VerusConstants.SATS_TO_WEI_STD);
             verusNotarizerStorage.setClaimableFees(bytes32(claiment),  0);
+        }
+        else
+        {
+            revert("No fees avaiable");
+        }
+    }
+
+    function claimRefund(uint176 verusAddress) public 
+    {
+        uint64 refundAmount;
+        refundAmount = uint64(verusBridgeStorage.refunds(bytes32(uint256(verusAddress))));
+
+        if (refundAmount > 0)
+        {
+            verusBridge.sendToVRSC(refundAmount, true, address(uint160(verusAddress)), uint8(verusAddress >> 168));
+            verusBridgeStorage.setRefund(bytes32(uint256(verusAddress)),  0);
         }
         else
         {
@@ -238,7 +254,7 @@ contract VerusBridgeMaster {
 
         if ((verusNotarizerStorage.claimableFees(bytes32(claiment)) > VerusConstants.verusvETHTransactionFee) && msg.sender == ethAddress)
         {
-            verusBridge.sendToVRSC(uint64(verusNotarizerStorage.claimableFees(bytes32(claiment))), true, rAddress); //sent in as SATS
+            verusBridge.sendToVRSC(uint64(verusNotarizerStorage.claimableFees(bytes32(claiment))), true, rAddress, VerusConstants.DEST_PKH); //sent in as SATS
             verusNotarizerStorage.setClaimableFees(bytes32(claiment),  0);
         }
         else
@@ -256,7 +272,7 @@ contract VerusBridgeMaster {
     function sendVRSC() public 
     {
         require(msg.sender == address(verusNotarizer));
-        verusBridge.sendToVRSC(0, false, address(0));
+        verusBridge.sendToVRSC(0, false, address(0), VerusConstants.DEST_PKH);
     }
 
 }

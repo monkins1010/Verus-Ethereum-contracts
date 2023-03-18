@@ -19,7 +19,7 @@ contract VerusBridgeStorage {
     mapping (bytes32 => bool) public processedTxids;
     mapping (address => VerusObjects.mappedToken) public verusToERC20mapping;
     mapping (bytes32 => VerusObjects.lastImportInfo) public lastImportInfo;
-    
+    mapping (bytes32 => uint256) public refunds;
     address[] public tokenList;
     bytes32 public lastTxIdImport;
     uint32 public lastCCEExportHeight;
@@ -192,6 +192,19 @@ contract VerusBridgeStorage {
         {
             token.burn(_tokenAmount);
         }
+    }
+
+    function setRefund(bytes32 claiment, uint256 fee) public {
+
+        require (msg.sender == tokenManager);
+        refunds[claiment] = fee;
+    }
+    
+    function appendRefund(bytes32 claiment, uint256 fee) public returns (uint256) {
+
+        require (msg.sender == tokenManager);
+        refunds[claiment] += fee;
+        return refunds[claiment];
     }
 
 }

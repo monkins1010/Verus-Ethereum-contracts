@@ -331,16 +331,18 @@ contract VerusSerializer {
     }
 
     function deserializeTransfers(bytes memory tempSerialized, uint8 numberOfTransfers) public pure
-        returns (VerusObjects.PackedSend[] memory, VerusObjects.PackedCurrencyLaunch[] memory, uint32 counter)
+        returns (VerusObjects.PackedSend[] memory tempTransfers, VerusObjects.PackedCurrencyLaunch[] memory launchTxs, uint32 counter, uint176[] memory refundAddresses)
     { 
         // return value counter is a packed 32bit number first bytes is number of transfers, 3rd byte number of ETH sends 4th byte number of currencey launches
               
-        VerusObjects.PackedSend[] memory tempTransfers = new VerusObjects.PackedSend[](numberOfTransfers); 
-        VerusObjects.PackedCurrencyLaunch[] memory launchTxs = new VerusObjects.PackedCurrencyLaunch[](2); //max to Currency launches
+        tempTransfers = new VerusObjects.PackedSend[](numberOfTransfers); 
+        refundAddresses = new uint176[](numberOfTransfers);
+        launchTxs = new VerusObjects.PackedCurrencyLaunch[](2); //max to Currency launches
         address tempaddress;
         uint64 temporaryRegister1;
         uint8 destinationType;
         uint256 nextOffset = 21;
+        uint176 refundAddress;
         uint64 flags;
 
         while (nextOffset <= tempSerialized.length) {
@@ -370,15 +372,8 @@ contract VerusSerializer {
             // if destination an address read 
             if (destinationType & VerusConstants.DEST_ETH == VerusConstants.DEST_ETH)
             {
-                if (tempaddress == VerusConstants.VEth)
-                {
-                    tempTransfers[uint8(counter)].destinationAndFlags = uint256(VerusConstants.TOKEN_ETH_SEND) << 160;
-                    counter |= (uint32((counter >> 16 & 0xff) + 1) << 16); //This is the ETH currency counter packed into the 3rd byte
-                }
-                else
-                {
-                    tempTransfers[uint8(counter)].destinationAndFlags = uint256(VerusConstants.TOKEN_ERC20_SEND) << 160;
-                }
+                tempTransfers[uint8(counter)].destinationAndFlags = uint256(tempaddress == VerusConstants.VEth ? VerusConstants.TOKEN_ETH_SEND : VerusConstants.TOKEN_ERC20_SEND) << 160;
+                counter |= tempaddress == VerusConstants.VEth ? (uint32((counter >> 16 & 0xff) + 1) << 16) : 0; //This is the ETH currency counter packed into the 3rd byte
 
                 assembly {
                     tempaddress := mload(sub(add(add(tempSerialized, nextOffset), temporaryRegister1), 1)) //skip type +1 byte to read address
@@ -398,13 +393,15 @@ contract VerusSerializer {
 
             if (destinationType & VerusConstants.FLAG_DEST_AUX == VerusConstants.FLAG_DEST_AUX)
             {
-                 (temporaryRegister1, nextOffset) = readCompactSizeLE2(tempSerialized, nextOffset);    // get the length of the auxDest
-                 uint arraySize = temporaryRegister1;
-                 for (uint i = 0; i < arraySize; i++)
-                 {
-                     (temporaryRegister1, nextOffset) = readCompactSizeLE2(tempSerialized, nextOffset);    // get the length of the auxDest sub array
-                     nextOffset += temporaryRegister1;
-                 }
+                (temporaryRegister1, nextOffset) = readCompactSizeLE2(tempSerialized, nextOffset);    // get the length of the auxDest
+             
+                (temporaryRegister1, nextOffset) = readCompactSizeLE2(tempSerialized, nextOffset);    // get the length of the auxDest sub array
+                assembly {
+                    refundAddress := mload(sub(add(add(tempSerialized, nextOffset), temporaryRegister1), 1)) //skip type +1 byte to read address
+                }
+                refundAddresses[uint8(counter)] = refundAddress;
+                nextOffset += temporaryRegister1;
+
             }
 
             if(destinationType & VerusConstants.FLAG_DEST_GATEWAY == VerusConstants.FLAG_DEST_GATEWAY )
@@ -429,7 +426,7 @@ contract VerusSerializer {
 
         }
 
-        return (tempTransfers, launchTxs, counter);
+        return (tempTransfers, launchTxs, counter, refundAddresses);
 
     }
         

@@ -172,7 +172,7 @@ contract VerusBridge {
 
     }
 
-    function sendToVRSC(uint64 LPFees, bool isBRIDGETx, address sendTo) public 
+    function sendToVRSC(uint64 LPFees, bool isBRIDGETx, address sendTo, uint8 destinationType) public 
     {
         require(msg.sender == address(verusBridgeMaster));
 
@@ -185,7 +185,7 @@ contract VerusBridge {
         LPtransfer.flags = sendTo == address(0) ? VerusConstants.VALID + VerusConstants.BURN_CHANGE_PRICE : VerusConstants.VALID; 
         LPtransfer.fees = isBRIDGETx ? VerusConstants.verusvETHTransactionFee : VerusConstants.verusTransactionFee;
         LPtransfer.feecurrencyid = isBRIDGETx ? VerusConstants.VEth : VerusConstants.VerusCurrencyId;
-        LPtransfer.destination.destinationtype = VerusConstants.DEST_PKH;
+        LPtransfer.destination.destinationtype = destinationType;
         LPtransfer.destination.destinationaddress = sendTo == address(0) ? bytes(hex'B26820ee0C9b1276Aac834Cf457026a575dfCe84') : abi.encodePacked(sendTo);
         LPtransfer.destcurrencyid = VerusConstants.VerusBridgeAddress;
         LPtransfer.destsystemid = address(0);

@@ -263,20 +263,19 @@ contract TokenManager {
     }
 
     function processTransactions(bytes calldata serializedTransfers, uint8 numberOfTransfers) 
-                public returns (VerusObjects.ETHPayments[] memory)
+                public returns (VerusObjects.ETHPayments[] memory payments)
     {
         require(msg.sender == verusBridge, "pt:vb_only");
         VerusObjects.PackedSend[] memory transfers;
         VerusObjects.PackedCurrencyLaunch[] memory launchTxs;
+        uint176[] memory refundAddresses;
         uint32 counter;
-        (transfers, launchTxs, counter) = verusSerializer.deserializeTransfers(serializedTransfers, numberOfTransfers);
+        (transfers, launchTxs, counter, refundAddresses) = verusSerializer.deserializeTransfers(serializedTransfers, numberOfTransfers);
 
         // counter: 16bit packed 32bit number for efficency
         uint8 ETHPaymentCounter = uint8((counter >> 16) & 0xff);
         uint8 currencyCounter = uint8((counter >> 24) & 0xff);
         uint8 transferCounter = uint8((counter & 0xff) - ETHPaymentCounter);
-
-        VerusObjects.ETHPayments[] memory payments;
 
         if(ETHPaymentCounter > 0 )
             payments = new VerusObjects.ETHPayments[](ETHPaymentCounter); //Avoid empty
@@ -287,15 +286,20 @@ contract TokenManager {
             uint8 flags = uint8((transfers[i].destinationAndFlags >> 160));
             
             // Handle ETH Send, check address will not revert
-            if (flags & VerusConstants.TOKEN_ETH_SEND == VerusConstants.TOKEN_ETH_SEND &&
-                payable(address(uint160(transfers[i].destinationAndFlags))).send(0)) 
+            if (flags & VerusConstants.TOKEN_ETH_SEND == VerusConstants.TOKEN_ETH_SEND) 
             {
+                if (payable(address(uint160(transfers[i].destinationAndFlags))).send(0)) {
                 // ETH is held in VerusBridgemaster, create array to bundle payments
-                payments[ETHPaymentCounter] = VerusObjects.ETHPayments(
-                    address(uint160(transfers[i].destinationAndFlags)), 
-                    (transfers[i].currencyAndAmount >> 160) * VerusConstants.SATS_TO_WEI_STD); //SATS to WEI (only for ETH)
-                ETHPaymentCounter++;                      
-            }               
+                    payments[ETHPaymentCounter] = VerusObjects.ETHPayments(
+                        address(uint160(transfers[i].destinationAndFlags)), 
+                        (transfers[i].currencyAndAmount >> 160) * VerusConstants.SATS_TO_WEI_STD); //SATS to WEI (only for ETH)
+
+                    ETHPaymentCounter++;        
+                }
+                else {
+                    verusBridgeStorage.appendRefund(bytes32(uint256(refundAddresses[i])), (transfers[i].currencyAndAmount >> 160) * VerusConstants.SATS_TO_WEI_STD);
+                }              
+            }           
         }
 
         if (transferCounter > 0)
