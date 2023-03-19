@@ -141,7 +141,7 @@ contract VerusBridgeMaster {
         if(totalLPFees > (VerusConstants.verusvETHTransactionFee * 10) && verusNotarizer.poolAvailable())
         {
             //make a transfer for the LP fees back to Verus
-            verusBridge.sendToVRSC(uint64(totalLPFees), true, address(0), VerusConstants.DEST_PKH);
+            verusBridge.sendToVRSC(uint64(totalLPFees), address(0), VerusConstants.DEST_PKH);
             verusNotarizerStorage.setClaimableFees(bytes32(uint256(uint160(address(verusNotarizerStorage)))), 0);
         }
     }
@@ -190,7 +190,7 @@ contract VerusBridgeMaster {
 
         if (refundAmount > 0)
         {
-            verusBridge.sendToVRSC(refundAmount, true, address(uint160(verusAddress)), uint8(verusAddress >> 168));
+            verusBridge.sendToVRSC(refundAmount, address(uint160(verusAddress)), uint8(verusAddress >> 168));
             verusBridgeStorage.setRefund(bytes32(uint256(verusAddress)),  0);
         }
         else
@@ -254,7 +254,7 @@ contract VerusBridgeMaster {
 
         if ((verusNotarizerStorage.claimableFees(bytes32(claiment)) > VerusConstants.verusvETHTransactionFee) && msg.sender == ethAddress)
         {
-            verusBridge.sendToVRSC(uint64(verusNotarizerStorage.claimableFees(bytes32(claiment))), true, rAddress, VerusConstants.DEST_PKH); //sent in as SATS
+            verusBridge.sendToVRSC(uint64(verusNotarizerStorage.claimableFees(bytes32(claiment))), rAddress, VerusConstants.DEST_PKH); //sent in as SATS
             verusNotarizerStorage.setClaimableFees(bytes32(claiment),  0);
         }
         else
@@ -272,7 +272,7 @@ contract VerusBridgeMaster {
     function sendVRSC() public 
     {
         require(msg.sender == address(verusNotarizer));
-        verusBridge.sendToVRSC(0, false, address(0), VerusConstants.DEST_PKH);
+        verusBridge.sendToVRSC(0, address(0), VerusConstants.DEST_PKH);
     }
 
 }

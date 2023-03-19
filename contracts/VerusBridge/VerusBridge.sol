@@ -172,24 +172,37 @@ contract VerusBridge {
 
     }
 
-    function sendToVRSC(uint64 LPFees, bool isBRIDGETx, address sendTo, uint8 destinationType) public 
+    function sendToVRSC(uint64 value, address sendTo, uint8 destinationType) public 
     {
         require(msg.sender == address(verusBridgeMaster));
-
-        uint64 amount = isBRIDGETx ? uint64(LPFees - VerusConstants.verusvETHTransactionFee) : uint64(poolSize - VerusConstants.verusTransactionFee);
-
         VerusObjects.CReserveTransfer memory LPtransfer;
+
         LPtransfer.version = 1;
-        LPtransfer.currencyvalue.currency = isBRIDGETx ? VerusConstants.VEth : VerusConstants.VerusCurrencyId;
-        LPtransfer.currencyvalue.amount = amount;
-        LPtransfer.flags = sendTo == address(0) ? VerusConstants.VALID + VerusConstants.BURN_CHANGE_PRICE : VerusConstants.VALID; 
-        LPtransfer.fees = isBRIDGETx ? VerusConstants.verusvETHTransactionFee : VerusConstants.verusTransactionFee;
-        LPtransfer.feecurrencyid = isBRIDGETx ? VerusConstants.VEth : VerusConstants.VerusCurrencyId;
         LPtransfer.destination.destinationtype = destinationType;
-        LPtransfer.destination.destinationaddress = sendTo == address(0) ? bytes(hex'B26820ee0C9b1276Aac834Cf457026a575dfCe84') : abi.encodePacked(sendTo);
         LPtransfer.destcurrencyid = VerusConstants.VerusBridgeAddress;
         LPtransfer.destsystemid = address(0);
         LPtransfer.secondreserveid = address(0);
+
+        LPtransfer.flags = VerusConstants.VALID;
+
+        if (sendTo == address(0)) {
+            LPtransfer.flags += VerusConstants.BURN_CHANGE_PRICE ;
+            LPtransfer.destination.destinationaddress = bytes(hex'B26820ee0C9b1276Aac834Cf457026a575dfCe84');
+        } else {
+            LPtransfer.destination.destinationaddress = abi.encodePacked(sendTo)
+        }
+        
+        if (value == 0) {
+            LPtransfer.currencyvalue.currency = VerusConstants.VerusCurrencyId;
+            LPtransfer.fees = VerusConstants.verusTransactionFee; 
+            LPtransfer.feecurrencyid = VerusConstants.VerusCurrencyId;
+            LPtransfer.currencyvalue.amount = uint64(poolSize - VerusConstants.verusTransactionFee)
+        } else {
+            LPtransfer.currencyvalue.currency = VerusConstants.VEth;
+            LPtransfer.fees = VerusConstants.verusvETHTransactionFee; 
+            LPtransfer.feecurrencyid = VerusConstants.VEth;
+            LPtransfer.currencyvalue.amount = uint64(value - VerusConstants.verusvETHTransactionFee);  
+        } 
 
         // When the bridge launches to make sure a fresh block with no pending transfers is used to insert the CCE
         _createExports(LPtransfer, true, block.number + 1);
