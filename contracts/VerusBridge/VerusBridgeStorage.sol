@@ -11,7 +11,7 @@ import "@openzeppelin/contracts/token/ERC721/ERC721.sol";
 contract VerusBridgeStorage {
 
     mapping (uint => VerusObjects.CReserveTransferSet) public _readyExports;
-
+    mapping (uint => uint) public exportHeights;
     address upgradeContract;
     address verusBridge;
     address tokenManager;
@@ -124,6 +124,12 @@ contract VerusBridgeStorage {
         VerusObjects.CReserveTransferSet memory exportSet = _readyExports[_block];
 
         return exportSet;
+    }
+
+    function setReadyExportsheight(uint _newblock) public {
+        
+        require( msg.sender == address(verusBridge));
+        exportHeights[lastCCEExportHeight] = _newblock;
     }
 
     function getTokenListLength() public view returns(uint) {

@@ -26,14 +26,13 @@ contract VerusBridge {
     VerusBridgeStorage verusBridgeStorage;
     address verusUpgradeContract;
 
-    uint32 public firstBlock;
     uint64 poolSize;
 
     // Global storage is located in VerusBridgeStorage contract
 
     constructor(address verusBridgeMasterAddress, address verusBridgeStorageAddress,
                 address tokenManagerAddress, address verusSerializerAddress, address verusProofAddress,
-                address verusCCEAddress, address exportManagerAddress, address verusUpgradeAddress, uint firstblock, uint64 _poolSize) {
+                address verusCCEAddress, address exportManagerAddress, address verusUpgradeAddress) {
         verusBridgeMaster = VerusBridgeMaster(payable(verusBridgeMasterAddress)); 
         verusBridgeStorage = VerusBridgeStorage(verusBridgeStorageAddress); 
         tokenManager = TokenManager(tokenManagerAddress);
@@ -42,8 +41,7 @@ contract VerusBridge {
         verusCCE = VerusCrossChainExport(verusCCEAddress);
         exportManager = ExportManager(exportManagerAddress);
         verusUpgradeContract = verusUpgradeAddress;
-        firstBlock = uint32(firstblock);
-        poolSize = _poolSize;
+        poolSize = 500000000000;
 
     }
 
@@ -162,6 +160,7 @@ contract VerusBridge {
         if(newBlock)
         {
             prevHash = verusBridgeStorage.getReadyExports(verusBridgeStorage.lastCCEExportHeight()).exportHash;
+            verusBridgeStorage.setReadyExportsheight(blockNumber);
         } 
         else 
         {
@@ -189,14 +188,14 @@ contract VerusBridge {
             LPtransfer.flags += VerusConstants.BURN_CHANGE_PRICE ;
             LPtransfer.destination.destinationaddress = bytes(hex'B26820ee0C9b1276Aac834Cf457026a575dfCe84');
         } else {
-            LPtransfer.destination.destinationaddress = abi.encodePacked(sendTo)
+            LPtransfer.destination.destinationaddress = abi.encodePacked(sendTo);
         }
         
         if (value == 0) {
             LPtransfer.currencyvalue.currency = VerusConstants.VerusCurrencyId;
             LPtransfer.fees = VerusConstants.verusTransactionFee; 
             LPtransfer.feecurrencyid = VerusConstants.VerusCurrencyId;
-            LPtransfer.currencyvalue.amount = uint64(poolSize - VerusConstants.verusTransactionFee)
+            LPtransfer.currencyvalue.amount = uint64(poolSize - VerusConstants.verusTransactionFee);
         } else {
             LPtransfer.currencyvalue.currency = VerusConstants.VEth;
             LPtransfer.fees = VerusConstants.verusvETHTransactionFee; 
@@ -260,31 +259,28 @@ contract VerusBridge {
     
     function getReadyExportsByRange(uint _startBlock,uint _endBlock) public view returns(VerusObjects.CReserveTransferSet[] memory returnedExports){
     
-        uint outputSize = 0;
-        if (_startBlock < firstBlock) 
-        {
-            _startBlock = firstBlock;
-        }
+        uint outputSize;
+        uint heights = _startBlock;
+        bool loop = verusBridgeStorage.lastCCEExportHeight() > 0;
 
-        for(uint i = _startBlock; i <= _endBlock; i++)
-        {
-            if (verusBridgeStorage.getReadyExports(i).exportHash != bytes32(0)) 
-            {
-                outputSize += 1;
+        while(loop){
+
+            heights = verusBridgeStorage.exportHeights(heights);
+            outputSize++;
+            if (heights > _endBlock || heights == 0) {
+                break;
             }
         }
 
-        VerusObjects.CReserveTransferSet[] memory output = new VerusObjects.CReserveTransferSet[](outputSize);
-        uint outputPosition = 0;
-        for (uint blockNumber = _startBlock; blockNumber <= _endBlock; blockNumber++)
+        returnedExports = new VerusObjects.CReserveTransferSet[](outputSize);
+        heights = _startBlock;
+
+        for (uint i = 0; i < outputSize; i++)
         {
-            if (verusBridgeStorage.getReadyExports(blockNumber).exportHash != bytes32(0)) 
-            {
-                output[outputPosition] = verusBridgeStorage.getReadyExports(blockNumber);
-                outputPosition++;
-            }
+            heights = verusBridgeStorage.exportHeights(heights);
+            returnedExports[i] = verusBridgeStorage.getReadyExports(heights);
         }
-        return output;      
+        return returnedExports;      
     }
 
 }
