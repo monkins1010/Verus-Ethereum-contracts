@@ -72,13 +72,13 @@ contract VerusBridgeStorage {
         }
     }
 
-    function setReadyExportTransfers(uint _block, VerusObjects.CReserveTransfer memory reserveTransfer) public returns (bool){
+    function setReadyExportTransfers(uint _block, VerusObjects.CReserveTransfer memory reserveTransfer, uint blockTxLimit) public returns (bool){
 
         isSenderBridgeContract(msg.sender);
         
         _readyExports[_block].blockHeight = uint32(_block);
         _readyExports[_block].transfers.push(reserveTransfer);
-
+        require(_readyExports[_block].transfers.length <= blockTxLimit);
         return (_readyExports[_block].transfers.length == 1);
     }
 

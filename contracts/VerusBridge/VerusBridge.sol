@@ -151,7 +151,7 @@ contract VerusBridge {
 
         //check if the current block height has a set of transfers associated with it if so add to the existing array
         bool newBlock;
-        newBlock = verusBridgeStorage.setReadyExportTransfers(blockNumber, newTransaction);
+        newBlock = verusBridgeStorage.setReadyExportTransfers(blockNumber, newTransaction, 50);
 
         bytes memory serializedCCE = verusSerializer.serializeCCrossChainExport(verusCCE.generateCCE(verusBridgeStorage.getReadyExports(blockNumber).transfers, poolAvailable, blockNumber));
 
