@@ -291,6 +291,8 @@ contract VerusNotarizer {
             //pack vout in at the end of the proposer 22 bytes ctransferdest
             encodeStandardNotarization(notarizations[1], abi.encode(hashedNotarization, 
                 txidHash, stateRoot, proposer));
+            verusNotarizerStorage.setNotaryHeight(uint64(block.number));
+
         }
         else
         {

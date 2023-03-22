@@ -12,17 +12,19 @@ contract VerusBridgeStorage {
 
     mapping (uint => VerusObjects.CReserveTransferSet) public _readyExports;
     mapping (uint => uint) public exportHeights;
-    address upgradeContract;
-    address verusBridge;
-    address tokenManager;
+    address private upgradeContract;
+    address private  verusBridge;
+    address  private tokenManager;
 
     mapping (bytes32 => bool) public processedTxids;
-    mapping (address => VerusObjects.mappedToken) public verusToERC20mapping;
+    mapping (address => VerusObjects.mappedToken) private verusToERC20mapping;
     mapping (bytes32 => VerusObjects.lastImportInfo) public lastImportInfo;
     mapping (bytes32 => uint256) public refunds;
     address[] public tokenList;
     bytes32 public lastTxIdImport;
-    uint32 public lastCCEExportHeight;
+
+    uint64 public cceLastStartHeight;
+    uint64 public cceLastEndHeight;
    
     constructor (address upgradeContractAddress){
 
@@ -68,18 +70,18 @@ contract VerusBridgeStorage {
             return;
         } 
         else{
-            revert("CCE Out of order");
+            revert();
         }
     }
 
-    function setReadyExportTransfers(uint _block, VerusObjects.CReserveTransfer memory reserveTransfer, uint blockTxLimit) public returns (bool){
+    function setReadyExportTransfers(uint64 _startHeight, uint64 _endHeight, VerusObjects.CReserveTransfer memory reserveTransfer, uint blockTxLimit) public {
 
         isSenderBridgeContract(msg.sender);
         
-        _readyExports[_block].blockHeight = uint32(_block);
-        _readyExports[_block].transfers.push(reserveTransfer);
-        require(_readyExports[_block].transfers.length <= blockTxLimit);
-        return (_readyExports[_block].transfers.length == 1);
+        _readyExports[_startHeight].endHeight = _endHeight;
+        _readyExports[_startHeight].transfers.push(reserveTransfer);
+        require(_readyExports[_startHeight].transfers.length <= blockTxLimit);
+      
     }
 
     function setReadyExportTxid(bytes32 txidhash, bytes32 prevTxidHash, uint _block) public {
@@ -91,10 +93,7 @@ contract VerusBridgeStorage {
         if (_readyExports[_block].transfers.length == 1)
         {
             _readyExports[_block].prevExportHash = prevTxidHash;
-            
-            // To stop out of order blocks
-            require(_block >= lastCCEExportHeight);
-            lastCCEExportHeight = uint32(_block);
+
         }
     }
 
@@ -124,12 +123,6 @@ contract VerusBridgeStorage {
         VerusObjects.CReserveTransferSet memory exportSet = _readyExports[_block];
 
         return exportSet;
-    }
-
-    function setReadyExportsheight(uint _newblock) public {
-        
-        require( msg.sender == address(verusBridge));
-        exportHeights[lastCCEExportHeight] = _newblock;
     }
 
     function getTokenListLength() public view returns(uint) {
@@ -200,17 +193,22 @@ contract VerusBridgeStorage {
         }
     }
 
-    function setRefund(bytes32 claiment, uint256 fee) public {
+    function setOrAppendRefund(bytes32 claiment, uint256 fee) public returns (uint256) {
 
         require (msg.sender == tokenManager);
-        refunds[claiment] = fee;
-    }
-    
-    function appendRefund(bytes32 claiment, uint256 fee) public returns (uint256) {
-
-        require (msg.sender == tokenManager);
-        refunds[claiment] += fee;
+        if (fee == 0) {
+            refunds[claiment] = 0;
+        } else {
+            refunds[claiment] += fee;
+        }
         return refunds[claiment];
+    }
+
+    function setCceHeights(uint64 start, uint64 end) public {
+
+        require (msg.sender == verusBridge);
+        cceLastStartHeight = start;
+        cceLastEndHeight = end;
     }
 
 }

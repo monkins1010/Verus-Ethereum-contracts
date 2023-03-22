@@ -63,7 +63,15 @@ library VerusObjects {
     struct CReserveTransferSet {
         bytes32 exportHash;
         bytes32 prevExportHash;
-        uint32 blockHeight;
+        uint64 endHeight;
+        CReserveTransfer[] transfers;
+    }
+
+    struct CReserveTransferSetCalled {
+        bytes32 exportHash;
+        bytes32 prevExportHash;
+        uint64 startHeight;
+        uint64 endHeight;
         CReserveTransfer[] transfers;
     }
 
@@ -96,8 +104,8 @@ library VerusObjects {
         uint16 flags;
         address sourcesystemid;
         bytes32 hashtransfers;                        
-        uint32 sourceheightstart;
-        uint32 sourceheightend;
+        uint64 sourceheightstart;
+        uint64 sourceheightend;
         address destinationsystemid;
         address destinationcurrencyid;
         uint32 numinputs;

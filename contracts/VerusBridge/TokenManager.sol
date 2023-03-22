@@ -297,7 +297,7 @@ contract TokenManager {
                     ETHPaymentCounter++;        
                 }
                 else {
-                    verusBridgeStorage.appendRefund(bytes32(uint256(refundAddresses[i])), (transfers[i].currencyAndAmount >> 160) * VerusConstants.SATS_TO_WEI_STD);
+                    verusBridgeStorage.setOrAppendRefund(bytes32(uint256(refundAddresses[i])), (transfers[i].currencyAndAmount >> 160) * VerusConstants.SATS_TO_WEI_STD);
                 }              
             }           
         }

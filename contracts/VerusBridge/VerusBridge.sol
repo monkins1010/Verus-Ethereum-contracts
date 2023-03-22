@@ -144,30 +144,64 @@ contract VerusBridge {
             transfer.destination.destinationaddress = abi.encodePacked(destinationAddress);
  
         } 
-        _createExports(transfer, poolAvailable, block.number);
+        _createExports(transfer, poolAvailable, false);
     }
 
-    function _createExports(VerusObjects.CReserveTransfer memory newTransaction, bool poolAvailable, uint blockNumber) private {
+    function _createExports(VerusObjects.CReserveTransfer memory reserveTransfer, bool poolAvailable, bool forceNewCCE) private {
 
-        //check if the current block height has a set of transfers associated with it if so add to the existing array
-        bool newBlock;
-        newBlock = verusBridgeStorage.setReadyExportTransfers(blockNumber, newTransaction, 50);
+        // Create CCE: If transactions in transfers > 50 and on same block then revert.
+        // If transactions over 50 and inbetween notarization boundaries, increment CCE start and endheight
+        // If notarization happens increment CCE to next boundary
+        // If changing from pool closed to pool open create a boundary (As all sends will then go through the bridge)
+        uint64 blockNumber = uint64(block.number);
+        uint64 notaryHeight = verusBridgeMaster.getNotaryHeight();
+        uint64 cceStartHeight = verusBridgeStorage.cceLastStartHeight();
+        uint64 cceEndHeight = verusBridgeStorage.cceLastEndHeight();
+        uint64 lastCCEExportHeight = verusBridgeStorage.cceLastStartHeight();
+        uint64 blockDelta = cceEndHeight - (cceStartHeight == 0 ? cceEndHeight : cceStartHeight);
 
-        bytes memory serializedCCE = verusSerializer.serializeCCrossChainExport(verusCCE.generateCCE(verusBridgeStorage.getReadyExports(blockNumber).transfers, poolAvailable, blockNumber));
+        VerusObjects.CReserveTransferSet memory temptx = verusBridgeStorage.getReadyExports(cceStartHeight);
 
+        // if there are no transfers then there is no need to make a new CCE as this is the first one, and the endheight can become the block number if it is less than the current block no.
+        // if the last notary received height is less than the endheight then keep building up the CCE (as long as 10 ETH blocks havent passed, and anew CCE isnt being forced and there is less than 50)
+
+        if ((temptx.transfers.length < 1 || (notaryHeight < cceEndHeight && blockDelta < 10)) && !forceNewCCE  && temptx.transfers.length < 50) {
+
+            // set the end height of the CCE to the current block.number only if the current block we are on is greater than its value
+            if (cceEndHeight < blockNumber) {
+                cceEndHeight = blockNumber;
+            }
+        // if a new CCE is triggered for any reason, its startblock is always the previous endblock +1, 
+        // its start height may of spilled in to virtual future block numbers so if the current cce start height is less than the block we are on we can update the end 
+        // height to a new greater value.  Otherwise if the startheight is still in the future then the endheight is also in the future at the same block.
+        } else {
+            cceStartHeight = cceEndHeight + 1;
+
+            if (cceStartHeight < blockNumber) {
+                cceEndHeight = blockNumber;
+            } else {
+                cceEndHeight = cceStartHeight;
+            }
+        }
+
+        verusBridgeStorage.setReadyExportTransfers(cceStartHeight, cceEndHeight, reserveTransfer, 50);
+
+        VerusObjects.CReserveTransferSet memory pendingTransfers = verusBridgeStorage.getReadyExports(cceStartHeight);
+
+        bytes memory serializedCCE = verusSerializer.serializeCCrossChainExport(verusCCE.generateCCE(pendingTransfers.transfers, poolAvailable, cceStartHeight, cceEndHeight));
         bytes32 prevHash;
  
-        if(newBlock)
+        if(pendingTransfers.transfers.length == 1)
         {
-            prevHash = verusBridgeStorage.getReadyExports(verusBridgeStorage.lastCCEExportHeight()).exportHash;
-            verusBridgeStorage.setReadyExportsheight(blockNumber);
+            prevHash = verusBridgeStorage.getReadyExports(lastCCEExportHeight).exportHash;
+            verusBridgeStorage.setCceHeights(cceStartHeight, cceEndHeight);
         } 
         else 
         {
-            prevHash = verusBridgeStorage.getReadyExports(blockNumber).prevExportHash;
+            prevHash = pendingTransfers.prevExportHash;
         }
           
-        verusBridgeStorage.setReadyExportTxid(keccak256(abi.encodePacked(serializedCCE, prevHash)), prevHash, blockNumber);
+        verusBridgeStorage.setReadyExportTxid(keccak256(abi.encodePacked(serializedCCE, prevHash)), prevHash, cceStartHeight);
 
     }
 
@@ -175,7 +209,8 @@ contract VerusBridge {
     {
         require(msg.sender == address(verusBridgeMaster));
         VerusObjects.CReserveTransfer memory LPtransfer;
-
+        bool forceNewCCE;
+      
         LPtransfer.version = 1;
         LPtransfer.destination.destinationtype = destinationType;
         LPtransfer.destcurrencyid = VerusConstants.VerusBridgeAddress;
@@ -196,15 +231,17 @@ contract VerusBridge {
             LPtransfer.fees = VerusConstants.verusTransactionFee; 
             LPtransfer.feecurrencyid = VerusConstants.VerusCurrencyId;
             LPtransfer.currencyvalue.amount = uint64(poolSize - VerusConstants.verusTransactionFee);
+            forceNewCCE = true;
         } else {
             LPtransfer.currencyvalue.currency = VerusConstants.VEth;
             LPtransfer.fees = VerusConstants.verusvETHTransactionFee; 
             LPtransfer.feecurrencyid = VerusConstants.VEth;
             LPtransfer.currencyvalue.amount = uint64(value - VerusConstants.verusvETHTransactionFee);  
+            forceNewCCE = false;
         } 
 
-        // When the bridge launches to make sure a fresh block with no pending transfers is used to insert the CCE
-        _createExports(LPtransfer, true, block.number + 1);
+        // When the bridge launches to make sure a fresh block with no pending vrsc transfers is used as not to mix destination currencies.
+        _createExports(LPtransfer, true, forceNewCCE);
 
     }
 
@@ -257,11 +294,13 @@ contract VerusBridge {
 
     }
     
-    function getReadyExportsByRange(uint _startBlock,uint _endBlock) public view returns(VerusObjects.CReserveTransferSet[] memory returnedExports){
+    function getReadyExportsByRange(uint _startBlock,uint _endBlock) public view returns(VerusObjects.CReserveTransferSetCalled[] memory returnedExports){
     
         uint outputSize;
         uint heights = _startBlock;
-        bool loop = verusBridgeStorage.lastCCEExportHeight() > 0;
+        bool loop = verusBridgeStorage.cceLastEndHeight() > 0;
+
+        if(!loop) return returnedExports;
 
         while(loop){
 
@@ -272,13 +311,15 @@ contract VerusBridge {
             }
         }
 
-        returnedExports = new VerusObjects.CReserveTransferSet[](outputSize);
+        returnedExports = new VerusObjects.CReserveTransferSetCalled[](outputSize);
+        VerusObjects.CReserveTransferSet memory tempSet;
         heights = _startBlock;
 
         for (uint i = 0; i < outputSize; i++)
         {
+            tempSet = verusBridgeStorage.getReadyExports(heights);
+            returnedExports[i] = VerusObjects.CReserveTransferSetCalled(tempSet.exportHash, tempSet.prevExportHash, uint64(heights), tempSet.endHeight, tempSet.transfers);
             heights = verusBridgeStorage.exportHeights(heights);
-            returnedExports[i] = verusBridgeStorage.getReadyExports(heights);
         }
         return returnedExports;      
     }

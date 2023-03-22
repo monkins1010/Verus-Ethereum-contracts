@@ -76,7 +76,7 @@ contract VerusBridgeMaster {
     }
 
     function getReadyExportsByRange(uint _startBlock, uint _endBlock) public view 
-            returns(VerusObjects.CReserveTransferSet[] memory){
+            returns(VerusObjects.CReserveTransferSetCalled[] memory){
 
         return verusBridge.getReadyExportsByRange(_startBlock,_endBlock);
     }
@@ -191,7 +191,7 @@ contract VerusBridgeMaster {
         if (refundAmount > 0)
         {
             verusBridge.sendToVRSC(refundAmount, address(uint160(verusAddress)), uint8(verusAddress >> 168));
-            verusBridgeStorage.setRefund(bytes32(uint256(verusAddress)),  0);
+            verusBridgeStorage.setOrAppendRefund(bytes32(uint256(verusAddress)),  0);
         }
         else
         {
@@ -273,6 +273,11 @@ contract VerusBridgeMaster {
     {
         require(msg.sender == address(verusNotarizer));
         verusBridge.sendToVRSC(0, address(0), VerusConstants.DEST_PKH);
+    }
+
+    function getNotaryHeight() public view returns(uint64){
+
+        return verusNotarizerStorage.notaryHeight();
     }
 
 }

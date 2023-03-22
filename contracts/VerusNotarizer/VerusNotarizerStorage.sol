@@ -21,6 +21,7 @@ contract VerusNotarizerStorage {
     mapping (bytes32 => bytes32) public storageGlobal;
     mapping (bytes32 => bytes) private proofs;
     mapping (bytes32 => uint256) public claimableFees;
+    uint64 public notaryHeight;
     
     constructor(address upgradeContractAddress)
     {
@@ -78,5 +79,12 @@ contract VerusNotarizerStorage {
         claimableFees[claiment] += fee;
         return claimableFees[claiment];
     }
+
+    function setNotaryHeight(uint64 value) public {
+
+        require (msg.sender == verusNotarizer);
+        notaryHeight = value;
+    }
+    
 
 }

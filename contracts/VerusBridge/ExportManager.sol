@@ -50,11 +50,7 @@ contract ExportManager {
     
         require (checkTransferFlags(transfer), "Flag Check failed");         
                                   
-        //TODO: We cant mix different transfer destinations together in the CCE require on non same fields.
-        address destCurrencyexportID = verusBridgeStorage.getCreatedExport(block.number);
-
-        require (destCurrencyexportID == address(0) || destCurrencyexportID == transfer.destcurrencyid, "checkReadyExports cannot mix types ");
-        
+       
         // Check destination address is not zero
         serializedDest = transfer.destination.destinationaddress;  
 

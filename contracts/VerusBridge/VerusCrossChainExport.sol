@@ -66,7 +66,7 @@ contract VerusCrossChainExport{
         return 0;
     }
 
-    function generateCCE(VerusObjects.CReserveTransfer[] memory transfers, bool bridgeReady, uint blockheight) public returns(VerusObjects.CCrossChainExport memory){
+    function generateCCE(VerusObjects.CReserveTransfer[] memory transfers, bool bridgeReady, uint64 startheight, uint64 endheight) public returns(VerusObjects.CCrossChainExport memory){
 
         VerusObjects.CCrossChainExport memory workingCCE;
         //create a hash of the transfers and then 
@@ -77,16 +77,16 @@ contract VerusCrossChainExport{
         
         workingCCE.version = 1;
         workingCCE.flags = 2;
-        workingCCE.sourceheightstart = uint32(blockheight);
-        workingCCE.sourceheightend = uint32(blockheight);
+        workingCCE.sourceheightstart = startheight;
+        workingCCE.sourceheightend = endheight;
         workingCCE.sourcesystemid = VerusConstants.VEth;
         workingCCE.hashtransfers = hashedTransfers;
         workingCCE.destinationsystemid = VerusConstants.VerusSystemId;
 
-        if (bridgeReady) { // RESERVETORESERVE FLAG
-            workingCCE.destinationcurrencyid = VerusConstants.VerusBridgeAddress;  //TODO:transfers are bundled by type
+        if (bridgeReady) { 
+            workingCCE.destinationcurrencyid = VerusConstants.VerusBridgeAddress;  //NOTE:transfers are bundled by type
         } else {
-            workingCCE.destinationcurrencyid = VerusConstants.VerusCurrencyId; //TODO:transfers are bundled by type
+            workingCCE.destinationcurrencyid = VerusConstants.VerusCurrencyId; 
         }
 
         workingCCE.numinputs = uint32(transfers.length);
