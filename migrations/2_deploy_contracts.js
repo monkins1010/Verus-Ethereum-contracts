@@ -79,7 +79,7 @@ module.exports = async function(deployer) {
     await deployer.deploy(VerusBridge, bridgeMasterInst.address, bridgeStorageInst.address, tokenInst.address, ProofInst.address, CCEInst.address, ExportManInst.address, UpgradeInst.address);
     const VerusBridgeInst = await VerusBridge.deployed();
 
-    await deployer.deploy(VerusInfo, notarizerInst.address, "2000753", "0.7.3-9-rc1", "VETH", true, UpgradeInst.address, tokenInst.address);
+    await deployer.deploy(VerusInfo, notarizerInst.address, "2000753", "0.9.9-rc1", "VETH", true, UpgradeInst.address);
     const INFOInst = await VerusInfo.deployed();
 
     const allContracts = [
@@ -101,7 +101,7 @@ module.exports = async function(deployer) {
     try {
         await UpgradeInst.setInitialContracts(allContracts);
         let launchCurrencies = [tokenmanvrsctest, tokenmanbeth, tokenmanUSDC, vETH];
-        await INFOInst.launchContractTokens(launchCurrencies);
+        await tokenInst.launchContractTokens(launchCurrencies);
 
         const settingString = "\nupgrademanageraddress=" + UpgradeInst.address + "\n\n" +
             "export const BRIDGE_MASTER_ADD = \"" + bridgeMasterInst.address + "\";\n" +

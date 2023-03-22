@@ -108,11 +108,6 @@ contract VerusBridgeMaster {
         }
     }
 
-    function getcurrency(address _currencyid) public view returns(bytes memory)
-    {
-        return verusInfo.getcurrency(_currencyid);
-    }
-
     function setClaimableFees(uint64 fees, uint176 bridgekeeper) private
     {
         uint256 notaryFees;

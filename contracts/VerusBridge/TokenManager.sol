@@ -20,6 +20,7 @@ contract TokenManager {
     VerusBridgeStorage verusBridgeStorage;
     UpgradeManager upgradeManager;
     address verusBridge;
+    address contractOwner;
 
     constructor(
         address verusUpgradeAddress,
@@ -30,6 +31,7 @@ contract TokenManager {
         verusBridgeStorage = VerusBridgeStorage(verusBridgeStorageAddress); 
         verusSerializer = VerusSerializer(verusSerializerAddress);
         upgradeManager = UpgradeManager(verusUpgradeAddress);
+        contractOwner = msg.sender;
         
     }
     
@@ -187,7 +189,7 @@ contract TokenManager {
 
     function launchContractTokens(VerusObjects.setupToken[] memory tokensToDeploy) public  {
 
-        require(verusBridgeStorage.getERCMapping(VerusConstants.VEth).erc20ContractAddress == address(0), "Launch tokens already set");
+        require(msg.sender == contractOwner);
 
         for (uint256 i = 0; i < tokensToDeploy.length; i++) {
             recordToken(
@@ -199,6 +201,7 @@ contract TokenManager {
                 uint256(0)
             );
         }
+        contractOwner = address(0);
     }
 
     function recordToken(

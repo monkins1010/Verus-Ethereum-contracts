@@ -186,7 +186,6 @@ contract UpgradeManager {
                     tokenManager = TokenManager(tempcontracts[uint(VerusConstants.ContractType.TokenManager)]);
                     verusBridge.setContracts(tempcontracts);
                     verusBridgeStorage.setContracts(tempcontracts);
-                    verusInfo.setContracts(tempcontracts);
                     exportManager.setContract(tempcontracts[uint(VerusConstants.ContractType.TokenManager)]);
                     tokenManager.setContracts(tempcontracts[uint(VerusConstants.ContractType.VerusSerializer)], 
                                 tempcontracts[uint(VerusConstants.ContractType.VerusBridge)]); 
