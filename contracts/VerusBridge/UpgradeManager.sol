@@ -196,7 +196,6 @@ contract UpgradeManager {
                     verusCrossChainExport.setContract(tempcontracts[uint(VerusConstants.ContractType.VerusSerializer)]);
                     tokenManager.setContracts(tempcontracts[uint(VerusConstants.ContractType.VerusSerializer)], 
                                             tempcontracts[uint(VerusConstants.ContractType.VerusBridge)]);
-                    verusBridge.setContracts(tempcontracts);  
                     verusProof.setContracts(tempcontracts);
                     verusNotarizer.setContracts(tempcontracts);
                     notarizationSerializer.setContract(tempcontracts[uint(VerusConstants.ContractType.VerusSerializer)]);

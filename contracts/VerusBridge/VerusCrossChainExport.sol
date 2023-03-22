@@ -66,7 +66,7 @@ contract VerusCrossChainExport{
         return 0;
     }
 
-    function generateCCE(VerusObjects.CReserveTransfer[] memory transfers, bool bridgeReady, uint64 startheight, uint64 endheight) public returns(VerusObjects.CCrossChainExport memory){
+    function generateCCE(VerusObjects.CReserveTransfer[] memory transfers, bool bridgeReady, uint64 startheight, uint64 endheight) public returns(bytes memory){
 
         VerusObjects.CCrossChainExport memory workingCCE;
         //create a hash of the transfers and then 
@@ -139,7 +139,7 @@ contract VerusCrossChainExport{
         delete currencies;
         delete fees;
 
-        return workingCCE;
+        return verusSerializer.serializeCCrossChainExport(workingCCE);
 
     }
     

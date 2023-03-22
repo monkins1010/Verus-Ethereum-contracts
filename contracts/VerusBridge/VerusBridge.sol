@@ -11,14 +11,12 @@ import "./VerusBridgeMaster.sol";
 import "./VerusBridgeStorage.sol";
 import "../MMR/VerusProof.sol";
 import "./Token.sol";
-import "./VerusSerializer.sol";
 import "./VerusCrossChainExport.sol";
 import "./ExportManager.sol";
 
 contract VerusBridge {
 
     TokenManager tokenManager;
-    VerusSerializer verusSerializer;
     VerusProof verusProof;
     VerusCrossChainExport verusCCE;
     VerusBridgeMaster verusBridgeMaster;
@@ -31,12 +29,11 @@ contract VerusBridge {
     // Global storage is located in VerusBridgeStorage contract
 
     constructor(address verusBridgeMasterAddress, address verusBridgeStorageAddress,
-                address tokenManagerAddress, address verusSerializerAddress, address verusProofAddress,
+                address tokenManagerAddress, address verusProofAddress,
                 address verusCCEAddress, address exportManagerAddress, address verusUpgradeAddress) {
         verusBridgeMaster = VerusBridgeMaster(payable(verusBridgeMasterAddress)); 
         verusBridgeStorage = VerusBridgeStorage(verusBridgeStorageAddress); 
         tokenManager = TokenManager(tokenManagerAddress);
-        verusSerializer = VerusSerializer(verusSerializerAddress);
         verusProof = VerusProof(verusProofAddress);
         verusCCE = VerusCrossChainExport(verusCCEAddress);
         exportManager = ExportManager(exportManagerAddress);
@@ -52,11 +49,7 @@ contract VerusBridge {
         if(contracts[uint(VerusConstants.ContractType.TokenManager)] != address(tokenManager)) {
             tokenManager = TokenManager(contracts[uint(VerusConstants.ContractType.TokenManager)]);
         }
-        
-        if(contracts[uint(VerusConstants.ContractType.VerusSerializer)] != address(verusSerializer)) {
-            verusSerializer = VerusSerializer(contracts[uint(VerusConstants.ContractType.VerusSerializer)]);
-        }
-        
+
         if(contracts[uint(VerusConstants.ContractType.VerusProof)] != address(verusProof))
             verusProof = VerusProof(contracts[uint(VerusConstants.ContractType.VerusProof)]);    
 
@@ -188,7 +181,7 @@ contract VerusBridge {
 
         VerusObjects.CReserveTransferSet memory pendingTransfers = verusBridgeStorage.getReadyExports(cceStartHeight);
 
-        bytes memory serializedCCE = verusSerializer.serializeCCrossChainExport(verusCCE.generateCCE(pendingTransfers.transfers, poolAvailable, cceStartHeight, cceEndHeight));
+        bytes memory serializedCCE = verusCCE.generateCCE(pendingTransfers.transfers, poolAvailable, cceStartHeight, cceEndHeight);
         bytes32 prevHash;
  
         if(pendingTransfers.transfers.length == 1)

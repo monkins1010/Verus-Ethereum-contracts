@@ -76,7 +76,7 @@ module.exports = async function(deployer) {
     await deployer.deploy(ExportManager, bridgeStorageInst.address, tokenInst.address, UpgradeInst.address);
     const ExportManInst = await ExportManager.deployed();
 
-    await deployer.deploy(VerusBridge, bridgeMasterInst.address, bridgeStorageInst.address, tokenInst.address, serializerInst.address, ProofInst.address, CCEInst.address, ExportManInst.address, UpgradeInst.address);
+    await deployer.deploy(VerusBridge, bridgeMasterInst.address, bridgeStorageInst.address, tokenInst.address, ProofInst.address, CCEInst.address, ExportManInst.address, UpgradeInst.address);
     const VerusBridgeInst = await VerusBridge.deployed();
 
     await deployer.deploy(VerusInfo, notarizerInst.address, "2000753", "0.7.3-9-rc1", "VETH", true, UpgradeInst.address, tokenInst.address);
