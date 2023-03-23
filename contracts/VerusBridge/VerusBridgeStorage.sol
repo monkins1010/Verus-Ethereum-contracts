@@ -19,7 +19,7 @@ contract VerusBridgeStorage {
     mapping (bytes32 => bool) public processedTxids;
     mapping (address => VerusObjects.mappedToken) private verusToERC20mapping;
     mapping (bytes32 => VerusObjects.lastImportInfo) public lastImportInfo;
-    mapping (bytes32 => uint256) public refunds;
+
     address[] public tokenList;
     bytes32 public lastTxIdImport;
 
@@ -44,6 +44,19 @@ contract VerusBridgeStorage {
 
         tokenManager = contracts[uint(VerusConstants.ContractType.TokenManager)];
         verusBridge = contracts[uint(VerusConstants.ContractType.VerusBridge)];
+    }
+
+    function upgradeTokens(address newBridgeStorageAddress) public {
+        
+        require(msg.sender == upgradeContract);
+
+        VerusNft(verusToERC20mapping[VerusConstants.VerusNFTID].erc20ContractAddress).changeowner(newBridgeStorageAddress);
+        
+        for (uint i = 0; i < tokenList.length ; i++) {
+            if (verusToERC20mapping[tokenList[i]].flags & VerusConstants.MAPPING_VERUS_OWNED == VerusConstants.MAPPING_VERUS_OWNED) {
+                Token(verusToERC20mapping[tokenList[i]].erc20ContractAddress).changeowner(newBridgeStorageAddress);
+            }
+        }
     }
 
     function isSenderBridgeContract(address sender) private view {
@@ -136,15 +149,6 @@ contract VerusBridgeStorage {
         
     }
 
-    function checkiaddresses(VerusObjects.CReserveTransfer memory transfer) public view {
-
-        require(ERC20Registered(transfer.currencyvalue.currency) && 
-            ERC20Registered(transfer.feecurrencyid) &&
-            ERC20Registered(transfer.destcurrencyid) &&
-            (ERC20Registered(transfer.secondreserveid) || transfer.secondreserveid == address(0)) &&
-            transfer.destsystemid == address(0));
-    }
-
     function emitNewToken(string memory name, string memory ticker) public returns (address){
 
         require(msg.sender == address(tokenManager));
@@ -191,17 +195,6 @@ contract VerusBridgeStorage {
         {
             token.burn(_tokenAmount);
         }
-    }
-
-    function setOrAppendRefund(bytes32 claiment, uint256 fee) public returns (uint256) {
-
-        require (msg.sender == tokenManager);
-        if (fee == 0) {
-            refunds[claiment] = 0;
-        } else {
-            refunds[claiment] += fee;
-        }
-        return refunds[claiment];
     }
 
     function setCceHeights(uint64 start, uint64 end) public {

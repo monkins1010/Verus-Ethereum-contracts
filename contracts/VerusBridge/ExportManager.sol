@@ -37,7 +37,11 @@ contract ExportManager {
 
     function checkExport(VerusObjects.CReserveTransfer memory transfer, uint256 ETHSent, bool poolAvailable) public view  returns (uint256 fees){
 
-        verusBridgeStorage.checkiaddresses(transfer);
+        require(verusBridgeStorage.ERC20Registered(transfer.currencyvalue.currency) && 
+            verusBridgeStorage.ERC20Registered(transfer.feecurrencyid) &&
+            verusBridgeStorage.ERC20Registered(transfer.destcurrencyid) &&
+            (verusBridgeStorage.ERC20Registered(transfer.secondreserveid) || transfer.secondreserveid == address(0)) &&
+            transfer.destsystemid == address(0));
 
         uint256 requiredFees =  VerusConstants.transactionFee;  //0.003 eth in WEI (To vrsc)
         uint64 bounceBackFee;

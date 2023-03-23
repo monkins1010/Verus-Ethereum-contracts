@@ -266,7 +266,7 @@ contract TokenManager {
     }
 
     function processTransactions(bytes calldata serializedTransfers, uint8 numberOfTransfers) 
-                public returns (VerusObjects.ETHPayments[] memory payments)
+                public returns (VerusObjects.ETHPayments[] memory payments, bytes memory refunds)
     {
         require(msg.sender == verusBridge, "pt:vb_only");
         VerusObjects.PackedSend[] memory transfers;
@@ -284,6 +284,7 @@ contract TokenManager {
             payments = new VerusObjects.ETHPayments[](ETHPaymentCounter); //Avoid empty
 
         ETHPaymentCounter = 0;
+
         for (uint8 i = 0; i< transfers.length; i++) {
 
             uint8 flags = uint8((transfers[i].destinationAndFlags >> 160));
@@ -300,7 +301,7 @@ contract TokenManager {
                     ETHPaymentCounter++;        
                 }
                 else {
-                    verusBridgeStorage.setOrAppendRefund(bytes32(uint256(refundAddresses[i])), (transfers[i].currencyAndAmount >> 160) * VerusConstants.SATS_TO_WEI_STD);
+                    refunds = abi.encodePacked(refunds, bytes32(uint256(refundAddresses[i])), uint256((transfers[i].currencyAndAmount >> 160) * VerusConstants.SATS_TO_WEI_STD));
                 }              
             }           
         }
@@ -314,7 +315,7 @@ contract TokenManager {
         }
 
         //return ETH and addresses to be sent ETH to + payment details
-        return payments;
+        return (payments, refunds);
     }
 
     function importTransactions(VerusObjects.PackedSend[] memory trans) private {

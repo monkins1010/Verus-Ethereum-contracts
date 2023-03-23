@@ -37,6 +37,7 @@ contract UpgradeManager {
     VerusObjects.voteState public pendingVoteState;
     bytes32 public newContractsPendingHash;
     address contractOwner;
+    address newBridgeStorageAddress;
 
     uint8 constant TYPE_CONTRACT = 1;
     uint8 constant TYPE_REVOKE = 2;
@@ -94,13 +95,13 @@ contract UpgradeManager {
         contractOwner = address(0);  //Blow the fuse i.e. make it one time only.
     }
 
-    function upgradeContracts(VerusObjects.upgradeInfo memory _newContractPackage) public returns (uint8) {
+    function upgradeContracts(VerusObjects.upgradeInfo memory _newContractPackage, address bridgeStorageAddress) public returns (uint8) {
 
         if (newContractsPendingHash != bytes32(0)) {
             return UPGRADE_IN_PROCESS;
         }
 
-        checkValidContractUpgrade(_newContractPackage);
+        checkValidContractUpgrade(_newContractPackage, bridgeStorageAddress);
             
         return PENDING; 
     }
@@ -118,7 +119,7 @@ contract UpgradeManager {
 
     }
 
-    function checkValidContractUpgrade(VerusObjects.upgradeInfo memory _newContractPackage) private {
+    function checkValidContractUpgrade(VerusObjects.upgradeInfo memory _newContractPackage, address bridgeStorageAddress) private {
 
         bytes memory be; 
 
@@ -135,7 +136,7 @@ contract UpgradeManager {
             pendingContracts.push(_newContractPackage.contracts[j]);
         }
 
-        be = bytesToString(abi.encodePacked(be, uint8(_newContractPackage.upgradeType), _newContractPackage.salt));
+        be = bytesToString(abi.encodePacked(be, bridgeStorageAddress, uint8(_newContractPackage.upgradeType), _newContractPackage.salt));
 
         address signer = recoverString(be, _newContractPackage._vs, _newContractPackage._rs, _newContractPackage._ss);
 
@@ -149,7 +150,7 @@ contract UpgradeManager {
         }
 
         newContractsPendingHash = keccak256(be);
-         
+        newBridgeStorageAddress = bridgeStorageAddress;
     }
 
     function bytesToString (bytes memory input) private pure returns (bytes memory output)
@@ -253,10 +254,15 @@ contract UpgradeManager {
                 contracts[i] = pendingContracts[i];
             }
 
+            if (newBridgeStorageAddress != address(0))
+                verusBridgeStorage.upgradeTokens(newBridgeStorageAddress);
+
             delete pendingContracts;
             delete pendingVoteState;
             newContractsPendingHash = bytes32(0);
+            newBridgeStorageAddress = address(0);
             emit contractUpdated(true);
+
             return COMPLETE;
 
         }

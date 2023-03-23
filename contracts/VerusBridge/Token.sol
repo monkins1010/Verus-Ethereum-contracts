@@ -24,6 +24,10 @@ contract Token is ERC20 {
         require(msg.sender == owner,"Only the contract owner can Burn Tokens");
         _burn(_msgSender(), amount);
     }
+    function changeowner(address newOwner) public virtual {
+        require(msg.sender == owner,"Only the contract owner can update the owner");
+        owner = newOwner;
+    }
 }
 
 contract VerusNft is ERC721URIStorage {
@@ -44,5 +48,10 @@ contract VerusNft is ERC721URIStorage {
     function burn(uint256 tokenId) public {
         require(msg.sender == owner,"Only the contract owner can Burn NFTS");
         _burn(tokenId);
+    }
+    
+    function changeowner(address newOwner) public virtual {
+        require(msg.sender == owner,"Only the contract owner can update the owner");
+        owner = newOwner;
     }
 }

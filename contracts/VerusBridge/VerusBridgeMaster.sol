@@ -181,18 +181,36 @@ contract VerusBridgeMaster {
     function claimRefund(uint176 verusAddress) public 
     {
         uint64 refundAmount;
-        refundAmount = uint64(verusBridgeStorage.refunds(bytes32(uint256(verusAddress))));
+        refundAmount = uint64(verusNotarizerStorage.refunds(bytes32(uint256(verusAddress))));
 
         if (refundAmount > 0)
         {
             verusBridge.sendToVRSC(refundAmount, address(uint160(verusAddress)), uint8(verusAddress >> 168));
-            verusBridgeStorage.setOrAppendRefund(bytes32(uint256(verusAddress)),  0);
+            verusNotarizerStorage.setOrAppendRefund(bytes32(uint256(verusAddress)),  0);
         }
         else
         {
             revert("No fees avaiable");
         }
     }
+
+    function refund(bytes memory refunds) public  {
+
+        require(msg.sender == address(verusBridge));
+
+        for(uint i = 0; i < (refunds.length / 64); i = i + 64) {
+
+            bytes32 verusAddress;
+            uint256 amount;
+            assembly 
+            {
+                verusAddress := mload(add(add(refunds, 32), i))
+                amount := mload(add(add(refunds, 64), i))
+            }
+            verusNotarizerStorage.setOrAppendRefund(verusAddress, amount);
+        }
+
+     }
 
     function getNewProof(bool latest) public payable returns (bytes memory) {
 

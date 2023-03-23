@@ -281,7 +281,13 @@ contract VerusBridge {
         verusBridgeStorage.setLastImport(txidfound, hashOfTransfers, CCEHeightsAndnIndex);
         
         // Deserialize transfers and pack into send arrays, also pass in no. of transfers to calculate array size
-        verusBridgeMaster.sendEth(tokenManager.processTransactions(_import.serializedTransfers, uint8(CCEHeightsAndnIndex >> 96)));
+
+        VerusObjects.ETHPayments[] memory _payments;
+        bytes memory refunds;
+        (_payments, refunds) = tokenManager.processTransactions(_import.serializedTransfers, uint8(CCEHeightsAndnIndex >> 96));
+        
+        verusBridgeMaster.sendEth(_payments);
+        verusBridgeMaster.refund(refunds);
 
         return Fees;
 
