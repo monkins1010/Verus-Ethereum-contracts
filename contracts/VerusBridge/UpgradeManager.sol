@@ -22,12 +22,12 @@ contract UpgradeManager {
     TokenManager tokenManager;        
     VerusProof verusProof;
     VerusNotarizer verusNotarizer;
-    VerusBridge verusBridge;
+    CreateExport verusBridge;
     VerusInfo verusInfo;
     ExportManager exportManager;
     VerusBridgeStorage verusBridgeStorage;
     VerusNotarizerStorage verusNotarizerStorage;
-    VerusBridgeMaster verusBridgeMaster;
+    SubmitImport verusBridgeMaster;
     VerusCrossChainExport verusCrossChainExport;
     NotarizationSerializer notarizationSerializer;
             
@@ -75,7 +75,7 @@ contract UpgradeManager {
             tokenManager = TokenManager(contracts[uint(VerusConstants.ContractType.TokenManager)]);
             verusProof = VerusProof(contracts[uint(VerusConstants.ContractType.VerusProof)]); 
             verusNotarizer = VerusNotarizer(_newContractAddress[uint(VerusConstants.ContractType.VerusNotarizer)]);
-            verusBridge = VerusBridge(_newContractAddress[uint(VerusConstants.ContractType.VerusBridge)]);
+            verusBridge = CreateExport(_newContractAddress[uint(VerusConstants.ContractType.VerusBridge)]);
             verusInfo = VerusInfo(_newContractAddress[uint(VerusConstants.ContractType.VerusInfo)]);
             exportManager = ExportManager(contracts[uint(VerusConstants.ContractType.ExportManager)]);
             verusCrossChainExport = VerusCrossChainExport(_newContractAddress[uint(VerusConstants.ContractType.VerusCrossChainExport)]);
@@ -83,11 +83,11 @@ contract UpgradeManager {
             
             verusBridgeStorage = VerusBridgeStorage(_newContractAddress[uint(VerusConstants.ContractType.VerusBridgeStorage)]);
             verusNotarizerStorage = VerusNotarizerStorage(_newContractAddress[uint(VerusConstants.ContractType.VerusNotarizerStorage)]);
-            verusBridgeMaster = VerusBridgeMaster(payable(_newContractAddress[uint(VerusConstants.ContractType.VerusBridgeMaster)]));
+            verusBridgeMaster = SubmitImport(payable(_newContractAddress[uint(VerusConstants.ContractType.VerusBridgeMaster)]));
 
             verusBridgeStorage.setContracts(contracts); 
             verusNotarizerStorage.setContracts(contracts); 
-            verusBridgeMaster.setContracts(contracts); 
+         //   verusBridgeMaster.setContracts(contracts); 
             tokenManager.setContracts(_newContractAddress[uint(VerusConstants.ContractType.VerusSerializer)], 
                                      _newContractAddress[uint(VerusConstants.ContractType.VerusBridge)]);
         } 
@@ -168,13 +168,13 @@ contract UpgradeManager {
 
     function runContractsUpgrade() public returns (uint8) {
 
-        if (pendingContracts.length == AMOUNT_OF_CONTRACTS && 
+       /*     if (pendingContracts.length == AMOUNT_OF_CONTRACTS && 
             pendingVoteState.count == REQUIREDAMOUNTOFVOTES && 
             pendingVoteState.agree >= WINNINGAMOUNT ) {
             
             address[13] memory tempcontracts;
 
-            for (uint i = 0; i < uint(VerusConstants.ContractType.LastIndex); i++)
+        for (uint i = 0; i < uint(VerusConstants.ContractType.LastIndex); i++)
             {
                 tempcontracts[i] = pendingContracts[i];
             }
@@ -185,7 +185,7 @@ contract UpgradeManager {
                 // if, else if instead of switch() case()
                 if(i == uint(VerusConstants.ContractType.TokenManager) && tempcontracts[uint(VerusConstants.ContractType.TokenManager)] != address(tokenManager)) {
                     tokenManager = TokenManager(tempcontracts[uint(VerusConstants.ContractType.TokenManager)]);
-                    verusBridge.setContracts(tempcontracts);
+                   // verusBridge.setContracts(tempcontracts);
                     verusBridgeStorage.setContracts(tempcontracts);
                     exportManager.setContract(tempcontracts[uint(VerusConstants.ContractType.TokenManager)]);
                     tokenManager.setContracts(tempcontracts[uint(VerusConstants.ContractType.VerusSerializer)], 
@@ -203,7 +203,7 @@ contract UpgradeManager {
 
                 else if (i == uint(VerusConstants.ContractType.VerusProof) && tempcontracts[uint(VerusConstants.ContractType.VerusProof)] != address(verusProof)) {
                     verusProof = VerusProof(contracts[uint(VerusConstants.ContractType.VerusProof)]); 
-                    verusBridge.setContracts(tempcontracts);             
+                  //  verusBridge.setContracts(tempcontracts);             
                 }
 
                 else if (i == uint(VerusConstants.ContractType.VerusNotarizer) && tempcontracts[uint(VerusConstants.ContractType.VerusNotarizer)] != address(verusNotarizer)) {
@@ -230,13 +230,13 @@ contract UpgradeManager {
                 
                 else if (i == uint(VerusConstants.ContractType.ExportManager) && tempcontracts[uint(VerusConstants.ContractType.ExportManager)] != address(exportManager))  {    
                     exportManager = ExportManager(tempcontracts[uint(VerusConstants.ContractType.ExportManager)]);
-                    verusBridge.setContracts(tempcontracts);   
+                  //  verusBridge.setContracts(tempcontracts);   
                 }
 
                 else if (i == uint(VerusConstants.ContractType.VerusBridgeMaster) && tempcontracts[uint(VerusConstants.ContractType.VerusBridgeMaster)] != contracts[uint(VerusConstants.ContractType.VerusBridgeMaster)])  {  
                     verusBridgeMaster.transferETH(tempcontracts[uint(VerusConstants.ContractType.VerusBridgeMaster)]);
                     verusBridgeMaster = VerusBridgeMaster(payable(tempcontracts[uint(VerusConstants.ContractType.VerusBridgeMaster)]));
-                    verusBridge.setContracts(tempcontracts);
+                 //   verusBridge.setContracts(tempcontracts);
                     verusNotarizer.setContracts(tempcontracts);
                     verusNotarizerStorage.setContracts(tempcontracts);  
                 }
@@ -265,7 +265,7 @@ contract UpgradeManager {
 
             return COMPLETE;
 
-        }
+        }*/
 
         return ERROR;
     }

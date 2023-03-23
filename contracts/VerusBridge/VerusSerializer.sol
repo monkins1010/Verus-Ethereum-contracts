@@ -7,7 +7,7 @@ import "../Libraries/VerusObjects.sol";
 import "../Libraries/VerusObjectsNotarization.sol";
 import "../Libraries/VerusConstants.sol";
 
-contract VerusSerializer {
+library VerusSerializer {
 
     uint constant ETH_ADDRESS_SIZE_BYTES = 20;
     uint32 constant CCC_PREFIX_TO_OPTIONS = 3 + 4; // already starts on the byte so 3 first

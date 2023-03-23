@@ -6,63 +6,10 @@ pragma abicoder v2;
 
 import "../Libraries/VerusObjects.sol";
 import "../Libraries/VerusConstants.sol";
-import "./TokenManager.sol";
-import "./VerusBridgeMaster.sol";
-import "./VerusBridgeStorage.sol";
-import "../MMR/VerusProof.sol";
 import "./Token.sol";
-import "./VerusCrossChainExport.sol";
-import "./ExportManager.sol";
+import "../Storage/StorageMaster.sol";
 
-contract VerusBridge {
-
-    TokenManager tokenManager;
-    VerusProof verusProof;
-    VerusCrossChainExport verusCCE;
-    VerusBridgeMaster verusBridgeMaster;
-    ExportManager exportManager;
-    VerusBridgeStorage verusBridgeStorage;
-    address verusUpgradeContract;
-
-    uint64 poolSize;
-
-    // Global storage is located in VerusBridgeStorage contract
-
-    constructor(address verusBridgeMasterAddress, address verusBridgeStorageAddress,
-                address tokenManagerAddress, address verusProofAddress,
-                address verusCCEAddress, address exportManagerAddress, address verusUpgradeAddress) {
-        verusBridgeMaster = VerusBridgeMaster(payable(verusBridgeMasterAddress)); 
-        verusBridgeStorage = VerusBridgeStorage(verusBridgeStorageAddress); 
-        tokenManager = TokenManager(tokenManagerAddress);
-        verusProof = VerusProof(verusProofAddress);
-        verusCCE = VerusCrossChainExport(verusCCEAddress);
-        exportManager = ExportManager(exportManagerAddress);
-        verusUpgradeContract = verusUpgradeAddress;
-        poolSize = 500000000000;
-
-    }
-
-    function setContracts(address[13] memory contracts) public {
-
-        require(msg.sender == verusUpgradeContract);
-
-        if(contracts[uint(VerusConstants.ContractType.TokenManager)] != address(tokenManager)) {
-            tokenManager = TokenManager(contracts[uint(VerusConstants.ContractType.TokenManager)]);
-        }
-
-        if(contracts[uint(VerusConstants.ContractType.VerusProof)] != address(verusProof))
-            verusProof = VerusProof(contracts[uint(VerusConstants.ContractType.VerusProof)]);    
-
-        if(contracts[uint(VerusConstants.ContractType.VerusCrossChainExport)] != address(verusCCE))     
-            verusCCE = VerusCrossChainExport(contracts[uint(VerusConstants.ContractType.VerusCrossChainExport)]);
-
-        if(contracts[uint(VerusConstants.ContractType.ExportManager)] != address(exportManager))     
-            exportManager = ExportManager(contracts[uint(VerusConstants.ContractType.ExportManager)]);
-
-        if(contracts[uint(VerusConstants.ContractType.VerusBridgeMaster)] != address(verusBridgeMaster))     
-            verusBridgeMaster = VerusBridgeMaster(payable(contracts[uint(VerusConstants.ContractType.VerusBridgeMaster)]));
-
-    }
+contract CreateExport is VerusStorage {
 
     function subtractPoolSize(uint64 _amount) private returns (bool) {
 
@@ -71,14 +18,18 @@ contract VerusBridge {
         return true;
     }
  
-    function export(VerusObjects.CReserveTransfer memory transfer, uint256 paidValue, address sender) public {
+    function export(bytes calldata data) payable external {
 
-        require(msg.sender == address(verusBridgeMaster));
         uint256 fees;
-        bool poolAvailable;
-        poolAvailable = verusBridgeMaster.isPoolAvailable();
 
-        fees = exportManager.checkExport(transfer, paidValue, poolAvailable);
+        VerusObjects.CReserveTransfer memory transfer = abi.decode(data, (VerusObjects.CReserveTransfer));
+
+        address verusExportManagerAddress = mapper.getLogicContract(uint(VerusConstants.ContractType.ExportManager));
+
+        (bool success, bytes memory feeBytes) = verusExportManagerAddress.call(abi.encodeWithSignature("checkExport(bytes,uint256,bool)", data, msg.value, poolAvailable));
+        require(success);
+
+        fees = abi.decode(feeBytes, (uint256)); //fees = exportManager.checkExport(transfer, paidValue, poolAvailable);
 
         require(fees != 0, "CheckExport Failed Checks"); 
 
@@ -89,15 +40,15 @@ contract VerusBridge {
 
         if (transfer.currencyvalue.currency != VerusConstants.VEth && transfer.destination.destinationtype != VerusConstants.DEST_ETHNFT) {
 
-            VerusObjects.mappedToken memory mappedContract = verusBridgeStorage.getERCMapping(transfer.currencyvalue.currency);
+            VerusObjects.mappedToken memory mappedContract = verusToERC20mapping[transfer.currencyvalue.currency];
             Token token = Token(mappedContract.erc20ContractAddress); 
             //Check user has allowed the verusBridgeStorage contract to spend on their behalf
-            uint256 allowedTokens = token.allowance(sender, address(verusBridgeStorage));
-            uint256 tokenAmount = tokenManager.convertFromVerusNumber(transfer.currencyvalue.amount, token.decimals()); //convert to wei from verus satoshis
+            uint256 allowedTokens = token.allowance(msg.sender, address(this));
+            uint256 tokenAmount = convertFromVerusNumber(transfer.currencyvalue.amount, token.decimals()); //convert to wei from verus satoshis
             require( allowedTokens >= tokenAmount);
             //transfer the tokens to the verusbridgemaster contract
             //total amount kept as wei until export to verus
-            verusBridgeStorage.exportERC20Tokens(tokenAmount, token, mappedContract.flags & VerusConstants.MAPPING_VERUS_OWNED == VerusConstants.MAPPING_VERUS_OWNED, sender );
+            exportERC20Tokens(tokenAmount, token, mappedContract.flags & VerusConstants.MAPPING_VERUS_OWNED == VerusConstants.MAPPING_VERUS_OWNED, msg.sender );
             
         } else if (transfer.destination.destinationtype == VerusConstants.DEST_ETHNFT){
             //handle a NFT Import
@@ -116,44 +67,60 @@ contract VerusBridge {
                 tokenId := mload(add(serializedDest, 53))  // cant have constant in assebmly == VerusConstants.VERUS_NFT_DEST_LENGTH
             }
 
-            VerusObjects.mappedToken memory mappedContract = verusBridgeStorage.getERCMapping(transfer.currencyvalue.currency);
+            VerusObjects.mappedToken memory mappedContract = verusToERC20mapping[transfer.currencyvalue.currency];
             nftContract = mappedContract.erc20ContractAddress;
             require (serializedDest.length == VerusConstants.VERUS_NFT_DEST_LENGTH && (desttype == VerusConstants.DEST_PKH || desttype == VerusConstants.DEST_ID) && destinationAddress != address(0), "NFT packet wrong length/dest wrong");
 
             VerusNft nft = VerusNft(nftContract);
             require (nft.getApproved(tokenId) == address(this), "NFT not approved");
 
-            nft.transferFrom(sender, address(this), tokenId);
+            nft.transferFrom(msg.sender, address(this), tokenId);
             
             if(transfer.currencyvalue.currency == VerusConstants.VerusNFTID)
             {
                 nft.burn(tokenId);
             }
-            else
-            {
-                nft.transferFrom(address(this), address(verusBridgeStorage), tokenId);
-            }
+
             transfer.destination.destinationtype = desttype;
             transfer.destination.destinationaddress = abi.encodePacked(destinationAddress);
  
         } 
-        _createExports(transfer, poolAvailable, false);
+        _createExports(transfer, false);
     }
 
-    function _createExports(VerusObjects.CReserveTransfer memory reserveTransfer, bool poolAvailable, bool forceNewCCE) private {
+    function exportERC20Tokens(uint256 _tokenAmount, Token token, bool burn, address sender ) private {
+        
+        (bool success, ) = address(token).call(abi.encodeWithSignature("transferFrom(address,address,uint256)", sender, address(this), _tokenAmount));
+        require(success, "transferfrom of token failed");
+
+        if (burn) 
+        {
+            token.burn(_tokenAmount);
+        }
+    }
+
+    function externalCreateExportCall(bytes memory data) public {
+
+        (VerusObjects.CReserveTransfer memory reserveTransfer, bool forceNewCCE) = abi.decode(data, (VerusObjects.CReserveTransfer, bool));
+
+        _createExports(reserveTransfer, forceNewCCE);
+    }
+
+    function _createExports(VerusObjects.CReserveTransfer memory reserveTransfer, bool forceNewCCE) private {
 
         // Create CCE: If transactions in transfers > 50 and on same block then revert.
         // If transactions over 50 and inbetween notarization boundaries, increment CCE start and endheight
         // If notarization happens increment CCE to next boundary
         // If changing from pool closed to pool open create a boundary (As all sends will then go through the bridge)
         uint64 blockNumber = uint64(block.number);
-        uint64 notaryHeight = verusBridgeMaster.getNotaryHeight();
-        uint64 cceStartHeight = verusBridgeStorage.cceLastStartHeight();
-        uint64 cceEndHeight = verusBridgeStorage.cceLastEndHeight();
-        uint64 lastCCEExportHeight = verusBridgeStorage.cceLastStartHeight();
+        uint64 notaryHeight = notaryHeight;
+        uint64 cceStartHeight = cceLastStartHeight;
+        uint64 cceEndHeight = cceLastEndHeight;
+        uint64 lastCCEExportHeight = cceLastStartHeight;
         uint64 blockDelta = cceEndHeight - (cceStartHeight == 0 ? cceEndHeight : cceStartHeight);
 
-        VerusObjects.CReserveTransferSet memory temptx = verusBridgeStorage.getReadyExports(cceStartHeight);
+
+        VerusObjects.CReserveTransferSet memory temptx = _readyExports[cceStartHeight];
 
         // if there are no transfers then there is no need to make a new CCE as this is the first one, and the endheight can become the block number if it is less than the current block no.
         // if the last notary received height is less than the endheight then keep building up the CCE (as long as 10 ETH blocks havent passed, and anew CCE isnt being forced and there is less than 50)
@@ -177,30 +144,74 @@ contract VerusBridge {
             }
         }
 
-        verusBridgeStorage.setReadyExportTransfers(cceStartHeight, cceEndHeight, reserveTransfer, 50);
+        setReadyExportTransfers(cceStartHeight, cceEndHeight, reserveTransfer, 50);
 
-        VerusObjects.CReserveTransferSet memory pendingTransfers = verusBridgeStorage.getReadyExports(cceStartHeight);
+        VerusObjects.CReserveTransferSet memory pendingTransfers = _readyExports[cceStartHeight];
 
-        bytes memory serializedCCE = verusCCE.generateCCE(pendingTransfers.transfers, poolAvailable, cceStartHeight, cceEndHeight);
+        address crossChainExportAddress = mapper.getLogicContract(uint(VerusConstants.ContractType.VerusCrossChainExport));
+
+        (bool success, bytes memory serializedCCE) = crossChainExportAddress.call(abi.encodeWithSignature("generateCCE(bytes)", abi.encode(pendingTransfers.transfers, poolAvailable, cceStartHeight, cceEndHeight)));
+        require(success);
+
+     //   bytes memory serializedCCE = verusCCE.generateCCE(pendingTransfers.transfers, poolAvailable, cceStartHeight, cceEndHeight);
         bytes32 prevHash;
  
         if(pendingTransfers.transfers.length == 1)
         {
-            prevHash = verusBridgeStorage.getReadyExports(lastCCEExportHeight).exportHash;
-            verusBridgeStorage.setCceHeights(cceStartHeight, cceEndHeight);
+            prevHash = _readyExports[lastCCEExportHeight].exportHash;
+            cceLastStartHeight = cceStartHeight;
+            cceLastEndHeight = cceEndHeight;
         } 
         else 
         {
             prevHash = pendingTransfers.prevExportHash;
         }
           
-        verusBridgeStorage.setReadyExportTxid(keccak256(abi.encodePacked(serializedCCE, prevHash)), prevHash, cceStartHeight);
+        setReadyExportTxid(keccak256(abi.encodePacked(serializedCCE, prevHash)), prevHash, cceStartHeight);
 
     }
 
+    function setReadyExportTxid(bytes32 txidhash, bytes32 prevTxidHash, uint _block) private {
+        
+        _readyExports[_block].exportHash = txidhash;
+
+        if (_readyExports[_block].transfers.length == 1)
+        {
+            _readyExports[_block].prevExportHash = prevTxidHash;
+
+        }
+    }
+
+    function setReadyExportTransfers(uint64 _startHeight, uint64 _endHeight, VerusObjects.CReserveTransfer memory reserveTransfer, uint blockTxLimit) private {
+        
+        _readyExports[_startHeight].endHeight = _endHeight;
+        _readyExports[_startHeight].transfers.push(reserveTransfer);
+        require(_readyExports[_startHeight].transfers.length <= blockTxLimit);
+      
+    }
+        
+    function convertFromVerusNumber(uint256 a,uint8 decimals) public pure returns (uint256) {
+        uint8 power = 10; //default value for 18
+        uint256 c = a;
+
+        if(decimals > 8 ) {
+            power = decimals - 8;// number of decimals in verus
+            c = a * (10 ** power);
+        }else if(decimals < 8){
+            power = 8 - decimals;// number of decimals in verus
+            c = a / (10 ** power);
+        }
+      
+        return c;
+    }
+
+}
+
+//Second contract
+
+contract SubmitImport is VerusStorage {
     function sendToVRSC(uint64 value, address sendTo, uint8 destinationType) public 
     {
-        require(msg.sender == address(verusBridgeMaster));
         VerusObjects.CReserveTransfer memory LPtransfer;
         bool forceNewCCE;
       
@@ -234,17 +245,23 @@ contract VerusBridge {
         } 
 
         // When the bridge launches to make sure a fresh block with no pending vrsc transfers is used as not to mix destination currencies.
-        _createExports(LPtransfer, true, forceNewCCE);
+        address verusBridgeAddress = mapper.getLogicContract(uint(VerusConstants.ContractType.VerusBridge));
+
+        (bool success,) = verusBridgeAddress.delegatecall(abi.encodeWithSignature("externalCreateExportCall(bytes,bool)", abi.encode(LPtransfer, forceNewCCE)));
+        require(success);
+       // _createExports(LPtransfer, true, forceNewCCE);
 
     }
 
-    function _createImports(VerusObjects.CReserveTransferImport calldata _import) public returns(uint64) {
+    function _createImports(bytes calldata data) external returns(uint64) {
         
-        // prove MMR
-        require(msg.sender == address(verusBridgeMaster));
+        
+        VerusObjects.CReserveTransferImport memory _import = abi.decode(data, (VerusObjects.CReserveTransferImport));
         bytes32 txidfound;
         bytes memory elVchObj = _import.partialtransactionproof.components[0].elVchObj;
         uint32 nVins;
+        bool success;
+        bytes memory returnBytes;
 
         assembly 
         {
@@ -256,7 +273,7 @@ contract VerusBridge {
         nVins = ((nVins & 0xFF00FF00) >> 8) |  ((nVins & 0x00FF00FF) << 8);
         nVins = (nVins >> 16) | (nVins << 16);
 
-        if (verusBridgeStorage.processedTxids(txidfound)) 
+        if (processedTxids[txidfound]) 
         {
             revert("Known txid");
         } 
@@ -264,46 +281,110 @@ contract VerusBridge {
         bytes32 hashOfTransfers;
 
         // [0..139]address of reward recipricent and [140..203]int64 fees
-        uint64 Fees;
+        uint64 fees;
 
         // [0..31]startheight [32..63]endheight [64..95]nIndex, [96..128] numberoftransfers packed into a uint128  
         uint128 CCEHeightsAndnIndex;
 
         hashOfTransfers = keccak256(_import.serializedTransfers);
 
-        (Fees, CCEHeightsAndnIndex) = verusProof.proveImports(_import, hashOfTransfers); 
+        address verusProofAddress = mapper.getLogicContract(uint(VerusConstants.ContractType.VerusProof));
 
-        verusBridgeStorage.isLastCCEInOrder(uint32(CCEHeightsAndnIndex));
+        (success, returnBytes) = verusProofAddress.call(abi.encodeWithSignature("proveImports(bytes)", abi.encode(data, hashOfTransfers)));
+        require(success);
+
+        (fees, CCEHeightsAndnIndex) = abi.decode(returnBytes, (uint64, uint128));// verusProof.proveImports(_import, hashOfTransfers); 
+
+        isLastCCEInOrder(uint32(CCEHeightsAndnIndex));
    
         // clear 4 bytes above first 64 bits, i.e. clear the nIndex 32 bit number, then convert to correct nIndex
 
         CCEHeightsAndnIndex  = (CCEHeightsAndnIndex & 0xffffffff00000000ffffffffffffffff) | (uint128(uint32(uint32(CCEHeightsAndnIndex >> 64) - (1 + (2 * nVins)))) << 64);  
-        verusBridgeStorage.setLastImport(txidfound, hashOfTransfers, CCEHeightsAndnIndex);
+        setLastImport(txidfound, hashOfTransfers, CCEHeightsAndnIndex);
         
         // Deserialize transfers and pack into send arrays, also pass in no. of transfers to calculate array size
 
         VerusObjects.ETHPayments[] memory _payments;
-        bytes memory refunds;
-        (_payments, refunds) = tokenManager.processTransactions(_import.serializedTransfers, uint8(CCEHeightsAndnIndex >> 96));
         
-        verusBridgeMaster.sendEth(_payments);
-        verusBridgeMaster.refund(refunds);
+        address verusTokenManagerAddress = mapper.getLogicContract(uint(VerusConstants.ContractType.TokenManager));
 
-        return Fees;
+        (success, returnBytes) = verusTokenManagerAddress.call(abi.encodeWithSignature("processTransactions(bytes,uint8)", _import.serializedTransfers, uint8(CCEHeightsAndnIndex >> 96)));
+        require(success);
+
+        bytes memory refunds;
+        (_payments, refunds) = abi.decode(returnBytes, (VerusObjects.ETHPayments[], bytes)); //tokenManager.processTransactions(_import.serializedTransfers, uint8(CCEHeightsAndnIndex >> 96));
+        
+        sendEth(_payments);
+        refund(refunds);
+
+        return fees;
 
     }
+
+    function sendEth(VerusObjects.ETHPayments[] memory _payments) private
+    {
+         //only callable by verusbridge contract
+
+        uint256 totalsent;
+        for(uint i = 0; i < _payments.length; i++)
+        {
+            address payable destination = payable(_payments[i].destination);
+            if(destination != address(0))
+            {
+                destination.transfer(_payments[i].amount);
+                totalsent += _payments[i].amount;
+            }
+        }
+    }
     
-    function getReadyExportsByRange(uint _startBlock,uint _endBlock) public view returns(VerusObjects.CReserveTransferSetCalled[] memory returnedExports){
+    function refund(bytes memory refundAmount) private  {
+
+        for(uint i = 0; i < (refundAmount.length / 64); i = i + 64) {
+
+            bytes32 verusAddress;
+            uint256 amount;
+            assembly 
+            {
+                verusAddress := mload(add(add(refundAmount, 32), i))
+                amount := mload(add(add(refundAmount, 64), i))
+            }
+            refunds[verusAddress] += amount; //verusNotarizerStorage.setOrAppendRefund(verusAddress, amount);
+        }
+     }
+
+    function setLastImport(bytes32 processedTXID, bytes32 hashofTXs, uint128 CCEheightsandTXNum ) private {
+
+        processedTxids[processedTXID] = true;
+        lastTxIdImport = processedTXID;
+        lastImportInfo[processedTXID] = VerusObjects.lastImportInfo(hashofTXs, processedTXID, uint32(CCEheightsandTXNum >> 64), uint32(CCEheightsandTXNum >> 32));
+    } 
+
+    function isLastCCEInOrder(uint32 height) private view {
+      
+        if ((lastImportInfo[lastTxIdImport].height + 1) == height)
+        {
+            return;
+        } 
+        else if (lastTxIdImport == bytes32(0))
+        {
+            return;
+        } 
+        else{
+            revert();
+        }
+    }
+    
+    function getReadyExportsByRange(uint _startBlock,uint _endBlock) external view returns(VerusObjects.CReserveTransferSetCalled[] memory returnedExports){
     
         uint outputSize;
         uint heights = _startBlock;
-        bool loop = verusBridgeStorage.cceLastEndHeight() > 0;
+        bool loop = cceLastEndHeight > 0;
 
         if(!loop) return returnedExports;
 
         while(loop){
 
-            heights = verusBridgeStorage.exportHeights(heights);
+            heights = exportHeights[heights];
             outputSize++;
             if (heights > _endBlock || heights == 0) {
                 break;
@@ -316,11 +397,89 @@ contract VerusBridge {
 
         for (uint i = 0; i < outputSize; i++)
         {
-            tempSet = verusBridgeStorage.getReadyExports(heights);
+            tempSet = _readyExports[heights];
             returnedExports[i] = VerusObjects.CReserveTransferSetCalled(tempSet.exportHash, tempSet.prevExportHash, uint64(heights), tempSet.endHeight, tempSet.transfers);
-            heights = verusBridgeStorage.exportHeights(heights);
+            heights = exportHeights[heights];
         }
         return returnedExports;      
+    }
+
+    function setClaimableFees(uint64 fees) external
+    {
+        uint176 bridgeKeeper;
+        bridgeKeeper = uint176(uint160(msg.sender));
+        bridgeKeeper |= (uint176(0x0c14) << 160); //make ETH type '0c' and length 20 '14'
+
+        uint256 notaryFees;
+        uint256 LPFee;
+        uint256 proposerFees;  
+        uint256 bridgekeeperFees;              
+        uint176 proposer;
+        bytes memory proposerBytes = bestForks[0];
+
+        assembly {
+                proposer := mload(add(proposerBytes, 128))
+        } 
+
+        (notaryFees, proposerFees, bridgekeeperFees, LPFee) = setFeePercentages(fees);
+
+        // Any remainder from Notaries shared fees is put into the LPFees pot.
+        LPFee += setNotaryFees(notaryFees);
+
+        setClaimedFees(bytes32(uint256(proposer)), proposerFees);
+        setClaimedFees(bytes32(uint256(bridgeKeeper)), bridgekeeperFees);
+
+        //NOTE: LP fees to be sent to vrsc to be burnt held at the verusNotarizerStorage address as a unique key
+        uint256 totalLPFees = setClaimedFees(bytes32(uint256(uint160(address(this)))), LPFee);
+        
+        //NOTE:only execute the LP transfer if there is x10 the fee amount 
+        if(totalLPFees > (VerusConstants.verusvETHTransactionFee * 10) && poolAvailable)
+        {
+            //make a transfer for the LP fees back to Verus
+            sendToVRSC(uint64(totalLPFees), address(0), VerusConstants.DEST_PKH);
+            setClaimableFees(bytes32(uint256(uint160(address(this)))), 0);
+        }
+    }
+
+    function setFeePercentages(uint256 _ethAmount)private pure returns (uint256,uint256,uint256,uint256)
+    {
+        uint256 notaryFees;
+        uint256 LPFees;
+        uint256 proposerFees;  
+        uint256 bridgekeeperFees;     
+        
+        notaryFees = (_ethAmount / 4 ); 
+        proposerFees = _ethAmount / 4 ;
+        bridgekeeperFees = (_ethAmount / 4 );
+
+        LPFees = _ethAmount - (notaryFees + proposerFees + bridgekeeperFees);
+
+        return(notaryFees, proposerFees, bridgekeeperFees, LPFees);
+    }
+
+    function setNotaryFees(uint256 notaryFees) private returns (uint64 remainder){  //sent in as SATS
+      
+        uint256 numOfNotaries = notaries.length;
+        uint64 notariesShare = uint64(notaryFees / numOfNotaries);
+        for (uint i=0; i < numOfNotaries; i++)
+        {
+            uint176 notary;
+            notary = uint176(uint160(notaryAddressMapping[notaries[i]].main));
+            notary |= (uint176(0x0c14) << 160); //set at type eth
+            claimableFees[bytes32(uint256(notary))] += notariesShare;
+        }
+        remainder = uint64(notaryFees % numOfNotaries);
+    }
+
+    function setClaimedFees(bytes32 _address, uint256 fees) private returns (uint256)
+    {
+        claimableFees[_address] += fees;
+        return claimableFees[_address];
+    }
+
+    function setClaimableFees(bytes32 claiment, uint256 fee) private {
+
+        claimableFees[claiment] = fee;
     }
 
 }

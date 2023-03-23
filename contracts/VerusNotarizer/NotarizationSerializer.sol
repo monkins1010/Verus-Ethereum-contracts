@@ -10,8 +10,6 @@ import "../VerusBridge/UpgradeManager.sol";
 
 contract NotarizationSerializer {
 
-    VerusSerializer verusSerializer;
-
     uint8 constant CURRENCY_LENGTH = 20;
     uint8 constant BYTES32_LENGTH = 32;
     uint8 constant TWO2BYTES32_LENGTH = 64;
@@ -22,22 +20,6 @@ contract NotarizationSerializer {
     uint8 constant AUX_DEST_ETH_VEC_LENGTH = 22;
     uint8 constant AUX_DEST_VOTE_HASH = 21;
     uint8 constant VOTE_BYTE_POSITION = 22;
-
-    UpgradeManager verusUpgradeContract;
-
-    constructor(address verusUpgradeAddress, address verusSerializerAddress) 
-    {
-        verusUpgradeContract = UpgradeManager(verusUpgradeAddress);
-        verusSerializer = VerusSerializer(verusSerializerAddress);
-    }
-
-    function setContract(address serializerContract) public {
-
-        require(msg.sender == address(verusUpgradeContract));
-
-        verusSerializer = VerusSerializer(serializerContract);
-        
-    }
 
     function readVarint(bytes memory buf, uint32 idx) public pure returns (uint32 v, uint32 retidx) {
 
@@ -105,7 +87,7 @@ contract NotarizationSerializer {
                     nextOffset := add(nextOffset, 1) //skip prevheight
                 }
 
-        readerLen = verusSerializer.readCompactSizeLE(notarization, nextOffset);    // get the length of the currencyState
+        readerLen = VerusSerializer.readCompactSizeLE(notarization, nextOffset);    // get the length of the currencyState
 
         nextOffset = readerLen.offset - 1;   //readCompactSizeLE returns 1 byte after and wants one byte after 
 
@@ -119,7 +101,7 @@ contract NotarizationSerializer {
         proposerAndLaunched |= bytes32(uint256(bridgeLaunched) << 176);  // Shift 16bit value 22 bytes to pack in bytes32
 
         nextOffset++; //move forwards to read le
-        readerLen = verusSerializer.readCompactSizeLE(notarization, nextOffset);    // get the length of proofroot array
+        readerLen = VerusSerializer.readCompactSizeLE(notarization, nextOffset);    // get the length of proofroot array
 
         (stateRoot, blockHash, height) = deserializeProofRoots(notarization, uint32(readerLen.value), nextOffset);
 
@@ -151,7 +133,7 @@ contract NotarizationSerializer {
         }
         VerusObjectsCommon.UintReader memory readerLen;
 
-        readerLen = verusSerializer.readCompactSizeLE(notarization, nextOffset);        // get the length currencies
+        readerLen = VerusSerializer.readCompactSizeLE(notarization, nextOffset);        // get the length currencies
 
         nextOffset = nextOffset + (uint32(readerLen.value) * BYTES32_LENGTH) + 2;       // currencys, wights, reserves arrarys
 
@@ -163,7 +145,7 @@ contract NotarizationSerializer {
                     nextOffset := add(nextOffset, 33) //skip coinbasecurrencystate first 4 items fixed at 4 x 8
                 }
 
-        readerLen = verusSerializer.readCompactSizeLE(notarization, nextOffset);    // get the length of the reservein array of uint64
+        readerLen = VerusSerializer.readCompactSizeLE(notarization, nextOffset);    // get the length of the reservein array of uint64
         nextOffset = readerLen.offset + (uint32(readerLen.value) * 60) + 6;                 //skip 60 bytes of rest of state knowing array size always same as first
 
         return (bridgeLaunched, nextOffset);
@@ -198,7 +180,7 @@ contract NotarizationSerializer {
             {
                 stateRoot = tempStateRoot;
                 blockHash = tempBlockHash;
-                height = verusSerializer.serializeUint32(tempHeight); //swapendian
+                height = VerusSerializer.serializeUint32(tempHeight); //swapendian
             }
 
             //swap 16bit endian

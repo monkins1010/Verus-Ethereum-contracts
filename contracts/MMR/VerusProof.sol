@@ -9,12 +9,10 @@ import "../VerusBridge/VerusSerializer.sol";
 import "../Libraries/VerusObjectsCommon.sol";
 import "../VerusNotarizer/VerusNotarizer.sol";
 import "./VerusMMR.sol";
+import "../Storage/StorageMaster.sol";
 
-contract VerusProof {
+contract VerusProof is VerusStorage  {
 
-    uint256 mmrRoot;
-    VerusSerializer verusSerializer;
-    VerusNotarizer verusNotarizer;
     using VerusBlake2b for bytes;
     
     // these constants should be able to reference each other, as many are relative, but Solidity does not
@@ -41,24 +39,6 @@ contract VerusProof {
     uint8 constant FLAG_LAUNCHCOMPLETEMARKER = 0x20;
     uint8 constant AUX_DEST_ETH_VEC_LENGTH = 22;
 
-    address verusUpgradeContract;
-
-    constructor(address verusUpgradeAddress, address verusSerializerAddress, 
-    address verusNotarizerAddress) 
-    {
-        verusUpgradeContract = verusUpgradeAddress;
-        verusSerializer = VerusSerializer(verusSerializerAddress);
-        verusNotarizer = VerusNotarizer(verusNotarizerAddress);
-    }
-
-    function setContracts(address[13] memory contracts) public {
-
-        require(msg.sender == verusUpgradeContract);
-
-        verusSerializer = VerusSerializer(contracts[uint(VerusConstants.ContractType.VerusSerializer)]);
-        verusNotarizer = VerusNotarizer(contracts[uint(VerusConstants.ContractType.VerusNotarizer)]);
-        
-    }
 
     function checkProof(bytes32 hashToProve, VerusObjects.CTXProof[] memory _branches) public view returns(bytes32){
         //loop through the branches from bottom to top
@@ -76,6 +56,7 @@ contract VerusProof {
         bytes32 hashInProgress = _hashToCheck;
         bytes memory joined;
         //hashInProgress = blake2b.bytesToBytes32(abi.encodePacked(_hashToCheck));
+
         uint hashIndex = VerusMMR.GetMMRProofIndex(_branch.nIndex, _branch.nSize, _branch.extraHashes);
         
        for(uint i = 0;i < branchLength; i++){
@@ -120,8 +101,8 @@ contract VerusProof {
 
             VerusObjectsCommon.UintReader memory readerLen;
 
-            readerLen = verusSerializer.readCompactSizeLE(firstObj, OUTPUT_SCRIPT_OFFSET);    // get the length of the output script
-            readerLen = verusSerializer.readCompactSizeLE(firstObj, readerLen.offset);        // then length of first master push
+            readerLen = VerusSerializer.readCompactSizeLE(firstObj, OUTPUT_SCRIPT_OFFSET);    // get the length of the output script
+            readerLen = VerusSerializer.readCompactSizeLE(firstObj, readerLen.offset);        // then length of first master push
 
             // must be push less than 75 bytes, as that is an op code encoded similarly to a vector.
             // all we do here is ensure that is the case and skip master
@@ -228,7 +209,7 @@ contract VerusProof {
         }
 
         (packedRegister, nextOffset)  = readVarint(firstObj, nextOffset);   // put startheight at [0] 32bit chunk
-        tempRegister = verusSerializer.serializeUint32(tempRegister);       // reverse endian of no. transfers
+        tempRegister = VerusSerializer.serializeUint32(tempRegister);       // reverse endian of no. transfers
         packedRegister  |= (uint128(tempRegister) << 96) ;                  // put number of transfers at [3] 32-bit chunk     
         
         (tempRegister, nextOffset)  = readVarint(firstObj, nextOffset); 
@@ -245,7 +226,7 @@ contract VerusProof {
                 nextOffset := add(add(nextOffset, CCE_DEST_CURRENCY_DELTA), 8)  // move 20 + 8 bytes for (address + 64bit)
                 rewardFees := mload(add(firstObj, nextOffset))    
             }
-                rewardFees = verusSerializer.serializeUint64(rewardFees);
+                rewardFees = VerusSerializer.serializeUint64(rewardFees);
         }
 
         if (!(hashedTransfers == hashReserveTransfers &&
@@ -263,13 +244,13 @@ contract VerusProof {
     {
                                                   
             VerusObjectsCommon.UintReader memory readerLen;
-            readerLen = verusSerializer.readCompactSizeLE(firstObj, nextOffset);    // get the length of the auxDest
+            readerLen = VerusSerializer.readCompactSizeLE(firstObj, nextOffset);    // get the length of the auxDest
             nextOffset = readerLen.offset;
             uint arraySize = readerLen.value;
             
             for (uint i = 0; i < arraySize; i++)
             {
-                    readerLen = verusSerializer.readCompactSizeLE(firstObj, nextOffset);    // get the length of the auxDest sub array
+                    readerLen = VerusSerializer.readCompactSizeLE(firstObj, nextOffset);    // get the length of the auxDest sub array
                     if (readerLen.value == AUX_DEST_ETH_VEC_LENGTH)
                     {
                          assembly {
@@ -326,7 +307,7 @@ contract VerusProof {
         }
 
         retStateRoot = checkProof(txRoot, _import.partialtransactionproof.txproof);
-        confirmedStateRoot = verusNotarizer.getLastConfirmedVRSCStateRoot();
+        confirmedStateRoot = getLastConfirmedVRSCStateRoot();
 
         if (retStateRoot == bytes32(0) || retStateRoot != confirmedStateRoot) {
 
@@ -335,6 +316,28 @@ contract VerusProof {
         //truncate to only return heights as, contract will revert if issue with proofs.
         return (fees, heightsAndTXNum);
  
+    }
+
+    function getLastConfirmedVRSCStateRoot() public view returns (bytes32) {
+
+        bytes32 stateRoot;
+        bytes32 slotHash;
+        bytes storage tempArray = bestForks[0];
+        uint32 nextOffset;
+
+        if (tempArray.length > 0)
+        {
+            bytes32 slot;
+            assembly {
+                        mstore(add(slot, 32),tempArray.slot)
+                        slotHash := keccak256(add(slot, 32), 32)
+                        nextOffset := add(nextOffset, 1)  
+                        nextOffset := add(nextOffset, 1)  
+                        stateRoot := sload(add(slotHash, nextOffset))
+            }
+        }
+
+        return stateRoot;
     }
 
     function readVarint(bytes memory buf, uint32 idx) public pure returns (uint32 v, uint32 retidx) {
