@@ -59,6 +59,7 @@ library VerusConstants {
     uint8 constant VERUS_NFT_DEST_LENGTH = 53;
 
     uint constant SATS_TO_WEI_STD = 10000000000;
+    uint8 constant AMOUNT_OF_CONTRACTS = 11;
 
     enum ContractType {
         TokenManager,
@@ -66,14 +67,12 @@ library VerusConstants {
         VerusProof,
         VerusCrossChainExport,
         VerusNotarizer,
-        VerusBridge,
-        VerusInfo,
+        CreateExport,
+        VerusNotaryTools,
         ExportManager,
-        VerusBridgeStorage,
-        VerusNotarizerStorage,
-        VerusBridgeMaster,
+        SubmitImports,
         NotarizationSerializer,
-        LastIndex
+        UpgradeManager
     }
         
 }

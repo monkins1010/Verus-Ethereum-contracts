@@ -468,4 +468,19 @@ library VerusSerializer {
         return (0, offset);
     }
 
+    function byteSlice(bytes memory _data) internal pure returns(bytes memory result) {
+        
+        uint256 length;
+        length = _data.length;
+        if (length > VerusConstants.TICKER_LENGTH_MAX) 
+        {
+            length = VerusConstants.TICKER_LENGTH_MAX;
+        }
+        result = new bytes(length);
+
+        for (uint i = 0; i < length; i++) {
+            result[i] = _data[i];
+        }
+    }
+
 }

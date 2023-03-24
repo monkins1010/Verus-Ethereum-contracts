@@ -7,7 +7,6 @@ import "../Libraries/VerusObjects.sol";
 import "../Libraries/VerusConstants.sol";
 import "../Libraries/VerusObjectsNotarization.sol";
 import "@openzeppelin/contracts/token/ERC721/ERC721.sol";
-import "./AddressMapper.sol";
 import "./Utils.sol";
 
 contract VerusStorage {
@@ -30,7 +29,7 @@ contract VerusStorage {
 
     bool public poolAvailable;
     mapping (bytes32 => bytes32) public storageGlobal;
-    mapping (bytes32 => bytes) private proofs;
+    mapping (bytes32 => bytes) public proofs;
     mapping (bytes32 => uint256) public claimableFees;
     mapping (bytes32 => uint256) public refunds;
     uint64 public notaryHeight;
@@ -42,11 +41,10 @@ contract VerusStorage {
     uint64 poolSize;
 
     //upgrademanager
-    address[13] public contracts;
+    address[] public contracts;
     address[] public pendingContracts;
     VerusObjects.voteState public pendingVoteState;
     bytes32 public newContractsPendingHash;
-    address contractOwner;
     address newBridgeStorageAddress;
 
     mapping (bytes32 => bool) public saltsUsed;
@@ -60,7 +58,7 @@ contract VerusStorage {
 
     bytes[] public bestForks;
 
-    AddressMapper public mapper;
-
     address public owner;
+
+    uint8 constant AMOUNT_OF_CONTRACTS = 11;
 }

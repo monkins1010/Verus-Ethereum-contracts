@@ -75,7 +75,7 @@ contract VerusProof is VerusStorage  {
 
     }
     
-    function checkTransfers(VerusObjects.CReserveTransferImport calldata _import, bytes32 hashedTransfers) public view returns (uint64, uint128) {
+    function checkTransfers(VerusObjects.CReserveTransferImport calldata _import, bytes32 hashedTransfers) public pure returns (uint64, uint128) {
 
         // the first component of the import partial transaction proof is the transaction header, for each version of
         // transaction header, we have a specific offset for the hash of transfers. if we change this, we must
@@ -173,7 +173,7 @@ contract VerusProof is VerusStorage  {
         return (uint64(0), uint128(0));
     }
 
-    function checkCCEValues(bytes memory firstObj, uint32 nextOffset, bytes32 hashedTransfers, uint32 nIndex) public view returns(uint64, uint128)
+    function checkCCEValues(bytes memory firstObj, uint32 nextOffset, bytes32 hashedTransfers, uint32 nIndex) public pure returns(uint64, uint128)
     {
         bytes32 hashReserveTransfers;
         address systemSourceID;
@@ -240,7 +240,7 @@ contract VerusProof is VerusStorage  {
 
     }
 
-    function skipAux (bytes memory firstObj, uint32 nextOffset) public view returns (uint32, uint176 auxDest)
+    function skipAux (bytes memory firstObj, uint32 nextOffset) public pure returns (uint32, uint176 auxDest)
     {
                                                   
             VerusObjectsCommon.UintReader memory readerLen;
@@ -354,6 +354,61 @@ contract VerusProof is VerusStorage  {
         }
         revert(); // i=10, invalid varint stream
     }
+
+    function getTokenList(uint256 start, uint256 end) external view returns(VerusObjects.setupToken[] memory ) {
+
+        uint tokenListLength;
+        tokenListLength = tokenList.length;
+        VerusObjects.setupToken[] memory temp = new VerusObjects.setupToken[](tokenListLength);
+        VerusObjects.mappedToken memory recordedToken;
+        uint i;
+        uint endPoint;
+
+        endPoint = tokenListLength;
+        if (start >= 0 && start < tokenListLength)
+        {
+            i = start;
+        }
+
+        if (end > i && end < tokenListLength)
+        {
+            endPoint = end;
+        }
+
+        for(; i < endPoint; i++) {
+
+            address iAddress;
+            iAddress = tokenList[i];
+            recordedToken = verusToERC20mapping[iAddress];
+            temp[i].iaddress = iAddress;
+            temp[i].flags = recordedToken.flags;
+
+            if (iAddress == VerusConstants.VEth)
+            {
+                temp[i].erc20ContractAddress = address(0);
+                temp[i].name = "Testnet ETH";
+                temp[i].ticker = "ETH";
+            }
+            else if(recordedToken.flags & VerusConstants.TOKEN_LAUNCH == VerusConstants.TOKEN_LAUNCH )
+            {
+                Token token = Token(recordedToken.erc20ContractAddress);
+                temp[i].erc20ContractAddress = address(token);
+                temp[i].name = recordedToken.name;
+                temp[i].ticker = token.symbol();
+            }
+            else if(recordedToken.flags & VerusConstants.TOKEN_ETH_NFT_DEFINITION == VerusConstants.TOKEN_ETH_NFT_DEFINITION)
+            {
+                temp[i].erc20ContractAddress = recordedToken.erc20ContractAddress;
+                temp[i].name = recordedToken.name;
+                temp[i].tokenID = recordedToken.tokenID;
+            }
+            
+        }
+
+        return temp;
+    }
+
+
 
     
 }

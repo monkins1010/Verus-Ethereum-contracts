@@ -12,22 +12,6 @@ contract VerusCrossChainExport{
 
     VerusObjects.CCurrencyValueMap[] currencies;
     VerusObjects.CCurrencyValueMap[] fees;
-    VerusSerializer verusSerializer;
-
-    address upgradeContract;
-
-    constructor(address verusSerializerAddress, address upgradeAddress) {
-        verusSerializer = VerusSerializer(verusSerializerAddress);
-        upgradeContract = upgradeAddress;
-    }
-
-    function setContract(address contractAddress) public {
-
-        require(msg.sender == upgradeContract);
-
-        verusSerializer = VerusSerializer(contractAddress);
-
-    }
 
     function quickSort(VerusObjects.CCurrencyValueMap[] storage currencey, int left, int right) private {
         int i = left;
@@ -70,7 +54,7 @@ contract VerusCrossChainExport{
 
         VerusObjects.CCrossChainExport memory workingCCE;
         //create a hash of the transfers and then 
-        bytes memory serializedTransfers = verusSerializer.serializeCReserveTransfers(transfers, false);
+        bytes memory serializedTransfers = VerusSerializer.serializeCReserveTransfers(transfers, false);
         bytes32 hashedTransfers = keccak256(serializedTransfers);
 
         //create the Cross ChainExport to then serialize and hash
@@ -139,7 +123,7 @@ contract VerusCrossChainExport{
         delete currencies;
         delete fees;
 
-        return verusSerializer.serializeCCrossChainExport(workingCCE);
+        return VerusSerializer.serializeCCrossChainExport(workingCCE);
 
     }
     

@@ -7,8 +7,6 @@ pragma abicoder v2;
 import "../Libraries/VerusConstants.sol";
 import "../Libraries/VerusObjectsNotarization.sol";
 import "../VerusBridge/VerusSerializer.sol";
-import "../VerusNotarizer/VerusNotarizerStorage.sol";
-import "../VerusBridge/VerusBridgeMaster.sol";
 import "@openzeppelin/contracts/utils/math/SafeMath.sol";
 import "./NotarizationSerializer.sol";
 import "../MMR/VerusBlake2b.sol";
@@ -27,6 +25,8 @@ contract VerusNotarizer is VerusStorage {
     uint8 constant NUM_ADDRESSES_FOR_REVOKE = 2;
     uint8 constant COMPLETE = 2;
     uint8 constant ERROR = 4;
+    uint32 constant CONFIRMED_PROPOSER = 128;
+    uint32 constant LATEST_PROPOSER = 256;
 
 
     // notarization vdxf key
@@ -103,9 +103,9 @@ contract VerusNotarizer is VerusStorage {
 
         blakeNotarizationHash = serializedNotarization.createHash();
 
-        address notarizationSerializerAddress = mapper.getLogicContract(uint(VerusConstants.ContractType.NotarizationSerializer));
+        address notarizationSerializerAddress = contracts[uint(VerusConstants.ContractType.NotarizationSerializer)];
 
-        (bool success, bytes memory returnBytes) = notarizationSerializerAddress.call(abi.encodeWithSignature("deserilizeNotarization(bytes)", serializedNotarization));
+        (bool success, bytes memory returnBytes) = notarizationSerializerAddress.delegatecall(abi.encodeWithSignature("deserilizeNotarization(bytes)", serializedNotarization));
         require(success);
 
         (bytes32 launchedAndProposer, bytes32 prevnotarizationtxid, bytes32 hashprevnotarization, bytes32 stateRoot, bytes32 blockHash, 
@@ -116,7 +116,7 @@ contract VerusNotarizer is VerusStorage {
         if (!poolAvailable && (((uint256(launchedAndProposer) >> 176) & 0xff) == 1)) { //shift to read if bridge launched in packed uint256
             poolAvailable = true;
             
-            address verusBridgeAddress = mapper.getLogicContract(uint(VerusConstants.ContractType.VerusBridge));
+            address verusBridgeAddress = contracts[uint(VerusConstants.ContractType.CreateExport)];
 
             (bool success2,) = verusBridgeAddress.delegatecall(abi.encodeWithSignature("sendToVRSC(uint64,address,uint8)", 0, address(0), VerusConstants.DEST_PKH));
             require(success2);
@@ -249,7 +249,7 @@ contract VerusNotarizer is VerusStorage {
             //pack vout in at the end of the proposer 22 bytes ctransferdest
             encodeStandardNotarization(notarizations[1], abi.encode(hashedNotarization, 
                 txidHash, stateRoot, proposer));
-            notaryHeight[uint64(block.number)];
+            notaryHeight = uint64(block.number);
 
         }
         else
@@ -272,7 +272,53 @@ contract VerusNotarizer is VerusStorage {
         }
     }
 
+    function getNewProof(bool latest) public payable returns (bytes memory) {
 
+        uint256 feeCost;
+
+        feeCost = latest ? (0.0125 ether) : (0.00625 ether);
+
+        require(msg.value == feeCost, "Not enough fee");
+
+        uint256 feeShare = (msg.value / VerusConstants.SATS_TO_WEI_STD) / 2;
+        uint256 remainder = (msg.value / VerusConstants.SATS_TO_WEI_STD) % 2;
+
+        uint256 proposerAndHeight;
+        bytes memory proposerBytes = bestForks[0];
+
+        uint32 proposeroffset = latest ? LATEST_PROPOSER : CONFIRMED_PROPOSER;
+
+        assembly {
+                proposerAndHeight := mload(add(proposerBytes, proposeroffset))
+        } 
+        
+        // Proposer and notaries get share of fees
+        // any remainder from divide by 2 or divide by notaries gets added
+        feeShare += setNotaryFees(feeShare);
+        setClaimedFees(bytes32(uint256(uint176(proposerAndHeight))), (feeShare + remainder));
+
+        return proofs[(bytes32(proposerAndHeight >> OFFSET_FOR_HEIGHT))];
+    }
+
+    function setNotaryFees(uint256 notaryFees) private returns (uint64 remainder){  //sent in as SATS
+      
+        uint256 numOfNotaries = notaries.length;
+        uint64 notariesShare = uint64(notaryFees / numOfNotaries);
+        for (uint i=0; i < numOfNotaries; i++)
+        {
+            uint176 notary;
+            notary = uint176(uint160(notaryAddressMapping[notaries[i]].main));
+            notary |= (uint176(0x0c14) << 160); //set at type eth
+            claimableFees[bytes32(uint256(notary))] += notariesShare;
+        }
+        remainder = uint64(notaryFees % numOfNotaries);
+    }
+
+    function setClaimedFees(bytes32 _address, uint256 fees) private returns (uint256)
+    {
+        claimableFees[_address] += fees;
+        return claimableFees[_address];
+    }
 
 
 }

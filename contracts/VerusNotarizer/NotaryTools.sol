@@ -7,8 +7,6 @@ pragma abicoder v2;
 import "../Libraries/VerusConstants.sol";
 import "../Libraries/VerusObjectsNotarization.sol";
 import "../VerusBridge/VerusSerializer.sol";
-import "../VerusNotarizer/VerusNotarizerStorage.sol";
-import "../VerusBridge/VerusBridgeMaster.sol";
 import "@openzeppelin/contracts/utils/math/SafeMath.sol";
 import "./NotarizationSerializer.sol";
 import "../MMR/VerusBlake2b.sol";
@@ -38,36 +36,59 @@ contract NotaryTools is VerusStorage {
     function getNotaryETHAddress(uint number) public view returns (address)
     {
         return notaryAddressMapping[notaries[number]].main;
-
-    }
-
-    function getNewProofs (bytes32 height) public view returns (bytes memory) {
-        
-        require(msg.sender == address(verusBridgeMaster));
-
-        return verusNotarizerStorage.getProof(bytes32(height >> OFFSET_FOR_HEIGHT));
-
     }
 
     function getProof(uint height) public view returns (bytes memory) {
 
-        require(msg.sender == address(verusBridgeMaster));
-        
         VerusObjectsNotarization.NotarizationForks[] memory latestForks;
 
         latestForks = decodeNotarization(0);
 
         require(height < uint256(latestForks[0].proposerPacked >> OFFSET_FOR_HEIGHT), "Latest proofs require paid service");
 
-        return verusNotarizerStorage.getProof(bytes32(height));
+        return proofs[bytes32(height)];
     }
 
-    function getProofCosts(bool latest) public pure returns (uint256) {
+    function decodeNotarization(uint index) public view returns (VerusObjectsNotarization.NotarizationForks[] memory)
+    {
+        uint32 nextOffset;
 
-        return latest ? (0.0125 ether) : (0.00625 ether);
+        bytes storage tempArray = bestForks[index];
+
+        bytes32 hashOfNotarization;
+        bytes32 txid;
+        bytes32 stateRoot;
+        bytes32 packedPositions;
+        bytes32 slotHash;
+        VerusObjectsNotarization.NotarizationForks[] memory retval = new VerusObjectsNotarization.NotarizationForks[]((tempArray.length / 128) + 1);
+        if (tempArray.length > 1)
+        {
+            bytes32 slot;
+            assembly {
+                        mstore(add(slot, 32),tempArray.slot)
+                        slotHash := keccak256(add(slot, 32), 32)
+                        }
+
+            for (int i = 0; i < int(tempArray.length / 128); i++) 
+            {
+                assembly {
+                    hashOfNotarization := sload(add(slotHash,nextOffset))
+                    nextOffset := add(nextOffset, 1)  
+                    txid := sload(add(slotHash,nextOffset))
+                    nextOffset := add(nextOffset, 1) 
+                    stateRoot := sload(add(slotHash,nextOffset))
+                    nextOffset := add(nextOffset, 1) 
+                    packedPositions :=sload(add(slotHash,nextOffset))
+                    nextOffset := add(nextOffset, 1)
+                }
+
+                retval[uint(i)] =  VerusObjectsNotarization.NotarizationForks(hashOfNotarization, txid, stateRoot, packedPositions);
+            }
+        }
+        return retval;
     }
 
-     function recoverString(bytes memory be, uint8 vs, bytes32 rs, bytes32 ss) public view returns (address)
+     function recoverString(bytes memory be, uint8 vs, bytes32 rs, bytes32 ss) public pure returns (address)
     {
         bytes32 hashValue;
 
@@ -82,8 +103,8 @@ contract NotaryTools is VerusStorage {
 
         bytes memory be; 
 
-        require(verusUpgradeContract.saltsUsed(_revokePacket.salt) == false, "salt Already used");
-        verusUpgradeContract.setSaltsUsed(_revokePacket.salt);
+        require(saltsUsed[_revokePacket.salt] == false, "salt Already used");
+        saltsUsed[_revokePacket.salt] = true;
 
         be = bytesToString(abi.encodePacked(uint8(TYPE_REVOKE), _revokePacket.salt));
 
@@ -103,8 +124,8 @@ contract NotaryTools is VerusStorage {
 
         bytes memory be; 
 
-        require(verusUpgradeContract.saltsUsed(_newContractPackage.salt) == false, "salt Already used");
-        verusUpgradeContract.setSaltsUsed(_newContractPackage.salt);
+        require(saltsUsed[_newContractPackage.salt] == false, "salt Already used");
+        saltsUsed[_newContractPackage.salt] = true;
         
         require(_newContractPackage.contracts.length == NUM_ADDRESSES_FOR_REVOKE, "Input Identities wrong length");
         require(_newContractPackage.upgradeType == TYPE_RECOVER, "Wrong type of package");
@@ -134,6 +155,27 @@ contract NotaryTools is VerusStorage {
             _string[1+i*2] = HEX[uint8(input[i] & 0x0f)];
         }
         return _string;
+    }
+
+    function launchContractTokens(bytes calldata data) external {
+
+        VerusObjects.setupToken[] memory tokensToDeploy = abi.decode(data, (VerusObjects.setupToken[]));
+
+        for (uint256 i = 0; i < tokensToDeploy.length; i++) {
+
+            address notarizationSerializerAddress = contracts[uint(VerusConstants.ContractType.NotarizationSerializer)];
+
+            (bool success,) = notarizationSerializerAddress.delegatecall(abi.encodeWithSignature("recordToken(address,address,string,string,uint8,uint256)",                 
+                                                                        tokensToDeploy[i].iaddress,
+                                                                        tokensToDeploy[i].erc20ContractAddress,
+                                                                        tokensToDeploy[i].name,
+                                                                        tokensToDeploy[i].ticker,
+                                                                        tokensToDeploy[i].flags,
+                                                                        uint256(0)));
+            require(success);
+
+        }
+
     }
 
 }

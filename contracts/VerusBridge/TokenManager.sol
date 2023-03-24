@@ -8,8 +8,7 @@ import "./Token.sol";
 import "../Libraries/VerusConstants.sol";
 import "../Libraries/VerusObjects.sol";
 import "./VerusSerializer.sol";
-import "../VerusBridge/VerusBridge.sol";
-import "../VerusBridge/VerusBridgeStorage.sol";
+import "../VerusBridge/CreateExports.sol";
 import "../VerusBridge/UpgradeManager.sol";
 import "../Libraries/VerusObjectsCommon.sol";
 import "@openzeppelin/contracts/token/ERC721/ERC721.sol";
@@ -19,81 +18,6 @@ import "../Storage/Utils.sol";
 contract TokenManager is VerusStorage {
 
     using Utils for uint256;
-
-    function getTokenList(uint start, uint end) public view returns(VerusObjects.setupToken[] memory ) {
-
-        uint tokenListLength;
-        tokenListLength = tokenList.length;
-        VerusObjects.setupToken[] memory temp = new VerusObjects.setupToken[](tokenListLength);
-        VerusObjects.mappedToken memory recordedToken;
-        uint i;
-        uint endPoint;
-
-        endPoint = tokenListLength;
-        if (start >= 0 && start < tokenListLength)
-        {
-            i = start;
-        }
-
-        if (end > i && end < tokenListLength)
-        {
-            endPoint = end;
-        }
-
-        for(; i < endPoint; i++) {
-
-            address iAddress;
-            iAddress = tokenList[i];
-            recordedToken = verusToERC20mapping[iAddress];
-            temp[i].iaddress = iAddress;
-            temp[i].flags = recordedToken.flags;
-
-            if (iAddress == VerusConstants.VEth)
-            {
-                temp[i].erc20ContractAddress = address(0);
-                temp[i].name = "Testnet ETH";
-                temp[i].ticker = "ETH";
-            }
-            else if(recordedToken.flags & VerusConstants.TOKEN_LAUNCH == VerusConstants.TOKEN_LAUNCH )
-            {
-                Token token = Token(recordedToken.erc20ContractAddress);
-                temp[i].erc20ContractAddress = address(token);
-                temp[i].name = recordedToken.name;
-                temp[i].ticker = token.symbol();
-            }
-            else if(recordedToken.flags & VerusConstants.TOKEN_ETH_NFT_DEFINITION == VerusConstants.TOKEN_ETH_NFT_DEFINITION)
-            {
-                temp[i].erc20ContractAddress = recordedToken.erc20ContractAddress;
-                temp[i].name = recordedToken.name;
-                temp[i].tokenID = recordedToken.tokenID;
-            }
-            
-        }
-
-        return temp;
-    }
-  
-
-    function ERC20Registered(address _iaddress) public view returns (bool) {
-
-        return verusToERC20mapping[_iaddress].flags > 0;
-        
-    }
-
-    function byteSlice(bytes memory _data) internal pure returns(bytes memory result) {
-        
-        uint256 length;
-        length = _data.length;
-        if (length > VerusConstants.TICKER_LENGTH_MAX) 
-        {
-            length = VerusConstants.TICKER_LENGTH_MAX;
-        }
-        result = new bytes(length);
-
-        for (uint i = 0; i < length; i++) {
-            result[i] = _data[i];
-        }
-    }
 
     function getName(address cont) public view returns (string memory)
     {
@@ -111,7 +35,7 @@ contract TokenManager is VerusStorage {
         
         for (uint j = 0; j < _tx.length; j++)
         {
-            if (ERC20Registered(_tx[j].iaddress) || _tx[j].iaddress == address(0))
+            if (verusToERC20mapping[_tx[j].iaddress].flags > 0 || _tx[j].iaddress == address(0))
                 continue;
 
             string memory outputName;
@@ -147,23 +71,8 @@ contract TokenManager is VerusStorage {
                 outputName = _tx[j].name;
             }
 
-            recordToken(_tx[j].iaddress, _tx[j].ERCContract, outputName, string(byteSlice(bytes(_tx[j].name))), uint8(_tx[j].flags), _tx[j].tokenID);
+            recordToken(_tx[j].iaddress, _tx[j].ERCContract, outputName, string(VerusSerializer.byteSlice(bytes(_tx[j].name))), uint8(_tx[j].flags), _tx[j].tokenID);
         }
-    }
-
-    function launchContractTokens(VerusObjects.setupToken[] memory tokensToDeploy) public  {
-
-        for (uint256 i = 0; i < tokensToDeploy.length; i++) {
-            recordToken(
-                tokensToDeploy[i].iaddress,
-                tokensToDeploy[i].erc20ContractAddress,
-                tokensToDeploy[i].name,
-                tokensToDeploy[i].ticker,
-                tokensToDeploy[i].flags,
-                uint256(0)
-            );
-        }
-
     }
 
     function recordToken(
@@ -195,32 +104,16 @@ contract TokenManager is VerusStorage {
             ERCContract = ethContractAddress;
         }
 
-        tokenList.push(iaddress);
+        tokenList.push(_iaddress);
         verusToERC20mapping[_iaddress] = VerusObjects.mappedToken(ERCContract, flags, tokenList.length, name, tokenID);
     
         return ERCContract;
     }
 
-    function convertFromVerusNumber(uint256 a,uint8 decimals) public pure returns (uint256) {
-        uint8 power = 10; //default value for 18
-        uint256 c = a;
-
-        if(decimals > 8 ) {
-            power = decimals - 8;// number of decimals in verus
-            c = a * (10 ** power);
-        }else if(decimals < 8){
-            power = 8 - decimals;// number of decimals in verus
-            c = a / (10 ** power);
-        }
-      
-        return c;
-    }
-
-
     function processTransactions(bytes calldata serializedTransfers, uint8 numberOfTransfers) 
-                public returns (VerusObjects.ETHPayments[] memory payments, bytes memory refunds)
+                external returns (VerusObjects.ETHPayments[] memory payments, bytes memory refunds)
     {
-        require(msg.sender == verusBridge, "pt:vb_only");
+
         VerusObjects.PackedSend[] memory transfers;
         VerusObjects.PackedCurrencyLaunch[] memory launchTxs;
         uint176[] memory refundAddresses;
@@ -245,7 +138,7 @@ contract TokenManager is VerusStorage {
             if (flags & VerusConstants.TOKEN_ETH_SEND == VerusConstants.TOKEN_ETH_SEND) 
             {
                 if (payable(address(uint160(transfers[i].destinationAndFlags))).send(0)) {
-                // ETH is held in VerusBridgemaster, create array to bundle payments
+                // ETH is held in Delegator, create array to bundle payments
                     payments[ETHPaymentCounter] = VerusObjects.ETHPayments(
                         address(uint160(transfers[i].destinationAndFlags)), 
                         (transfers[i].currencyAndAmount >> 160) * VerusConstants.SATS_TO_WEI_STD); //SATS to WEI (only for ETH)
@@ -277,7 +170,7 @@ contract TokenManager is VerusStorage {
 
         for(uint256 i = 0; i < trans.length; i++)
         {
-            VerusObjects.mappedToken memory tempToken = verusBridgeStorage.getERCMapping(address(uint160(trans[i].currencyAndAmount)));
+            VerusObjects.mappedToken memory tempToken = verusToERC20mapping[address(uint160(trans[i].currencyAndAmount))];
             address destinationAddress;
             destinationAddress  = address(uint160(trans[i].destinationAndFlags));
             sendFlags = uint32(trans[i].destinationAndFlags >> 160);
@@ -310,15 +203,13 @@ contract TokenManager is VerusStorage {
                 if (destinationAddress != address(0))
                 {
                     VerusNft t = VerusNft(verusToERC20mapping[address(uint160(trans[i].currencyAndAmount))].erc20ContractAddress);
-                    t.mint(tokenId, tempToken.name, destinationAddress);
+                    t.mint(address(uint160(trans[i].currencyAndAmount)), tempToken.name, destinationAddress);
                 }
             }
         } 
     }
 
     function mintOrTransferToken(Token token, address destinationAddress, uint256 amount, bool mint ) private {
-
-        require(address(tokenManager) == msg.sender);
 
             if (mint) 
             {   
@@ -327,7 +218,7 @@ contract TokenManager is VerusStorage {
             else 
             {
                 (bool success, ) = address(token).call(abi.encodeWithSignature("transfer(address,uint256)", destinationAddress, amount));
-                require(success, "transfer of token failed");
+                require(success);
             }
     }
 }

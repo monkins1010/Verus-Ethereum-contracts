@@ -7,8 +7,9 @@ import "../Libraries/VerusObjects.sol";
 import "../VerusBridge/VerusSerializer.sol";
 import "../Libraries/VerusObjectsCommon.sol";
 import "../VerusBridge/UpgradeManager.sol";
+import "../Storage/StorageMaster.sol";
 
-contract NotarizationSerializer {
+contract NotarizationSerializer is VerusStorage {
 
     uint8 constant CURRENCY_LENGTH = 20;
     uint8 constant BYTES32_LENGTH = 32;
@@ -20,6 +21,8 @@ contract NotarizationSerializer {
     uint8 constant AUX_DEST_ETH_VEC_LENGTH = 22;
     uint8 constant AUX_DEST_VOTE_HASH = 21;
     uint8 constant VOTE_BYTE_POSITION = 22;
+    uint8 constant REQUIREDAMOUNTOFVOTES = 100;
+    uint8 constant WINNINGAMOUNT = 51;
 
     function readVarint(bytes memory buf, uint32 idx) public pure returns (uint32 v, uint32 retidx) {
 
@@ -107,7 +110,7 @@ contract NotarizationSerializer {
 
     }
 
-    function deserializeCoinbaseCurrencyState(bytes memory notarization, uint32 nextOffset) private view returns (uint16, uint32)
+    function deserializeCoinbaseCurrencyState(bytes memory notarization, uint32 nextOffset) private pure returns (uint16, uint32)
     {
         
         address currencyid;
@@ -151,7 +154,7 @@ contract NotarizationSerializer {
         return (bridgeLaunched, nextOffset);
     }
 
-    function deserializeProofRoots (bytes memory notarization, uint32 size, uint32 nextOffset) private view returns (bytes32 stateRoot, bytes32 blockHash, uint32 height)
+    function deserializeProofRoots (bytes memory notarization, uint32 size, uint32 nextOffset) private pure returns (bytes32 stateRoot, bytes32 blockHash, uint32 height)
     {
         for (uint i = 0; i < size; i++)
         {
@@ -235,13 +238,24 @@ contract NotarizationSerializer {
                             voteHash := mload(add(add(firstObj, nextOffset),AUX_DEST_VOTE_HASH))
                             voteByte := mload(add(add(firstObj, nextOffset),VOTE_BYTE_POSITION))
                         }
-                        bool voted = (voteHash == verusUpgradeContract.newContractsPendingHash() && voteByte == 1);
-                        verusUpgradeContract.updateVote(voted);
+                        bool voted = (voteHash == newContractsPendingHash && voteByte == 1);
+                        updateVote(voted);
                     }
 
                     nextOffset = (readerLen.offset + uint32(readerLen.value));
             }
             return (nextOffset, auxDest);
+    }
+
+    function updateVote(bool voted) private {
+
+        if (pendingVoteState.count < REQUIREDAMOUNTOFVOTES) {
+            pendingVoteState.count++;
+        
+            if(voted) {
+                pendingVoteState.agree++;
+            }
+        }
     }
 
     function readCompactSizeLE(bytes memory incoming, uint32 offset) public pure returns(VerusObjectsCommon.UintReader memory) {
