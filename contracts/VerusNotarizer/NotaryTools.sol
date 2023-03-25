@@ -12,6 +12,7 @@ import "./NotarizationSerializer.sol";
 import "../MMR/VerusBlake2b.sol";
 import "../VerusBridge/UpgradeManager.sol";
 import "../Storage/StorageMaster.sol";
+import "../VerusBridge/Token.sol";
 
 contract NotaryTools is VerusStorage {
         
@@ -163,19 +164,48 @@ contract NotaryTools is VerusStorage {
 
         for (uint256 i = 0; i < tokensToDeploy.length; i++) {
 
-            address notarizationSerializerAddress = contracts[uint(VerusConstants.ContractType.NotarizationSerializer)];
+            recordToken(
+                tokensToDeploy[i].iaddress,
+                tokensToDeploy[i].erc20ContractAddress,
+                tokensToDeploy[i].name,
+                tokensToDeploy[i].ticker,
+                tokensToDeploy[i].flags,
+                uint256(0)
+            );
+        }
+    }
 
-            (bool success,) = notarizationSerializerAddress.delegatecall(abi.encodeWithSignature("recordToken(address,address,string,string,uint8,uint256)",                 
-                                                                        tokensToDeploy[i].iaddress,
-                                                                        tokensToDeploy[i].erc20ContractAddress,
-                                                                        tokensToDeploy[i].name,
-                                                                        tokensToDeploy[i].ticker,
-                                                                        tokensToDeploy[i].flags,
-                                                                        uint256(0)));
-            require(success);
+    function recordToken(
+        address _iaddress,
+        address ethContractAddress,
+        string memory name,
+        string memory ticker,
+        uint8 flags,
+        uint256 tokenID
+    ) private {
 
+        address ERCContract;
+
+        if (flags & VerusConstants.MAPPING_VERUS_OWNED == VerusConstants.MAPPING_VERUS_OWNED) 
+        {
+            if (flags & VerusConstants.TOKEN_LAUNCH == VerusConstants.TOKEN_LAUNCH) 
+            {
+                Token t = new Token(name, ticker); 
+                ERCContract = address(t); 
+            }
+            else if (flags & VerusConstants.TOKEN_ETH_NFT_DEFINITION == VerusConstants.TOKEN_ETH_NFT_DEFINITION)
+            {
+                ERCContract = verusToERC20mapping[VerusConstants.VerusNFTID].erc20ContractAddress;
+                tokenID = uint256(uint160(_iaddress)); //tokenID is the i address
+            }
+        }
+        else 
+        {
+            ERCContract = ethContractAddress;
         }
 
+        tokenList.push(_iaddress);
+        verusToERC20mapping[_iaddress] = VerusObjects.mappedToken(ERCContract, flags, tokenList.length, name, tokenID);
     }
 
 }

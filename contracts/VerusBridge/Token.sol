@@ -38,10 +38,10 @@ contract VerusNft is ERC721URIStorage {
         owner = msg.sender;
     }
     
-    function mint(address tokenId, string memory tokenURI, address recipient) public {
+    function mint(address tokenId, string memory inTokenURI, address recipient) public {
         require(msg.sender == owner,"Only the contract owner can Mint NFTS");
         _mint(recipient, uint256(uint160(tokenId)));
-        _setTokenURI(uint256(uint160(tokenId)), tokenURI);
+        _setTokenURI(uint256(uint160(tokenId)), inTokenURI);
 
     }
 

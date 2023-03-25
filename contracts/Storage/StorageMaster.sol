@@ -45,7 +45,6 @@ contract VerusStorage {
     address[] public pendingContracts;
     VerusObjects.voteState public pendingVoteState;
     bytes32 public newContractsPendingHash;
-    address newBridgeStorageAddress;
 
     mapping (bytes32 => bool) public saltsUsed;
 

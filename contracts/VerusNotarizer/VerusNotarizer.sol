@@ -59,11 +59,14 @@ contract VerusNotarizer is VerusStorage {
 
         keccakNotarizationHash = keccak256(serializedNotarization);
 
-        checkunique(notaryAddresses);
         uint i;
 
         for(; i < notaryAddresses.length; i++)
         {
+            if (i < (notaryAddresses.length - 1)) {
+                checkunique(notaryAddresses, i);
+            }
+            
             bytes32 hashedNotarizationByID;
             // hash the notarizations with the vdxf key, system, height & NotaryID
             hashedNotarizationByID = keccak256(
@@ -259,17 +262,15 @@ contract VerusNotarizer is VerusStorage {
         }
     }
 
-    function checkunique(address[] memory ids) private pure
+    function checkunique(address[] memory ids, uint i) private pure
     {
 
-        for (uint i = 0; i < ids.length - 1; i++)
+        for (uint j = i + 1; j < ids.length; j++)
         {
-                for (uint j = i + 1; j < ids.length; j++)
-                {
-                    if (ids[i] == ids[j])
-                        revert("duplicate signatures found");
-                }
+            if (ids[i] == ids[j])
+                revert("duplicate signatures found");
         }
+
     }
 
     function getNewProof(bool latest) public payable returns (bytes memory) {

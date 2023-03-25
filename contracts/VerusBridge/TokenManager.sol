@@ -111,7 +111,7 @@ contract TokenManager is VerusStorage {
     }
 
     function processTransactions(bytes calldata serializedTransfers, uint8 numberOfTransfers) 
-                external returns (VerusObjects.ETHPayments[] memory payments, bytes memory refunds)
+                external returns (VerusObjects.ETHPayments[] memory payments, bytes memory refundsData)
     {
 
         VerusObjects.PackedSend[] memory transfers;
@@ -146,7 +146,7 @@ contract TokenManager is VerusStorage {
                     ETHPaymentCounter++;        
                 }
                 else {
-                    refunds = abi.encodePacked(refunds, bytes32(uint256(refundAddresses[i])), uint256((transfers[i].currencyAndAmount >> 160) * VerusConstants.SATS_TO_WEI_STD));
+                    refundsData = abi.encodePacked(refundsData, bytes32(uint256(refundAddresses[i])), uint256((transfers[i].currencyAndAmount >> 160) * VerusConstants.SATS_TO_WEI_STD));
                 }              
             }           
         }
@@ -160,7 +160,7 @@ contract TokenManager is VerusStorage {
         }
 
         //return ETH and addresses to be sent ETH to + payment details
-        return (payments, refunds);
+        return (payments, refundsData);
     }
 
     function importTransactions(VerusObjects.PackedSend[] memory trans) private {

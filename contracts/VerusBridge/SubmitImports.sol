@@ -10,7 +10,7 @@ import "./Token.sol";
 import "../Storage/StorageMaster.sol";
 
 
-contract SubmitImport is VerusStorage {
+contract SubmitImports is VerusStorage {
     function sendToVRSC(uint64 value, address sendTo, uint8 destinationType) public 
     {
         VerusObjects.CReserveTransfer memory LPtransfer;
@@ -91,7 +91,7 @@ contract SubmitImport is VerusStorage {
 
         address verusProofAddress = contracts[uint(VerusConstants.ContractType.VerusProof)];
 
-        (success, returnBytes) = verusProofAddress.call(abi.encodeWithSignature("proveImports(bytes)", abi.encode(data, hashOfTransfers)));
+        (success, returnBytes) = verusProofAddress.delegatecall(abi.encodeWithSignature("proveImports(bytes)", abi.encode(data, hashOfTransfers)));
         require(success);
 
         (fees, CCEHeightsAndnIndex) = abi.decode(returnBytes, (uint64, uint128));// verusProof.proveImports(_import, hashOfTransfers); 
@@ -109,14 +109,14 @@ contract SubmitImport is VerusStorage {
         
         address verusTokenManagerAddress = contracts[uint(VerusConstants.ContractType.TokenManager)];
 
-        (success, returnBytes) = verusTokenManagerAddress.call(abi.encodeWithSignature("processTransactions(bytes,uint8)", _import.serializedTransfers, uint8(CCEHeightsAndnIndex >> 96)));
+        (success, returnBytes) = verusTokenManagerAddress.delegatecall(abi.encodeWithSignature("processTransactions(bytes,uint8)", _import.serializedTransfers, uint8(CCEHeightsAndnIndex >> 96)));
         require(success);
 
-        bytes memory refunds;
-        (_payments, refunds) = abi.decode(returnBytes, (VerusObjects.ETHPayments[], bytes)); //tokenManager.processTransactions(_import.serializedTransfers, uint8(CCEHeightsAndnIndex >> 96));
+        bytes memory refundsData;
+        (_payments, refundsData) = abi.decode(returnBytes, (VerusObjects.ETHPayments[], bytes)); //tokenManager.processTransactions(_import.serializedTransfers, uint8(CCEHeightsAndnIndex >> 96));
         
         sendEth(_payments);
-        refund(refunds);
+        refund(refundsData);
 
         return fees;
 

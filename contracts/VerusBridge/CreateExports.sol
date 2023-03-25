@@ -9,7 +9,7 @@ import "../Libraries/VerusConstants.sol";
 import "./Token.sol";
 import "../Storage/StorageMaster.sol";
 
-contract CreateExport is VerusStorage {
+contract CreateExports is VerusStorage {
 
     function subtractPoolSize(uint64 _amount) private returns (bool) {
 
@@ -26,7 +26,7 @@ contract CreateExport is VerusStorage {
 
         address verusExportManagerAddress = contracts[uint(VerusConstants.ContractType.ExportManager)];
 
-        (bool success, bytes memory feeBytes) = verusExportManagerAddress.call(abi.encodeWithSignature("checkExport(bytes,uint256,bool)", data, msg.value, poolAvailable));
+        (bool success, bytes memory feeBytes) = verusExportManagerAddress.delegatecall(abi.encodeWithSignature("checkExport(bytes,uint256,bool)", data, msg.value));
         require(success);
 
         fees = abi.decode(feeBytes, (uint256)); //fees = exportManager.checkExport(transfer, paidValue, poolAvailable);
@@ -113,7 +113,6 @@ contract CreateExport is VerusStorage {
         // If notarization happens increment CCE to next boundary
         // If changing from pool closed to pool open create a boundary (As all sends will then go through the bridge)
         uint64 blockNumber = uint64(block.number);
-        uint64 notaryHeight = notaryHeight;
         uint64 cceStartHeight = cceLastStartHeight;
         uint64 cceEndHeight = cceLastEndHeight;
         uint64 lastCCEExportHeight = cceLastStartHeight;
@@ -150,10 +149,10 @@ contract CreateExport is VerusStorage {
 
         address crossChainExportAddress = contracts[uint(VerusConstants.ContractType.VerusCrossChainExport)];
 
-        (bool success, bytes memory serializedCCE) = crossChainExportAddress.call(abi.encodeWithSignature("generateCCE(bytes)", abi.encode(pendingTransfers.transfers, poolAvailable, cceStartHeight, cceEndHeight)));
+        (bool success, bytes memory returnData) = crossChainExportAddress.call(abi.encodeWithSignature("generateCCE(bytes)", abi.encode(pendingTransfers.transfers, poolAvailable, cceStartHeight, cceEndHeight)));
         require(success);
 
-     //   bytes memory serializedCCE = verusCCE.generateCCE(pendingTransfers.transfers, poolAvailable, cceStartHeight, cceEndHeight);
+        bytes memory serializedCCE = abi.decode(returnData, (bytes)); //verusCCE.generateCCE(pendingTransfers.transfers, poolAvailable, cceStartHeight, cceEndHeight);
         bytes32 prevHash;
  
         if(pendingTransfers.transfers.length == 1)

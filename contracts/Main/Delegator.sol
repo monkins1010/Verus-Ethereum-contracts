@@ -3,11 +3,25 @@ pragma solidity >=0.6.0 <0.9.0;
 pragma abicoder v2;
 
 import "../Storage/StorageMaster.sol";
+import "../VerusBridge/Token.sol";
 
 contract Delegator is VerusStorage {
     
-    constructor() {
+    constructor(address[] memory _notaries, address[] memory _notariesEthAddress, address[] memory _notariesColdStoreEthAddress) {
         poolSize = 500000000000;
+
+        for(uint i =0; i < _notaries.length; i++){
+            notaryAddressMapping[_notaries[i]] = VerusObjects.notarizer(_notariesEthAddress[i], _notariesColdStoreEthAddress[i], VerusConstants.NOTARY_VALID);
+            notaries.push(_notaries[i]);
+        }
+        VerusNft t = new VerusNft(); 
+
+        verusToERC20mapping[VerusConstants.VerusNFTID] = 
+            VerusObjects.mappedToken(address(t), uint8(VerusConstants.MAPPING_VERUS_OWNED + VerusConstants.TOKEN_ETH_NFT_DEFINITION),
+                0, "VerusNFT", uint256(0));  
+
+        tokenList.push(VerusConstants.VerusNFTID);
+    
     }
     
     receive() external payable {
@@ -54,7 +68,7 @@ contract Delegator is VerusStorage {
 
         address logic = contracts[uint(VerusConstants.ContractType.VerusNotaryTools)];
 
-        (bool success,) = logic.delegatecall(abi.encodeWithSignature("launchContractTokens(data)", data));
+        (bool success,) = logic.delegatecall(abi.encodeWithSignature("launchContractTokens(bytes)", data));
         require(success);
 
     }
@@ -119,5 +133,24 @@ contract Delegator is VerusStorage {
         (bool success,) = upgradeManagerAddress.delegatecall(abi.encodeWithSignature("setInitialContracts(address[])", _newContractAddress));
         require(success);
 
+    }
+
+    function upgradeContracts(bytes calldata data) external returns (uint8) {
+
+        address upgradeManagerAddress = contracts[uint(VerusConstants.ContractType.UpgradeManager)];
+
+        (bool success, bytes memory returnedData) = upgradeManagerAddress.delegatecall(abi.encodeWithSignature("upgradeContracts(bytes)", data));
+        require(success);
+        
+        return abi.decode(returnedData, (uint8));
+    }
+
+    function runContractsUpgrade() public returns (uint8) {
+      
+        address upgradeManagerAddress = contracts[uint(VerusConstants.ContractType.UpgradeManager)];
+
+        (bool success, bytes memory returnedData) = upgradeManagerAddress.delegatecall(abi.encodeWithSignature("runContractsUpgrade()"));
+        require(success);
+        return abi.decode(returnedData, (uint8));
     }
 }

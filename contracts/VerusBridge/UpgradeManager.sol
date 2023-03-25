@@ -49,18 +49,23 @@ contract UpgradeManager is VerusStorage {
         contractOwner = address(0);  //Blow the fuse i.e. make it one time only.
     }
 
-    function upgradeContracts(VerusObjects.upgradeInfo memory _newContractPackage, address bridgeStorageAddress) public returns (uint8) {
+    function upgradeContracts(bytes calldata data) external returns (uint8) {
 
+        VerusObjects.upgradeInfo memory _newContractPackage;
+
+        (_newContractPackage) = abi.decode(data, (VerusObjects.upgradeInfo));
+        
+        
         if (newContractsPendingHash != bytes32(0)) {
             return UPGRADE_IN_PROCESS;
         }
 
-        checkValidContractUpgrade(_newContractPackage, bridgeStorageAddress);
+        checkValidContractUpgrade(_newContractPackage);
             
         return PENDING; 
     }
 
-    function recoverString(bytes memory be, uint8 vs, bytes32 rs, bytes32 ss) public pure returns (address)
+    function recoverString(bytes memory be, uint8 vs, bytes32 rs, bytes32 ss) private pure returns (address)
     {
         bytes32 hashValue;
 
@@ -71,7 +76,7 @@ contract UpgradeManager is VerusStorage {
 
     }
 
-    function checkValidContractUpgrade(VerusObjects.upgradeInfo memory _newContractPackage, address bridgeStorageAddress) private {
+    function checkValidContractUpgrade(VerusObjects.upgradeInfo memory _newContractPackage) private {
 
         bytes memory be; 
 
@@ -88,7 +93,7 @@ contract UpgradeManager is VerusStorage {
             pendingContracts.push(_newContractPackage.contracts[j]);
         }
 
-        be = bytesToString(abi.encodePacked(be, bridgeStorageAddress, uint8(_newContractPackage.upgradeType), _newContractPackage.salt));
+        be = bytesToString(abi.encodePacked(be, uint8(_newContractPackage.upgradeType), _newContractPackage.salt));
 
         address signer = recoverString(be, _newContractPackage._vs, _newContractPackage._rs, _newContractPackage._ss);
 
@@ -102,7 +107,7 @@ contract UpgradeManager is VerusStorage {
         }
 
         newContractsPendingHash = keccak256(be);
-        newBridgeStorageAddress = bridgeStorageAddress;
+
     }
 
     function bytesToString (bytes memory input) private pure returns (bytes memory output)
@@ -120,7 +125,7 @@ contract UpgradeManager is VerusStorage {
 
     function runContractsUpgrade() public returns (uint8) {
 
-        if (pendingContracts.length == AMOUNT_OF_CONTRACTS && 
+        if (pendingContracts.length == VerusConstants.AMOUNT_OF_CONTRACTS && 
             pendingVoteState.count == REQUIREDAMOUNTOFVOTES && 
             pendingVoteState.agree >= WINNINGAMOUNT ) {
             

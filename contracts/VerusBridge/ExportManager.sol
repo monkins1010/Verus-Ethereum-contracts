@@ -22,7 +22,7 @@ contract ExportManager is VerusStorage  {
         
     }
 
-    function checkExport(bytes memory data, uint256 ETHSent, bool poolAvailable) public view  returns (uint256 fees){
+    function checkExport(bytes memory data, uint256 ETHSent) public view  returns (uint256 fees){
 
         VerusObjects.CReserveTransfer memory transfer = abi.decode(data, (VerusObjects.CReserveTransfer));
 
