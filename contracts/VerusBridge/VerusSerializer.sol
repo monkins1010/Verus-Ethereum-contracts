@@ -373,7 +373,7 @@ library VerusSerializer {
             if (destinationType & VerusConstants.DEST_ETH == VerusConstants.DEST_ETH)
             {
                 tempTransfers[uint8(counter)].destinationAndFlags = uint256(tempaddress == VerusConstants.VEth ? VerusConstants.TOKEN_ETH_SEND : VerusConstants.TOKEN_ERC20_SEND) << 160;
-                counter |= tempaddress == VerusConstants.VEth ? (uint32((counter >> 16 & 0xff) + 1) << 16) : 0; //This is the ETH currency counter packed into the 3rd byte
+                counter += tempaddress == VerusConstants.VEth ? 0x10000 : 0; //This is the ETH currency counter packed into the 3rd byte
 
                 assembly {
                     tempaddress := mload(sub(add(add(tempSerialized, nextOffset), temporaryRegister1), 1)) //skip type +1 byte to read address
@@ -386,7 +386,7 @@ library VerusSerializer {
             { 
                 launchTxs[(counter >> 24 & 0xff)] = currencyParser(tempSerialized, nextOffset);
                 launchTxs[(counter >> 24 & 0xff)].iaddress = address(uint160(tempTransfers[uint8(counter)].currencyAndAmount));
-                counter |= (uint32((counter >> 24 & 0xff) + 1) << 24); //This is the Launch currency counter packed into the 4th byte
+                counter += 0x1000000; //This is the Launch currency counter packed into the 4th byte
             }
 
             nextOffset += temporaryRegister1;

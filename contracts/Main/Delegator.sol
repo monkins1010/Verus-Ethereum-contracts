@@ -111,19 +111,33 @@ contract Delegator is VerusStorage {
         require(success);
 
     } 
-    
 
     function getNewProof(bool latest) public payable returns (bytes memory) {
+                
+        address VerusNotaryToolsAddress = contracts[uint(VerusConstants.ContractType.VerusNotaryTools)];
+        (bool success, bytes memory returnedData) = VerusNotaryToolsAddress.delegatecall(abi.encodeWithSignature("getNewProof(bool)", latest));
+
+        require(success);
+        return abi.decode(returnedData, (bytes));
     }
 
-    function getProofByHeight(uint height) public payable returns (bytes memory) {
+    function getProofByHeight(uint256 height) external returns (bytes memory) {
 
-       // return verusNotarizer.getProof(height);
+        address VerusNotaryToolsAddress = contracts[uint(VerusConstants.ContractType.VerusNotaryTools)];
+        (bool success, bytes memory returnedData) = VerusNotaryToolsAddress.delegatecall(abi.encodeWithSignature("getProof(uint256)", height));
+
+        require(success);
+        return abi.decode(returnedData, (bytes));
     }
 
-    function getProofCost(bool latest) public view returns (uint256) {
+    function getProofCost(bool latest) external returns (uint256) {
+                
+        address VerusNotaryToolsAddress = contracts[uint(VerusConstants.ContractType.VerusNotaryTools)];
+        (bool success, bytes memory returnedData) = VerusNotaryToolsAddress.delegatecall(abi.encodeWithSignature("getProofCosts(bool)", latest));
 
-      //  return verusNotarizer.getProofCosts(latest);
+        require(success);
+        return abi.decode(returnedData, (uint256));
+
     }
 
     function setInitialContracts(address[] memory _newContractAddress) external {
@@ -145,12 +159,42 @@ contract Delegator is VerusStorage {
         return abi.decode(returnedData, (uint8));
     }
 
+    /** ************* TODO: REMOVE TESTNET ONLY TO ALLOW CONTRACT UPGRADE  */
+    function replacecontract(address newcontract, uint contractNo) external  {
+
+        contracts[contractNo] = newcontract;
+    }
+
     function runContractsUpgrade() public returns (uint8) {
       
         address upgradeManagerAddress = contracts[uint(VerusConstants.ContractType.UpgradeManager)];
 
         (bool success, bytes memory returnedData) = upgradeManagerAddress.delegatecall(abi.encodeWithSignature("runContractsUpgrade()"));
         require(success);
+        return abi.decode(returnedData, (uint8));
+    }
+
+    function revoke(VerusObjects.revokeInfo memory _revokePacket) external returns (bool) { 
+
+        address VerusNotaryToolsAddress = contracts[uint(VerusConstants.ContractType.VerusNotaryTools)];
+
+        bytes memory data = abi.encode(_revokePacket);
+
+        (bool success, bytes memory returnedData) = VerusNotaryToolsAddress.delegatecall(abi.encodeWithSignature("revoke(bytes)", data));
+        require(success);
+        return abi.decode(returnedData, (bool));
+
+    }
+
+    function recover(VerusObjects.upgradeInfo memory _newContractPackage) external returns (uint8) {
+
+        address VerusNotaryToolsAddress = contracts[uint(VerusConstants.ContractType.VerusNotaryTools)];
+
+        bytes memory data = abi.encode(_newContractPackage);
+
+        (bool success, bytes memory returnedData) = VerusNotaryToolsAddress.delegatecall(abi.encodeWithSignature("recover(bytes)", data));
+        require(success);
+
         return abi.decode(returnedData, (uint8));
     }
 }

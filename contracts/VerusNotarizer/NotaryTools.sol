@@ -34,12 +34,12 @@ contract NotaryTools is VerusStorage {
         notaryAddressMapping[notarizer] = VerusObjects.notarizer(mainAddress, revokeAddress, state);
     }
 
-    function getNotaryETHAddress(uint number) public view returns (address)
+    function getNotaryETHAddress(uint256 number) public view returns (address)
     {
         return notaryAddressMapping[notaries[number]].main;
     }
 
-    function getProof(uint height) public view returns (bytes memory) {
+    function getProof(uint256 height) public view returns (bytes memory) {
 
         VerusObjectsNotarization.NotarizationForks[] memory latestForks;
 
@@ -50,7 +50,7 @@ contract NotaryTools is VerusStorage {
         return proofs[bytes32(height)];
     }
 
-    function decodeNotarization(uint index) public view returns (VerusObjectsNotarization.NotarizationForks[] memory)
+    function decodeNotarization(uint256 index) public view returns (VerusObjectsNotarization.NotarizationForks[] memory)
     {
         uint32 nextOffset;
 
@@ -100,8 +100,10 @@ contract NotaryTools is VerusStorage {
 
     }
 
-    function revoke(VerusObjects.revokeInfo memory _revokePacket) public returns (bool) {
+    function revoke(bytes calldata dataIn) public returns (bool) {
 
+        VerusObjects.revokeInfo memory _revokePacket = abi.decode(dataIn, (VerusObjects.revokeInfo));
+        
         bytes memory be; 
 
         require(saltsUsed[_revokePacket.salt] == false, "salt Already used");
@@ -121,8 +123,10 @@ contract NotaryTools is VerusStorage {
         return true;
     }
 
-    function recover(VerusObjects.upgradeInfo memory _newContractPackage) public returns (uint8) {
+    function recover(bytes calldata dataIn) public returns (uint8) {
 
+        VerusObjects.upgradeInfo memory _newContractPackage = abi.decode(dataIn, (VerusObjects.upgradeInfo));
+  
         bytes memory be; 
 
         require(saltsUsed[_newContractPackage.salt] == false, "salt Already used");

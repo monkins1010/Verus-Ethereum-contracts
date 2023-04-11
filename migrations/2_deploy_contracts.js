@@ -124,7 +124,6 @@ const abidata = () => {
         'tuple(address,address,address,uint8,string,string,uint256)[]',
         arrayofcurrencies);
 
-
     return data;
 
 }

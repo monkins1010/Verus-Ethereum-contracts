@@ -29,7 +29,7 @@ contract VerusStorage {
 
     bool public poolAvailable;
     mapping (bytes32 => bytes32) public storageGlobal;
-    mapping (bytes32 => bytes) public proofs;
+    mapping (bytes32 => bytes) internal proofs;
     mapping (bytes32 => uint256) public claimableFees;
     mapping (bytes32 => uint256) public refunds;
     uint64 public notaryHeight;
