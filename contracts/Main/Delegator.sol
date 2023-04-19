@@ -66,6 +66,7 @@ contract Delegator is VerusStorage {
 
     function launchContractTokens(bytes calldata data) external  {
 
+        require(verusToERC20mapping[0x67460C2f56774eD27EeB8685f29f6CEC0B090B00].flags == 0);
         address logic = contracts[uint(VerusConstants.ContractType.VerusNotaryTools)];
 
         (bool success,) = logic.delegatecall(abi.encodeWithSignature("launchContractTokens(bytes)", data));
