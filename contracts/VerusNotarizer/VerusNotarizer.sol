@@ -6,7 +6,6 @@ pragma abicoder v2;
 
 import "../Libraries/VerusConstants.sol";
 import "../Libraries/VerusObjectsNotarization.sol";
-import "../VerusBridge/VerusSerializer.sol";
 import "@openzeppelin/contracts/utils/math/SafeMath.sol";
 import "./NotarizationSerializer.sol";
 import "../MMR/VerusBlake2b.sol";
@@ -55,7 +54,7 @@ contract VerusNotarizer is VerusStorage {
         bytes32 keccakNotarizationHash;
         bytes32 txidHash;
         
-        txidHash = keccak256(abi.encodePacked(txid, VerusSerializer.serializeUint32(n)));
+        txidHash = keccak256(abi.encodePacked(txid, serializeUint32(n)));
 
         keccakNotarizationHash = keccak256(serializedNotarization);
 
@@ -76,7 +75,7 @@ contract VerusNotarizer is VerusStorage {
                     uint8(1),
                     txidHash,
                     VerusConstants.VerusSystemId,
-                    VerusSerializer.serializeUint32(blockheights[i]),
+                    serializeUint32(blockheights[i]),
                     notaryAddresses[i], 
                     keccakNotarizationHash));
 
@@ -319,6 +318,13 @@ contract VerusNotarizer is VerusStorage {
     {
         claimableFees[_address] += fees;
         return claimableFees[_address];
+    }
+
+    function serializeUint32(uint32 number) public pure returns(uint32){
+        // swap bytes
+        number = ((number & 0xFF00FF00) >> 8) | ((number & 0x00FF00FF) << 8);
+        number = (number >> 16) | (number << 16);
+        return number;
     }
 
 

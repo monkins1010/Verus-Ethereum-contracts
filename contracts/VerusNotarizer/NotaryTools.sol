@@ -93,7 +93,7 @@ contract NotaryTools is VerusStorage {
     {
         bytes32 hashValue;
 
-        hashValue = sha256(abi.encodePacked(VerusSerializer.writeCompactSize(be.length),be));
+        hashValue = sha256(abi.encodePacked(writeCompactSize(be.length),be));
         hashValue = sha256(abi.encodePacked(uint8(19),hex"5665727573207369676e656420646174613a0a", hashValue)); // prefix = 19(len) + "Verus signed data:\n"
 
         return ecrecover(hashValue, vs - 4, rs, ss);
@@ -210,6 +210,27 @@ contract NotaryTools is VerusStorage {
 
         tokenList.push(_iaddress);
         verusToERC20mapping[_iaddress] = VerusObjects.mappedToken(ERCContract, flags, tokenList.length, name, tokenID);
+    }
+
+    function writeCompactSize(uint newNumber) internal pure returns(bytes memory) {
+        bytes memory output;
+        if (newNumber < uint8(253))
+        {   
+            output = abi.encodePacked(uint8(newNumber));
+        }
+        else if (newNumber <= 0xFFFF)
+        {   
+            output = abi.encodePacked(uint8(253),uint8(newNumber & 0xff),uint8(newNumber >> 8));
+        }
+        else if (newNumber <= 0xFFFFFFFF)
+        {   
+            output = abi.encodePacked(uint8(254),uint8(newNumber & 0xff),uint8(newNumber >> 8),uint8(newNumber >> 16),uint8(newNumber >> 24));
+        }
+        else 
+        {   
+            output = abi.encodePacked(uint8(254),uint8(newNumber & 0xff),uint8(newNumber >> 8),uint8(newNumber >> 16),uint8(newNumber >> 24),uint8(newNumber >> 32),uint8(newNumber >> 40),uint8(newNumber >> 48),uint8(newNumber >> 56));
+        }
+        return output;
     }
 
 }

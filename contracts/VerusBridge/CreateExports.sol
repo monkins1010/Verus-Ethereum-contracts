@@ -149,10 +149,10 @@ contract CreateExports is VerusStorage {
 
         address crossChainExportAddress = contracts[uint(VerusConstants.ContractType.VerusCrossChainExport)];
 
-        (bool success, bytes memory returnData) = crossChainExportAddress.call(abi.encodeWithSignature("generateCCE(bytes)", abi.encode(pendingTransfers.transfers, poolAvailable, cceStartHeight, cceEndHeight)));
+        (bool success, bytes memory returnData) = crossChainExportAddress.call(abi.encodeWithSignature("generateCCE(bytes)", abi.encode(pendingTransfers.transfers, poolAvailable, cceStartHeight, cceEndHeight, contracts[uint(VerusConstants.ContractType.VerusSerializer)])));
         require(success);
 
-        bytes memory serializedCCE = abi.decode(returnData, (bytes)); //verusCCE.generateCCE(pendingTransfers.transfers, poolAvailable, cceStartHeight, cceEndHeight);
+        bytes memory serializedCCE = abi.decode(returnData, (bytes)); 
         bytes32 prevHash;
  
         if(pendingTransfers.transfers.length == 1)

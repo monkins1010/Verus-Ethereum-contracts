@@ -4,7 +4,7 @@
 pragma solidity >=0.6.0;
 pragma abicoder v2;
 import "../Libraries/VerusObjects.sol";
-import "../VerusBridge/VerusSerializer.sol";
+
 import "../Libraries/VerusObjectsCommon.sol";
 import "../VerusBridge/UpgradeManager.sol";
 import "../Storage/StorageMaster.sol";
@@ -90,7 +90,7 @@ contract NotarizationSerializer is VerusStorage {
                     nextOffset := add(nextOffset, 1) //skip prevheight
                 }
 
-        readerLen = VerusSerializer.readCompactSizeLE(notarization, nextOffset);    // get the length of the currencyState
+        readerLen = readCompactSizeLE(notarization, nextOffset);    // get the length of the currencyState
 
         nextOffset = readerLen.offset - 1;   //readCompactSizeLE returns 1 byte after and wants one byte after 
 
@@ -104,7 +104,7 @@ contract NotarizationSerializer is VerusStorage {
         proposerAndLaunched |= bytes32(uint256(bridgeLaunched) << 176);  // Shift 16bit value 22 bytes to pack in bytes32
 
         nextOffset++; //move forwards to read le
-        readerLen = VerusSerializer.readCompactSizeLE(notarization, nextOffset);    // get the length of proofroot array
+        readerLen = readCompactSizeLE(notarization, nextOffset);    // get the length of proofroot array
 
         (stateRoot, blockHash, height) = deserializeProofRoots(notarization, uint32(readerLen.value), nextOffset);
 
@@ -136,7 +136,7 @@ contract NotarizationSerializer is VerusStorage {
         }
         VerusObjectsCommon.UintReader memory readerLen;
 
-        readerLen = VerusSerializer.readCompactSizeLE(notarization, nextOffset);        // get the length currencies
+        readerLen = readCompactSizeLE(notarization, nextOffset);        // get the length currencies
 
         nextOffset = nextOffset + (uint32(readerLen.value) * BYTES32_LENGTH) + 2;       // currencys, wights, reserves arrarys
 
@@ -148,7 +148,7 @@ contract NotarizationSerializer is VerusStorage {
                     nextOffset := add(nextOffset, 33) //skip coinbasecurrencystate first 4 items fixed at 4 x 8
                 }
 
-        readerLen = VerusSerializer.readCompactSizeLE(notarization, nextOffset);    // get the length of the reservein array of uint64
+        readerLen = readCompactSizeLE(notarization, nextOffset);    // get the length of the reservein array of uint64
         nextOffset = readerLen.offset + (uint32(readerLen.value) * 60) + 6;                 //skip 60 bytes of rest of state knowing array size always same as first
 
         return (bridgeLaunched, nextOffset);
@@ -183,7 +183,7 @@ contract NotarizationSerializer is VerusStorage {
             {
                 stateRoot = tempStateRoot;
                 blockHash = tempBlockHash;
-                height = VerusSerializer.serializeUint32(tempHeight); //swapendian
+                height = serializeUint32(tempHeight); //swapendian
             }
 
             //swap 16bit endian
@@ -280,6 +280,13 @@ contract NotarizationSerializer is VerusStorage {
             return VerusObjectsCommon.UintReader(offset + 1, ((twoByte << 8) & 0xffff)  | twoByte >> 8);
         }
         return VerusObjectsCommon.UintReader(offset, 0);
+    }
+
+    function serializeUint32(uint32 number) public pure returns(uint32){
+        // swap bytes
+        number = ((number & 0xFF00FF00) >> 8) | ((number & 0x00FF00FF) << 8);
+        number = (number >> 16) | (number << 16);
+        return number;
     }
 }
 

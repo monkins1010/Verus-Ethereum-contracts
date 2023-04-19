@@ -7,7 +7,7 @@ import "../Libraries/VerusObjects.sol";
 import "../Libraries/VerusObjectsNotarization.sol";
 import "../Libraries/VerusConstants.sol";
 
-library VerusSerializer {
+contract VerusSerializer {
 
     uint constant ETH_ADDRESS_SIZE_BYTES = 20;
     uint32 constant CCC_PREFIX_TO_OPTIONS = 3 + 4; // already starts on the byte so 3 first
@@ -468,19 +468,6 @@ library VerusSerializer {
         return (0, offset);
     }
 
-    function byteSlice(bytes memory _data) internal pure returns(bytes memory result) {
-        
-        uint256 length;
-        length = _data.length;
-        if (length > VerusConstants.TICKER_LENGTH_MAX) 
-        {
-            length = VerusConstants.TICKER_LENGTH_MAX;
-        }
-        result = new bytes(length);
 
-        for (uint i = 0; i < length; i++) {
-            result[i] = _data[i];
-        }
-    }
 
 }

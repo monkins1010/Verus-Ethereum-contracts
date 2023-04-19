@@ -7,14 +7,12 @@ import "../Libraries/VerusObjects.sol";
 import "../Libraries/VerusObjectsCommon.sol";
 import "../Libraries/VerusConstants.sol";
 import "../Storage/StorageMaster.sol";
-import "../Storage/Utils.sol";
+
 
 contract ExportManager is VerusStorage  {
 
     uint8 constant FEE_OFFSET = 20 + 20 + 20 + 8; // 3 x 20bytes address + 64bit uint
     uint8 constant AUX_DEST_LENGTH = 24;
-    using Utils for uint256;
-    using Utils for uint64;
 
     function ERC20Registered(address _iaddress) private view returns (bool) {
 
@@ -118,11 +116,11 @@ contract ExportManager is VerusStorage  {
                 require (gatewayID == VerusConstants.VEth, "GatewayID not VETH");
                 require (gatewayCode == address(0), "GatewayCODE must be empty");
 
-              //  bounceBackFee = bounceBackFee.reverse();
+                bounceBackFee = reverse(bounceBackFee);
                 require (bounceBackFee >= VerusConstants.verusvETHReturnFee, "Return fee not >= 0.01ETH");
 
                 transferFee += bounceBackFee;
-                requiredFees += uint256(bounceBackFee).convertFromVerusNumber(18);  //bounceback fees required as well as send fees
+                requiredFees += convertFromVerusNumber(uint256(bounceBackFee),18);  //bounceback fees required as well as send fees
 
             } else if (!(transfer.destination.destinationtype == VerusConstants.DEST_PKH || transfer.destination.destinationtype == VerusConstants.DEST_ID 
                         || transfer.destination.destinationtype == VerusConstants.DEST_SH || transfer.destination.destinationtype == VerusConstants.DEST_ETHNFT)) {
@@ -139,17 +137,17 @@ contract ExportManager is VerusStorage  {
 
         if (poolAvailable)
         { 
-            if (transferFee.convertFromVerusNumber(18) < requiredFees)
+            if (convertFromVerusNumber(transferFee, 18) < requiredFees)
             {
                 revert ("ETH Fees to Low");
             }            
             else if (transfer.currencyvalue.currency == VerusConstants.VEth && 
-                ETHSent < uint256(amount + transferFee).convertFromVerusNumber(18))
+                ETHSent < convertFromVerusNumber(uint256(amount + transferFee), 18))
             {
                 revert ("ETH sent < (amount + fees)");
             } 
             else if (transfer.currencyvalue.currency != VerusConstants.VEth &&
-                    ETHSent < transferFee.convertFromVerusNumber(18))
+                    ETHSent < convertFromVerusNumber(transferFee, 18))
             {
                 revert ("ETH fee sent < fees for token");
             } 
@@ -163,7 +161,7 @@ contract ExportManager is VerusStorage  {
                 revert ("Invalid VRSC fee");
             }
             else if (transfer.currencyvalue.currency == VerusConstants.VEth &&
-                     (amount.convertFromVerusNumber(18) + requiredFees) != ETHSent)
+                     (convertFromVerusNumber(amount, 18) + requiredFees) != ETHSent)
             {
                 revert ("ETH Fee to low");
             }
@@ -260,5 +258,36 @@ contract ExportManager is VerusStorage  {
             }
             return true;
         }  
+    }
+
+    function reverse(uint64 input) public pure returns (uint64 v) 
+    {
+        v = input;
+
+        // swap bytes
+        v = ((v & 0xFF00FF00FF00FF00) >> 8) |
+            ((v & 0x00FF00FF00FF00FF) << 8);
+
+        // swap 2-byte long pairs
+        v = ((v & 0xFFFF0000FFFF0000) >> 16) |
+            ((v & 0x0000FFFF0000FFFF) << 16);
+
+        // swap 4-byte long pairs
+        v = (v >> 32) | (v << 32);
+    }
+
+    function convertFromVerusNumber(uint256 a,uint8 decimals) public pure returns (uint256) {
+        uint8 power = 10; //default value for 18
+        uint256 c = a;
+
+        if(decimals > 8 ) {
+            power = decimals - 8;// number of decimals in verus
+            c = a * (10 ** power);
+        }else if(decimals < 8){
+            power = 8 - decimals;// number of decimals in verus
+            c = a / (10 ** power);
+        }
+      
+        return c;
     }
 }

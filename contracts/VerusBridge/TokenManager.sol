@@ -7,17 +7,15 @@ pragma abicoder v2;
 import "./Token.sol";
 import "../Libraries/VerusConstants.sol";
 import "../Libraries/VerusObjects.sol";
-import "./VerusSerializer.sol";
+import {VerusSerializer} from "../VerusBridge/VerusSerializer.sol";
 import "../VerusBridge/CreateExports.sol";
 import "../VerusBridge/UpgradeManager.sol";
 import "../Libraries/VerusObjectsCommon.sol";
 import "@openzeppelin/contracts/token/ERC721/ERC721.sol";
 import "../Storage/StorageMaster.sol";
-import "../Storage/Utils.sol";
+
 
 contract TokenManager is VerusStorage {
-
-    using Utils for uint256;
 
     function getName(address cont) public view returns (string memory)
     {
@@ -71,7 +69,7 @@ contract TokenManager is VerusStorage {
                 outputName = _tx[j].name;
             }
 
-            recordToken(_tx[j].iaddress, _tx[j].ERCContract, outputName, string(VerusSerializer.byteSlice(bytes(_tx[j].name))), uint8(_tx[j].flags), _tx[j].tokenID);
+            recordToken(_tx[j].iaddress, _tx[j].ERCContract, outputName, string(byteSlice(bytes(_tx[j].name))), uint8(_tx[j].flags), _tx[j].tokenID);
         }
     }
 
@@ -118,7 +116,7 @@ contract TokenManager is VerusStorage {
         VerusObjects.PackedCurrencyLaunch[] memory launchTxs;
         uint176[] memory refundAddresses;
         uint32 counter;
-        (transfers, launchTxs, counter, refundAddresses) = VerusSerializer.deserializeTransfers(serializedTransfers, numberOfTransfers);
+        (transfers, launchTxs, counter, refundAddresses) = VerusSerializer(contracts[uint(VerusConstants.ContractType.VerusSerializer)]).deserializeTransfers(serializedTransfers, numberOfTransfers);
 
         // counter: 16bit packed 32bit number for efficency
         uint8 ETHPaymentCounter = uint8((counter >> 16) & 0xff);
@@ -185,7 +183,7 @@ contract TokenManager is VerusStorage {
                     bool shouldMint = (tempToken.flags & VerusConstants.MAPPING_VERUS_OWNED == VerusConstants.MAPPING_VERUS_OWNED);
                      
                     mintOrTransferToken(token, destinationAddress, 
-                            uint256(trans[i].currencyAndAmount >> 160).convertFromVerusNumber(token.decimals()), shouldMint);
+                            convertFromVerusNumber(uint256(trans[i].currencyAndAmount >> 160), token.decimals()), shouldMint);
                 }
             } 
             else if (tempToken.flags & VerusConstants.TOKEN_ETH_NFT_DEFINITION == VerusConstants.TOKEN_ETH_NFT_DEFINITION &&
@@ -221,4 +219,33 @@ contract TokenManager is VerusStorage {
                 require(success);
             }
     }
+
+    function byteSlice(bytes memory _data) internal pure returns(bytes memory result) {
+        
+        uint256 length;
+        length = _data.length;
+        if (length > VerusConstants.TICKER_LENGTH_MAX) 
+        {
+            length = VerusConstants.TICKER_LENGTH_MAX;
+        }
+        result = new bytes(length);
+
+        for (uint i = 0; i < length; i++) {
+            result[i] = _data[i];
+        }
+    }
+    function convertFromVerusNumber(uint256 a,uint8 decimals) internal pure returns (uint256) {
+            uint8 power = 10; //default value for 18
+            uint256 c = a;
+
+            if(decimals > 8 ) {
+                power = decimals - 8;// number of decimals in verus
+                c = a * (10 ** power);
+            }else if(decimals < 8){
+                power = 8 - decimals;// number of decimals in verus
+                c = a / (10 ** power);
+            }
+        
+            return c;
+        }
 }

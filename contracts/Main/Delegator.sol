@@ -6,8 +6,10 @@ import "../Storage/StorageMaster.sol";
 import "../VerusBridge/Token.sol";
 
 contract Delegator is VerusStorage {
+   /** ************* TODO: REMOVE TESTNET ONLY   */
+    address testnetonly;
     
-    constructor(address[] memory _notaries, address[] memory _notariesEthAddress, address[] memory _notariesColdStoreEthAddress) {
+    constructor(address[] memory _notaries, address[] memory _notariesEthAddress, address[] memory _notariesColdStoreEthAddress, address[] memory _newContractAddress) {
         poolSize = 500000000000;
 
         for(uint i =0; i < _notaries.length; i++){
@@ -21,7 +23,12 @@ contract Delegator is VerusStorage {
                 0, "VerusNFT", uint256(0));  
 
         tokenList.push(VerusConstants.VerusNFTID);
-    
+         /** ************* TODO: REMOVE TESTNET ONLY   */
+        testnetonly = msg.sender;
+        for (uint i = 0; i < uint(VerusConstants.AMOUNT_OF_CONTRACTS); i++) 
+            {
+                contracts.push(_newContractAddress[i]);
+            }
     }
     
     receive() external payable {
@@ -141,15 +148,6 @@ contract Delegator is VerusStorage {
 
     }
 
-    function setInitialContracts(address[] memory _newContractAddress) external {
-
-        address upgradeManagerAddress = contracts[uint(VerusConstants.ContractType.UpgradeManager)];
-
-        (bool success,) = upgradeManagerAddress.delegatecall(abi.encodeWithSignature("setInitialContracts(address[])", _newContractAddress));
-        require(success);
-
-    }
-
     function upgradeContracts(bytes calldata data) external returns (uint8) {
 
         address upgradeManagerAddress = contracts[uint(VerusConstants.ContractType.UpgradeManager)];
@@ -162,7 +160,7 @@ contract Delegator is VerusStorage {
 
     /** ************* TODO: REMOVE TESTNET ONLY TO ALLOW CONTRACT UPGRADE  */
     function replacecontract(address newcontract, uint contractNo) external  {
-
+        require(testnetonly == msg.sender);
         contracts[contractNo] = newcontract;
     }
 

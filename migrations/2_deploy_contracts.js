@@ -70,11 +70,7 @@ module.exports = async function(deployer) {
 
     await deployer.deploy(VerusNotaryTools);
     const VerusNotaryToolsInst = await VerusNotaryTools.deployed();
-
-    await deployer.deploy(VerusDelegator, verusNotariserIDS, verusNotariserSigner, verusNotariserRevoker);
-    const VerusDelegatorInst = await VerusDelegator.deployed();
     
-
     const allContracts = [
         tokenInst.address,
         serializerInst.address,
@@ -89,8 +85,11 @@ module.exports = async function(deployer) {
         UpgradeInst.address
     ];
 
+    await deployer.deploy(VerusDelegator, verusNotariserIDS, verusNotariserSigner, verusNotariserRevoker, allContracts);
+    const VerusDelegatorInst = await VerusDelegator.deployed();
+
     try {
-        await VerusDelegatorInst.setInitialContracts(allContracts);
+
         const launchCurrencies = abidata();
         await VerusDelegatorInst.launchContractTokens(launchCurrencies);
 

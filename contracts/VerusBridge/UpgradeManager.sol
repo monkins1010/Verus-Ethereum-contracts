@@ -4,15 +4,7 @@ pragma abicoder v2;
 
 import "../Libraries/VerusObjects.sol";
 import "../Libraries/VerusObjectsNotarization.sol";
-import "../VerusNotarizer/VerusNotarizer.sol";
-import "./CreateExports.sol";
-import "../VerusNotarizer/NotaryTools.sol";
-import "./TokenManager.sol";
-import "../MMR/VerusProof.sol";
-import "./ExportManager.sol";
-import "../VerusBridge/VerusCrossChainExport.sol";
-import "../VerusBridge/VerusSerializer.sol";
-import "../VerusNotarizer/NotarizationSerializer.sol";
+import "../Storage/StorageMaster.sol";
 
 contract UpgradeManager is VerusStorage {
 
@@ -29,25 +21,6 @@ contract UpgradeManager is VerusStorage {
 
     event contractUpdated(bool);
     address internal contractOwner;
-
-    constructor() {
-        contractOwner = msg.sender;
-    }
-    
-    function setInitialContracts(address[] memory _newContractAddress) external {
-    
-        //One time set of contracts for all       
-        require(msg.sender == contractOwner);
-        if (contractOwner != address(0)){
-
-            for (uint i = 0; i < uint(VerusConstants.AMOUNT_OF_CONTRACTS); i++) 
-            {
-                contracts[i] = _newContractAddress[i];
-            }
-        } 
-       
-        contractOwner = address(0);  //Blow the fuse i.e. make it one time only.
-    }
 
     function upgradeContracts(bytes calldata data) external returns (uint8) {
 
@@ -69,7 +42,7 @@ contract UpgradeManager is VerusStorage {
     {
         bytes32 hashValue;
 
-        hashValue = sha256(abi.encodePacked(VerusSerializer.writeCompactSize(be.length),be));
+        hashValue = sha256(abi.encodePacked(writeCompactSize(be.length),be));
         hashValue = sha256(abi.encodePacked(uint8(19),hex"5665727573207369676e656420646174613a0a", hashValue)); // prefix = 19(len) + "Verus signed data:\n"
 
         return recoverSigner(hashValue, vs - 4, rs, ss);
@@ -174,5 +147,26 @@ contract UpgradeManager is VerusStorage {
         require(msg.sender == contracts[uint(VerusConstants.ContractType.VerusNotarizer)]);
         saltsUsed[salt] = true;
 
+    }
+
+    function writeCompactSize(uint newNumber) public pure returns(bytes memory) {
+        bytes memory output;
+        if (newNumber < uint8(253))
+        {   
+            output = abi.encodePacked(uint8(newNumber));
+        }
+        else if (newNumber <= 0xFFFF)
+        {   
+            output = abi.encodePacked(uint8(253),uint8(newNumber & 0xff),uint8(newNumber >> 8));
+        }
+        else if (newNumber <= 0xFFFFFFFF)
+        {   
+            output = abi.encodePacked(uint8(254),uint8(newNumber & 0xff),uint8(newNumber >> 8),uint8(newNumber >> 16),uint8(newNumber >> 24));
+        }
+        else 
+        {   
+            output = abi.encodePacked(uint8(254),uint8(newNumber & 0xff),uint8(newNumber >> 8),uint8(newNumber >> 16),uint8(newNumber >> 24),uint8(newNumber >> 32),uint8(newNumber >> 40),uint8(newNumber >> 48),uint8(newNumber >> 56));
+        }
+        return output;
     }
 }

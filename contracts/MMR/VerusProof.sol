@@ -5,7 +5,7 @@ pragma solidity >=0.6.0;
 pragma abicoder v2;
 import "../Libraries/VerusObjects.sol";
 import "./VerusBlake2b.sol";
-import "../VerusBridge/VerusSerializer.sol";
+import {VerusSerializer} from "../VerusBridge/VerusSerializer.sol";
 import "../Libraries/VerusObjectsCommon.sol";
 import "../VerusNotarizer/VerusNotarizer.sol";
 import "./VerusMMR.sol";
@@ -75,7 +75,7 @@ contract VerusProof is VerusStorage  {
 
     }
     
-    function checkTransfers(VerusObjects.CReserveTransferImport calldata _import, bytes32 hashedTransfers) public pure returns (uint64, uint128) {
+    function checkTransfers(VerusObjects.CReserveTransferImport calldata _import, bytes32 hashedTransfers) public view returns (uint64, uint128) {
 
         // the first component of the import partial transaction proof is the transaction header, for each version of
         // transaction header, we have a specific offset for the hash of transfers. if we change this, we must
@@ -101,8 +101,8 @@ contract VerusProof is VerusStorage  {
 
             VerusObjectsCommon.UintReader memory readerLen;
 
-            readerLen = VerusSerializer.readCompactSizeLE(firstObj, OUTPUT_SCRIPT_OFFSET);    // get the length of the output script
-            readerLen = VerusSerializer.readCompactSizeLE(firstObj, readerLen.offset);        // then length of first master push
+            readerLen = VerusSerializer(contracts[uint(VerusConstants.ContractType.VerusSerializer)]).readCompactSizeLE(firstObj, OUTPUT_SCRIPT_OFFSET);    // get the length of the output script
+            readerLen = VerusSerializer(contracts[uint(VerusConstants.ContractType.VerusSerializer)]).readCompactSizeLE(firstObj, readerLen.offset);        // then length of first master push
 
             // must be push less than 75 bytes, as that is an op code encoded similarly to a vector.
             // all we do here is ensure that is the case and skip master
@@ -173,7 +173,7 @@ contract VerusProof is VerusStorage  {
         return (uint64(0), uint128(0));
     }
 
-    function checkCCEValues(bytes memory firstObj, uint32 nextOffset, bytes32 hashedTransfers, uint32 nIndex) public pure returns(uint64, uint128)
+    function checkCCEValues(bytes memory firstObj, uint32 nextOffset, bytes32 hashedTransfers, uint32 nIndex) public view returns(uint64, uint128)
     {
         bytes32 hashReserveTransfers;
         address systemSourceID;
@@ -209,7 +209,7 @@ contract VerusProof is VerusStorage  {
         }
 
         (packedRegister, nextOffset)  = readVarint(firstObj, nextOffset);   // put startheight at [0] 32bit chunk
-        tempRegister = VerusSerializer.serializeUint32(tempRegister);       // reverse endian of no. transfers
+        tempRegister = serializeUint32(tempRegister);       // reverse endian of no. transfers
         packedRegister  |= (uint128(tempRegister) << 96) ;                  // put number of transfers at [3] 32-bit chunk     
         
         (tempRegister, nextOffset)  = readVarint(firstObj, nextOffset); 
@@ -226,7 +226,7 @@ contract VerusProof is VerusStorage  {
                 nextOffset := add(add(nextOffset, CCE_DEST_CURRENCY_DELTA), 8)  // move 20 + 8 bytes for (address + 64bit)
                 rewardFees := mload(add(firstObj, nextOffset))    
             }
-                rewardFees = VerusSerializer.serializeUint64(rewardFees);
+                rewardFees = VerusSerializer(contracts[uint(VerusConstants.ContractType.VerusSerializer)]).serializeUint64(rewardFees);
         }
 
         if (!(hashedTransfers == hashReserveTransfers &&
@@ -240,17 +240,17 @@ contract VerusProof is VerusStorage  {
 
     }
 
-    function skipAux (bytes memory firstObj, uint32 nextOffset) public pure returns (uint32, uint176 auxDest)
+    function skipAux (bytes memory firstObj, uint32 nextOffset) public view returns (uint32, uint176 auxDest)
     {
                                                   
             VerusObjectsCommon.UintReader memory readerLen;
-            readerLen = VerusSerializer.readCompactSizeLE(firstObj, nextOffset);    // get the length of the auxDest
+            readerLen = VerusSerializer(contracts[uint(VerusConstants.ContractType.VerusSerializer)]).readCompactSizeLE(firstObj, nextOffset);    // get the length of the auxDest
             nextOffset = readerLen.offset;
             uint arraySize = readerLen.value;
             
             for (uint i = 0; i < arraySize; i++)
             {
-                    readerLen = VerusSerializer.readCompactSizeLE(firstObj, nextOffset);    // get the length of the auxDest sub array
+                    readerLen = VerusSerializer(contracts[uint(VerusConstants.ContractType.VerusSerializer)]).readCompactSizeLE(firstObj, nextOffset);    // get the length of the auxDest sub array
                     if (readerLen.value == AUX_DEST_ETH_VEC_LENGTH)
                     {
                          assembly {
@@ -408,8 +408,12 @@ contract VerusProof is VerusStorage  {
         return temp;
     }
 
-
-
+    function serializeUint32(uint32 number) public pure returns(uint32){
+        // swap bytes
+        number = ((number & 0xFF00FF00) >> 8) | ((number & 0x00FF00FF) << 8);
+        number = (number >> 16) | (number << 16);
+        return number;
+    }
     
 }
 

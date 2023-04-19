@@ -8,7 +8,7 @@ import "../Libraries/VerusObjects.sol";
 import "../Libraries/VerusConstants.sol";
 import "../VerusBridge/VerusSerializer.sol";
 
-contract VerusCrossChainExport{
+contract VerusCrossChainExport {
 
     VerusObjects.CCurrencyValueMap[] currencies;
     VerusObjects.CCurrencyValueMap[] fees;
@@ -50,11 +50,11 @@ contract VerusCrossChainExport{
         return 0;
     }
 
-    function generateCCE(VerusObjects.CReserveTransfer[] memory transfers, bool bridgeReady, uint64 startheight, uint64 endheight) public returns(bytes memory){
+    function generateCCE(VerusObjects.CReserveTransfer[] memory transfers, bool bridgeReady, uint64 startheight, uint64 endheight, address verusSerializer) public returns(bytes memory){
 
         VerusObjects.CCrossChainExport memory workingCCE;
         //create a hash of the transfers and then 
-        bytes memory serializedTransfers = VerusSerializer.serializeCReserveTransfers(transfers, false);
+        bytes memory serializedTransfers = VerusSerializer(verusSerializer).serializeCReserveTransfers(transfers, false);
         bytes32 hashedTransfers = keccak256(serializedTransfers);
 
         //create the Cross ChainExport to then serialize and hash
@@ -123,7 +123,7 @@ contract VerusCrossChainExport{
         delete currencies;
         delete fees;
 
-        return VerusSerializer.serializeCCrossChainExport(workingCCE);
+        return VerusSerializer(verusSerializer).serializeCCrossChainExport(workingCCE);
 
     }
     
