@@ -14,7 +14,6 @@ contract VerusSerializer {
     uint32 constant CCC_ID_LEN = 20;
     uint32 constant CCC_NATIVE_OFFSET = 4 + 4 + 1;
     uint32 constant CCC_TOKENID_OFFSET = 32;
-    int16 constant TYPE_ETHEREUM = 2;
 
     function readCompactSizeLE(bytes memory incoming, uint32 offset) public pure returns(VerusObjectsCommon.UintReader memory) {
 
@@ -282,9 +281,8 @@ contract VerusSerializer {
         }
         
         returnCurrency.name = string(tempname);
-
+        nextOffset += nameStringLength;
         assembly {
-            nextOffset := add(nextOffset, nameStringLength)
             nextOffset := add(nextOffset, CCC_ID_LEN) // move to read launchsystemID
             nextOffset := add(nextOffset, CCC_ID_LEN) // move to read Native currency
             nextOffset := add(nextOffset, CCC_NATIVE_OFFSET)
