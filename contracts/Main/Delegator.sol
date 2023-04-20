@@ -35,6 +35,16 @@ contract Delegator is VerusStorage {
         
     }
 
+    function export(VerusObjects.CReserveTransfer calldata _transfer) external { 
+
+        bool success;
+        bytes memory data = abi.encode(_transfer); 
+
+        address verusBridgeAddress = contracts[uint(VerusConstants.ContractType.CreateExport)];
+        (success, ) = verusBridgeAddress.delegatecall(abi.encodeWithSignature("export(bytes)", data));
+        require(success);
+    }
+
     function submitImports(bytes calldata data) external { 
 
         bool success;
