@@ -35,7 +35,7 @@ contract Delegator is VerusStorage {
         
     }
 
-    function export(VerusObjects.CReserveTransfer calldata _transfer) external { 
+    function export(VerusObjects.CReserveTransfer calldata _transfer) external payable { 
 
         bool success;
         bytes memory data = abi.encode(_transfer); 

@@ -26,8 +26,8 @@ contract CreateExports is VerusStorage {
 
         address verusExportManagerAddress = contracts[uint(VerusConstants.ContractType.ExportManager)];
 
-        (bool success, bytes memory feeBytes) = verusExportManagerAddress.delegatecall(abi.encodeWithSignature("checkExport(bytes,uint256,bool)", data, msg.value));
-        require(success);
+        (bool success, bytes memory feeBytes) = verusExportManagerAddress.delegatecall(abi.encodeWithSignature("checkExport(bytes,uint256)", data, uint256(msg.value)));
+        require(success, "checkExport call failed");
 
         fees = abi.decode(feeBytes, (uint256)); //fees = exportManager.checkExport(transfer, paidValue, poolAvailable);
 
@@ -150,7 +150,7 @@ contract CreateExports is VerusStorage {
         address crossChainExportAddress = contracts[uint(VerusConstants.ContractType.VerusCrossChainExport)];
 
         (bool success, bytes memory returnData) = crossChainExportAddress.call(abi.encodeWithSignature("generateCCE(bytes)", abi.encode(pendingTransfers.transfers, poolAvailable, cceStartHeight, cceEndHeight, contracts[uint(VerusConstants.ContractType.VerusSerializer)])));
-        require(success);
+        require(success, "generateCCEfailed");
 
         bytes memory serializedCCE = abi.decode(returnData, (bytes)); 
         bytes32 prevHash;

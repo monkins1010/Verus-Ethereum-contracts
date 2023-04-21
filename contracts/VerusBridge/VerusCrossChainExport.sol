@@ -50,8 +50,10 @@ contract VerusCrossChainExport {
         return 0;
     }
 
-    function generateCCE(VerusObjects.CReserveTransfer[] memory transfers, bool bridgeReady, uint64 startheight, uint64 endheight, address verusSerializer) public returns(bytes memory){
+    function generateCCE(bytes memory bytesin) public returns(bytes memory){
 
+        (VerusObjects.CReserveTransfer[] memory transfers, bool bridgeReady, uint64 startheight, uint64 endheight, address verusSerializer) = abi.decode(bytesin, (VerusObjects.CReserveTransfer[], bool, uint64, uint64, address));
+        
         VerusObjects.CCrossChainExport memory workingCCE;
         //create a hash of the transfers and then 
         bytes memory serializedTransfers = VerusSerializer(verusSerializer).serializeCReserveTransfers(transfers, false);

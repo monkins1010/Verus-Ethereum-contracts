@@ -28,7 +28,7 @@ contract ExportManager is VerusStorage  {
             ERC20Registered(transfer.feecurrencyid) &&
             ERC20Registered(transfer.destcurrencyid) &&
             (ERC20Registered(transfer.secondreserveid) || transfer.secondreserveid == address(0)) &&
-            transfer.destsystemid == address(0));
+            transfer.destsystemid == address(0), "currencycheckfailed");
 
         uint256 requiredFees =  VerusConstants.transactionFee;  //0.003 eth in WEI (To vrsc)
         uint64 bounceBackFee;
@@ -96,7 +96,7 @@ contract ExportManager is VerusStorage  {
 
             if (transfer.flags == VerusConstants.VALID)
             {
-                require(transfer.destcurrencyid == VerusConstants.VerusBridgeAddress);
+                require(transfer.destcurrencyid == VerusConstants.VerusBridgeAddress, "flagsnotvalid");
             }
 
             if ((transfer.destination.destinationtype & ~VerusConstants.FLAG_DEST_AUX) == (VerusConstants.FLAG_DEST_GATEWAY + VerusConstants.DEST_ETH)) {
