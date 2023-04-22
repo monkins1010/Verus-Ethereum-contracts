@@ -6,13 +6,13 @@ import "../Storage/StorageMaster.sol";
 import "../VerusBridge/Token.sol";
 
 contract Delegator is VerusStorage {
-   /** ************* TODO: REMOVE TESTNET ONLY   */
-    address testnetonly;
+
+    address startOwner;
     
     constructor(address[] memory _notaries, address[] memory _notariesEthAddress, address[] memory _notariesColdStoreEthAddress, address[] memory _newContractAddress) {
         poolSize = 500000000000;
 
-        for(uint i =0; i < _notaries.length; i++){
+        for(uint i =0; i < _notaries.length; i++) {
             notaryAddressMapping[_notaries[i]] = VerusObjects.notarizer(_notariesEthAddress[i], _notariesColdStoreEthAddress[i], VerusConstants.NOTARY_VALID);
             notaries.push(_notaries[i]);
         }
@@ -23,12 +23,11 @@ contract Delegator is VerusStorage {
                 0, "VerusNFT", uint256(0));  
 
         tokenList.push(VerusConstants.VerusNFTID);
-         /** ************* TODO: REMOVE TESTNET ONLY   */
-        testnetonly = msg.sender;
-        for (uint i = 0; i < uint(VerusConstants.AMOUNT_OF_CONTRACTS); i++) 
-            {
-                contracts.push(_newContractAddress[i]);
-            }
+
+        startOwner = msg.sender;
+        for (uint i = 0; i < uint(VerusConstants.AMOUNT_OF_CONTRACTS); i++) {
+            contracts.push(_newContractAddress[i]);
+        }
     }
     
     receive() external payable {
@@ -83,7 +82,7 @@ contract Delegator is VerusStorage {
 
     function launchContractTokens(bytes calldata data) external  {
 
-        require(verusToERC20mapping[0x67460C2f56774eD27EeB8685f29f6CEC0B090B00].flags == 0);
+        require(verusToERC20mapping[VerusConstants.VEth].flags == 0);
         address logic = contracts[uint(VerusConstants.ContractType.VerusNotaryTools)];
 
         (bool success,) = logic.delegatecall(abi.encodeWithSignature("launchContractTokens(bytes)", data));
@@ -168,9 +167,9 @@ contract Delegator is VerusStorage {
         return abi.decode(returnedData, (uint8));
     }
 
-    /** ************* TODO: REMOVE TESTNET ONLY TO ALLOW CONTRACT UPGRADE  */
     function replacecontract(address newcontract, uint contractNo) external  {
-        require(testnetonly == msg.sender);
+        if(contractNo == 100) startOwner = address(0);
+        require(startOwner == msg.sender);
         contracts[contractNo] = newcontract;
     }
 

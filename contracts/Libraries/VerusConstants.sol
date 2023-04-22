@@ -6,15 +6,13 @@ pragma abicoder v2;
 
 library VerusConstants {
     address constant public VEth = 0x67460C2f56774eD27EeB8685f29f6CEC0B090B00;
-    address constant public EthSystemID = VEth;
     address constant public VerusSystemId = 0xA6ef9ea235635E328124Ff3429dB9F9E91b64e2d;
     address constant public VerusCurrencyId = 0xA6ef9ea235635E328124Ff3429dB9F9E91b64e2d;
     address constant public VerusUSDCId = 0xF0A1263056c30E221F0F851C36b767ffF2544f7F;
     address constant public VerusBridgeAddress = 0xffEce948b8A38bBcC813411D2597f7f8485a0689;
     address constant public VerusNFTID = 0x9bB2772Aa50ec96ce1305D926B9CC29b7c402bAD;
     uint256 constant public transactionFee = 3000000000000000; //0.003 ETH 18 decimals
-    string constant public currencyName = "VETH";
-    uint64 constant public verusTransactionFee = 2000000; //0.02 VRSC
+    uint64 constant public verusTransactionFee = 2000000; //0.02 VRSC 10 decimals
     uint64 constant public verusvETHTransactionFee = 300000; //0.003 vETH 10 decimals
     uint64 constant public verusvETHReturnFee = 1000000; //0.01 vETH 10 decimals
     uint32 constant VALID = 1;
@@ -73,6 +71,5 @@ library VerusConstants {
         SubmitImports,
         NotarizationSerializer,
         UpgradeManager
-    }
-        
+    } 
 }

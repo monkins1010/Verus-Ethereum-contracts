@@ -231,7 +231,7 @@ contract VerusProof is VerusStorage  {
 
         if (!(hashedTransfers == hashReserveTransfers &&
                 systemSourceID == VerusConstants.VerusSystemId &&
-                destSystemID == VerusConstants.EthSystemID)) {
+                destSystemID == VerusConstants.VEth)) {
 
             revert("CCE information does not checkout");
         }
