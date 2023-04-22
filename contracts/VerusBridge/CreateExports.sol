@@ -18,15 +18,16 @@ contract CreateExports is VerusStorage {
         return true;
     }
  
-    function export(bytes calldata data) payable external {
+    function export(bytes calldata datain) payable external {
 
         uint256 fees;
 
-        VerusObjects.CReserveTransfer memory transfer = abi.decode(data, (VerusObjects.CReserveTransfer));
+        VerusObjects.CReserveTransfer memory transfer = abi.decode(datain, (VerusObjects.CReserveTransfer));
 
         address verusExportManagerAddress = contracts[uint(VerusConstants.ContractType.ExportManager)];
+        bytes memory data = abi.encode(transfer); 
 
-        (bool success, bytes memory feeBytes) = verusExportManagerAddress.delegatecall(abi.encodeWithSignature("checkExport(bytes,uint256)", data, uint256(msg.value)));
+        (bool success, bytes memory feeBytes) = verusExportManagerAddress.delegatecall(abi.encodeWithSignature("checkExport(bytes)", data));
         require(success, "checkExport call failed");
 
         fees = abi.decode(feeBytes, (uint256)); //fees = exportManager.checkExport(transfer, paidValue, poolAvailable);

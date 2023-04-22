@@ -20,9 +20,9 @@ contract ExportManager is VerusStorage  {
         
     }
 
-    function checkExport(bytes memory data, uint256 ETHSent) public view  returns (uint256 fees){
-
-        VerusObjects.CReserveTransfer memory transfer = abi.decode(data, (VerusObjects.CReserveTransfer));
+    function checkExport(bytes calldata datain) external payable returns (uint256 fees){
+       
+        VerusObjects.CReserveTransfer memory transfer = abi.decode(datain, (VerusObjects.CReserveTransfer));
 
         require(ERC20Registered(transfer.currencyvalue.currency) && 
             ERC20Registered(transfer.feecurrencyid) &&
@@ -30,7 +30,7 @@ contract ExportManager is VerusStorage  {
             (ERC20Registered(transfer.secondreserveid) || transfer.secondreserveid == address(0)) &&
             transfer.destsystemid == address(0), "currencycheckfailed");
 
-        uint256 requiredFees =  VerusConstants.transactionFee;  //0.003 eth in WEI (To vrsc)
+        uint256 requiredFees = VerusConstants.transactionFee;  //0.003 eth in WEI (To vrsc)
         uint64 bounceBackFee;
         uint64 transferFee;
         bytes memory serializedDest;
@@ -38,9 +38,8 @@ contract ExportManager is VerusStorage  {
         address gatewayCode;
         address destAddressID;
         uint8 destinationType;
-    
-        require (checkTransferFlags(transfer), "Flag Check failed");         
-                                  
+
+        require (checkTransferFlags(transfer), "Flag Check failed");                 
        
         // Check destination address is not zero
         serializedDest = transfer.destination.destinationaddress;  
@@ -69,7 +68,6 @@ contract ExportManager is VerusStorage  {
 
         }
         require (destAddressID != address(0), "Destination Address null");// Destination can be currency definition
-
         // Check fees are correct, if pool unavailble vrsctest only fees, TODO:if pool availble vETH fees only for now
 
         if (!poolAvailable) {
@@ -142,12 +140,12 @@ contract ExportManager is VerusStorage  {
                 revert ("ETH Fees to Low");
             }            
             else if (transfer.currencyvalue.currency == VerusConstants.VEth && 
-                ETHSent < convertFromVerusNumber(uint256(amount + transferFee), 18))
+                msg.value < convertFromVerusNumber(uint256(amount + transferFee), 18))
             {
                 revert ("ETH sent < (amount + fees)");
             } 
             else if (transfer.currencyvalue.currency != VerusConstants.VEth &&
-                    ETHSent < convertFromVerusNumber(transferFee, 18))
+                    msg.value < convertFromVerusNumber(transferFee, 18))
             {
                 revert ("ETH fee sent < fees for token");
             } 
@@ -161,11 +159,11 @@ contract ExportManager is VerusStorage  {
                 revert ("Invalid VRSC fee");
             }
             else if (transfer.currencyvalue.currency == VerusConstants.VEth &&
-                     (convertFromVerusNumber(amount, 18) + requiredFees) != ETHSent)
+                     (convertFromVerusNumber(amount, 18) + requiredFees) != msg.value)
             {
                 revert ("ETH Fee to low");
             }
-            else if(transfer.currencyvalue.currency != VerusConstants.VEth && requiredFees != ETHSent)
+            else if(transfer.currencyvalue.currency != VerusConstants.VEth && requiredFees != msg.value)
             {
                 revert ("ETH Fee to low (token)");
             }
