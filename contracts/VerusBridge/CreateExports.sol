@@ -109,65 +109,51 @@ contract CreateExports is VerusStorage {
 
     function _createExports(VerusObjects.CReserveTransfer memory reserveTransfer, bool forceNewCCE) private {
 
-        // Create CCE: If transactions in transfers > 50 and on same block then revert.
         // If transactions over 50 and inbetween notarization boundaries, increment CCE start and endheight
-        // If notarization happens increment CCE to next boundary
+        // If notarization has happened increment CCE to next boundary when the tx comes in
         // If changing from pool closed to pool open create a boundary (As all sends will then go through the bridge)
         uint64 blockNumber = uint64(block.number);
-        uint64 cceStartHeight = cceLastStartHeight;
-        uint64 cceEndHeight = cceLastEndHeight;
-        uint64 lastCCEExportHeight = cceLastStartHeight;
-        uint64 blockDelta = cceEndHeight - (cceStartHeight == 0 ? cceEndHeight : cceStartHeight);
-
-
-        VerusObjects.CReserveTransferSet memory temptx = _readyExports[cceStartHeight];
+        uint64 blockDelta = cceLastEndHeight - (cceLastStartHeight == 0 ? cceLastEndHeight : cceLastStartHeight);
+        uint64 lastTransfersLenght = uint64(_readyExports[cceLastStartHeight].transfers.length);
+        bytes32 prevHash = _readyExports[cceLastStartHeight].exportHash;
 
         // if there are no transfers then there is no need to make a new CCE as this is the first one, and the endheight can become the block number if it is less than the current block no.
-        // if the last notary received height is less than the endheight then keep building up the CCE (as long as 10 ETH blocks havent passed, and anew CCE isnt being forced and there is less than 50)
+        // if the last notary received height is less than the endheight then keep building up the CCE (as long as 10 ETH blocks havent passed, and a new CCE isnt being forced and there is less than 50)
 
-        if ((temptx.transfers.length < 1 || (notaryHeight < cceEndHeight && blockDelta < 10)) && !forceNewCCE  && temptx.transfers.length < 50) {
+        if ((lastTransfersLenght < 1 || (notaryHeight < cceLastEndHeight && blockDelta < 10)) && !forceNewCCE  && lastTransfersLenght < 50) {
 
             // set the end height of the CCE to the current block.number only if the current block we are on is greater than its value
-            if (cceEndHeight < blockNumber) {
-                cceEndHeight = blockNumber;
+            if (cceLastEndHeight < blockNumber) {
+                cceLastEndHeight = blockNumber;
             }
         // if a new CCE is triggered for any reason, its startblock is always the previous endblock +1, 
         // its start height may of spilled in to virtual future block numbers so if the current cce start height is less than the block we are on we can update the end 
         // height to a new greater value.  Otherwise if the startheight is still in the future then the endheight is also in the future at the same block.
         } else {
-            cceStartHeight = cceEndHeight + 1;
+            cceLastStartHeight = cceLastEndHeight + 1;
 
-            if (cceStartHeight < blockNumber) {
-                cceEndHeight = blockNumber;
+            if (cceLastStartHeight < blockNumber) {
+                cceLastEndHeight = blockNumber;
             } else {
-                cceEndHeight = cceStartHeight;
+                cceLastEndHeight = cceLastStartHeight;
             }
         }
 
-        setReadyExportTransfers(cceStartHeight, cceEndHeight, reserveTransfer, 50);
-
-        VerusObjects.CReserveTransferSet memory pendingTransfers = _readyExports[cceStartHeight];
-
+        setReadyExportTransfers(cceLastStartHeight, cceLastEndHeight, reserveTransfer, 50);
+        VerusObjects.CReserveTransferSet memory pendingTransfers = _readyExports[cceLastStartHeight];
         address crossChainExportAddress = contracts[uint(VerusConstants.ContractType.VerusCrossChainExport)];
 
-        (bool success, bytes memory returnData) = crossChainExportAddress.call(abi.encodeWithSignature("generateCCE(bytes)", abi.encode(pendingTransfers.transfers, poolAvailable, cceStartHeight, cceEndHeight, contracts[uint(VerusConstants.ContractType.VerusSerializer)])));
+        (bool success, bytes memory returnData) = crossChainExportAddress.call(abi.encodeWithSignature("generateCCE(bytes)", abi.encode(pendingTransfers.transfers, poolAvailable, cceLastStartHeight, cceLastEndHeight, contracts[uint(VerusConstants.ContractType.VerusSerializer)])));
         require(success, "generateCCEfailed");
 
         bytes memory serializedCCE = abi.decode(returnData, (bytes)); 
-        bytes32 prevHash;
- 
-        if(pendingTransfers.transfers.length == 1)
-        {
-            prevHash = _readyExports[lastCCEExportHeight].exportHash;
-            cceLastStartHeight = cceStartHeight;
-            cceLastEndHeight = cceEndHeight;
-        } 
-        else 
+
+        if(pendingTransfers.transfers.length > 1)
         {
             prevHash = pendingTransfers.prevExportHash;
         }
           
-        setReadyExportTxid(keccak256(abi.encodePacked(serializedCCE, prevHash)), prevHash, cceStartHeight);
+        setReadyExportTxid(keccak256(abi.encodePacked(serializedCCE, prevHash)), prevHash, cceLastStartHeight);
 
     }
 
