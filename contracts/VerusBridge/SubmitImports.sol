@@ -185,11 +185,11 @@ contract SubmitImports is VerusStorage {
 
         while(loop){
 
-            heights = exportHeights[heights];
-            outputSize++;
-            if (heights > _endBlock || heights == 0) {
+            heights = _readyExports[heights].endHeight + 1;
+            if (heights > _endBlock || heights == 1) {
                 break;
             }
+            outputSize++;
         }
 
         returnedExports = new VerusObjects.CReserveTransferSetCalled[](outputSize);
@@ -200,7 +200,7 @@ contract SubmitImports is VerusStorage {
         {
             tempSet = _readyExports[heights];
             returnedExports[i] = VerusObjects.CReserveTransferSetCalled(tempSet.exportHash, tempSet.prevExportHash, uint64(heights), tempSet.endHeight, tempSet.transfers);
-            heights = exportHeights[heights];
+            heights = tempSet.endHeight + 1;
         }
         return returnedExports;      
     }

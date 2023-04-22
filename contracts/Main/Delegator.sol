@@ -64,7 +64,7 @@ contract Delegator is VerusStorage {
 
     function getReadyExportsByRange(uint256 _startBlock, uint256 _endBlock) external returns(VerusObjects.CReserveTransferSetCalled[] memory returnedExports){
 
-        address logic = contracts[uint(VerusConstants.ContractType.CreateExport)];
+        address logic = contracts[uint(VerusConstants.ContractType.SubmitImports)];
 
         (bool success, bytes memory returnedData) = logic.delegatecall(abi.encodeWithSignature("getReadyExportsByRange(uint256,uint256)", _startBlock, _endBlock));
         require(success);
