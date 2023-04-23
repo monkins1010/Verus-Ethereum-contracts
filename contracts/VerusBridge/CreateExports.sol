@@ -116,7 +116,6 @@ contract CreateExports is VerusStorage {
         uint64 blockDelta = cceLastEndHeight - (cceLastStartHeight == 0 ? cceLastEndHeight : cceLastStartHeight);
         uint64 lastTransfersLenght = uint64(_readyExports[cceLastStartHeight].transfers.length);
         bytes32 prevHash = _readyExports[cceLastStartHeight].exportHash;
-
         // if there are no transfers then there is no need to make a new CCE as this is the first one, and the endheight can become the block number if it is less than the current block no.
         // if the last notary received height is less than the endheight then keep building up the CCE (as long as 10 ETH blocks havent passed, and a new CCE isnt being forced and there is less than 50)
 
@@ -139,6 +138,10 @@ contract CreateExports is VerusStorage {
             }
         }
 
+        if (exportHeights[cceLastEndHeight] != cceLastStartHeight) {
+            exportHeights[cceLastEndHeight] = cceLastStartHeight;
+        }
+
         setReadyExportTransfers(cceLastStartHeight, cceLastEndHeight, reserveTransfer, 50);
         VerusObjects.CReserveTransferSet memory pendingTransfers = _readyExports[cceLastStartHeight];
         address crossChainExportAddress = contracts[uint(VerusConstants.ContractType.VerusCrossChainExport)];
@@ -152,7 +155,6 @@ contract CreateExports is VerusStorage {
         {
             prevHash = pendingTransfers.prevExportHash;
         }
-          
         setReadyExportTxid(keccak256(abi.encodePacked(serializedCCE, prevHash)), prevHash, cceLastStartHeight);
 
     }

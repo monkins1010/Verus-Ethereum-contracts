@@ -44,19 +44,21 @@ contract Delegator is VerusStorage {
         require(success);
     }
 
-    function submitImports(bytes calldata data) external { 
+    function submitImports(VerusObjects.CReserveTransferImport calldata data) external { 
 
         bool success;
         bytes memory returnedData;
 
-        address verusBridgeAddress = contracts[uint(VerusConstants.ContractType.CreateExport)];
-        (success, returnedData) = verusBridgeAddress.delegatecall(abi.encodeWithSignature("_createImports(bytes)", data));
+        bytes memory packedData = abi.encode(data);
+
+        address SubmitImportsAddress = contracts[uint(VerusConstants.ContractType.SubmitImports)];
+        (success, returnedData) = SubmitImportsAddress.delegatecall(abi.encodeWithSignature("_createImports(bytes)", packedData));
         require(success);
 
         uint64 fees = abi.decode(returnedData, (uint64));
 
         if (fees > 0 ) {
-            (success,) = verusBridgeAddress.delegatecall(abi.encodeWithSignature("setClaimableFees(uint64)", fees));
+            (success,) = SubmitImportsAddress.delegatecall(abi.encodeWithSignature("setClaimableFees(uint64)", fees));
             require(success);
         }
     }

@@ -75,7 +75,7 @@ contract VerusProof is VerusStorage  {
 
     }
     
-    function checkTransfers(VerusObjects.CReserveTransferImport calldata _import, bytes32 hashedTransfers) public view returns (uint64, uint128) {
+    function checkTransfers(VerusObjects.CReserveTransferImport memory _import, bytes32 hashedTransfers) public view returns (uint64, uint128) {
 
         // the first component of the import partial transaction proof is the transaction header, for each version of
         // transaction header, we have a specific offset for the hash of transfers. if we change this, we must
@@ -290,8 +290,9 @@ contract VerusProof is VerusStorage  {
         return txRoot;
     }
     
-    function proveImports(VerusObjects.CReserveTransferImport calldata _import, bytes32 hashOfTransfers) public view returns(uint64, uint128){
+    function proveImports(bytes calldata dataIn ) external view returns(uint64, uint128){
         
+        (VerusObjects.CReserveTransferImport memory _import, bytes32 hashOfTransfers) = abi.decode(dataIn, (VerusObjects.CReserveTransferImport, bytes32));
         bytes32 confirmedStateRoot;
         bytes32 retStateRoot;
         uint64 fees;

@@ -91,7 +91,7 @@ contract SubmitImports is VerusStorage {
 
         address verusProofAddress = contracts[uint(VerusConstants.ContractType.VerusProof)];
 
-        (success, returnBytes) = verusProofAddress.delegatecall(abi.encodeWithSignature("proveImports(bytes)", abi.encode(data, hashOfTransfers)));
+        (success, returnBytes) = verusProofAddress.delegatecall(abi.encodeWithSignature("proveImports(bytes)", abi.encode(_import, hashOfTransfers)));
         require(success);
 
         (fees, CCEHeightsAndnIndex) = abi.decode(returnBytes, (uint64, uint128));// verusProof.proveImports(_import, hashOfTransfers); 
