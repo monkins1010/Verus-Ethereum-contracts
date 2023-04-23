@@ -8,26 +8,10 @@ import "../Libraries/VerusObjects.sol";
 import "../Libraries/VerusConstants.sol";
 import "../VerusBridge/VerusSerializer.sol";
 
-contract VerusCrossChainExport{
+contract VerusCrossChainExport {
 
     VerusObjects.CCurrencyValueMap[] currencies;
     VerusObjects.CCurrencyValueMap[] fees;
-    VerusSerializer verusSerializer;
-
-    address upgradeContract;
-
-    constructor(address verusSerializerAddress, address upgradeAddress) {
-        verusSerializer = VerusSerializer(verusSerializerAddress);
-        upgradeContract = upgradeAddress;
-    }
-
-    function setContract(address contractAddress) public {
-
-        require(msg.sender == upgradeContract);
-
-        verusSerializer = VerusSerializer(contractAddress);
-
-    }
 
     function quickSort(VerusObjects.CCurrencyValueMap[] storage currencey, int left, int right) private {
         int i = left;
@@ -66,27 +50,29 @@ contract VerusCrossChainExport{
         return 0;
     }
 
-    function generateCCE(VerusObjects.CReserveTransfer[] memory transfers, bool bridgeReady, uint blockheight) public returns(VerusObjects.CCrossChainExport memory){
+    function generateCCE(bytes memory bytesin) external returns(bytes memory){
 
+        (VerusObjects.CReserveTransfer[] memory transfers, bool bridgeReady, uint64 startheight, uint64 endheight, address verusSerializer) = abi.decode(bytesin, (VerusObjects.CReserveTransfer[], bool, uint64, uint64, address));
+        
         VerusObjects.CCrossChainExport memory workingCCE;
         //create a hash of the transfers and then 
-        bytes memory serializedTransfers = verusSerializer.serializeCReserveTransfers(transfers, false);
+        bytes memory serializedTransfers = VerusSerializer(verusSerializer).serializeCReserveTransfers(transfers, false);
         bytes32 hashedTransfers = keccak256(serializedTransfers);
 
         //create the Cross ChainExport to then serialize and hash
         
         workingCCE.version = 1;
         workingCCE.flags = 2;
-        workingCCE.sourceheightstart = uint32(blockheight);
-        workingCCE.sourceheightend = uint32(blockheight);
+        workingCCE.sourceheightstart = startheight;
+        workingCCE.sourceheightend = endheight;
         workingCCE.sourcesystemid = VerusConstants.VEth;
         workingCCE.hashtransfers = hashedTransfers;
         workingCCE.destinationsystemid = VerusConstants.VerusSystemId;
 
-        if (bridgeReady) { // RESERVETORESERVE FLAG
-            workingCCE.destinationcurrencyid = VerusConstants.VerusBridgeAddress;  //TODO:transfers are bundled by type
+        if (bridgeReady) { 
+            workingCCE.destinationcurrencyid = VerusConstants.VerusBridgeAddress;  //NOTE:transfers are bundled by type
         } else {
-            workingCCE.destinationcurrencyid = VerusConstants.VerusCurrencyId; //TODO:transfers are bundled by type
+            workingCCE.destinationcurrencyid = VerusConstants.VerusCurrencyId; 
         }
 
         workingCCE.numinputs = uint32(transfers.length);
@@ -139,7 +125,7 @@ contract VerusCrossChainExport{
         delete currencies;
         delete fees;
 
-        return workingCCE;
+        return VerusSerializer(verusSerializer).serializeCCrossChainExport(workingCCE);
 
     }
     

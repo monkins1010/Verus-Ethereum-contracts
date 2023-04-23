@@ -65,6 +65,12 @@ library VerusObjectsNotarization {
         bytes32 proposerPacked;  //after 22 bytes the voutnum 32bit num resides << 176
     }
 
+    struct storedCProofRoot{
+        bytes32 stateroot;            
+        bytes32 blockhash;              
+        bytes32 compactpower;
+    }
+
     struct CNodeData {
         string networkaddress;
         address nodeidentity;

@@ -6,40 +6,31 @@ pragma abicoder v2;
 import "../Libraries/VerusObjects.sol";
 import "../Libraries/VerusObjectsCommon.sol";
 import "../Libraries/VerusConstants.sol";
-import "./TokenManager.sol";
-import "../VerusBridge/VerusBridgeStorage.sol";
+import "../Storage/StorageMaster.sol";
 
-contract ExportManager {
 
-    TokenManager tokenManager;
-    VerusBridgeStorage verusBridgeStorage;
-    address verusUpgradeContract;
+contract ExportManager is VerusStorage  {
+
     uint8 constant FEE_OFFSET = 20 + 20 + 20 + 8; // 3 x 20bytes address + 64bit uint
     uint8 constant AUX_DEST_LENGTH = 24;
 
-    constructor(address verusBridgeStorageAddress, address tokenManagerAddress, address verusUpgradeAddress)
-    {
-        verusBridgeStorage = VerusBridgeStorage(verusBridgeStorageAddress); 
-        tokenManager = TokenManager(tokenManagerAddress);
-        verusUpgradeContract = verusUpgradeAddress;
-    }
+    function ERC20Registered(address _iaddress) private view returns (bool) {
 
-    function setContract(address _contract) public {
-
-        require(msg.sender == verusUpgradeContract);
+        return verusToERC20mapping[_iaddress].flags > 0;
         
-        if(_contract != address(tokenManager)) 
-        {
-            tokenManager = TokenManager(_contract);
-        }
-
     }
 
-    function checkExport(VerusObjects.CReserveTransfer memory transfer, uint256 ETHSent, bool poolAvailable) public view  returns (uint256 fees){
+    function checkExport(bytes calldata datain) external payable returns (uint256 fees){
+       
+        VerusObjects.CReserveTransfer memory transfer = abi.decode(datain, (VerusObjects.CReserveTransfer));
 
-        verusBridgeStorage.checkiaddresses(transfer);
+        require(ERC20Registered(transfer.currencyvalue.currency) && 
+            ERC20Registered(transfer.feecurrencyid) &&
+            ERC20Registered(transfer.destcurrencyid) &&
+            (ERC20Registered(transfer.secondreserveid) || transfer.secondreserveid == address(0)) &&
+            transfer.destsystemid == address(0), "currencycheckfailed");
 
-        uint256 requiredFees =  VerusConstants.transactionFee;  //0.003 eth in WEI (To vrsc)
+        uint256 requiredFees = VerusConstants.transactionFee;  //0.003 eth in WEI (To vrsc)
         uint64 bounceBackFee;
         uint64 transferFee;
         bytes memory serializedDest;
@@ -47,14 +38,9 @@ contract ExportManager {
         address gatewayCode;
         address destAddressID;
         uint8 destinationType;
-    
-        require (checkTransferFlags(transfer), "Flag Check failed");         
-                                  
-        //TODO: We cant mix different transfer destinations together in the CCE require on non same fields.
-        address destCurrencyexportID = verusBridgeStorage.getCreatedExport(block.number);
 
-        require (destCurrencyexportID == address(0) || destCurrencyexportID == transfer.destcurrencyid, "checkReadyExports cannot mix types ");
-        
+        require (checkTransferFlags(transfer), "Flag Check failed");                 
+       
         // Check destination address is not zero
         serializedDest = transfer.destination.destinationaddress;  
 
@@ -68,7 +54,7 @@ contract ExportManager {
         else
         {
             // Custom destination for NFT  = 1byte desttype + 20bytes destinationaddres + 20bytes NFT address + 32bytes NFTTokenID
-            require (transfer.destination.destinationaddress.length == 73, "NFT destination address not 73 bytes");
+            require (transfer.destination.destinationaddress.length == VerusConstants.VERUS_NFT_DEST_LENGTH, "NFT destination address not 53 bytes");
             require (transfer.flags == VerusConstants.VALID, "Invalid flags for NFT transfer");
             require (transfer.currencyvalue.amount == 1, "Currency value must be 1 Satoshi");
             assembly 
@@ -82,7 +68,6 @@ contract ExportManager {
 
         }
         require (destAddressID != address(0), "Destination Address null");// Destination can be currency definition
-
         // Check fees are correct, if pool unavailble vrsctest only fees, TODO:if pool availble vETH fees only for now
 
         if (!poolAvailable) {
@@ -109,7 +94,7 @@ contract ExportManager {
 
             if (transfer.flags == VerusConstants.VALID)
             {
-                require(transfer.destcurrencyid == VerusConstants.VerusBridgeAddress);
+                require(transfer.destcurrencyid == VerusConstants.VerusBridgeAddress, "flagsnotvalid");
             }
 
             if ((transfer.destination.destinationtype & ~VerusConstants.FLAG_DEST_AUX) == (VerusConstants.FLAG_DEST_GATEWAY + VerusConstants.DEST_ETH)) {
@@ -133,7 +118,7 @@ contract ExportManager {
                 require (bounceBackFee >= VerusConstants.verusvETHReturnFee, "Return fee not >= 0.01ETH");
 
                 transferFee += bounceBackFee;
-                requiredFees += tokenManager.convertFromVerusNumber(bounceBackFee, 18);  //bounceback fees required as well as send fees
+                requiredFees += convertFromVerusNumber(uint256(bounceBackFee),18);  //bounceback fees required as well as send fees
 
             } else if (!(transfer.destination.destinationtype == VerusConstants.DEST_PKH || transfer.destination.destinationtype == VerusConstants.DEST_ID 
                         || transfer.destination.destinationtype == VerusConstants.DEST_SH || transfer.destination.destinationtype == VerusConstants.DEST_ETHNFT)) {
@@ -150,17 +135,17 @@ contract ExportManager {
 
         if (poolAvailable)
         { 
-            if (tokenManager.convertFromVerusNumber(transferFee, 18) < requiredFees)
+            if (convertFromVerusNumber(transferFee, 18) < requiredFees)
             {
                 revert ("ETH Fees to Low");
             }            
             else if (transfer.currencyvalue.currency == VerusConstants.VEth && 
-                ETHSent < tokenManager.convertFromVerusNumber(amount + transferFee, 18))
+                msg.value < convertFromVerusNumber(uint256(amount + transferFee), 18))
             {
-                revert ("ETH sent <= (amount + fees)");
+                revert ("ETH sent < (amount + fees)");
             } 
             else if (transfer.currencyvalue.currency != VerusConstants.VEth &&
-                    ETHSent < tokenManager.convertFromVerusNumber(transferFee, 18))
+                    msg.value < convertFromVerusNumber(transferFee, 18))
             {
                 revert ("ETH fee sent < fees for token");
             } 
@@ -174,11 +159,11 @@ contract ExportManager {
                 revert ("Invalid VRSC fee");
             }
             else if (transfer.currencyvalue.currency == VerusConstants.VEth &&
-                     (tokenManager.convertFromVerusNumber(amount, 18) + requiredFees) != ETHSent)
+                     (convertFromVerusNumber(amount, 18) + requiredFees) != msg.value)
             {
                 revert ("ETH Fee to low");
             }
-            else if(transfer.currencyvalue.currency != VerusConstants.VEth && requiredFees != ETHSent)
+            else if(transfer.currencyvalue.currency != VerusConstants.VEth && requiredFees != msg.value)
             {
                 revert ("ETH Fee to low (token)");
             }
@@ -193,8 +178,8 @@ contract ExportManager {
 
         uint8 transferType = transfer.destination.destinationtype & ~VerusConstants.FLAG_DEST_GATEWAY;
         
-        VerusObjects.mappedToken memory sendingCurrency = verusBridgeStorage.getERCMapping(transfer.currencyvalue.currency);
-        VerusObjects.mappedToken memory destinationCurrency = verusBridgeStorage.getERCMapping(transfer.destcurrencyid);
+        VerusObjects.mappedToken memory sendingCurrency = verusToERC20mapping[transfer.currencyvalue.currency];
+        VerusObjects.mappedToken memory destinationCurrency = verusToERC20mapping[transfer.destcurrencyid];
 
         if (transfer.destination.destinationtype == (VerusConstants.DEST_ETH + VerusConstants.FLAG_DEST_GATEWAY)
                 && (transfer.flags & VerusConstants.CURRENCY_EXPORT  != VerusConstants.CURRENCY_EXPORT))
@@ -203,7 +188,7 @@ contract ExportManager {
             {
                 require(sendingCurrency.flags & VerusConstants.MAPPING_PARTOF_BRIDGEVETH == VerusConstants.MAPPING_PARTOF_BRIDGEVETH &&
                         destinationCurrency.flags & VerusConstants.MAPPING_ISBRIDGE_CURRENCY == VerusConstants.MAPPING_ISBRIDGE_CURRENCY &&
-                        verusBridgeStorage.getERCMapping(transfer.secondreserveid).flags & VerusConstants.MAPPING_PARTOF_BRIDGEVETH == VerusConstants.MAPPING_PARTOF_BRIDGEVETH,
+                        verusToERC20mapping[transfer.secondreserveid].flags & VerusConstants.MAPPING_PARTOF_BRIDGEVETH == VerusConstants.MAPPING_PARTOF_BRIDGEVETH,
                          "Cannot convert non bridge reserves");
             }
             else if (transfer.flags == (VerusConstants.VALID + VerusConstants.CONVERT + VerusConstants.IMPORT_TO_SOURCE))
@@ -250,7 +235,7 @@ contract ExportManager {
             {
                 require(sendingCurrency.flags & VerusConstants.MAPPING_PARTOF_BRIDGEVETH == VerusConstants.MAPPING_PARTOF_BRIDGEVETH &&
                         destinationCurrency.flags & VerusConstants.MAPPING_ISBRIDGE_CURRENCY == VerusConstants.MAPPING_ISBRIDGE_CURRENCY &&
-                        verusBridgeStorage.getERCMapping(transfer.secondreserveid).flags & VerusConstants.MAPPING_PARTOF_BRIDGEVETH == VerusConstants.MAPPING_PARTOF_BRIDGEVETH,
+                        verusToERC20mapping[transfer.secondreserveid].flags & VerusConstants.MAPPING_PARTOF_BRIDGEVETH == VerusConstants.MAPPING_PARTOF_BRIDGEVETH,
                          "Cannot convert non bridge reserves");
             }
             else if (transfer.flags ==  (VerusConstants.VALID + VerusConstants.CONVERT + VerusConstants.IMPORT_TO_SOURCE))
@@ -273,7 +258,7 @@ contract ExportManager {
         }  
     }
 
-    function reverse(uint64 input) internal pure returns (uint64 v) 
+    function reverse(uint64 input) public pure returns (uint64 v) 
     {
         v = input;
 
@@ -287,5 +272,20 @@ contract ExportManager {
 
         // swap 4-byte long pairs
         v = (v >> 32) | (v << 32);
+    }
+
+    function convertFromVerusNumber(uint256 a,uint8 decimals) public pure returns (uint256) {
+        uint8 power = 10; //default value for 18
+        uint256 c = a;
+
+        if(decimals > 8 ) {
+            power = decimals - 8;// number of decimals in verus
+            c = a * (10 ** power);
+        }else if(decimals < 8){
+            power = 8 - decimals;// number of decimals in verus
+            c = a / (10 ** power);
+        }
+      
+        return c;
     }
 }

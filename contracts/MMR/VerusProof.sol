@@ -5,16 +5,14 @@ pragma solidity >=0.6.0;
 pragma abicoder v2;
 import "../Libraries/VerusObjects.sol";
 import "./VerusBlake2b.sol";
-import "../VerusBridge/VerusSerializer.sol";
+import {VerusSerializer} from "../VerusBridge/VerusSerializer.sol";
 import "../Libraries/VerusObjectsCommon.sol";
 import "../VerusNotarizer/VerusNotarizer.sol";
 import "./VerusMMR.sol";
+import "../Storage/StorageMaster.sol";
 
-contract VerusProof {
+contract VerusProof is VerusStorage  {
 
-    uint256 mmrRoot;
-    VerusSerializer verusSerializer;
-    VerusNotarizer verusNotarizer;
     using VerusBlake2b for bytes;
     
     // these constants should be able to reference each other, as many are relative, but Solidity does not
@@ -39,25 +37,8 @@ contract VerusProof {
     uint8 constant FLAG_REFUNDING = 4;
     uint8 constant FLAG_LAUNCHCONFIRMED = 0x10;
     uint8 constant FLAG_LAUNCHCOMPLETEMARKER = 0x20;
+    uint8 constant AUX_DEST_ETH_VEC_LENGTH = 22;
 
-    address verusUpgradeContract;
-
-    constructor(address verusUpgradeAddress, address verusSerializerAddress, 
-    address verusNotarizerAddress) 
-    {
-        verusUpgradeContract = verusUpgradeAddress;
-        verusSerializer = VerusSerializer(verusSerializerAddress);
-        verusNotarizer = VerusNotarizer(verusNotarizerAddress);
-    }
-
-    function setContracts(address[13] memory contracts) public {
-
-        require(msg.sender == verusUpgradeContract);
-
-        verusSerializer = VerusSerializer(contracts[uint(VerusConstants.ContractType.VerusSerializer)]);
-        verusNotarizer = VerusNotarizer(contracts[uint(VerusConstants.ContractType.VerusNotarizer)]);
-        
-    }
 
     function checkProof(bytes32 hashToProve, VerusObjects.CTXProof[] memory _branches) public view returns(bytes32){
         //loop through the branches from bottom to top
@@ -75,6 +56,7 @@ contract VerusProof {
         bytes32 hashInProgress = _hashToCheck;
         bytes memory joined;
         //hashInProgress = blake2b.bytesToBytes32(abi.encodePacked(_hashToCheck));
+
         uint hashIndex = VerusMMR.GetMMRProofIndex(_branch.nIndex, _branch.nSize, _branch.extraHashes);
         
        for(uint i = 0;i < branchLength; i++){
@@ -93,7 +75,7 @@ contract VerusProof {
 
     }
     
-    function checkTransfers(VerusObjects.CReserveTransferImport calldata _import, bytes32 hashedTransfers) public view returns (uint256, uint128) {
+    function checkTransfers(VerusObjects.CReserveTransferImport memory _import, bytes32 hashedTransfers) public view returns (uint64, uint128) {
 
         // the first component of the import partial transaction proof is the transaction header, for each version of
         // transaction header, we have a specific offset for the hash of transfers. if we change this, we must
@@ -119,14 +101,14 @@ contract VerusProof {
 
             VerusObjectsCommon.UintReader memory readerLen;
 
-            readerLen = verusSerializer.readCompactSizeLE(firstObj, OUTPUT_SCRIPT_OFFSET);    // get the length of the output script
-            readerLen = verusSerializer.readCompactSizeLE(firstObj, readerLen.offset);        // then length of first master push
+            readerLen = VerusSerializer(contracts[uint(VerusConstants.ContractType.VerusSerializer)]).readCompactSizeLE(firstObj, OUTPUT_SCRIPT_OFFSET);    // get the length of the output script
+            readerLen = VerusSerializer(contracts[uint(VerusConstants.ContractType.VerusSerializer)]).readCompactSizeLE(firstObj, readerLen.offset);        // then length of first master push
 
             // must be push less than 75 bytes, as that is an op code encoded similarly to a vector.
             // all we do here is ensure that is the case and skip master
             if (readerLen.value == 0 || readerLen.value > 0x4b)
             {
-                return (uint256(0), uint128(0));
+                return (uint64(0), uint128(0));
             }
 
             nextOffset = uint32(readerLen.offset + readerLen.value);        // add the length of the push of master to point to cc opcode
@@ -141,7 +123,7 @@ contract VerusProof {
             if (var1 != SCRIPT_OP_CHECKCRYPTOCONDITION ||
                 (opCode2 != SCRIPT_OP_PUSHDATA1 && opCode2 != SCRIPT_OP_PUSHDATA2))
             {
-                return (uint256(0), uint128(0));
+                return (uint64(0), uint128(0));
             }
 
             if (opCode2 == SCRIPT_OP_PUSHDATA1)
@@ -168,7 +150,7 @@ contract VerusProof {
 
             if (var1 != CCE_EVAL_EXPORT)
             {
-                return (uint256(0), uint128(0));
+                return (uint64(0), uint128(0));
             }
 
             nextOffset += CCE_SOURCE_SYSTEM_OFFSET;
@@ -188,20 +170,18 @@ contract VerusProof {
             return (checkCCEValues(firstObj, nextOffset, hashedTransfers, nIndex));
         
         }
-        return (uint256(0), uint128(0));
+        return (uint64(0), uint128(0));
     }
 
-    function checkCCEValues(bytes memory firstObj, uint32 nextOffset, bytes32 hashedTransfers, uint32 nIndex) public view returns(uint256, uint128)
+    function checkCCEValues(bytes memory firstObj, uint32 nextOffset, bytes32 hashedTransfers, uint32 nIndex) public view returns(uint64, uint128)
     {
         bytes32 hashReserveTransfers;
         address systemSourceID;
         address destSystemID;
-        uint176 exporter;
         uint64 rewardFees;
         uint32 tempRegister;
         uint8 tmpuint8;
         uint128 packedRegister; //uint128(startheight) | (uint128(endheight) << 32) | (uint128(nIndex) << 64) | (uint128(numInputs) << 96));
-        uint256 rewardAddressPlusFees;
         
         assembly {
             systemSourceID := mload(add(firstObj, nextOffset))      // source system ID, which should match expected source (VRSC/VRSCTEST)
@@ -214,13 +194,12 @@ contract VerusProof {
             tmpuint8 := mload(add(firstObj, nextOffset))            // read exporter type
             nextOffset := add(nextOffset, 1)                        // goto exporter vec length
             nextOffset := add(nextOffset, CCE_DEST_CURRENCY_DELTA)  // goto exporter
-            exporter := mload(add(firstObj, nextOffset))            // exporter
         }
 
         if (tmpuint8 & VerusConstants.FLAG_DEST_AUX == VerusConstants.FLAG_DEST_AUX)
         {
             nextOffset += 1;  // goto auxdest parent vec length position
-            nextOffset = skipAux(firstObj, nextOffset);
+            (nextOffset, ) = skipAux(firstObj, nextOffset);
             nextOffset -= 1;  // NOTE: Next Varint call takes array pos not array pos +1
         }
 
@@ -230,7 +209,7 @@ contract VerusProof {
         }
 
         (packedRegister, nextOffset)  = readVarint(firstObj, nextOffset);   // put startheight at [0] 32bit chunk
-        tempRegister = verusSerializer.serializeUint32(tempRegister);       // reverse endian of no. transfers
+        tempRegister = serializeUint32(tempRegister);       // reverse endian of no. transfers
         packedRegister  |= (uint128(tempRegister) << 96) ;                  // put number of transfers at [3] 32-bit chunk     
         
         (tempRegister, nextOffset)  = readVarint(firstObj, nextOffset); 
@@ -247,37 +226,41 @@ contract VerusProof {
                 nextOffset := add(add(nextOffset, CCE_DEST_CURRENCY_DELTA), 8)  // move 20 + 8 bytes for (address + 64bit)
                 rewardFees := mload(add(firstObj, nextOffset))    
             }
-                // packed uint64 and uint160 into a uint256 for efficiency (fees and address)
-                rewardAddressPlusFees = uint256(exporter);
-                rewardFees = verusSerializer.serializeUint64(rewardFees);
-                rewardAddressPlusFees |= uint256(rewardFees) << 176;
+                rewardFees = VerusSerializer(contracts[uint(VerusConstants.ContractType.VerusSerializer)]).serializeUint64(rewardFees);
         }
 
         if (!(hashedTransfers == hashReserveTransfers &&
                 systemSourceID == VerusConstants.VerusSystemId &&
-                destSystemID == VerusConstants.EthSystemID)) {
+                destSystemID == VerusConstants.VEth)) {
 
             revert("CCE information does not checkout");
         }
 
-        return (rewardAddressPlusFees, packedRegister); //uint128(startheight) | (uint128(endheight) << 32) | (uint128(nIndex) << 64) | (uint128(numInputs) << 96));
+        return (rewardFees, packedRegister); //uint128(startheight) | (uint128(endheight) << 32) | (uint128(nIndex) << 64) | (uint128(numInputs) << 96));
 
     }
 
-    function skipAux (bytes memory firstObj, uint32 nextOffset) public view returns (uint32)
+    function skipAux (bytes memory firstObj, uint32 nextOffset) public view returns (uint32, uint176 auxDest)
     {
                                                   
             VerusObjectsCommon.UintReader memory readerLen;
-            readerLen = verusSerializer.readCompactSizeLE(firstObj, nextOffset);    // get the length of the auxDest
+            readerLen = VerusSerializer(contracts[uint(VerusConstants.ContractType.VerusSerializer)]).readCompactSizeLE(firstObj, nextOffset);    // get the length of the auxDest
             nextOffset = readerLen.offset;
             uint arraySize = readerLen.value;
-
+            
             for (uint i = 0; i < arraySize; i++)
             {
-                    readerLen = verusSerializer.readCompactSizeLE(firstObj, nextOffset);    // get the length of the auxDest sub array
+                    readerLen = VerusSerializer(contracts[uint(VerusConstants.ContractType.VerusSerializer)]).readCompactSizeLE(firstObj, nextOffset);    // get the length of the auxDest sub array
+                    if (readerLen.value == AUX_DEST_ETH_VEC_LENGTH)
+                    {
+                         assembly {
+                            auxDest := mload(add(add(firstObj, nextOffset),AUX_DEST_ETH_VEC_LENGTH))
+                         }
+                    }
+
                     nextOffset = (readerLen.offset + uint32(readerLen.value));
             }
-            return nextOffset;
+            return (nextOffset, auxDest);
     }
 
     // roll through each proveComponents
@@ -285,19 +268,17 @@ contract VerusProof {
      
         bytes32 hashInProgress;
         bytes32 testHash;
-
-        if (_import.partialtransactionproof.components.length > 0)
-        {   
-            hashInProgress = _import.partialtransactionproof.components[0].elVchObj.createHash();
-            if (_import.partialtransactionproof.components[0].elType == 1 )
-            {
-                txRoot = checkProof(hashInProgress,_import.partialtransactionproof.components[0].elProof);           
-            }
+  
+        hashInProgress = _import.partialtransactionproof.components[0].elVchObj.createHash();
+        if (_import.partialtransactionproof.components[0].elType == 1 )
+        {
+            txRoot = checkProof(hashInProgress, _import.partialtransactionproof.components[0].elProof);           
         }
-
+        
         for (uint i = 1; i < _import.partialtransactionproof.components.length; i++) {
+
             hashInProgress = _import.partialtransactionproof.components[i].elVchObj.createHash();
-            testHash = checkProof(hashInProgress,_import.partialtransactionproof.components[i].elProof);
+            testHash = checkProof(hashInProgress, _import.partialtransactionproof.components[i].elProof);
         
             if (txRoot != testHash) 
             {
@@ -309,14 +290,15 @@ contract VerusProof {
         return txRoot;
     }
     
-    function proveImports(VerusObjects.CReserveTransferImport calldata _import, bytes32 hashOfTransfers) public view returns(uint256, uint128){
+    function proveImports(bytes calldata dataIn ) external view returns(uint64, uint128){
         
+        (VerusObjects.CReserveTransferImport memory _import, bytes32 hashOfTransfers) = abi.decode(dataIn, (VerusObjects.CReserveTransferImport, bytes32));
         bytes32 confirmedStateRoot;
         bytes32 retStateRoot;
-        uint256 rewardAddPlusFees;
+        uint64 fees;
         uint128 heightsAndTXNum;
 
-        (rewardAddPlusFees, heightsAndTXNum) = checkTransfers(_import, hashOfTransfers);
+        (fees, heightsAndTXNum) = checkTransfers(_import, hashOfTransfers);
         
         bytes32 txRoot = proveComponents(_import);
 
@@ -326,15 +308,37 @@ contract VerusProof {
         }
 
         retStateRoot = checkProof(txRoot, _import.partialtransactionproof.txproof);
-        confirmedStateRoot = verusNotarizer.getLastConfirmedVRSCStateRoot();
+        confirmedStateRoot = getLastConfirmedVRSCStateRoot();
 
         if (retStateRoot == bytes32(0) || retStateRoot != confirmedStateRoot) {
 
             revert("Stateroot does not match");
         }
         //truncate to only return heights as, contract will revert if issue with proofs.
-        return (rewardAddPlusFees, heightsAndTXNum);
+        return (fees, heightsAndTXNum);
  
+    }
+
+    function getLastConfirmedVRSCStateRoot() public view returns (bytes32) {
+
+        bytes32 stateRoot;
+        bytes32 slotHash;
+        bytes storage tempArray = bestForks[0];
+        uint32 nextOffset;
+
+        if (tempArray.length > 0)
+        {
+            bytes32 slot;
+            assembly {
+                        mstore(add(slot, 32),tempArray.slot)
+                        slotHash := keccak256(add(slot, 32), 32)
+                        nextOffset := add(nextOffset, 1)  
+                        nextOffset := add(nextOffset, 1)  
+                        stateRoot := sload(add(slotHash, nextOffset))
+            }
+        }
+
+        return stateRoot;
     }
 
     function readVarint(bytes memory buf, uint32 idx) public pure returns (uint32 v, uint32 retidx) {
@@ -352,6 +356,65 @@ contract VerusProof {
         revert(); // i=10, invalid varint stream
     }
 
+    function getTokenList(uint256 start, uint256 end) external view returns(VerusObjects.setupToken[] memory ) {
+
+        uint tokenListLength;
+        tokenListLength = tokenList.length;
+        VerusObjects.setupToken[] memory temp = new VerusObjects.setupToken[](tokenListLength);
+        VerusObjects.mappedToken memory recordedToken;
+        uint i;
+        uint endPoint;
+
+        endPoint = tokenListLength;
+        if (start >= 0 && start < tokenListLength)
+        {
+            i = start;
+        }
+
+        if (end > i && end < tokenListLength)
+        {
+            endPoint = end;
+        }
+
+        for(; i < endPoint; i++) {
+
+            address iAddress;
+            iAddress = tokenList[i];
+            recordedToken = verusToERC20mapping[iAddress];
+            temp[i].iaddress = iAddress;
+            temp[i].flags = recordedToken.flags;
+
+            if (iAddress == VerusConstants.VEth)
+            {
+                temp[i].erc20ContractAddress = address(0);
+                temp[i].name = "Testnet ETH";
+                temp[i].ticker = "ETH";
+            }
+            else if(recordedToken.flags & VerusConstants.TOKEN_LAUNCH == VerusConstants.TOKEN_LAUNCH )
+            {
+                Token token = Token(recordedToken.erc20ContractAddress);
+                temp[i].erc20ContractAddress = address(token);
+                temp[i].name = recordedToken.name;
+                temp[i].ticker = token.symbol();
+            }
+            else if(recordedToken.flags & VerusConstants.TOKEN_ETH_NFT_DEFINITION == VerusConstants.TOKEN_ETH_NFT_DEFINITION)
+            {
+                temp[i].erc20ContractAddress = recordedToken.erc20ContractAddress;
+                temp[i].name = recordedToken.name;
+                temp[i].tokenID = recordedToken.tokenID;
+            }
+            
+        }
+
+        return temp;
+    }
+
+    function serializeUint32(uint32 number) public pure returns(uint32){
+        // swap bytes
+        number = ((number & 0xFF00FF00) >> 8) | ((number & 0x00FF00FF) << 8);
+        number = (number >> 16) | (number << 16);
+        return number;
+    }
     
 }
 

@@ -6,67 +6,33 @@ pragma abicoder v2;
 
 import "../Libraries/VerusConstants.sol";
 import "../Libraries/VerusObjectsNotarization.sol";
-import "../VerusBridge/VerusSerializer.sol";
-import "../VerusNotarizer/VerusNotarizerStorage.sol";
-import "../VerusBridge/VerusBridgeMaster.sol";
 import "@openzeppelin/contracts/utils/math/SafeMath.sol";
 import "./NotarizationSerializer.sol";
+import "../MMR/VerusBlake2b.sol";
+import "../VerusBridge/UpgradeManager.sol";
+import "../Storage/StorageMaster.sol";
 
-contract VerusNotarizer {
+contract VerusNotarizer is VerusStorage {
         
     uint8 constant FLAG_FRACTIONAL = 1;
     uint8 constant FLAG_REFUNDING = 4;
     uint8 constant FLAG_LAUNCHCONFIRMED = 0x10;
     uint8 constant FLAG_LAUNCHCOMPLETEMARKER = 0x20;
+    uint8 constant OFFSET_FOR_HEIGHT = 224;
+    uint8 constant TYPE_REVOKE = 2;
+    uint8 constant TYPE_RECOVER = 3;
+    uint8 constant NUM_ADDRESSES_FOR_REVOKE = 2;
+    uint8 constant COMPLETE = 2;
+    uint8 constant ERROR = 4;
+    uint32 constant CONFIRMED_PROPOSER = 128;
+    uint32 constant LATEST_PROPOSER = 256;
+
+
     // notarization vdxf key
     bytes20 constant vdxfcode = bytes20(0x367Eaadd291E1976ABc446A143f83c2D4D2C5a84);
-
-    VerusSerializer verusSerializer;
-    VerusNotarizerStorage verusNotarizerStorage;
-    VerusBridgeMaster verusBridgeMaster;
-    NotarizationSerializer notarizationSerializer;
-    address upgradeContract;
-
-    // list of all notarizers mapped to allow for quick searching
-    mapping (address => VerusObjects.notarizer ) public notaryAddressMapping;
-    mapping (address => uint) sigCheck;
-    mapping (bytes32 => bool) knownNotarizationTxids;
-
-    address[] public notaries;
-
-    bool public poolAvailable;
-    bytes[] public bestForks;
-    // Notifies when a new block hash is published
     event NewNotarization (bytes32);
-
-    constructor(address _verusSerializerAddress, address upgradeContractAddress, 
-    address[] memory _notaries, address[] memory _notariesEthAddress, address[] memory _notariesColdStoreEthAddress, 
-    address verusNotarizerStorageAddress, address verusBridgeMasterAddress, address notarizationSerializerAddress) {
-        verusSerializer = VerusSerializer(_verusSerializerAddress);
-        upgradeContract = upgradeContractAddress;
-        verusNotarizerStorage = VerusNotarizerStorage(verusNotarizerStorageAddress); 
-        verusBridgeMaster = VerusBridgeMaster(verusBridgeMasterAddress);
-        notarizationSerializer = NotarizationSerializer(notarizationSerializerAddress);
-
-        // when contract is launching/upgrading copy in to global bool pool available.
-        if(verusNotarizerStorage.poolAvailable(VerusConstants.VerusBridgeAddress) > 0 )
-            poolAvailable = true;
-
-        for(uint i =0; i < _notaries.length; i++){
-            notaryAddressMapping[_notaries[i]] = VerusObjects.notarizer(_notariesEthAddress[i], _notariesColdStoreEthAddress[i], VerusConstants.NOTARY_VALID);
-            notaries.push(_notaries[i]);
-        }
-    }
-
-    function setContract(address serializerAddress, address notarizationSerializerAddress) public {
-
-        require(msg.sender == upgradeContract);
-
-        verusSerializer = VerusSerializer(serializerAddress);
-        notarizationSerializer = NotarizationSerializer(notarizationSerializerAddress);
-
-    }
-          
+    using VerusBlake2b for bytes;
+    
     function currentNotariesLength() public view returns(uint8){
 
         return uint8(notaries.length);
@@ -74,13 +40,12 @@ contract VerusNotarizer {
     }
  
     function setLatestData(bytes calldata serializedNotarization, bytes32 txid, uint32 n, bytes calldata data
-        ) public returns(uint16) {
+        ) external {
 
-        require(msg.sender == address(verusBridgeMaster), "SLD");
         require(!knownNotarizationTxids[txid], "known TXID");
         knownNotarizationTxids[txid] = true;
 
-       ( uint8[] memory _vs,
+        (uint8[] memory _vs,
         bytes32[] memory _rs,
         bytes32[] memory _ss,
         uint32[] memory blockheights,
@@ -89,16 +54,18 @@ contract VerusNotarizer {
         bytes32 keccakNotarizationHash;
         bytes32 txidHash;
         
-        txidHash = keccak256(abi.encodePacked(txid, verusSerializer.serializeUint32(n)));
+        txidHash = keccak256(abi.encodePacked(txid, serializeUint32(n)));
 
         keccakNotarizationHash = keccak256(serializedNotarization);
 
-        uint validSignatures;
+        uint i;
 
-        checkunique(notaryAddresses);
-
-        for(uint i = 0; i < notaryAddresses.length; i++)
+        for(; i < notaryAddresses.length; i++)
         {
+            if (i < (notaryAddresses.length - 1)) {
+                checkunique(notaryAddresses, i);
+            }
+            
             bytes32 hashedNotarizationByID;
             // hash the notarizations with the vdxf key, system, height & NotaryID
             hashedNotarizationByID = keccak256(
@@ -108,11 +75,11 @@ contract VerusNotarizer {
                     uint8(1),
                     txidHash,
                     VerusConstants.VerusSystemId,
-                    verusSerializer.serializeUint32(blockheights[i]),
+                    serializeUint32(blockheights[i]),
                     notaryAddresses[i], 
                     keccakNotarizationHash));
 
-            if (recoverSigner(hashedNotarizationByID, _vs[i]-4, _rs[i], _ss[i]) != notaryAddressMapping[notaryAddresses[i]].main || sigCheck[notaryAddresses[i]] != i)
+            if (ecrecover(hashedNotarizationByID, _vs[i]-4, _rs[i], _ss[i]) != notaryAddressMapping[notaryAddresses[i]].main)
             {
                 revert("Invalid notary signature");  
             }
@@ -120,37 +87,46 @@ contract VerusNotarizer {
             {
                 revert("Notary revoked"); 
             }
-
-            validSignatures++;
-            
         }
 
-        if(validSignatures < ((notaries.length >> 1) + 1 ))
+        if(i < ((notaries.length >> 1) + 1 ))
         {
-            return 0;
+            revert("not enough notary signatures");
         }
 
-        return uint16(blockheights[0]);
+        checkNotarization(serializedNotarization, txid, uint64(n));
 
     }
 
-    function checkNotarization(bytes calldata serializedNotarization, bytes32 txid, uint32 n ) public {
+    function checkNotarization(bytes calldata serializedNotarization, bytes32 txid, uint64 voutAndHeight ) private {
 
-        require(msg.sender == address(verusBridgeMaster), "WS");
-       
+    
         bytes32 blakeNotarizationHash;
 
-        blakeNotarizationHash = verusSerializer.notarizationBlakeHash(serializedNotarization);
-        
-        (bytes32 launchedAndProposer, bytes32 prevnotarizationtxid, bytes32 hashprevnotarization, bytes32 stateRoot) = notarizationSerializer.deserilizeNotarization(serializedNotarization);
+        blakeNotarizationHash = serializedNotarization.createHash();
 
+        address notarizationSerializerAddress = contracts[uint(VerusConstants.ContractType.NotarizationSerializer)];
+
+        (bool success, bytes memory returnBytes) = notarizationSerializerAddress.delegatecall(abi.encodeWithSignature("deserilizeNotarization(bytes)", serializedNotarization));
+        require(success);
+
+        (bytes32 launchedAndProposer, bytes32 prevnotarizationtxid, bytes32 hashprevnotarization, bytes32 stateRoot, bytes32 blockHash, 
+                uint32 verusProofheight) = abi.decode(returnBytes, (bytes32, bytes32, bytes32, bytes32, bytes32, uint32));
+
+        proofs[bytes32(uint256(verusProofheight))] = abi.encode(stateRoot, blockHash);
+        
         if (!poolAvailable && (((uint256(launchedAndProposer) >> 176) & 0xff) == 1)) { //shift to read if bridge launched in packed uint256
-            verusNotarizerStorage.setPoolAvailable();
             poolAvailable = true;
-            verusBridgeMaster.sendVRSC();
+            
+            address submitImportsAddress = contracts[uint(VerusConstants.ContractType.SubmitImports)];
+            (bool success2,) = submitImportsAddress.delegatecall(abi.encodeWithSignature("sendToVRSC(uint64,address,uint8)", 0, address(0), VerusConstants.DEST_PKH));
+            require(success2);
         }
 
-        setNotarizationProofRoot(blakeNotarizationHash, hashprevnotarization, txid, n, prevnotarizationtxid, launchedAndProposer, stateRoot);
+        voutAndHeight |= uint64(verusProofheight) << 32;
+        launchedAndProposer |= bytes32(uint256(voutAndHeight) << 192); //also pack in the voutnum
+
+        setNotarizationProofRoot(blakeNotarizationHash, hashprevnotarization, txid, prevnotarizationtxid, launchedAndProposer, stateRoot);
 
         emit NewNotarization(blakeNotarizationHash);
 
@@ -219,7 +195,7 @@ contract VerusNotarizer {
     }
 
     function setNotarizationProofRoot(bytes32 hashedNotarization, 
-            bytes32 hashprevnotarization, bytes32 txidHash, uint32 voutnum, bytes32 hashprevtxid, bytes32 proposer, bytes32 stateRoot) private 
+            bytes32 hashprevnotarization, bytes32 txidHash, bytes32 hashprevtxid, bytes32 proposer, bytes32 stateRoot) private 
     {
         
         int forkIdx = -1;
@@ -261,9 +237,6 @@ contract VerusNotarizer {
             encodeNotarization(uint(forkIdx), notarizations[uint(0)]);
         }
 
-        // Pack the voutnum in the bytes32 variable after the CReserveDestination 22 bytes and bridge launched 2 bytes
-        proposer |= bytes32(uint256(voutnum) << 192);
-
         // If the position that is matched is the second stored one, then that becomes the new confirmed.
         if(forkPos == 1)
         {
@@ -276,6 +249,8 @@ contract VerusNotarizer {
             //pack vout in at the end of the proposer 22 bytes ctransferdest
             encodeStandardNotarization(notarizations[1], abi.encode(hashedNotarization, 
                 txidHash, stateRoot, proposer));
+            notaryHeight = uint64(block.number);
+
         }
         else
         {
@@ -284,54 +259,71 @@ contract VerusNotarizer {
         }
     }
 
-    function checkunique(address[] memory ids) private
+    function checkunique(address[] memory ids, uint i) private pure
     {
-        for (uint i = 0; i < ids.length; i++)
+
+        for (uint j = i + 1; j < ids.length; j++)
         {
-            sigCheck[ids[i]] = i;
-        }
-    }
-
-    function recoverSigner(bytes32 _h, uint8 _v, bytes32 _r, bytes32 _s) private pure returns (address) {
-
-        return ecrecover(_h, _v, _r, _s);
-    }
-
-    function getLastConfirmedVRSCStateRoot() public view returns (bytes32) {
-
-        bytes32 stateRoot;
-        bytes32 slotHash;
-        bytes storage tempArray = bestForks[0];
-        uint32 nextOffset;
-
-        if (tempArray.length > 0)
-        {
-            bytes32 slot;
-            assembly {
-                        mstore(add(slot, 32),tempArray.slot)
-                        slotHash := keccak256(add(slot, 32), 32)
-                        nextOffset := add(nextOffset, 1)  
-                        nextOffset := add(nextOffset, 1)  
-                        stateRoot := sload(add(slotHash, nextOffset))
-            }
+            if (ids[i] == ids[j])
+                revert("duplicate signatures found");
         }
 
-        return stateRoot;
     }
 
-    function updateNotarizer(address notarizer, address mainAddress, address revokeAddress, uint8 state) public
+    function getNewProof(bool latest) public payable returns (bytes memory) {
+
+        uint256 feeCost;
+
+        feeCost = latest ? (0.0125 ether) : (0.00625 ether);
+
+        require(msg.value == feeCost, "Not enough fee");
+
+        uint256 feeShare = (msg.value / VerusConstants.SATS_TO_WEI_STD) / 2;
+        uint256 remainder = (msg.value / VerusConstants.SATS_TO_WEI_STD) % 2;
+
+        uint256 proposerAndHeight;
+        bytes memory proposerBytes = bestForks[0];
+
+        uint32 proposeroffset = latest ? LATEST_PROPOSER : CONFIRMED_PROPOSER;
+
+        assembly {
+                proposerAndHeight := mload(add(proposerBytes, proposeroffset))
+        } 
+        
+        // Proposer and notaries get share of fees
+        // any remainder from divide by 2 or divide by notaries gets added
+        feeShare += setNotaryFees(feeShare);
+        setClaimedFees(bytes32(uint256(uint176(proposerAndHeight))), (feeShare + remainder));
+
+        return proofs[(bytes32(proposerAndHeight >> OFFSET_FOR_HEIGHT))];
+    }
+
+    function setNotaryFees(uint256 notaryFees) private returns (uint64 remainder){  //sent in as SATS
+      
+        uint256 numOfNotaries = notaries.length;
+        uint64 notariesShare = uint64(notaryFees / numOfNotaries);
+        for (uint i=0; i < numOfNotaries; i++)
+        {
+            uint176 notary;
+            notary = uint176(uint160(notaryAddressMapping[notaries[i]].main));
+            notary |= (uint176(0x0c14) << 160); //set at type eth
+            claimableFees[bytes32(uint256(notary))] += notariesShare;
+        }
+        remainder = uint64(notaryFees % numOfNotaries);
+    }
+
+    function setClaimedFees(bytes32 _address, uint256 fees) private returns (uint256)
     {
-        require(msg.sender == upgradeContract);
-        notaryAddressMapping[notarizer] = VerusObjects.notarizer(mainAddress, revokeAddress, state);
-
+        claimableFees[_address] += fees;
+        return claimableFees[_address];
     }
 
-    function getNotaryETHAddress(uint number) public view returns (address)
-    {
-        return notaryAddressMapping[notaries[number]].main;
-
+    function serializeUint32(uint32 number) public pure returns(uint32){
+        // swap bytes
+        number = ((number & 0xFF00FF00) >> 8) | ((number & 0x00FF00FF) << 8);
+        number = (number >> 16) | (number << 16);
+        return number;
     }
-
 
 
 }

@@ -63,7 +63,15 @@ library VerusObjects {
     struct CReserveTransferSet {
         bytes32 exportHash;
         bytes32 prevExportHash;
-        uint32 blockHeight;
+        uint64 endHeight;
+        CReserveTransfer[] transfers;
+    }
+
+    struct CReserveTransferSetCalled {
+        bytes32 exportHash;
+        bytes32 prevExportHash;
+        uint64 startHeight;
+        uint64 endHeight;
         CReserveTransfer[] transfers;
     }
 
@@ -73,10 +81,12 @@ library VerusObjects {
     }
 
     struct PackedCurrencyLaunch {
-        uint256 nameAndFlags;
         uint256 tokenID;    
         address ERCContract;  //erc address
         address iaddress;
+        address parent;
+        uint8 flags;
+        string name;
     }
 
     struct ETHPayments {
@@ -94,8 +104,8 @@ library VerusObjects {
         uint16 flags;
         address sourcesystemid;
         bytes32 hashtransfers;                        
-        uint32 sourceheightstart;
-        uint32 sourceheightend;
+        uint64 sourceheightstart;
+        uint64 sourceheightend;
         address destinationsystemid;
         address destinationcurrencyid;
         uint32 numinputs;
@@ -185,5 +195,10 @@ library VerusObjects {
         bytes32 exporttxid;
         uint32 exporttxoutnum;
         uint32 height;
+    }
+
+    struct voteState {
+        uint32 agree;
+        uint32 count;
     }
  }
