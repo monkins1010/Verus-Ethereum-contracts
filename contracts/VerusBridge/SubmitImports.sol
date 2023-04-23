@@ -48,7 +48,7 @@ contract SubmitImports is VerusStorage {
         // When the bridge launches to make sure a fresh block with no pending vrsc transfers is used as not to mix destination currencies.
         address verusBridgeAddress = contracts[uint(VerusConstants.ContractType.CreateExport)];
 
-        (bool success,) = verusBridgeAddress.delegatecall(abi.encodeWithSignature("externalCreateExportCall(bytes,bool)", abi.encode(LPtransfer, forceNewCCE)));
+        (bool success,) = verusBridgeAddress.delegatecall(abi.encodeWithSignature("externalCreateExportCall(bytes)", abi.encode(LPtransfer, forceNewCCE)));
         require(success);
        // _createExports(LPtransfer, true, forceNewCCE);
 

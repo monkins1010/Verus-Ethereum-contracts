@@ -118,11 +118,9 @@ contract VerusNotarizer is VerusStorage {
         if (!poolAvailable && (((uint256(launchedAndProposer) >> 176) & 0xff) == 1)) { //shift to read if bridge launched in packed uint256
             poolAvailable = true;
             
-            address verusBridgeAddress = contracts[uint(VerusConstants.ContractType.CreateExport)];
-
-            (bool success2,) = verusBridgeAddress.delegatecall(abi.encodeWithSignature("sendToVRSC(uint64,address,uint8)", 0, address(0), VerusConstants.DEST_PKH));
+            address submitImportsAddress = contracts[uint(VerusConstants.ContractType.SubmitImports)];
+            (bool success2,) = submitImportsAddress.delegatecall(abi.encodeWithSignature("sendToVRSC(uint64,address,uint8)", 0, address(0), VerusConstants.DEST_PKH));
             require(success2);
-          //  verusBridge.sendToVRSC(0, address(0), VerusConstants.DEST_PKH);;
         }
 
         voutAndHeight |= uint64(verusProofheight) << 32;
