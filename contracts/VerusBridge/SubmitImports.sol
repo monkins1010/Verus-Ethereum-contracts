@@ -216,8 +216,8 @@ contract SubmitImports is VerusStorage {
         //NOTE: LP fees to be sent to vrsc to be burnt held at the verusNotarizerStorage address as a unique key
         uint256 totalLPFees = setClaimedFees(bytes32(uint256(uint160(address(this)))), LPFee);
         
-        //NOTE:only execute the LP transfer if there is x10 the fee amount 
-        if(totalLPFees > (VerusConstants.verusvETHTransactionFee * 10) && poolAvailable)
+        //NOTE:only execute the LP transfer if there is x100 the fee amount 
+        if(totalLPFees > (VerusConstants.verusvETHTransactionFee * 100) && poolAvailable)
         {
             //make a transfer for the LP fees back to Verus
             sendToVRSC(uint64(totalLPFees), address(0), VerusConstants.DEST_PKH);
