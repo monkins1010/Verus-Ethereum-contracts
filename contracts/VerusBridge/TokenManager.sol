@@ -20,46 +20,33 @@ contract TokenManager is VerusStorage {
     function getName(address cont) public view returns (string memory)
     {
         // Wrapper functions to enable try catch to work
-        return ERC20(cont).name();
-    }
-
-    function getNFTName(address cont) public view returns (string memory)
-    {
-        // Wrapper functions to enable try catch to work
-        return ERC721(cont).name();
+        (bool success, bytes memory result) = address(cont).staticcall(abi.encodeWithSignature("name()"));
+        if (success) {
+            return abi.decode(result, (string));
+        } else {
+            return "";
+        }
     }
 
     function launchToken(VerusObjects.PackedCurrencyLaunch[] memory _tx) private {
         
         for (uint j = 0; j < _tx.length; j++)
         {
+            // If the iaddress is already mapped or the iaddress is null skip token register
             if (verusToERC20mapping[_tx[j].iaddress].flags > 0 || _tx[j].iaddress == address(0))
                 continue;
 
             string memory outputName;
 
-            if (uint8(_tx[j].flags) == VerusConstants.MAPPING_ETHEREUM_OWNED + VerusConstants.TOKEN_LAUNCH)
+            if ((uint8(_tx[j].flags) & VerusConstants.MAPPING_ETHEREUM_OWNED) == VerusConstants.MAPPING_ETHEREUM_OWNED)
             {
-                try (this).getName(_tx[j].ERCContract) returns (string memory retval) 
-                {
-                    outputName = string(abi.encodePacked("[", retval, "] as ", _tx[j].name));
-                } 
-                catch 
+                outputName = getName(_tx[j].ERCContract);
+                if (bytes(outputName).length == 0) 
                 {
                     continue;
                 }
+                outputName = string(abi.encodePacked("[", outputName, "] as ", _tx[j].name));
             }
-            else if (uint8(_tx[j].flags) == VerusConstants.MAPPING_ETHEREUM_OWNED + VerusConstants.TOKEN_ETH_NFT_DEFINITION)
-            {
-                try (this).getNFTName(_tx[j].ERCContract) returns (string memory retval) 
-                {
-                    outputName = string(abi.encodePacked("[", retval, "] as ", _tx[j].name));
-                } 
-                catch 
-                {
-                    continue;
-                }     
-            } 
             else if (_tx[j].parent != VerusConstants.VerusSystemId)
             {
                 outputName = string(abi.encodePacked(_tx[j].name, ".", verusToERC20mapping[_tx[j].parent].name));
@@ -68,7 +55,6 @@ contract TokenManager is VerusStorage {
             {
                 outputName = _tx[j].name;
             }
-
             recordToken(_tx[j].iaddress, _tx[j].ERCContract, outputName, string(byteSlice(bytes(_tx[j].name))), uint8(_tx[j].flags), _tx[j].tokenID);
         }
     }
