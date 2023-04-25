@@ -105,49 +105,32 @@ contract SubmitImports is VerusStorage {
         
         // Deserialize transfers and pack into send arrays, also pass in no. of transfers to calculate array size
 
-        VerusObjects.ETHPayments[] memory _payments;
-        
         address verusTokenManagerAddress = contracts[uint(VerusConstants.ContractType.TokenManager)];
 
         (success, returnBytes) = verusTokenManagerAddress.delegatecall(abi.encodeWithSignature("processTransactions(bytes,uint8)", _import.serializedTransfers, uint8(CCEHeightsAndnIndex >> 96)));
         require(success);
 
         bytes memory refundsData;
-        (_payments, refundsData) = abi.decode(returnBytes, (VerusObjects.ETHPayments[], bytes)); //tokenManager.processTransactions(_import.serializedTransfers, uint8(CCEHeightsAndnIndex >> 96));
+        (refundsData) = abi.decode(returnBytes, (bytes));
         
-        sendEth(_payments);
         refund(refundsData);
 
         return fees;
 
     }
 
-    function sendEth(VerusObjects.ETHPayments[] memory _payments) private
-    {
-         //only callable by verusbridge contract
-
-        uint256 totalsent;
-        for(uint i = 0; i < _payments.length; i++)
-        {
-            address payable destination = payable(_payments[i].destination);
-            if(destination != address(0))
-            {
-                destination.transfer(_payments[i].amount);
-                totalsent += _payments[i].amount;
-            }
-        }
-    }
-    
+  
     function refund(bytes memory refundAmount) private  {
 
-        for(uint i = 0; i < (refundAmount.length / 64); i = i + 64) {
+        // Note each refund is 40 bytes = 32bytes + uint64 
+        for(uint i = 0; i < (refundAmount.length / 40); i = i + 40) {
 
             bytes32 verusAddress;
-            uint256 amount;
+            uint64 amount;
             assembly 
             {
                 verusAddress := mload(add(add(refundAmount, 32), i))
-                amount := mload(add(add(refundAmount, 64), i))
+                amount := mload(add(add(refundAmount, 40), i))
             }
             refunds[verusAddress] += amount; //verusNotarizerStorage.setOrAppendRefund(verusAddress, amount);
         }
