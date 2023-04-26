@@ -91,17 +91,8 @@ module.exports = async function(deployer) {
 };
 
 const abidata = () => {
-    const vrsctest = setup.vrsctest;
-    const bridgeeth = setup.bridgeeth
-    const dai = setup.dai
-    const veth = setup.veth
     
-    let arrayofcurrencies = [];
-
-    arrayofcurrencies.push(vrsctest);
-    arrayofcurrencies.push(bridgeeth);
-    arrayofcurrencies.push(dai);
-    arrayofcurrencies.push(veth);
+    let arrayofcurrencies = setup.arrayofcurrencies;
 
     let data = abi.encodeParameter(
         'tuple(address,address,address,uint8,string,string,uint256)[]',
