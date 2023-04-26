@@ -170,8 +170,11 @@ contract Delegator is VerusStorage {
     }
 
     function replacecontract(address newcontract, uint contractNo) external  {
-        if(contractNo == 100) startOwner = address(0);
         require(startOwner == msg.sender);
+        if(contractNo == 100) {
+            startOwner = address(0);
+            return;
+        } 
         contracts[contractNo] = newcontract;
     }
 
