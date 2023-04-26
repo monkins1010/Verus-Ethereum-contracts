@@ -4,6 +4,7 @@ const MAPPING_PARTOF_BRIDGEVETH = 4;
 const MAPPING_ISBRIDGE_CURRENCY = 8;
 const TOKEN_LAUNCH = 32;
 
+// These are the notaries iaddresses in hex form.
 exports.verusNotariserIDS = ["0x429c5f2039f259c02885972852438731f21fc949",
     "0xcc86752da0c3629b7478c2b542d8b5055efee861",
     "0x9ea954a6086ba4693af454be3bfa34c9af27b6b4",
@@ -24,6 +25,7 @@ exports.verusNotariserIDS = ["0x429c5f2039f259c02885972852438731f21fc949",
     "0x6fa063cf74dd44d72cb7021f2c5e51c0a34bfd9e",
     "0x39c893ffa61a12e899f8f255b5e09067922df277"];
 
+// These are the equivelent ETH addresses of the notaries Spending R addresses
 exports.verusNotariserSigner = ["0x75201d47A549C39531aD22Fda6A0B2b99B5b61e1",
     "0x50af1B0fda9690C5B50fC6dc1036eC07d4C190e7",
     "0x696921eD978F93558C327d4727e49EE506Da6381",
@@ -44,6 +46,7 @@ exports.verusNotariserSigner = ["0x75201d47A549C39531aD22Fda6A0B2b99B5b61e1",
     "0xC994C8eDBfa60db9E90665925686CD53cc65Bb64",
     "0x92352245278B8c973209a83B509c19Ef921925B9"];
 
+// These are the equivelent ETH addresses of the notaries Recovery R addresses
 exports.verusNotariserRevoker = ["0x75201d47A549C39531aD22Fda6A0B2b99B5b61e1",
     "0x50af1B0fda9690C5B50fC6dc1036eC07d4C190e7",
     "0x696921eD978F93558C327d4727e49EE506Da6381",
@@ -65,7 +68,7 @@ exports.verusNotariserRevoker = ["0x75201d47A549C39531aD22Fda6A0B2b99B5b61e1",
     "0x92352245278B8c973209a83B509c19Ef921925B9"];
 
 // currencies that are defined are in this format:
-// iaddress in hex, ERC20 contract, parent, token options
+// iaddress in hex, ERC20 contract, parent, token options, name, ticker, NFTtokenID.
 
 const vrsctest = ["0xA6ef9ea235635E328124Ff3429dB9F9E91b64e2d", 
     "0x0000000000000000000000000000000000000000", 
@@ -106,5 +109,7 @@ const dai = ["0xcce5d18f305474f1e0e0ec1c507d8c85e7315fdf",
     "Testnet DAI", 
     "DAI",
     "0x0000000000000000000000000000000000000000000000000000000000000000"];
+
+// Setup the tokens to be launched with the contract here.  Important this must match the vETH definitions.
 
 exports.arrayofcurrencies = [vrsctest, bridgeeth, veth, dai]
