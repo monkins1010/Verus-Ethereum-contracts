@@ -47,7 +47,7 @@ exports.verusNotariserSigner = ["0x75201d47A549C39531aD22Fda6A0B2b99B5b61e1",
     "0x92352245278B8c973209a83B509c19Ef921925B9"];
 
 // These are the equivelent ETH addresses of the notaries Recovery R addresses
-exports.verusNotariserRevoker = ["0x75201d47A549C39531aD22Fda6A0B2b99B5b61e1",
+exports.verusNotariserRecovery = ["0x75201d47A549C39531aD22Fda6A0B2b99B5b61e1",
     "0x50af1B0fda9690C5B50fC6dc1036eC07d4C190e7",
     "0x696921eD978F93558C327d4727e49EE506Da6381",
     "0x9961E69D5B8c229e033143141A4611346C5BCEbb",

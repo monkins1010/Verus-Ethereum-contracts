@@ -19,7 +19,7 @@ const abi = web3.eth.abi
 
 const verusNotariserIDS = setup.verusNotariserIDS;
 const verusNotariserSigner = setup.verusNotariserSigner;
-const verusNotariserRevoker = setup.verusNotariserRevoker;
+const verusNotariserRecovery = setup.verusNotariserRecovery;
 
 module.exports = async function(deployer) {
 
@@ -78,7 +78,7 @@ module.exports = async function(deployer) {
         UpgradeInst.address
     ];
 
-    await deployer.deploy(VerusDelegator, verusNotariserIDS, verusNotariserSigner, verusNotariserRevoker, allContracts);
+    await deployer.deploy(VerusDelegator, verusNotariserIDS, verusNotariserSigner, verusNotariserRecovery, allContracts);
     const VerusDelegatorInst = await VerusDelegator.deployed();
 
     const launchCurrencies = abidata();
