@@ -20,46 +20,33 @@ contract TokenManager is VerusStorage {
     function getName(address cont) public view returns (string memory)
     {
         // Wrapper functions to enable try catch to work
-        return ERC20(cont).name();
-    }
-
-    function getNFTName(address cont) public view returns (string memory)
-    {
-        // Wrapper functions to enable try catch to work
-        return ERC721(cont).name();
+        (bool success, bytes memory result) = address(cont).staticcall(abi.encodeWithSignature("name()"));
+        if (success) {
+            return abi.decode(result, (string));
+        } else {
+            return "";
+        }
     }
 
     function launchToken(VerusObjects.PackedCurrencyLaunch[] memory _tx) private {
         
         for (uint j = 0; j < _tx.length; j++)
         {
+            // If the iaddress is already mapped or the iaddress is null skip token register
             if (verusToERC20mapping[_tx[j].iaddress].flags > 0 || _tx[j].iaddress == address(0))
                 continue;
 
             string memory outputName;
 
-            if (uint8(_tx[j].flags) == VerusConstants.MAPPING_ETHEREUM_OWNED + VerusConstants.TOKEN_LAUNCH)
+            if ((uint8(_tx[j].flags) & VerusConstants.MAPPING_ETHEREUM_OWNED) == VerusConstants.MAPPING_ETHEREUM_OWNED)
             {
-                try (this).getName(_tx[j].ERCContract) returns (string memory retval) 
-                {
-                    outputName = string(abi.encodePacked("[", retval, "] as ", _tx[j].name));
-                } 
-                catch 
+                outputName = getName(_tx[j].ERCContract);
+                if (bytes(outputName).length == 0) 
                 {
                     continue;
                 }
+                outputName = string(abi.encodePacked("[", outputName, "] as ", _tx[j].name));
             }
-            else if (uint8(_tx[j].flags) == VerusConstants.MAPPING_ETHEREUM_OWNED + VerusConstants.TOKEN_ETH_NFT_DEFINITION)
-            {
-                try (this).getNFTName(_tx[j].ERCContract) returns (string memory retval) 
-                {
-                    outputName = string(abi.encodePacked("[", retval, "] as ", _tx[j].name));
-                } 
-                catch 
-                {
-                    continue;
-                }     
-            } 
             else if (_tx[j].parent != VerusConstants.VerusSystemId)
             {
                 outputName = string(abi.encodePacked(_tx[j].name, ".", verusToERC20mapping[_tx[j].parent].name));
@@ -68,7 +55,6 @@ contract TokenManager is VerusStorage {
             {
                 outputName = _tx[j].name;
             }
-
             recordToken(_tx[j].iaddress, _tx[j].ERCContract, outputName, string(byteSlice(bytes(_tx[j].name))), uint8(_tx[j].flags), _tx[j].tokenID);
         }
     }
@@ -109,7 +95,7 @@ contract TokenManager is VerusStorage {
     }
 
     function processTransactions(bytes calldata serializedTransfers, uint8 numberOfTransfers) 
-                external returns (VerusObjects.ETHPayments[] memory payments, bytes memory refundsData)
+                external returns (bytes memory refundsData)
     {
 
         VerusObjects.PackedSend[] memory transfers;
@@ -119,46 +105,34 @@ contract TokenManager is VerusStorage {
         (transfers, launchTxs, counter, refundAddresses) = VerusSerializer(contracts[uint(VerusConstants.ContractType.VerusSerializer)]).deserializeTransfers(serializedTransfers, numberOfTransfers);
 
         // counter: 16bit packed 32bit number for efficency
-        uint8 ETHPaymentCounter = uint8((counter >> 16) & 0xff);
         uint8 currencyCounter = uint8((counter >> 24) & 0xff);
-        uint8 transferCounter = uint8((counter & 0xff) - ETHPaymentCounter);
-
-        if(ETHPaymentCounter > 0 )
-            payments = new VerusObjects.ETHPayments[](ETHPaymentCounter); //Avoid empty
-
-        ETHPaymentCounter = 0;
+        // Transfers - Ethsends
+        uint8 transferCounter = uint8(counter & 0xff) - uint8((counter >> 16) & 0xff);
 
         for (uint8 i = 0; i< transfers.length; i++) {
 
             uint8 flags = uint8((transfers[i].destinationAndFlags >> 160));
             
-            // Handle ETH Send, check address will not revert
+            // Handle ETH Send, check if the payment goes through if not issue refund.
             if (flags & VerusConstants.TOKEN_ETH_SEND == VerusConstants.TOKEN_ETH_SEND) 
             {
-                if (payable(address(uint160(transfers[i].destinationAndFlags))).send(0)) {
-                // ETH is held in Delegator, create array to bundle payments
-                    payments[ETHPaymentCounter] = VerusObjects.ETHPayments(
-                        address(uint160(transfers[i].destinationAndFlags)), 
-                        (transfers[i].currencyAndAmount >> 160) * VerusConstants.SATS_TO_WEI_STD); //SATS to WEI (only for ETH)
-
-                    ETHPaymentCounter++;        
-                }
-                else {
-                    refundsData = abi.encodePacked(refundsData, bytes32(uint256(refundAddresses[i])), uint256((transfers[i].currencyAndAmount >> 160) * VerusConstants.SATS_TO_WEI_STD));
+                if (!payable(address(uint160(transfers[i].destinationAndFlags))).send((transfers[i].currencyAndAmount >> 160) * VerusConstants.SATS_TO_WEI_STD)) {
+                    // Note: Refund address is a CTransferdestination and Amount is in VerusSATS, so store as that.
+                    refundsData = abi.encodePacked(refundsData, bytes32(uint256(refundAddresses[i])), uint64((transfers[i].currencyAndAmount >> 160)));
                 }              
             }           
         }
 
-        if (transferCounter > 0)
+        if (transferCounter > 0) {
             importTransactions(transfers);
+        }
 
-        if (currencyCounter > 0)
-        {
+        if (currencyCounter > 0) {
             launchToken(launchTxs);
         }
 
         //return ETH and addresses to be sent ETH to + payment details
-        return (payments, refundsData);
+        return (refundsData);
     }
 
     function importTransactions(VerusObjects.PackedSend[] memory trans) private {
