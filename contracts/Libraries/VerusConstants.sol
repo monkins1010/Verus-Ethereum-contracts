@@ -12,6 +12,7 @@ library VerusConstants {
     address constant public VerusBridgeAddress = 0xffEce948b8A38bBcC813411D2597f7f8485a0689;
     address constant public VerusNFTID = 0x9bB2772Aa50ec96ce1305D926B9CC29b7c402bAD;
     uint256 constant public transactionFee = 3000000000000000; //0.003 ETH 18 decimals
+    uint256 constant public upgradeFee = 1000000000000000000; //1 ETH 18 decimals WEI
     uint64 constant public verusTransactionFee = 2000000; //0.02 VRSC 10 decimals
     uint64 constant public verusvETHTransactionFee = 300000; //0.003 vETH 10 decimals
     uint64 constant public verusvETHReturnFee = 1000000; //0.01 vETH 10 decimals

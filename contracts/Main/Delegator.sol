@@ -159,7 +159,7 @@ contract Delegator is VerusStorage {
 
     }
 
-    function upgradeContracts(bytes calldata data) external returns (uint8) {
+    function upgradeContracts(bytes calldata data) external payable returns (uint8) {
 
         address upgradeManagerAddress = contracts[uint(VerusConstants.ContractType.UpgradeManager)];
 
