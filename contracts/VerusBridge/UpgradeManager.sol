@@ -22,8 +22,10 @@ contract UpgradeManager is VerusStorage {
     event contractUpdated(bool);
     address internal contractOwner;
 
-    function upgradeContracts(bytes calldata data) external returns (uint8) {
+    function upgradeContracts(bytes calldata data) external payable returns (uint8) {
 
+        require(msg.value > VerusConstants.upgradeFee);
+        
         VerusObjects.upgradeInfo memory _newContractPackage;
 
         (_newContractPackage) = abi.decode(data, (VerusObjects.upgradeInfo));
