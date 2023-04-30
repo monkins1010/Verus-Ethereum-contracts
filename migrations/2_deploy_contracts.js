@@ -85,7 +85,7 @@ module.exports = async function(deployer) {
     await VerusDelegatorInst.launchContractTokens(launchCurrencies);
 
     const settingString = "\ndelegatorcontractaddress=" + VerusDelegatorInst.address + "\n\n" +
-        "export const BRIDGE_DELEGATOR_ADDRESS = \"" + VerusDelegatorInst.address + "\";";
+        "export const DELEGATOR_ADD = \"" + VerusDelegatorInst.address + "\";";
 
     console.log("Settings to be pasted into *.conf file and website constants \n\n", settingString);        
 };
