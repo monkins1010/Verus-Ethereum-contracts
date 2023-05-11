@@ -104,30 +104,9 @@ contract TokenManager is VerusStorage {
         uint32 counter;
         (transfers, launchTxs, counter, refundAddresses) = VerusSerializer(contracts[uint(VerusConstants.ContractType.VerusSerializer)]).deserializeTransfers(serializedTransfers, numberOfTransfers);
 
-        // counter: 16bit packed 32bit number for efficency
-        uint8 currencyCounter = uint8((counter >> 24) & 0xff);
-        // Transfers - Ethsends
-        uint8 transferCounter = uint8(counter & 0xff) - uint8((counter >> 16) & 0xff);
+        refundsData = importTransactions(transfers, refundAddresses);
 
-        for (uint8 i = 0; i< transfers.length; i++) {
-
-            uint8 flags = uint8((transfers[i].destinationAndFlags >> 160));
-            
-            // Handle ETH Send, check if the payment goes through if not issue refund.
-            if (flags & VerusConstants.TOKEN_ETH_SEND == VerusConstants.TOKEN_ETH_SEND) 
-            {
-                if (!payable(address(uint160(transfers[i].destinationAndFlags))).send((transfers[i].currencyAndAmount >> 160) * VerusConstants.SATS_TO_WEI_STD)) {
-                    // Note: Refund address is a CTransferdestination and Amount is in VerusSATS, so store as that.
-                    refundsData = abi.encodePacked(refundsData, bytes32(uint256(refundAddresses[i])), uint64((transfers[i].currencyAndAmount >> 160)));
-                }              
-            }           
-        }
-
-        if (transferCounter > 0) {
-            importTransactions(transfers);
-        }
-
-        if (currencyCounter > 0) {
+        if (uint8(counter >> 24) > 0) {
             launchToken(launchTxs);
         }
 
@@ -135,7 +114,7 @@ contract TokenManager is VerusStorage {
         return (refundsData);
     }
 
-    function importTransactions(VerusObjects.PackedSend[] memory trans) private {
+    function importTransactions(VerusObjects.PackedSend[] memory trans, uint176[] memory refundAddresses) private returns (bytes memory refundsData){
       
         uint32 sendFlags;
         Token token;
@@ -146,8 +125,15 @@ contract TokenManager is VerusStorage {
             address destinationAddress;
             destinationAddress  = address(uint160(trans[i].destinationAndFlags));
             sendFlags = uint32(trans[i].destinationAndFlags >> 160);
-
-            if (sendFlags & VerusConstants.TOKEN_ERC20_SEND == VerusConstants.TOKEN_ERC20_SEND  &&
+            
+            if (sendFlags & VerusConstants.TOKEN_ETH_SEND == VerusConstants.TOKEN_ETH_SEND) 
+            {
+                if (!payable(destinationAddress).send((trans[i].currencyAndAmount >> 160) * VerusConstants.SATS_TO_WEI_STD)) {
+                    // Note: Refund address is a CTransferdestination and Amount is in VerusSATS, so store as that.
+                    refundsData = abi.encodePacked(refundsData, bytes32(uint256(refundAddresses[i])), uint64((trans[i].currencyAndAmount >> 160)));
+                }              
+            }   
+            else if (sendFlags & VerusConstants.TOKEN_ERC20_SEND == VerusConstants.TOKEN_ERC20_SEND  &&
                    tempToken.flags & VerusConstants.TOKEN_LAUNCH == VerusConstants.TOKEN_LAUNCH )
             {
                 token = Token(tempToken.erc20ContractAddress);

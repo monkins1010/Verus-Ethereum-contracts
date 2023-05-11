@@ -371,13 +371,11 @@ contract VerusSerializer {
             if (destinationType & VerusConstants.DEST_ETH == VerusConstants.DEST_ETH)
             {
                 tempTransfers[uint8(counter)].destinationAndFlags = uint256(tempaddress == VerusConstants.VEth ? VerusConstants.TOKEN_ETH_SEND : VerusConstants.TOKEN_ERC20_SEND) << 160;
-                counter += tempaddress == VerusConstants.VEth ? 0x10000 : 0; //This is the ETH currency counter packed into the 3rd byte
 
                 assembly {
                     tempaddress := mload(sub(add(add(tempSerialized, nextOffset), temporaryRegister1), 1)) //skip type +1 byte to read address
                 }
                 tempTransfers[uint8(counter)].destinationAndFlags |= uint256(uint160(tempaddress));
-                counter++;
             }
             else if (destinationType & VerusConstants.DEST_REGISTERCURRENCY == VerusConstants.DEST_REGISTERCURRENCY || 
                                 destinationType & VerusConstants.DEST_ETHNFT == VerusConstants.DEST_ETHNFT)
@@ -401,7 +399,7 @@ contract VerusSerializer {
                 nextOffset += temporaryRegister1;
 
             }
-
+            counter++;
             if(destinationType & VerusConstants.FLAG_DEST_GATEWAY == VerusConstants.FLAG_DEST_GATEWAY )
             {
                  nextOffset += 56; //skip gatewayid, gatewaycode + fees
