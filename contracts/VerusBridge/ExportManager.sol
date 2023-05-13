@@ -24,12 +24,6 @@ contract ExportManager is VerusStorage  {
        
         VerusObjects.CReserveTransfer memory transfer = abi.decode(datain, (VerusObjects.CReserveTransfer));
 
-        require(ERC20Registered(transfer.currencyvalue.currency) && 
-            ERC20Registered(transfer.feecurrencyid) &&
-            ERC20Registered(transfer.destcurrencyid) &&
-            (ERC20Registered(transfer.secondreserveid) || transfer.secondreserveid == address(0)) &&
-            transfer.destsystemid == address(0), "currencycheckfailed");
-
         uint256 requiredFees = VerusConstants.transactionFee;  //0.003 eth in WEI (To vrsc)
         uint64 bounceBackFee;
         uint64 transferFee;
@@ -41,7 +35,6 @@ contract ExportManager is VerusStorage  {
 
         require (checkTransferFlags(transfer), "Flag Check failed");                 
        
-        // Check destination address is not zero
         serializedDest = transfer.destination.destinationaddress;  
 
         if (transfer.destination.destinationtype != VerusConstants.DEST_ETHNFT)
@@ -67,6 +60,7 @@ contract ExportManager is VerusStorage  {
                    destinationType == VerusConstants.DEST_SH, "NFT destination not valid");
 
         }
+        // Check destination address is not zero
         require (destAddressID != address(0), "Destination Address null");// Destination can be currency definition
         // Check fees are correct, if pool unavailble vrsctest only fees, TODO:if pool availble vETH fees only for now
 
@@ -75,13 +69,8 @@ contract ExportManager is VerusStorage  {
             require (transfer.feecurrencyid == VerusConstants.VerusCurrencyId, "feecurrencyid != vrsc");
             
             //VRSC pool as WEI
-            if (!(transfer.destination.destinationtype == VerusConstants.DEST_PKH ||
-                   transfer.destination.destinationtype == VerusConstants.DEST_ID  ||
-                   transfer.destination.destinationtype == VerusConstants.DEST_SH))
-                    return 0;
-
-            if (!(transfer.secondreserveid == address(0) && transfer.destcurrencyid == VerusConstants.VerusCurrencyId
-                    && transfer.flags == VerusConstants.VALID))
+            if (transfer.destination.destinationtype == (VerusConstants.DEST_ETH + VerusConstants.FLAG_DEST_GATEWAY) ||
+                transfer.flags != VerusConstants.VALID)
                 return 0;
 
             require (transfer.destination.destinationaddress.length == 20, "destination address not 20 bytes");
@@ -91,11 +80,6 @@ contract ExportManager is VerusStorage  {
             transferFee = uint64(transfer.fees);
 
             require(transfer.feecurrencyid == VerusConstants.VEth, "Fee Currency not vETH"); //TODO:Accept more fee currencies
-
-            if (transfer.flags == VerusConstants.VALID)
-            {
-                require(transfer.destcurrencyid == VerusConstants.VerusBridgeAddress, "flagsnotvalid");
-            }
 
             if ((transfer.destination.destinationtype & ~VerusConstants.FLAG_DEST_AUX) == (VerusConstants.FLAG_DEST_GATEWAY + VerusConstants.DEST_ETH)) {
 
@@ -173,89 +157,60 @@ contract ExportManager is VerusStorage  {
 
     function checkTransferFlags(VerusObjects.CReserveTransfer memory transfer) public view returns(bool) {
 
-        if (transfer.version != VerusConstants.CURRENT_VERSION || (transfer.flags & (VerusConstants.INVALID_FLAGS | VerusConstants.VALID) ) != VerusConstants.VALID)
-            return false;
+        require(transfer.destsystemid == address(0), "currencycheckfailed");
 
-        uint8 transferType = transfer.destination.destinationtype & ~VerusConstants.FLAG_DEST_GATEWAY;
-        
+        if (transfer.version != VerusConstants.CURRENT_VERSION || 
+            (transfer.flags & (VerusConstants.INVALID_FLAGS | VerusConstants.VALID) ) != VerusConstants.VALID)
+        {
+            revert ("Invalid Flag used");
+        }
+
         VerusObjects.mappedToken memory sendingCurrency = verusToERC20mapping[transfer.currencyvalue.currency];
         VerusObjects.mappedToken memory destinationCurrency = verusToERC20mapping[transfer.destcurrencyid];
 
-        if (transfer.destination.destinationtype == (VerusConstants.DEST_ETH + VerusConstants.FLAG_DEST_GATEWAY)
-                && (transfer.flags & VerusConstants.CURRENCY_EXPORT  != VerusConstants.CURRENCY_EXPORT))
+        if (!(transfer.destination.destinationtype == (VerusConstants.DEST_ETH + VerusConstants.FLAG_DEST_GATEWAY) || 
+                transfer.destination.destinationtype == VerusConstants.DEST_ID ||
+                transfer.destination.destinationtype == VerusConstants.DEST_PKH || 
+                transfer.destination.destinationtype == VerusConstants.DEST_SH ||
+                transfer.destination.destinationtype == VerusConstants.DEST_ETHNFT) ||
+                sendingCurrency.flags == 0)
         {
-            if (transfer.flags == (VerusConstants.VALID + VerusConstants.CONVERT + VerusConstants.RESERVE_TO_RESERVE))
-            {
-                require(sendingCurrency.flags & VerusConstants.MAPPING_PARTOF_BRIDGEVETH == VerusConstants.MAPPING_PARTOF_BRIDGEVETH &&
-                        destinationCurrency.flags & VerusConstants.MAPPING_ISBRIDGE_CURRENCY == VerusConstants.MAPPING_ISBRIDGE_CURRENCY &&
-                        verusToERC20mapping[transfer.secondreserveid].flags & VerusConstants.MAPPING_PARTOF_BRIDGEVETH == VerusConstants.MAPPING_PARTOF_BRIDGEVETH,
-                         "Cannot convert non bridge reserves");
-            }
-            else if (transfer.flags == (VerusConstants.VALID + VerusConstants.CONVERT + VerusConstants.IMPORT_TO_SOURCE))
-            {
-                require(sendingCurrency.flags & VerusConstants.MAPPING_ISBRIDGE_CURRENCY == VerusConstants.MAPPING_ISBRIDGE_CURRENCY  &&
-                        destinationCurrency.flags & VerusConstants.MAPPING_PARTOF_BRIDGEVETH == VerusConstants.MAPPING_PARTOF_BRIDGEVETH,
-                         "Cannot import non reserve to source");
-            }
-            else if (transfer.flags == (VerusConstants.VALID + VerusConstants.CONVERT))
-            {
-                require(sendingCurrency.flags & VerusConstants.MAPPING_PARTOF_BRIDGEVETH == VerusConstants.MAPPING_PARTOF_BRIDGEVETH  &&
-                        destinationCurrency.flags & VerusConstants.MAPPING_ISBRIDGE_CURRENCY == VerusConstants.MAPPING_ISBRIDGE_CURRENCY,
-                         "Cannot convert non reserve");
-            }
-            else 
-            {
-                return false;
-            }
+            revert ("Invalid desttype");
+        }
 
-            return true;
-        }
-        else if (transfer.flags == (VerusConstants.CURRENCY_EXPORT + VerusConstants.VALID) && transferType == VerusConstants.DEST_REGISTERCURRENCY)
+        if (transfer.flags == VerusConstants.VALID && transfer.secondreserveid == address(0))
         {
-            // TODO: upgrade contract to handle ERC721's registered by the contract (currently only from mapped currencies from the daemon)
-            // NFT currency export definition.  Contains ERC721 contract address and token ID. 
-            // NOTE: Check when importing a currency check the fees and gateway
-            // can be sent to DEST_ID / DEST_PKH / DEST_SH
-            return false; /* NFTS NOT CURRENCTLY ACTIVATED */
+            require (transfer.destcurrencyid == (poolAvailable ? VerusConstants.VerusBridgeAddress : VerusConstants.VerusCurrencyId),  
+                        "Invalid desttype");
         }
-        else if (transferType != VerusConstants.DEST_ID && 
-                 transferType != VerusConstants.DEST_PKH && 
-                 transferType != VerusConstants.DEST_SH &&
-                 transferType != VerusConstants.DEST_ETHNFT)
+        else if (transfer.flags == (VerusConstants.VALID + VerusConstants.CONVERT + VerusConstants.RESERVE_TO_RESERVE))
         {
-            return false;
+            require(sendingCurrency.flags & VerusConstants.MAPPING_PARTOF_BRIDGEVETH == VerusConstants.MAPPING_PARTOF_BRIDGEVETH &&
+                    destinationCurrency.flags & VerusConstants.MAPPING_ISBRIDGE_CURRENCY == VerusConstants.MAPPING_ISBRIDGE_CURRENCY &&
+                    verusToERC20mapping[transfer.secondreserveid].flags & VerusConstants.MAPPING_PARTOF_BRIDGEVETH == VerusConstants.MAPPING_PARTOF_BRIDGEVETH,
+                        "Cannot convert non bridge reserves");
         }
-        else
+        else if (transfer.flags == (VerusConstants.VALID + VerusConstants.CONVERT + VerusConstants.IMPORT_TO_SOURCE))
         {
-            if (transfer.flags == VerusConstants.VALID)
-            {
-                return true;
-            }
-            else if (transfer.flags == (VerusConstants.VALID + VerusConstants.CONVERT + VerusConstants.RESERVE_TO_RESERVE))
-            {
-                require(sendingCurrency.flags & VerusConstants.MAPPING_PARTOF_BRIDGEVETH == VerusConstants.MAPPING_PARTOF_BRIDGEVETH &&
-                        destinationCurrency.flags & VerusConstants.MAPPING_ISBRIDGE_CURRENCY == VerusConstants.MAPPING_ISBRIDGE_CURRENCY &&
-                        verusToERC20mapping[transfer.secondreserveid].flags & VerusConstants.MAPPING_PARTOF_BRIDGEVETH == VerusConstants.MAPPING_PARTOF_BRIDGEVETH,
-                         "Cannot convert non bridge reserves");
-            }
-            else if (transfer.flags ==  (VerusConstants.VALID + VerusConstants.CONVERT + VerusConstants.IMPORT_TO_SOURCE))
-            {
-                require(sendingCurrency.flags & VerusConstants.MAPPING_ISBRIDGE_CURRENCY == VerusConstants.MAPPING_ISBRIDGE_CURRENCY  &&
-                        destinationCurrency.flags & VerusConstants.MAPPING_PARTOF_BRIDGEVETH == VerusConstants.MAPPING_PARTOF_BRIDGEVETH,
-                         "Cannot import non reserve to source");
-            }
-            else if (transfer.flags ==  (VerusConstants.VALID + VerusConstants.CONVERT))
-            {
-                require(sendingCurrency.flags & VerusConstants.MAPPING_PARTOF_BRIDGEVETH == VerusConstants.MAPPING_PARTOF_BRIDGEVETH &&
-                        destinationCurrency.flags & VerusConstants.MAPPING_ISBRIDGE_CURRENCY == VerusConstants.MAPPING_ISBRIDGE_CURRENCY,
-                         "Cannot convert to source");
-            }
-            else
-            {
-                return false;
-            }
-            return true;
-        }  
+            require(sendingCurrency.flags & VerusConstants.MAPPING_ISBRIDGE_CURRENCY == VerusConstants.MAPPING_ISBRIDGE_CURRENCY  &&
+                    destinationCurrency.flags & VerusConstants.MAPPING_PARTOF_BRIDGEVETH == VerusConstants.MAPPING_PARTOF_BRIDGEVETH &&
+                    transfer.secondreserveid == address(0),
+                        "Cannot import non reserve to source");
+        }
+        else if (transfer.flags == (VerusConstants.VALID + VerusConstants.CONVERT))
+        {
+            require(sendingCurrency.flags & VerusConstants.MAPPING_PARTOF_BRIDGEVETH == VerusConstants.MAPPING_PARTOF_BRIDGEVETH  &&
+                    destinationCurrency.flags & VerusConstants.MAPPING_ISBRIDGE_CURRENCY == VerusConstants.MAPPING_ISBRIDGE_CURRENCY &&
+                    transfer.secondreserveid == address(0),
+                        "Cannot convert non reserve");
+        }
+        else 
+        {
+            revert ("Invalid flag combination");
+        }
+
+        return true;
+
     }
 
     function reverse(uint64 input) public pure returns (uint64 v) 
