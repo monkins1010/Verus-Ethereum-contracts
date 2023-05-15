@@ -24,7 +24,7 @@ library VerusConstants {
     uint32 constant RESERVE_TO_RESERVE = 0x400; 
     uint32 constant CURRENCY_EXPORT = 0x2000;
 
-    uint32 constant INVALID_FLAGS = 0xffffffff - (VALID + CONVERT + RESERVE_TO_RESERVE + IMPORT_TO_SOURCE + CURRENCY_EXPORT);
+    uint32 constant INVALID_FLAGS = 0xffffffff - (VALID + CONVERT + RESERVE_TO_RESERVE + IMPORT_TO_SOURCE);
 
     uint8 constant DEST_PKH = 2;
     uint8 constant DEST_SH = 3;
