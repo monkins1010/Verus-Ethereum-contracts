@@ -6,7 +6,6 @@ import "../VerusBridge/Token.sol";
 import "../Libraries/VerusObjects.sol";
 import "../Libraries/VerusConstants.sol";
 import "../Libraries/VerusObjectsNotarization.sol";
-import "@openzeppelin/contracts/token/ERC721/ERC721.sol";
 
 
 contract VerusStorage {
