@@ -237,6 +237,9 @@ contract VerusNotarizer is VerusStorage {
             encodeNotarization(uint(forkIdx), notarizations[uint(0)]);
         }
 
+        // used to trigger a new CCE only
+        notaryHeight = uint64(block.number);
+
         // If the position that is matched is the second stored one, then that becomes the new confirmed.
         if(forkPos == 1)
         {
@@ -249,7 +252,7 @@ contract VerusNotarizer is VerusStorage {
             //pack vout in at the end of the proposer 22 bytes ctransferdest
             encodeStandardNotarization(notarizations[1], abi.encode(hashedNotarization, 
                 txidHash, stateRoot, proposer));
-            notaryHeight = uint64(block.number);
+
 
         }
         else
