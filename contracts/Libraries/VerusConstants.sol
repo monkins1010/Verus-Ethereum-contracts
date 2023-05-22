@@ -53,6 +53,9 @@ library VerusConstants {
     uint8 constant NOTARY_VALID = 1;
     uint8 constant NOTARY_REVOKED = 2;
 
+    //notarizationflags
+    uint32 constant FLAG_CONTRACT_UPGRADE = 0x200;
+
     //cCurrencydefintion constants
     uint32 constant OPTION_NFT_TOKEN = 0x800;
     uint8 constant VERUS_NFT_DEST_LENGTH = 53;
