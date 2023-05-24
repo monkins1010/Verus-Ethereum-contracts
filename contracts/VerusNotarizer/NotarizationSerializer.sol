@@ -48,7 +48,6 @@ contract NotarizationSerializer is VerusStorage {
         
         uint32 nextOffset;
         uint16 bridgeLaunched;
-        uint176 auxProposer;
         uint8 proposerFlags;
         uint32 notarizationFlags;
 
@@ -64,7 +63,6 @@ contract NotarizationSerializer is VerusStorage {
                     nextOffset := add(nextOffset, 1)  // move to read type
                     proposerFlags := mload(add(nextOffset, notarization))
                     nextOffset := add(nextOffset, 21) // move to proposer, type and vector length
-                    proposerAndLaunched := and(mload(add(nextOffset, notarization)), 0x00000000000000000000ffffffffffffffffffffffffffffffffffffffffffff)   // type+len+proposer 22bytes
                  }
 
         if (proposerFlags & VerusConstants.FLAG_DEST_AUX == VerusConstants.FLAG_DEST_AUX)
@@ -72,7 +70,6 @@ contract NotarizationSerializer is VerusStorage {
             nextOffset += 1;  // goto auxdest parent vec length position
             nextOffset = processAux(notarization, nextOffset, notarizationFlags);
             nextOffset -= 1;  // NOTE: Next Varint call takes array pos not array pos +1
-            proposerAndLaunched = bytes32(uint256(auxProposer));
         }
 
         assembly {
