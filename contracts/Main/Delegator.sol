@@ -210,4 +210,10 @@ contract Delegator is VerusStorage {
 
         return abi.decode(returnedData, (uint8));
     }
+
+    function getVoteState(address txid) public view returns (VerusObjects.voteState memory) {
+
+        return pendingVoteState[txid];
+
+    }
 }

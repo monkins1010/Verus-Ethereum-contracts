@@ -126,11 +126,6 @@ contract UpgradeManager is VerusStorage {
         revert("Cannot upgrade.");
     }
 
-    function getVoteState(address txid) public view returns (VerusObjects.voteState memory) {
-
-        return pendingVoteState[txid];
-
-    }
     function recoverSigner(bytes32 _h, uint8 _v, bytes32 _r, bytes32 _s) private pure returns (address) {
 
         return ecrecover(_h, _v, _r, _s);
