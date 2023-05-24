@@ -54,7 +54,7 @@ contract SubmitImports is VerusStorage {
 
     }
 
-    function _createImports(bytes calldata data) external returns(uint64) {
+    function _createImports(bytes calldata data) external returns(uint64, uint176) {
         
         
         VerusObjects.CReserveTransferImport memory _import = abi.decode(data, (VerusObjects.CReserveTransferImport));
@@ -93,8 +93,8 @@ contract SubmitImports is VerusStorage {
 
         (success, returnBytes) = verusProofAddress.delegatecall(abi.encodeWithSignature("proveImports(bytes)", abi.encode(_import, hashOfTransfers)));
         require(success);
-
-        (fees, CCEHeightsAndnIndex) = abi.decode(returnBytes, (uint64, uint128));// verusProof.proveImports(_import, hashOfTransfers); 
+        uint176 exporter;
+        (fees, CCEHeightsAndnIndex, exporter) = abi.decode(returnBytes, (uint64, uint128, uint176));
 
         isLastCCEInOrder(uint32(CCEHeightsAndnIndex));
    
@@ -115,7 +115,7 @@ contract SubmitImports is VerusStorage {
         
         refund(refundsData);
 
-        return fees;
+        return (fees, exporter);
 
     }
 
@@ -188,16 +188,12 @@ contract SubmitImports is VerusStorage {
         return returnedExports;      
     }
 
-    function setClaimableFees(uint64 fees) external
+    function setClaimableFees(uint64 fees, uint176 exporter) external
     {
         uint176 bridgeKeeper;
         bridgeKeeper = uint176(uint160(msg.sender));
-        bridgeKeeper |= (uint176(0x0c14) << 160); //make ETH type '0c' and length 20 '14'
+        bridgeKeeper |= (uint176(0x0c14) << 160); //make ETH type '0x0c' and length '0x14'
 
-        uint256 notaryFees;
-        uint256 LPFee;
-        uint256 proposerFees;  
-        uint256 bridgekeeperFees;              
         uint176 proposer;
         bytes memory proposerBytes = bestForks[0];
 
@@ -205,40 +201,31 @@ contract SubmitImports is VerusStorage {
                 proposer := mload(add(proposerBytes, 128))
         } 
 
-        (notaryFees, proposerFees, bridgekeeperFees, LPFee) = setFeePercentages(fees);
+        (uint256 notaryFees, uint256 proposerFees, uint256 bridgekeeperFees, uint256 exporterFees) = setFeePercentages(fees);
 
         // Any remainder from Notaries shared fees is put into the LPFees pot.
-        LPFee += setNotaryFees(notaryFees);
 
         setClaimedFees(bytes32(uint256(proposer)), proposerFees);
         setClaimedFees(bytes32(uint256(bridgeKeeper)), bridgekeeperFees);
+        exporterFees += setNotaryFees(notaryFees);
+        setClaimedFees(bytes32(uint256(exporter)), exporterFees);
 
-        //NOTE: LP fees to be sent to vrsc to be burnt held at the verusNotarizerStorage address as a unique key
-        uint256 totalLPFees = setClaimedFees(bytes32(uint256(uint160(address(this)))), LPFee);
-        
-        //NOTE:only execute the LP transfer if there is x100 the fee amount 
-        if(totalLPFees > (VerusConstants.verusvETHTransactionFee * 100) && poolAvailable)
-        {
-            //make a transfer for the LP fees back to Verus
-            sendToVRSC(uint64(totalLPFees), address(0), VerusConstants.DEST_PKH);
-            setClaimableFees(bytes32(uint256(uint160(address(this)))), 0);
-        }
     }
 
     function setFeePercentages(uint256 _ethAmount)private pure returns (uint256,uint256,uint256,uint256)
     {
         uint256 notaryFees;
-        uint256 LPFees;
         uint256 proposerFees;  
+        uint256 exporterFees;
         uint256 bridgekeeperFees;     
         
         notaryFees = (_ethAmount / 4 ); 
         proposerFees = _ethAmount / 4 ;
         bridgekeeperFees = (_ethAmount / 4 );
 
-        LPFees = _ethAmount - (notaryFees + proposerFees + bridgekeeperFees);
+        exporterFees = _ethAmount - (notaryFees + proposerFees + bridgekeeperFees);
 
-        return(notaryFees, proposerFees, bridgekeeperFees, LPFees);
+        return(notaryFees, proposerFees, bridgekeeperFees, exporterFees);
     }
 
     function setNotaryFees(uint256 notaryFees) private returns (uint64 remainder){  //sent in as SATS
@@ -255,15 +242,9 @@ contract SubmitImports is VerusStorage {
         remainder = uint64(notaryFees % numOfNotaries);
     }
 
-    function setClaimedFees(bytes32 _address, uint256 fees) private returns (uint256)
-    {
+    function setClaimedFees(bytes32 _address, uint256 fees) public  {
+
         claimableFees[_address] += fees;
-        return claimableFees[_address];
-    }
-
-    function setClaimableFees(bytes32 claiment, uint256 fee) private {
-
-        claimableFees[claiment] = fee;
     }
 
     function claimfees() public {

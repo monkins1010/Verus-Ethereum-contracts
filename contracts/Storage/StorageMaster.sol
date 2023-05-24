@@ -27,23 +27,19 @@ contract VerusStorage {
     //verusnotarizaerstorage
 
     bool public poolAvailable;
-    mapping (bytes32 => bytes32) public storageGlobal;
+    mapping (bytes32 => bytes32[]) public storageGlobal;
     mapping (bytes32 => bytes) internal proofs;
     mapping (bytes32 => uint256) public claimableFees;
     mapping (bytes32 => uint256) public refunds;
-    uint64 public notaryHeight;
 
     //verusbridge
-
-    address verusUpgradeContract;
 
     uint64 poolSize;
 
     //upgrademanager
     address[] public contracts;
-    address[] public pendingContracts;
-    VerusObjects.voteState public pendingVoteState;
-    bytes32 public newContractsPendingHash;
+
+    mapping (address => VerusObjects.voteState) public pendingVoteState;
 
     mapping (bytes32 => bool) public saltsUsed;
 
@@ -58,5 +54,5 @@ contract VerusStorage {
 
     address public owner;
 
-    uint8 constant AMOUNT_OF_CONTRACTS = 11;
+    uint64 public lastRecievedGasPrice;
 }

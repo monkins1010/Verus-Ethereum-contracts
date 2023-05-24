@@ -75,7 +75,7 @@ contract VerusProof is VerusStorage  {
 
     }
     
-    function checkTransfers(VerusObjects.CReserveTransferImport memory _import, bytes32 hashedTransfers) public view returns (uint64, uint128) {
+    function checkTransfers(VerusObjects.CReserveTransferImport memory _import, bytes32 hashedTransfers) public view returns (uint256, uint176) {
 
         // the first component of the import partial transaction proof is the transaction header, for each version of
         // transaction header, we have a specific offset for the hash of transfers. if we change this, we must
@@ -170,10 +170,10 @@ contract VerusProof is VerusStorage  {
             return (checkCCEValues(firstObj, nextOffset, hashedTransfers, nIndex));
         
         }
-        return (uint64(0), uint128(0));
+        return (uint256(0), uint176(0));
     }
 
-    function checkCCEValues(bytes memory firstObj, uint32 nextOffset, bytes32 hashedTransfers, uint32 nIndex) public view returns(uint64, uint128)
+    function checkCCEValues(bytes memory firstObj, uint32 nextOffset, bytes32 hashedTransfers, uint32 nIndex) public view returns(uint256 tmpPacked, uint176 exporter)
     {
         bytes32 hashReserveTransfers;
         address systemSourceID;
@@ -181,19 +181,20 @@ contract VerusProof is VerusStorage  {
         uint64 rewardFees;
         uint32 tempRegister;
         uint8 tmpuint8;
-        uint128 packedRegister; //uint128(startheight) | (uint128(endheight) << 32) | (uint128(nIndex) << 64) | (uint128(numInputs) << 96));
+        uint128 packedRegister;
         
         assembly {
-            systemSourceID := mload(add(firstObj, nextOffset))      // source system ID, which should match expected source (VRSC/VRSCTEST)
+            systemSourceID := mload(add(firstObj, nextOffset))       // source system ID, which should match expected source (VRSC/VRSCTEST)
             nextOffset := add(nextOffset, CCE_HASH_TRANSFERS_DELTA)
-            hashReserveTransfers := mload(add(firstObj, nextOffset))// get hash of reserve transfers from partial transaction proof
+            hashReserveTransfers := mload(add(firstObj, nextOffset)) // get hash of reserve transfers from partial transaction proof
             nextOffset := add(nextOffset, CCE_DEST_SYSTEM_DELTA)
-            destSystemID := mload(add(firstObj, nextOffset))        // destination system, which should be vETH
+            destSystemID := mload(add(firstObj, nextOffset))         // destination system, which should be vETH
             nextOffset := add(nextOffset, CCE_DEST_CURRENCY_DELTA)  // goto destcurrencyid
             nextOffset := add(nextOffset, 1)                        // goto exporter type  
-            tmpuint8 := mload(add(firstObj, nextOffset))            // read exporter type
+            tmpuint8 := mload(add(firstObj, nextOffset))             // read exporter type
             nextOffset := add(nextOffset, 1)                        // goto exporter vec length
             nextOffset := add(nextOffset, CCE_DEST_CURRENCY_DELTA)  // goto exporter
+            exporter := mload(add(firstObj, nextOffset))            //read exporter
         }
 
         if (tmpuint8 & VerusConstants.FLAG_DEST_AUX == VerusConstants.FLAG_DEST_AUX)
@@ -204,16 +205,16 @@ contract VerusProof is VerusStorage  {
         }
 
         assembly {
-            nextOffset := add(nextOffset, 8)                                // move to read num inputs
+            nextOffset := add(nextOffset, 8)                               // move to read num inputs
             tempRegister := mload(add(firstObj, nextOffset))                // number of numInputs                 
         }
 
         (packedRegister, nextOffset)  = readVarint(firstObj, nextOffset);   // put startheight at [0] 32bit chunk
-        tempRegister = serializeUint32(tempRegister);       // reverse endian of no. transfers
-        packedRegister  |= (uint128(tempRegister) << 96) ;                  // put number of transfers at [3] 32-bit chunk     
+        tempRegister = serializeUint32(tempRegister);                          // reverse endian of no. transfers
+        packedRegister  |= (uint128(tempRegister) << 96) ;                     // put number of transfers at [3] 32-bit chunk     
         
         (tempRegister, nextOffset)  = readVarint(firstObj, nextOffset); 
-        packedRegister  |= (uint128(tempRegister) << 32) ;                  // put endheight at [1] 32 bit chunk
+        packedRegister  |= (uint128(tempRegister) << 32) ;                   // put endheight at [1] 32 bit chunk
         packedRegister  |= (uint128(nIndex) << 64) ;                        // put nindex at [2] 32 bit chunk
         assembly {
             nextOffset := add(nextOffset, 1)                                // move to next byte for mapsize
@@ -236,7 +237,8 @@ contract VerusProof is VerusStorage  {
             revert("CCE information does not checkout");
         }
 
-        return (rewardFees, packedRegister); //uint128(startheight) | (uint128(endheight) << 32) | (uint128(nIndex) << 64) | (uint128(numInputs) << 96));
+        tmpPacked = uint256(packedRegister) | uint256(rewardFees) << 128;
+        return (tmpPacked, exporter); 
 
     }
 
@@ -290,15 +292,20 @@ contract VerusProof is VerusStorage  {
         return txRoot;
     }
     
-    function proveImports(bytes calldata dataIn ) external view returns(uint64, uint128){
+    function proveImports(bytes calldata dataIn ) external view returns(uint64, uint128, uint176){
         
         (VerusObjects.CReserveTransferImport memory _import, bytes32 hashOfTransfers) = abi.decode(dataIn, (VerusObjects.CReserveTransferImport, bytes32));
         bytes32 confirmedStateRoot;
         bytes32 retStateRoot;
+        uint256 tmp;
+        uint176 exporter;
         uint64 fees;
         uint128 heightsAndTXNum;
 
-        (fees, heightsAndTXNum) = checkTransfers(_import, hashOfTransfers);
+        (tmp, exporter) = checkTransfers(_import, hashOfTransfers);
+
+        fees = uint64(tmp >> 128);
+        heightsAndTXNum = uint128(tmp);
         
         bytes32 txRoot = proveComponents(_import);
 
@@ -315,7 +322,7 @@ contract VerusProof is VerusStorage  {
             revert("Stateroot does not match");
         }
         //truncate to only return heights as, contract will revert if issue with proofs.
-        return (fees, heightsAndTXNum);
+        return (fees, heightsAndTXNum, exporter);
  
     }
 
