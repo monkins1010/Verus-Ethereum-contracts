@@ -55,10 +55,10 @@ contract Delegator is VerusStorage {
         (success, returnedData) = SubmitImportsAddress.delegatecall(abi.encodeWithSignature("_createImports(bytes)", packedData));
         require(success);
 
-        uint64 fees = abi.decode(returnedData, (uint64));
+        (uint64 fees, uint176 exporter) = abi.decode(returnedData, (uint64, uint176));
 
         if (fees > 0 ) {
-            (success,) = SubmitImportsAddress.delegatecall(abi.encodeWithSignature("setClaimableFees(uint64)", fees));
+            (success,) = SubmitImportsAddress.delegatecall(abi.encodeWithSignature("setClaimableFees(uint64,uint176)", fees, exporter));
             require(success);
         }
     }

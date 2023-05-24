@@ -25,19 +25,29 @@ contract UpgradeManager is VerusStorage {
     function upgradeContracts(bytes calldata data) external payable returns (uint8) {
 
         require(msg.value > VerusConstants.upgradeFee);
-        
+
+        setNotaryFees(msg.value / VerusConstants.SATS_TO_WEI_STD);
+
         VerusObjects.upgradeInfo memory _newContractPackage;
 
         (_newContractPackage) = abi.decode(data, (VerusObjects.upgradeInfo));
         
-        
-        if (newContractsPendingHash != bytes32(0)) {
-            return UPGRADE_IN_PROCESS;
-        }
-
         checkValidContractUpgrade(_newContractPackage);
             
         return PENDING; 
+    }
+
+    function setNotaryFees(uint256 notaryFees) private {  //sent in as SATS
+      
+        uint256 numOfNotaries = notaries.length;
+        uint64 notariesShare = uint64(notaryFees / numOfNotaries);
+        for (uint i=0; i < numOfNotaries; i++)
+        {
+            uint176 notary;
+            notary = uint176(uint160(notaryAddressMapping[notaries[i]].main));
+            notary |= (uint176(0x0c14) << 160); //set at type eth
+            claimableFees[bytes32(uint256(notary))] += notariesShare;
+        }
     }
 
     function recoverString(bytes memory be, uint8 vs, bytes32 rs, bytes32 ss) private pure returns (address)
@@ -54,34 +64,29 @@ contract UpgradeManager is VerusStorage {
     function checkValidContractUpgrade(VerusObjects.upgradeInfo memory _newContractPackage) private {
 
         bytes memory be; 
+        address contractsHash;
+
 
         require(saltsUsed[_newContractPackage.salt] == false, "salt Already used");
         saltsUsed[_newContractPackage.salt] = true;
 
         require(contracts.length == _newContractPackage.contracts.length, "Input contracts wrong length");
         
-        // TODO: Check to see if a currency upgrade contract is in action, if so end.
+        for (uint i = 0; i < contracts.length; i++)
+        {
+            be = abi.encodePacked(be, _newContractPackage.contracts[i]);
+        }
+
+        be = abi.encodePacked(be, uint8(_newContractPackage.upgradeType), _newContractPackage.salt);
+
+        contractsHash = address(uint160(uint256(keccak256(be))));
+
+        address[] storage newArray = pendingVoteState[contractsHash].pendingContracts;
 
         for (uint j = 0; j < contracts.length; j++)
         {
-            be = abi.encodePacked(be, _newContractPackage.contracts[j]);
-            pendingContracts.push(_newContractPackage.contracts[j]);
+            newArray.push(_newContractPackage.contracts[j]);
         }
-
-        be = bytesToString(abi.encodePacked(be, uint8(_newContractPackage.upgradeType), _newContractPackage.salt));
-
-        address signer = recoverString(be, _newContractPackage._vs, _newContractPackage._rs, _newContractPackage._ss);
-
-        VerusObjects.notarizer memory notary;
-        // get the notarys status from the mapping using its Notary i-address to check if it is valid.
-        notary = notaryAddressMapping[_newContractPackage.notarizerID];
-
-        if (notary.state != VerusConstants.NOTARY_VALID || notary.recovery != signer)
-        {
-            revert("Invalid notary signer");  
-        }
-
-        newContractsPendingHash = keccak256(be);
 
     }
 
@@ -98,46 +103,32 @@ contract UpgradeManager is VerusStorage {
         return _string;
     }
 
-    function runContractsUpgrade() public returns (uint8) {
+    function runContractsUpgrade(address txid) public returns (uint8) {
 
-        if (pendingContracts.length == VerusConstants.AMOUNT_OF_CONTRACTS && 
-            pendingVoteState.count == REQUIREDAMOUNTOFVOTES && 
-            pendingVoteState.agree >= WINNINGAMOUNT ) {
+        if (pendingVoteState[txid].count == REQUIREDAMOUNTOFVOTES && 
+            pendingVoteState[txid].agree >= WINNINGAMOUNT ) {
             
             for (uint i = 0; i < uint(VerusConstants.AMOUNT_OF_CONTRACTS); i++)
             {       
-                    if(contracts[i] != pendingContracts[i]) {
-                        contracts[i] = pendingContracts[i];
+                    if(contracts[i] != pendingVoteState[txid].pendingContracts[i]) {
+                        contracts[i] = pendingVoteState[txid].pendingContracts[i];
                     }
             }
 
-            delete pendingContracts;
-            delete pendingVoteState;
-            newContractsPendingHash = bytes32(0);
+            delete pendingVoteState[txid];
+
             emit contractUpdated(true);
 
             return COMPLETE;
 
         }
 
-        return ERROR;
+        revert("Cannot upgrade.");
     }
 
-    function updateVote(bool voted) public {
+    function getVoteState(address txid) public view returns (VerusObjects.voteState memory) {
 
-        require(msg.sender == contracts[uint(VerusConstants.ContractType.VerusNotarizer)]);
-        if (pendingVoteState.count < REQUIREDAMOUNTOFVOTES) {
-            pendingVoteState.count++;
-        
-            if(voted) {
-                pendingVoteState.agree++;
-            }
-        }
-    }
-
-    function getVoteState() public view returns (VerusObjects.voteState memory) {
-
-        return pendingVoteState;
+        return pendingVoteState[txid];
 
     }
     function recoverSigner(bytes32 _h, uint8 _v, bytes32 _r, bytes32 _s) private pure returns (address) {

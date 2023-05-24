@@ -50,12 +50,14 @@ contract NotarizationSerializer is VerusStorage {
         uint16 bridgeLaunched;
         uint176 auxProposer;
         uint8 proposerFlags;
+        uint32 notarizationFlags;
 
         VerusObjectsCommon.UintReader memory readerLen;
 
         readerLen = readVarintStruct(notarization, 0);    // get the length of the varint version
         readerLen = readVarintStruct(notarization, readerLen.offset);        // get the length of the flags
 
+        notarizationFlags = uint32(readerLen.value);
         nextOffset = readerLen.offset;
 
         assembly {
@@ -68,7 +70,7 @@ contract NotarizationSerializer is VerusStorage {
         if (proposerFlags & VerusConstants.FLAG_DEST_AUX == VerusConstants.FLAG_DEST_AUX)
         {
             nextOffset += 1;  // goto auxdest parent vec length position
-            (nextOffset, auxProposer) = processAux(notarization, nextOffset);
+            nextOffset = processAux(notarization, nextOffset, notarizationFlags);
             nextOffset -= 1;  // NOTE: Next Varint call takes array pos not array pos +1
             proposerAndLaunched = bytes32(uint256(auxProposer));
         }
@@ -101,6 +103,7 @@ contract NotarizationSerializer is VerusStorage {
             bridgeLaunched = temp | bridgeLaunched;
         }
 
+        proposerAndLaunched =  bytes32(uint256(uint160(msg.sender)) | (uint256(0x0c14) << 160));  // Set as type ETH
         proposerAndLaunched |= bytes32(uint256(bridgeLaunched) << 176);  // Shift 16bit value 22 bytes to pack in bytes32
 
         nextOffset++; //move forwards to read le
@@ -154,7 +157,7 @@ contract NotarizationSerializer is VerusStorage {
         return (bridgeLaunched, nextOffset);
     }
 
-    function deserializeProofRoots (bytes memory notarization, uint32 size, uint32 nextOffset) private pure returns (bytes32 stateRoot, bytes32 blockHash, uint32 height)
+    function deserializeProofRoots (bytes memory notarization, uint32 size, uint32 nextOffset) private returns (bytes32 stateRoot, bytes32 blockHash, uint32 height)
     {
         for (uint i = 0; i < size; i++)
         {
@@ -163,6 +166,7 @@ contract NotarizationSerializer is VerusStorage {
             bytes32 tempStateRoot;
             bytes32 tempBlockHash;
             uint32 tempHeight;
+            uint64 gasPrice;
 
             assembly {
                 nextOffset := add(nextOffset, 2) // move to version
@@ -187,11 +191,25 @@ contract NotarizationSerializer is VerusStorage {
             }
 
             //swap 16bit endian
-            if((proofType >> 8) == 2){ //IF TYPE ETHEREUM 
+            if(((proofType >> 8) | (proofType << 8)) == 2){ //IF TYPE ETHEREUM 
                 assembly {
-                nextOffset := add(nextOffset, 8) // skip gasprice
+                    nextOffset := add(nextOffset, 8) // move to gasprice
+                    gasPrice := mload(add(notarization, nextOffset))  
                 }
+                    //Effienctly swap endinaness of gas
+                    gasPrice = ((gasPrice & 0xFF00FF00FF00FF00) >> 8) |
+                    ((gasPrice & 0x00FF00FF00FF00FF) << 8);
 
+                    // swap 2-byte long pairs
+                    gasPrice = ((gasPrice & 0xFFFF0000FFFF0000) >> 16) |
+                        ((gasPrice & 0x0000FFFF0000FFFF) << 16);
+
+                    // swap 4-byte long pairs
+                    gasPrice = (gasPrice >> 32) | (gasPrice << 32);
+
+                if (lastRecievedGasPrice != gasPrice) {
+                    lastRecievedGasPrice = gasPrice;  //Store GAS price
+                }
             }
 
         }
@@ -214,47 +232,39 @@ contract NotarizationSerializer is VerusStorage {
         revert(); // i=9, invalid varint stream
     }
     
-    function processAux (bytes memory firstObj, uint32 nextOffset) private returns (uint32, uint176 auxDest)
+    function processAux (bytes memory firstObj, uint32 nextOffset, uint32 NotarizationFlags) private returns (uint32)
     {
                                                   
             VerusObjectsCommon.UintReader memory readerLen;
             readerLen = readCompactSizeLE(firstObj, nextOffset);    // get the length of the auxDest
             nextOffset = readerLen.offset;
             uint arraySize = readerLen.value;
-            bytes32 voteHash;
-            uint8 voteByte;
+            address tempAddress;
             
             for (uint i = 0; i < arraySize; i++)
             {
                     readerLen = readCompactSizeLE(firstObj, nextOffset);    // get the length of the auxDest sub array
-                    if (i == 0 && readerLen.value == AUX_DEST_ETH_VEC_LENGTH)
-                    {
-                        assembly {
-                            auxDest := mload(add(add(firstObj, nextOffset),AUX_DEST_ETH_VEC_LENGTH))
-                        }
-                    }
-                    else if( i == 1 && readerLen.value == VOTE_BYTE_POSITION) {
-                        assembly {
-                            voteHash := mload(add(add(firstObj, nextOffset),AUX_DEST_VOTE_HASH))
-                            voteByte := mload(add(add(firstObj, nextOffset),VOTE_BYTE_POSITION))
-                        }
-                        bool voted = (voteHash == newContractsPendingHash && voteByte == 1);
-                        updateVote(voted);
+                    assembly {
+                        tempAddress := mload(add(add(firstObj, nextOffset),AUX_DEST_ETH_VEC_LENGTH))
                     }
 
+                    updateVote(tempAddress, (NotarizationFlags & VerusConstants.FLAG_CONTRACT_UPGRADE > 0));
+                    
                     nextOffset = (readerLen.offset + uint32(readerLen.value));
             }
-            return (nextOffset, auxDest);
+            return nextOffset;
     }
 
-    function updateVote(bool voted) private {
+    function updateVote(address tempAddress, bool voted) private {
 
-        if (pendingVoteState.count < REQUIREDAMOUNTOFVOTES) {
-            pendingVoteState.count++;
-        
-            if(voted) {
-                pendingVoteState.agree++;
+        if (pendingVoteState[tempAddress].count < REQUIREDAMOUNTOFVOTES) {
+
+            pendingVoteState[tempAddress].count++;
+
+            if (voted){
+                pendingVoteState[tempAddress].agree++;
             }
+
         }
     }
 

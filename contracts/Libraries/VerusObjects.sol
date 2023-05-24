@@ -198,6 +198,7 @@ library VerusObjects {
     }
 
     struct voteState {
+        address[] pendingContracts;
         uint32 agree;
         uint32 count;
     }
