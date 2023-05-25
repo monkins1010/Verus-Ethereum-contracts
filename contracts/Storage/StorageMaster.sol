@@ -24,35 +24,33 @@ contract VerusStorage {
     uint64 public cceLastStartHeight;
     uint64 public cceLastEndHeight;
 
-    //verusnotarizaerstorage
+    //verusnotarizer storage
 
     bool public poolAvailable;
-    mapping (bytes32 => bytes32[]) public storageGlobal;
-    mapping (bytes32 => bytes) internal proofs;
-    mapping (bytes32 => uint256) public claimableFees;
-    mapping (bytes32 => uint256) public refunds;
+    mapping (bytes32 => bytes) public storageGlobal;    // Generic storage location
+    mapping (bytes32 => bytes) internal proofs;         // Stored Verus stateroot/blockhash proofs indexed by height.
+    mapping (bytes32 => uint256) public claimableFees;  // CreserveTRansfer destinations mapped to Fees they have accrued.
+    mapping (bytes32 => uint256) public refunds;        // Failed transaction refunds 
 
-    //verusbridge
-
-    uint64 poolSize;
+    uint64 poolSize;   // Starts at 5000 VRSC
 
     //upgrademanager
-    address[] public contracts;
+    address[] public contracts;  // List of all known contracts Delegator trusts to use (contracts replacable on upgrade)
 
-    mapping (address => VerusObjects.voteState) public pendingVoteState;
+    mapping (address => VerusObjects.voteState) public pendingVoteState; // Potential contract upgrades
 
-    mapping (bytes32 => bool) public saltsUsed;
+    mapping (bytes32 => bool) public saltsUsed;   //salts used for upgrades and revoking.
 
     // verusnotarizer
     
-    mapping (address => VerusObjects.notarizer ) public notaryAddressMapping;
+    mapping (address => VerusObjects.notarizer ) public notaryAddressMapping; // Mapping iaddress of notaries to their spend/recover ETH addresses
     mapping (bytes32 => bool) knownNotarizationTxids;
 
-    address[] public notaries;
+    address[] public notaries; // Notaries for enumeration
 
-    bytes[] public bestForks;
+    bytes[] public bestForks; // Forks array
 
-    address public owner;
+    address public owner;    // TEestnet only owner to allow quick upgrades, TODO: Remove once Voting established.
 
-    uint64 public lastRecievedGasPrice;
+    uint64 public lastRecievedGasPrice;  //Gasprice last recieved.
 }

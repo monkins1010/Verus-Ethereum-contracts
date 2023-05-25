@@ -61,23 +61,25 @@ contract SubmitImports is VerusStorage {
         bytes32 txidfound;
         bytes memory elVchObj = _import.partialtransactionproof.components[0].elVchObj;
         uint32 nVins;
-        bool success;
-        bytes memory returnBytes;
 
         assembly 
         {
             txidfound := mload(add(elVchObj, 32)) 
             nVins := mload(add(elVchObj, 45)) 
         }
-        
-        // reverse 32bit endianess
-        nVins = ((nVins & 0xFF00FF00) >> 8) |  ((nVins & 0x00FF00FF) << 8);
-        nVins = (nVins >> 16) | (nVins << 16);
 
         if (processedTxids[txidfound]) 
         {
             revert("Known txid");
         } 
+
+        bool success;
+        bytes memory returnBytes;
+        
+        // reverse 32bit endianess
+        nVins = ((nVins & 0xFF00FF00) >> 8) |  ((nVins & 0x00FF00FF) << 8);
+        nVins = (nVins >> 16) | (nVins << 16);
+
 
         bytes32 hashOfTransfers;
 
