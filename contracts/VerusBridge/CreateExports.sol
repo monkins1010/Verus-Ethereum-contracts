@@ -113,13 +113,13 @@ contract CreateExports is VerusStorage {
         // If notarization has happened increment CCE to next boundary when the tx comes in
         // If changing from pool closed to pool open create a boundary (As all sends will then go through the bridge)
         uint64 blockNumber = uint64(block.number);
-        uint64 blockDelta = cceLastStartHeight - (blockNumber >= cceLastStartHeight ? blockNumber : 0);
+        uint64 blockDelta = blockNumber - cceLastStartHeight;
         uint64 lastTransfersLength = uint64(_readyExports[cceLastStartHeight].transfers.length);
         bytes32 prevHash = _readyExports[cceLastStartHeight].exportHash;
         // if there are no transfers then there is no need to make a new CCE as this is the first one, and the endheight can become the block number if it is less than the current block no.
         // if the last notary received height is less than the endheight then keep building up the CCE (as long as 10 ETH blocks havent passed, and a new CCE isnt being forced and there is less than 50)
 
-        if ((lastTransfersLength < 1 || blockDelta < 10) && !forceNewCCE  && lastTransfersLength < 50) {
+        if ((cceLastEndHeight == 0 || blockDelta < 10) && !forceNewCCE  && lastTransfersLength < 50) {
 
             // set the end height of the CCE to the current block.number only if the current block we are on is greater than its value
             if (cceLastEndHeight < blockNumber) {
