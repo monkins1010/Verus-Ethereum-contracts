@@ -189,18 +189,21 @@ contract VerusProof is VerusStorage  {
             hashReserveTransfers := mload(add(firstObj, nextOffset)) // get hash of reserve transfers from partial transaction proof
             nextOffset := add(nextOffset, CCE_DEST_SYSTEM_DELTA)
             destSystemID := mload(add(firstObj, nextOffset))         // destination system, which should be vETH
-            nextOffset := add(nextOffset, CCE_DEST_CURRENCY_DELTA)  // goto destcurrencyid
-            nextOffset := add(nextOffset, 1)                        // goto exporter type  
+            nextOffset := add(nextOffset, CCE_DEST_CURRENCY_DELTA)   // goto destcurrencyid
+            nextOffset := add(nextOffset, 1)                         // goto exporter type  
             tmpuint8 := mload(add(firstObj, nextOffset))             // read exporter type
-            nextOffset := add(nextOffset, 1)                        // goto exporter vec length
-            nextOffset := add(nextOffset, CCE_DEST_CURRENCY_DELTA)  // goto exporter
-            exporter := mload(add(firstObj, nextOffset))            //read exporter
+            nextOffset := add(nextOffset, 1)                         // goto exporter destination length
+            let lengthOfExporter := and(mload(add(firstObj, nextOffset)), 0xff)  
+            if gt(lengthOfExporter, 0) {
+                nextOffset := add(nextOffset, lengthOfExporter)  // goto exporter destination
+                exporter := mload(add(firstObj, nextOffset))     // read exporter destination
+            }
         }
 
         if (tmpuint8 & VerusConstants.FLAG_DEST_AUX == VerusConstants.FLAG_DEST_AUX)
         {
             nextOffset += 1;  // goto auxdest parent vec length position
-            (nextOffset, ) = skipAux(firstObj, nextOffset);
+            (nextOffset, exporter) = readAuxDest(firstObj, nextOffset, exporter); //NOTE: If Auxdest present use address
             nextOffset -= 1;  // NOTE: Next Varint call takes array pos not array pos +1
         }
 
@@ -242,7 +245,7 @@ contract VerusProof is VerusStorage  {
 
     }
 
-    function skipAux (bytes memory firstObj, uint32 nextOffset) public view returns (uint32, uint176 auxDest)
+    function readAuxDest (bytes memory firstObj, uint32 nextOffset, uint176 exporter) public view returns (uint32, uint176)
     {
                                                   
             VerusObjectsCommon.UintReader memory readerLen;
@@ -256,13 +259,13 @@ contract VerusProof is VerusStorage  {
                     if (readerLen.value == AUX_DEST_ETH_VEC_LENGTH)
                     {
                          assembly {
-                            auxDest := mload(add(add(firstObj, nextOffset),AUX_DEST_ETH_VEC_LENGTH))
+                            exporter := mload(add(add(firstObj, nextOffset),AUX_DEST_ETH_VEC_LENGTH))
                          }
                     }
 
                     nextOffset = (readerLen.offset + uint32(readerLen.value));
             }
-            return (nextOffset, auxDest);
+            return (nextOffset, exporter);
     }
 
     // roll through each proveComponents
