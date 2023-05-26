@@ -6,7 +6,6 @@ pragma abicoder v2;
 
 import "../Libraries/VerusConstants.sol";
 import "../Libraries/VerusObjectsNotarization.sol";
-import "@openzeppelin/contracts/utils/math/SafeMath.sol";
 import "./NotarizationSerializer.sol";
 import "../MMR/VerusBlake2b.sol";
 import "../VerusBridge/UpgradeManager.sol";
