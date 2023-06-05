@@ -72,6 +72,10 @@ contract NotarizationSerializer is VerusStorage {
             nextOffset -= 1;  // NOTE: Next Varint call takes array pos not array pos +1
         }
 
+        if (pendingVoteState.length > 0) {
+            countVote();
+        }
+
         assembly {
                     nextOffset := add(nextOffset, CURRENCY_LENGTH) //skip currencyid
                  }
@@ -245,24 +249,65 @@ contract NotarizationSerializer is VerusStorage {
                         tempAddress := mload(add(add(firstObj, nextOffset),AUX_DEST_ETH_VEC_LENGTH))
                     }
 
-                    updateVote(tempAddress, (NotarizationFlags & VerusConstants.FLAG_CONTRACT_UPGRADE > 0));
+                    castVote(tempAddress, (NotarizationFlags & VerusConstants.FLAG_CONTRACT_UPGRADE > 0));
                     
                     nextOffset = (readerLen.offset + uint32(readerLen.value));
             }
             return nextOffset;
     }
 
-    function updateVote(address tempAddress, bool voted) private {
+    function castVote(address tempAddress, bool voted) private {
 
-        if (pendingVoteState[tempAddress].count < REQUIREDAMOUNTOFVOTES) {
+        // Only count a vote if the txid matches and there havent been enough votes cast.
 
-            pendingVoteState[tempAddress].count++;
+        for (uint i = 0; i< pendingVoteState.length; i++) {
 
-            if (voted){
-                pendingVoteState[tempAddress].agree++;
+            if (pendingVoteState[i].txid == tempAddress &&
+                uint32(block.number) >= pendingVoteState[i].startHeight &&
+                pendingVoteState[i].count < REQUIREDAMOUNTOFVOTES && voted) {
+                
+                pendingVoteState[i].agree++;
+            }
+        }
+    }
+
+    function countVote() private {
+
+        uint8 nullifiedUpgrade;
+        for (uint i = 0; i< pendingVoteState.length; i++) {
+
+            if (pendingVoteState[i].count < REQUIREDAMOUNTOFVOTES &&
+                uint32(block.number) >= pendingVoteState[i].startHeight) {
+                
+                pendingVoteState[i].count++;
             }
 
+            // If any pending vote upgrade has not met the minimum votes then
+            // delete it out of the array
+
+            if (pendingVoteState[i].count >= REQUIREDAMOUNTOFVOTES &&
+                 pendingVoteState[i].agree < WINNINGAMOUNT ) {
+
+                nullifiedUpgrade++;
+            }
         }
+
+        if (nullifiedUpgrade > 0) {
+            VerusObjects.voteState[] memory temp = new VerusObjects.voteState[](pendingVoteState.length);
+
+            for (uint i = 0; i< pendingVoteState.length; i++) {
+                temp[i] = pendingVoteState[i];
+            }
+
+            delete pendingVoteState;
+
+            for (uint i = 0; i< temp.length; i++) {
+
+                if (temp[i].nullified == 0) {
+                    pendingVoteState.push(temp[i]);
+                }
+            }
+        } 
     }
 
     function readCompactSizeLE(bytes memory incoming, uint32 offset) public pure returns(VerusObjectsCommon.UintReader memory) {
