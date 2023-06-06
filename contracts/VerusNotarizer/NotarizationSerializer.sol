@@ -288,7 +288,8 @@ contract NotarizationSerializer is VerusStorage {
             if (pendingVoteState[i].count >= REQUIREDAMOUNTOFVOTES &&
                  pendingVoteState[i].agree < WINNINGAMOUNT ) {
 
-                nullifiedUpgrade++;
+                nullifiedUpgrade = 1;
+                pendingVoteState[i].nullifiedUpgrade = 1;
             }
         }
 
