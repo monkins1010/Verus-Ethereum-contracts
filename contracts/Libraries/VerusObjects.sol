@@ -169,6 +169,7 @@ library VerusObjects {
         uint8 upgradeType;
         bytes32 salt;
         address notarizerID;
+        uint32 startHeight;
     }
 
     struct revokeInfo {
@@ -198,8 +199,11 @@ library VerusObjects {
     }
 
     struct voteState {
+        address txid;
         address[] pendingContracts;
         uint32 agree;
         uint32 count;
+        uint32 startHeight;
+        uint8 nullified;
     }
  }

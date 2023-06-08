@@ -66,7 +66,6 @@ contract UpgradeManager is VerusStorage {
         bytes memory be; 
         address contractsHash;
 
-
         require(saltsUsed[_newContractPackage.salt] == false, "salt Already used");
         saltsUsed[_newContractPackage.salt] = true;
 
@@ -81,12 +80,14 @@ contract UpgradeManager is VerusStorage {
 
         contractsHash = address(uint160(uint256(keccak256(be))));
 
-        address[] storage newArray = pendingVoteState[contractsHash].pendingContracts;
+        pendingVoteState.push(VerusObjects.voteState(contractsHash, _newContractPackage.contracts, 0, 0, _newContractPackage.startHeight, 0 ));
 
-        for (uint j = 0; j < contracts.length; j++)
-        {
-            newArray.push(_newContractPackage.contracts[j]);
-        }
+    //    address[] storage newArray = pendingVoteState[contractsHash].pendingContracts;
+
+    //    for (uint j = 0; j < contracts.length; j++)
+    //    {
+    //        newArray.push(_newContractPackage.contracts[j]);
+    //    }
 
     }
 
@@ -103,27 +104,29 @@ contract UpgradeManager is VerusStorage {
         return _string;
     }
 
-    function runContractsUpgrade(address txid) public returns (uint8) {
+    function runContractsUpgrade() public returns (uint8) {
 
-        if (pendingVoteState[txid].count == REQUIREDAMOUNTOFVOTES && 
-            pendingVoteState[txid].agree >= WINNINGAMOUNT ) {
-            
-            for (uint i = 0; i < uint(VerusConstants.AMOUNT_OF_CONTRACTS); i++)
-            {       
-                    if(contracts[i] != pendingVoteState[txid].pendingContracts[i]) {
-                        contracts[i] = pendingVoteState[txid].pendingContracts[i];
-                    }
+        for(uint i = 0; i < pendingVoteState.length; i++) 
+        {
+            if (pendingVoteState[i].count == REQUIREDAMOUNTOFVOTES && 
+                pendingVoteState[i].agree >= WINNINGAMOUNT ) {
+                
+                for (uint j = 0; j < uint(VerusConstants.AMOUNT_OF_CONTRACTS); j++)
+                {       
+                        if(contracts[j] != pendingVoteState[i].pendingContracts[j]) {
+                            contracts[j] = pendingVoteState[i].pendingContracts[j];
+                        }
+                }
+
+                delete pendingVoteState;
+
+                emit contractUpdated(true);
+
+                return COMPLETE;
+
             }
-
-            delete pendingVoteState[txid];
-
-            emit contractUpdated(true);
-
-            return COMPLETE;
-
         }
-
-        revert("Cannot upgrade.");
+        return UPGRADE_IN_PROCESS;
     }
 
     function recoverSigner(bytes32 _h, uint8 _v, bytes32 _r, bytes32 _s) private pure returns (address) {

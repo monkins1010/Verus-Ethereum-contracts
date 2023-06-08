@@ -37,7 +37,7 @@ contract VerusStorage {
     //upgrademanager
     address[] public contracts;  // List of all known contracts Delegator trusts to use (contracts replacable on upgrade)
 
-    mapping (address => VerusObjects.voteState) public pendingVoteState; // Potential contract upgrades
+    VerusObjects.voteState[] public pendingVoteState; // Potential contract upgrades
 
     mapping (bytes32 => bool) public saltsUsed;   //salts used for upgrades and revoking.
 
