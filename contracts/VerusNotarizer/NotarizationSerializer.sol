@@ -167,7 +167,6 @@ contract NotarizationSerializer is VerusStorage {
             bytes32 tempStateRoot;
             bytes32 tempBlockHash;
             uint32 tempHeight;
-            uint64 gasPrice;
 
             assembly {
                 nextOffset := add(nextOffset, 2) // move to version
@@ -190,29 +189,13 @@ contract NotarizationSerializer is VerusStorage {
                 blockHash = tempBlockHash;
                 height = serializeUint32(tempHeight); //swapendian
             }
-
+            
             //swap 16bit endian
-            if(((proofType >> 8) | (proofType << 8)) == 2){ //IF TYPE ETHEREUM 
+            if(((proofType >> 8) | (proofType << 8)) == 2){ //IF TYPE ETHEREUM TODO: add constant
                 assembly {
                     nextOffset := add(nextOffset, 8) // move to gasprice
-                    gasPrice := mload(add(notarization, nextOffset))  
-                }
-                    //Effienctly swap endinaness of gas
-                    gasPrice = ((gasPrice & 0xFF00FF00FF00FF00) >> 8) |
-                    ((gasPrice & 0x00FF00FF00FF00FF) << 8);
-
-                    // swap 2-byte long pairs
-                    gasPrice = ((gasPrice & 0xFFFF0000FFFF0000) >> 16) |
-                        ((gasPrice & 0x0000FFFF0000FFFF) << 16);
-
-                    // swap 4-byte long pairs
-                    gasPrice = (gasPrice >> 32) | (gasPrice << 32);
-
-                if (lastReceivedGasPrice != gasPrice) {
-                    lastReceivedGasPrice = gasPrice;  //Store GAS price
                 }
             }
-
         }
  
     }

@@ -53,5 +53,4 @@ contract VerusStorage {
 
     address public owner;    // Testnet only owner to allow quick upgrades, TODO: Remove once Voting established.
 
-    uint64 public lastReceivedGasPrice;  //Gasprice last recieved.
 }
