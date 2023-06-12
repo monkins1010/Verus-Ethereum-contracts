@@ -30,11 +30,11 @@ contract CreateExports is VerusStorage {
         (bool success, bytes memory feeBytes) = verusExportManagerAddress.delegatecall(abi.encodeWithSignature("checkExport(bytes)", data));
         require(success, "checkExport call failed");
 
-        fees = abi.decode(feeBytes, (uint256)); //fees = exportManager.checkExport(transfer, paidValue, poolAvailable);
+        fees = abi.decode(feeBytes, (uint256)); //fees = exportManager.checkExport(transfer, paidValue, bridgeConverterActive);
 
         require(fees != 0, "CheckExport Failed Checks"); 
 
-        if(!poolAvailable)
+        if(!bridgeConverterActive)
         {
             require (subtractPoolSize(uint64(transfer.fees)));
         }
@@ -146,7 +146,7 @@ contract CreateExports is VerusStorage {
         VerusObjects.CReserveTransferSet memory pendingTransfers = _readyExports[cceLastStartHeight];
         address crossChainExportAddress = contracts[uint(VerusConstants.ContractType.VerusCrossChainExport)];
 
-        (bool success, bytes memory returnData) = crossChainExportAddress.call(abi.encodeWithSignature("generateCCE(bytes)", abi.encode(pendingTransfers.transfers, poolAvailable, cceLastStartHeight, cceLastEndHeight, contracts[uint(VerusConstants.ContractType.VerusSerializer)])));
+        (bool success, bytes memory returnData) = crossChainExportAddress.call(abi.encodeWithSignature("generateCCE(bytes)", abi.encode(pendingTransfers.transfers, bridgeConverterActive, cceLastStartHeight, cceLastEndHeight, contracts[uint(VerusConstants.ContractType.VerusSerializer)])));
         require(success, "generateCCEfailed");
 
         bytes memory serializedCCE = abi.decode(returnData, (bytes)); 

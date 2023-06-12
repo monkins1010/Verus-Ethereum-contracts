@@ -114,8 +114,8 @@ contract VerusNotarizer is VerusStorage {
 
         proofs[bytes32(uint256(verusProofheight))] = abi.encode(stateRoot, blockHash);
         
-        if (!poolAvailable && (((uint256(launchedAndProposer) >> 176) & 0xff) == 1)) { //shift to read if bridge launched in packed uint256
-            poolAvailable = true;
+        if (!bridgeConverterActive && (((uint256(launchedAndProposer) >> 176) & 0xff) == 1)) { //shift to read if bridge launched in packed uint256
+            bridgeConverterActive = true;
             
             address submitImportsAddress = contracts[uint(VerusConstants.ContractType.SubmitImports)];
             (bool success2,) = submitImportsAddress.delegatecall(abi.encodeWithSignature("sendToVRSC(uint64,address,uint8)", 0, address(0), VerusConstants.DEST_PKH));

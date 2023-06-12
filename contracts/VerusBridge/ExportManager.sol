@@ -64,7 +64,7 @@ contract ExportManager is VerusStorage  {
         require (destAddressID != address(0), "Destination Address null");// Destination can be currency definition
         // Check fees are correct, if pool unavailble vrsctest only fees, TODO:if pool availble vETH fees only for now
 
-        if (!poolAvailable) {
+        if (!bridgeConverterActive) {
 
             require (transfer.feecurrencyid == VerusConstants.VerusCurrencyId, "feecurrencyid != vrsc");
             
@@ -117,7 +117,7 @@ contract ExportManager is VerusStorage  {
         uint amount;
         amount = transfer.currencyvalue.amount;
 
-        if (poolAvailable)
+        if (bridgeConverterActive)
         { 
             if (convertFromVerusNumber(transferFee, 18) < requiredFees)
             {
@@ -180,7 +180,7 @@ contract ExportManager is VerusStorage  {
 
         if (transfer.flags == VerusConstants.VALID && transfer.secondreserveid == address(0))
         {
-            require (transfer.destcurrencyid == (poolAvailable ? VerusConstants.VerusBridgeAddress : VerusConstants.VerusCurrencyId),  
+            require (transfer.destcurrencyid == (bridgeConverterActive ? VerusConstants.VerusBridgeAddress : VerusConstants.VerusCurrencyId),  
                         "Invalid desttype");
         }
         else if (transfer.flags == (VerusConstants.VALID + VerusConstants.CONVERT + VerusConstants.RESERVE_TO_RESERVE))
