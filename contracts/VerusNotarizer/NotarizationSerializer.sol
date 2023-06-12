@@ -158,7 +158,7 @@ contract NotarizationSerializer is VerusStorage {
         return (bridgeLaunched, nextOffset);
     }
 
-    function deserializeProofRoots (bytes memory notarization, uint32 size, uint32 nextOffset) private returns (bytes32 stateRoot, bytes32 blockHash, uint32 height)
+    function deserializeProofRoots (bytes memory notarization, uint32 size, uint32 nextOffset) private pure returns (bytes32 stateRoot, bytes32 blockHash, uint32 height)
     {
         for (uint i = 0; i < size; i++)
         {
@@ -189,7 +189,7 @@ contract NotarizationSerializer is VerusStorage {
                 blockHash = tempBlockHash;
                 height = serializeUint32(tempHeight); //swapendian
             }
-            
+
             //swap 16bit endian
             if(((proofType >> 8) | (proofType << 8)) == 2){ //IF TYPE ETHEREUM TODO: add constant
                 assembly {
