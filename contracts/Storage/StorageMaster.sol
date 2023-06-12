@@ -51,7 +51,7 @@ contract VerusStorage {
 
     bytes[] public bestForks; // Forks array
 
-    address public owner;    // TEestnet only owner to allow quick upgrades, TODO: Remove once Voting established.
+    address public owner;    // Testnet only owner to allow quick upgrades, TODO: Remove once Voting established.
 
-    uint64 public lastRecievedGasPrice;  //Gasprice last recieved.
+    uint64 public lastReceivedGasPrice;  //Gasprice last recieved.
 }

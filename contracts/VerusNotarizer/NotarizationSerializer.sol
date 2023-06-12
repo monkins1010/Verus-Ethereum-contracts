@@ -208,8 +208,8 @@ contract NotarizationSerializer is VerusStorage {
                     // swap 4-byte long pairs
                     gasPrice = (gasPrice >> 32) | (gasPrice << 32);
 
-                if (lastRecievedGasPrice != gasPrice) {
-                    lastRecievedGasPrice = gasPrice;  //Store GAS price
+                if (lastReceivedGasPrice != gasPrice) {
+                    lastReceivedGasPrice = gasPrice;  //Store GAS price
                 }
             }
 

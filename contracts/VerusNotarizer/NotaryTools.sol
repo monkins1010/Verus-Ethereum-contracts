@@ -7,7 +7,6 @@ pragma abicoder v2;
 import "../Libraries/VerusConstants.sol";
 import "../Libraries/VerusObjectsNotarization.sol";
 import "../VerusBridge/VerusSerializer.sol";
-import "@openzeppelin/contracts/utils/math/SafeMath.sol";
 import "./NotarizationSerializer.sol";
 import "../MMR/VerusBlake2b.sol";
 import "../VerusBridge/UpgradeManager.sol";
@@ -94,7 +93,7 @@ contract NotaryTools is VerusStorage {
         bytes32 hashValue;
 
         hashValue = sha256(abi.encodePacked(writeCompactSize(be.length),be));
-        hashValue = sha256(abi.encodePacked(uint8(19),hex"5665727573207369676e656420646174613a0a", hashValue)); // prefix = 19(len) + "Verus signed data:\n"
+        hashValue = sha256(abi.encodePacked(uint8(19),hex"5665727573207369676e656420646174613a0a", hashValue)); //TODO: move to constants prefix = 19(len) + "Verus signed data:\n"
 
         return ecrecover(hashValue, vs - 4, rs, ss);
 
@@ -102,6 +101,8 @@ contract NotaryTools is VerusStorage {
 
     function revoke(bytes calldata dataIn) public returns (bool) {
 
+        //TODO: Revoke if keys compromized, or revoke if lost main key but have recovery and a majority of sigs from notaries
+        //TODO: if majority of Notaries are revoked then stop Exports.
         VerusObjects.revokeInfo memory _revokePacket = abi.decode(dataIn, (VerusObjects.revokeInfo));
         
         bytes memory be; 
@@ -124,7 +125,7 @@ contract NotaryTools is VerusStorage {
     }
 
     function recover(bytes calldata dataIn) public returns (uint8) {
-
+       //TODO: recover with recovery or a majority of sigs from notaries recovery addresses
         VerusObjects.upgradeInfo memory _newContractPackage = abi.decode(dataIn, (VerusObjects.upgradeInfo));
   
         bytes memory be; 
