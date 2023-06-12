@@ -106,7 +106,7 @@ contract VerusNotarizer is VerusStorage {
 
         address notarizationSerializerAddress = contracts[uint(VerusConstants.ContractType.NotarizationSerializer)];
 
-        (bool success, bytes memory returnBytes) = notarizationSerializerAddress.delegatecall(abi.encodeWithSignature("deserilizeNotarization(bytes)", serializedNotarization));
+        (bool success, bytes memory returnBytes) = notarizationSerializerAddress.delegatecall(abi.encodeWithSignature("deserializeNotarization(bytes)", serializedNotarization));
         require(success);
 
         (bytes32 launchedAndProposer, bytes32 prevnotarizationtxid, bytes32 hashprevnotarization, bytes32 stateRoot, bytes32 blockHash, 
@@ -114,12 +114,14 @@ contract VerusNotarizer is VerusStorage {
 
         proofs[bytes32(uint256(verusProofheight))] = abi.encode(stateRoot, blockHash);
         
-        if (!poolAvailable && (((uint256(launchedAndProposer) >> 176) & 0xff) == 1)) { //shift to read if bridge launched in packed uint256
-            poolAvailable = true;
+        if (!bridgeConverterActive && (((uint256(launchedAndProposer) >> 176) & 0xff) == 1)) { //shift to read if bridge launched in packed uint256
+            bridgeConverterActive = true;
             
             address submitImportsAddress = contracts[uint(VerusConstants.ContractType.SubmitImports)];
-            (bool success2,) = submitImportsAddress.delegatecall(abi.encodeWithSignature("sendToVRSC(uint64,address,uint8)", 0, address(0), VerusConstants.DEST_PKH));
-            require(success2);
+            if (remainingLaunchFeeReserves > (VerusConstants.verusTransactionFee * 2)) {
+                (bool success2,) = submitImportsAddress.delegatecall(abi.encodeWithSignature("sendToVRSC(uint64,address,uint8)", 0, address(0), VerusConstants.DEST_PKH));
+                require(success2);
+            }
         }
 
         voutAndHeight |= uint64(verusProofheight) << 32;

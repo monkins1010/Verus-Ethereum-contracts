@@ -26,19 +26,19 @@ contract VerusStorage {
 
     //verusnotarizer storage
 
-    bool public poolAvailable;
-    mapping (bytes32 => bytes) public storageGlobal;    // Generic storage location
+    bool public bridgeConverterActive;
+    mapping (bytes32 => bytes) public storageGlobal;    // Generic storage location NOTE: After security verified, add Oracle proofs.
     mapping (bytes32 => bytes) internal proofs;         // Stored Verus stateroot/blockhash proofs indexed by height.
-    mapping (bytes32 => uint256) public claimableFees;  // CreserveTRansfer destinations mapped to Fees they have accrued.
+    mapping (bytes32 => uint256) public claimableFees;  // CreserveTransfer destinations mapped to Fees they have accrued.
     mapping (bytes32 => uint256) public refunds;        // Failed transaction refunds 
 
-    uint64 poolSize;   // Starts at 5000 VRSC
+    uint64 remainingLaunchFeeReserves;   // Starts at 5000 VRSC
 
     //upgrademanager
     address[] public contracts;  // List of all known contracts Delegator trusts to use (contracts replacable on upgrade)
 
     VerusObjects.voteState[] public pendingVoteState; // Potential contract upgrades
-
+    address[100] public rollingUpgradeVotes; //TODO: change voting mechanism
     mapping (bytes32 => bool) public saltsUsed;   //salts used for upgrades and revoking.
 
     // verusnotarizer

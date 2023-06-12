@@ -10,7 +10,7 @@ contract Delegator is VerusStorage {
     address startOwner;
     
     constructor(address[] memory _notaries, address[] memory _notariesEthAddress, address[] memory _notariesColdStoreEthAddress, address[] memory _newContractAddress) {
-        poolSize = 500000000000;
+        remainingLaunchFeeReserves = VerusConstants.verusBridgeLaunchFeeShare;
 
         for(uint i =0; i < _notaries.length; i++) {
             notaryAddressMapping[_notaries[i]] = VerusObjects.notarizer(_notariesEthAddress[i], _notariesColdStoreEthAddress[i], VerusConstants.NOTARY_VALID);
