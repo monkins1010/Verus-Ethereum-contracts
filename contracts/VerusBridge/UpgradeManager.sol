@@ -134,12 +134,6 @@ contract UpgradeManager is VerusStorage {
         return ecrecover(_h, _v, _r, _s);
     }
 
-    function setSaltsUsed(bytes32 salt) public {
-        require(msg.sender == contracts[uint(VerusConstants.ContractType.VerusNotarizer)]);
-        saltsUsed[salt] = true;
-
-    }
-
     function writeCompactSize(uint newNumber) public pure returns(bytes memory) {
         bytes memory output;
         if (newNumber < uint8(253))
