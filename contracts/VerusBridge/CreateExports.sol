@@ -13,8 +13,8 @@ contract CreateExports is VerusStorage {
 
     function subtractPoolSize(uint64 _amount) private returns (bool) {
 
-        if(_amount > poolSize) return false;
-        poolSize -= _amount;
+        if(_amount > remainingLaunchFeeReserves) return false;
+        remainingLaunchFeeReserves -= _amount;
         return true;
     }
  

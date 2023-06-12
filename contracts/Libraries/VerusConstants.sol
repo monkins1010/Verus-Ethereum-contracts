@@ -4,6 +4,9 @@
 pragma solidity >=0.6.0 < 0.9.0;
 pragma abicoder v2;
 
+// Developers notes for datatypes used:
+//NOTE: Document uint176 and uint128
+
 library VerusConstants {
     address constant public VEth = 0x67460C2f56774eD27EeB8685f29f6CEC0B090B00;
     address constant public VerusSystemId = 0xA6ef9ea235635E328124Ff3429dB9F9E91b64e2d;
@@ -16,6 +19,7 @@ library VerusConstants {
     uint64 constant public verusTransactionFee = 2000000; //0.02 VRSC 10 decimals
     uint64 constant public verusvETHTransactionFee = 300000; //0.003 vETH 10 decimals
     uint64 constant public verusvETHReturnFee = 1000000; //0.01 vETH 10 decimals
+    uint64 constant public verusBridgeLaunchFeeShare = 500000000000;
     uint32 constant VALID = 1;
     uint32 constant CONVERT = 2;
     uint32 constant CROSS_SYSTEM = 0x40; 
@@ -44,7 +48,7 @@ library VerusConstants {
     uint32 constant TOKEN_ERC20_SEND = 16;   //TODO: Make these tokens down to a new set
     uint32 constant TOKEN_LAUNCH = 32;
     uint32 constant TOKEN_ETH_SEND = 64;
-    uint32 constant TOKEN_ETH_NFT_DEFINITION = 128;  //TODO this should be part of mapping
+    uint32 constant TOKEN_ETH_NFT_DEFINITION = 128;  //TODO: this should be part of mapping
 
     uint32 constant TICKER_LENGTH_MAX = 4;
     uint8 constant DESTINATION_PLUS_GATEWAY = 68;
@@ -77,3 +81,7 @@ library VerusConstants {
         UpgradeManager
     } 
 }
+
+//TODO: extra constants to add 176, 92 etc..
+//NOTE: Check constants with Mike
+

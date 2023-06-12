@@ -39,7 +39,7 @@ contract NotarizationSerializer is VerusStorage {
         revert(); // i=10, invalid varint stream
     }
 
-    function deserilizeNotarization(bytes memory notarization) public returns (bytes32 proposerAndLaunched, 
+    function deserializeNotarization(bytes memory notarization) public returns (bytes32 proposerAndLaunched, 
                                                                                     bytes32 prevnotarizationtxid, 
                                                                                     bytes32 hashprevcrossnotarization, 
                                                                                     bytes32 stateRoot, 

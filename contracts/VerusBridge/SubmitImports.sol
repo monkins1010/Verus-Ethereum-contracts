@@ -35,7 +35,7 @@ contract SubmitImports is VerusStorage {
             LPtransfer.currencyvalue.currency = VerusConstants.VerusCurrencyId;
             LPtransfer.fees = VerusConstants.verusTransactionFee; 
             LPtransfer.feecurrencyid = VerusConstants.VerusCurrencyId;
-            LPtransfer.currencyvalue.amount = uint64(poolSize - VerusConstants.verusTransactionFee);
+            LPtransfer.currencyvalue.amount = uint64(remainingLaunchFeeReserves - VerusConstants.verusTransactionFee);
             forceNewCCE = true;
         } else {
             LPtransfer.currencyvalue.currency = VerusConstants.VEth;
