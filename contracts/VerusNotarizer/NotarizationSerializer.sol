@@ -289,7 +289,7 @@ contract NotarizationSerializer is VerusStorage {
                  pendingVoteState[i].agree < WINNINGAMOUNT ) {
 
                 nullifiedUpgrade = 1;
-                pendingVoteState[i].nullifiedUpgrade = 1;
+                pendingVoteState[i].nullified = 1;
             }
         }
 
