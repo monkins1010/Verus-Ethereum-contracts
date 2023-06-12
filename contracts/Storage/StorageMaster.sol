@@ -39,6 +39,7 @@ contract VerusStorage {
 
     VerusObjects.voteState[] public pendingVoteState; // Potential contract upgrades
     address[100] public rollingUpgradeVotes; //TODO: change voting mechanism
+    uint8 public rollingVoteIndex;
     mapping (bytes32 => bool) public saltsUsed;   //salts used for upgrades and revoking.
 
     // verusnotarizer
