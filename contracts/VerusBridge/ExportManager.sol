@@ -11,7 +11,9 @@ import "../Storage/StorageMaster.sol";
 
 contract ExportManager is VerusStorage  {
 
-    uint8 constant FEE_OFFSET = 20 + 20 + 20 + 8; // 3 x 20bytes address + 64bit uint
+    uint8 constant UINT160_SIZE = 20; 
+    uint8 constant FEE_OFFSET = 20 + 20 + 20 + 8; // 3 x 20bytes address + 64bit uint // 3 x 20bytes address + 64bit uint
+    // Aux dest can only be one vector, of one vector which is a CTransferDestiantion of an R address.
     uint8 constant AUX_DEST_LENGTH = 24;
 
     function ERC20Registered(address _iaddress) private view returns (bool) {
@@ -41,7 +43,7 @@ contract ExportManager is VerusStorage  {
         {
             assembly 
             {
-                destAddressID := mload(add(serializedDest, 20))
+                destAddressID := mload(add(serializedDest, UINT160_SIZE))
             }
         }
         else
@@ -69,7 +71,7 @@ contract ExportManager is VerusStorage  {
             require (transfer.feecurrencyid == VerusConstants.VerusCurrencyId, "feecurrencyid != vrsc");
             
             //VRSC pool as WEI
-            if (transfer.destination.destinationtype == (VerusConstants.DEST_ETH + VerusConstants.FLAG_DEST_GATEWAY) ||
+            if (transfer.destination.destinationtype == (VerusConstants.DEST_ETH + VerusConstants.FLAG_DEST_GATEWAY + VerusConstants.FLAG_DEST_AUX) ||
                 transfer.flags != VerusConstants.VALID)
                 return 0;
 
@@ -83,16 +85,36 @@ contract ExportManager is VerusStorage  {
 
             if ((transfer.destination.destinationtype & ~VerusConstants.FLAG_DEST_AUX) == (VerusConstants.FLAG_DEST_GATEWAY + VerusConstants.DEST_ETH)) {
 
-                //destination is concatenated with the gateway back address (bridge.veth) + (gatewayCode) + 0.003 ETH in fees uint64LE
+                // destinationaddress is concatenated with the gateway back address (bridge.veth) + (gatewayCode) + 0.003 ETH in fees uint64LE
+                // destinationaddress is also concatenated with aux dest 
                 
-                require (transfer.destination.destinationaddress.length == (FEE_OFFSET + AUX_DEST_LENGTH) ||
-                        transfer.destination.destinationaddress.length == (FEE_OFFSET), "destination address not 68 or (+ 24 bytes)");
+
                 require (transfer.currencyvalue.currency != transfer.secondreserveid, "Bounce back type not allowed");
                 assembly 
                 {
                     gatewayID := mload(add(serializedDest, 40)) // second 20bytes in bytes array
                     gatewayCode := mload(add(serializedDest, 60)) // third 20bytes in bytes array
                     bounceBackFee := mload(add(serializedDest, FEE_OFFSET))
+                }
+
+                if (transfer.destination.destinationtype & VerusConstants.FLAG_DEST_AUX == VerusConstants.FLAG_DEST_AUX) {
+                    
+                    require (transfer.destination.destinationaddress.length == (FEE_OFFSET + AUX_DEST_LENGTH), "destination address not 68 + 24 bytes");    
+                    uint32 auxDestPrefix;
+                    address auxDestAddress;
+                    
+                    assembly 
+                    {
+                        auxDestPrefix := mload(add(add(serializedDest, FEE_OFFSET), 4)) // 4bytes AUX_DEST_PREFIX_CONSTANT
+                        auxDestAddress := mload(add(add(serializedDest, FEE_OFFSET), 24)) // destaddress
+                    }
+                    require (auxDestPrefix == VerusConstants.AUX_DEST_PREFIX, "auxDestPrefix Incorrect");
+                    require (gatewayCode != address(0), "auxDestAddress must not be empty");
+
+                } else  {
+
+                    require (transfer.destination.destinationaddress.length == (FEE_OFFSET), "destination address not 68 bytes");
+
                 }
 
                 require (gatewayID == VerusConstants.VEth, "GatewayID not VETH");
@@ -168,7 +190,7 @@ contract ExportManager is VerusStorage  {
         VerusObjects.mappedToken memory sendingCurrency = verusToERC20mapping[transfer.currencyvalue.currency];
         VerusObjects.mappedToken memory destinationCurrency = verusToERC20mapping[transfer.destcurrencyid];
 
-        if (!(transfer.destination.destinationtype == (VerusConstants.DEST_ETH + VerusConstants.FLAG_DEST_GATEWAY) || 
+        if (!(transfer.destination.destinationtype == (VerusConstants.DEST_ETH + VerusConstants.FLAG_DEST_GATEWAY + VerusConstants.FLAG_DEST_AUX) || 
                 transfer.destination.destinationtype == VerusConstants.DEST_ID ||
                 transfer.destination.destinationtype == VerusConstants.DEST_PKH || 
                 transfer.destination.destinationtype == VerusConstants.DEST_SH ||

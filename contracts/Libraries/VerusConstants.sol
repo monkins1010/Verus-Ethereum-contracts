@@ -5,7 +5,10 @@ pragma solidity >=0.6.0 < 0.9.0;
 pragma abicoder v2;
 
 // Developers notes for datatypes used:
-//NOTE: Document uint176 and uint128
+// uint176 types are used to store CTransferDestiantions as we are limited to a type (1byte) + vector length (1byte) + 20 bytes address.
+// These are used to allow the contract to process up to 50 transactions per CCE.  When a currency import enters the contract through a transaction
+// The destination is a bytes array.
+
 
 library VerusConstants {
     address constant public VEth = 0x67460C2f56774eD27EeB8685f29f6CEC0B090B00;
@@ -50,6 +53,8 @@ library VerusConstants {
     uint32 constant TOKEN_ETH_SEND = 64;
     uint32 constant TOKEN_ETH_NFT_DEFINITION = 128;  //TODO: this should be part of mapping
 
+    uint32 constant AUX_DEST_PREFIX = 0x01160214;
+
     uint32 constant TICKER_LENGTH_MAX = 4;
     uint8 constant DESTINATION_PLUS_GATEWAY = 68;
 
@@ -80,6 +85,11 @@ library VerusConstants {
         NotarizationSerializer,
         UpgradeManager
     } 
+
+    uint8 constant UINT160_SIZE = 20;
+    uint8 constant UINT64_SIZE = 8;
+    uint8 constant UINT176_BITS_SIZE = 176;
+    uint8 constant UINT160_BITS_SIZE = 160;
 }
 
 //TODO: extra constants to add 176, 92 etc..
