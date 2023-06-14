@@ -59,6 +59,25 @@ contract TokenManager is VerusStorage {
         }
     }
 
+    
+    function launchContractTokens(bytes calldata data) external {
+
+        VerusObjects.setupToken[] memory tokensToDeploy = abi.decode(data, (VerusObjects.setupToken[]));
+
+        for (uint256 i = 0; i < tokensToDeploy.length; i++) {
+
+            recordToken(
+                tokensToDeploy[i].iaddress,
+                tokensToDeploy[i].erc20ContractAddress,
+                tokensToDeploy[i].name,
+                tokensToDeploy[i].ticker,
+                tokensToDeploy[i].flags,
+                uint256(0)
+            );
+        }
+    }
+    
+
     function recordToken(
         address _iaddress,
         address ethContractAddress,

@@ -85,7 +85,7 @@ contract Delegator is VerusStorage {
     function launchContractTokens(bytes calldata data) external  {
 
         require(verusToERC20mapping[VerusConstants.VEth].flags == 0);
-        address logic = contracts[uint(VerusConstants.ContractType.VerusNotaryTools)];
+        address logic = contracts[uint(VerusConstants.ContractType.TokenManager)];
 
         (bool success,) = logic.delegatecall(abi.encodeWithSignature("launchContractTokens(bytes)", data));
         require(success);
@@ -187,25 +187,41 @@ contract Delegator is VerusStorage {
         return abi.decode(returnedData, (uint8));
     }
 
-    function revoke(VerusObjects.revokeInfo memory _revokePacket) external returns (bool) { 
+    function revokeWithMainAddress(bytes calldata data) external returns (bool) { 
 
         address VerusNotaryToolsAddress = contracts[uint(VerusConstants.ContractType.VerusNotaryTools)];
 
-        bytes memory data = abi.encode(_revokePacket);
-
-        (bool success, bytes memory returnedData) = VerusNotaryToolsAddress.delegatecall(abi.encodeWithSignature("revoke(bytes)", data));
+        (bool success, bytes memory returnedData) = VerusNotaryToolsAddress.delegatecall(abi.encodeWithSignature("revokeWithMainAddress(bytes)", data));
         require(success);
         return abi.decode(returnedData, (bool));
 
     }
 
-    function recover(VerusObjects.upgradeInfo memory _newContractPackage) external returns (uint8) {
+    function revokeWithMultiSig(bytes calldata data) external returns (bool) { 
 
         address VerusNotaryToolsAddress = contracts[uint(VerusConstants.ContractType.VerusNotaryTools)];
 
-        bytes memory data = abi.encode(_newContractPackage);
+        (bool success, bytes memory returnedData) = VerusNotaryToolsAddress.delegatecall(abi.encodeWithSignature("revokeWithMultiSig(bytes)", data));
+        require(success);
+        return abi.decode(returnedData, (bool));
 
-        (bool success, bytes memory returnedData) = VerusNotaryToolsAddress.delegatecall(abi.encodeWithSignature("recover(bytes)", data));
+    }
+
+    function recoverWithRecoveryAddress(bytes calldata data) external returns (uint8) {
+
+        address VerusNotaryToolsAddress = contracts[uint(VerusConstants.ContractType.VerusNotaryTools)];
+
+        (bool success, bytes memory returnedData) = VerusNotaryToolsAddress.delegatecall(abi.encodeWithSignature("recoverWithRecoveryAddress(bytes)", data));
+        require(success);
+
+        return abi.decode(returnedData, (uint8));
+    }
+
+    function recoverWithMultiSig(bytes calldata data) external returns (uint8) {
+
+        address VerusNotaryToolsAddress = contracts[uint(VerusConstants.ContractType.VerusNotaryTools)];
+
+        (bool success, bytes memory returnedData) = VerusNotaryToolsAddress.delegatecall(abi.encodeWithSignature("recoverWithMultiSig(bytes)", data));
         require(success);
 
         return abi.decode(returnedData, (uint8));

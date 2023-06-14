@@ -206,4 +206,11 @@ library VerusObjects {
         uint32 startHeight;
         uint8 nullified;
     }
+    struct revokeRecoverInfo{
+        uint8 _vs;
+        bytes32 _rs;
+        bytes32 _ss;
+        bytes32 salt;
+        address notarizerID;
+    }
  }
