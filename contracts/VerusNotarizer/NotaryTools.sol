@@ -33,10 +33,6 @@ contract NotaryTools is VerusStorage {
         notaryAddressMapping[notarizer] = VerusObjects.notarizer(mainAddress, revokeAddress, state);
     }
 
-    function getNotaryETHAddress(uint256 number) public view returns (address)
-    {
-        return notaryAddressMapping[notaries[number]].main;
-    }
 
     function getProof(uint256 height) public view returns (bytes memory) {
 
@@ -99,10 +95,8 @@ contract NotaryTools is VerusStorage {
 
     }
 
-    function revoke(bytes calldata dataIn) public returns (bool) {
+    function revokeWithMainAddress(bytes calldata dataIn) public returns (bool) {
 
-        //TODO: Revoke if keys compromized, or revoke if lost main key but have recovery and a majority of sigs from notaries
-        //TODO: if majority of Notaries are revoked then stop Exports.
         VerusObjects.revokeInfo memory _revokePacket = abi.decode(dataIn, (VerusObjects.revokeInfo));
         
         bytes memory be; 
@@ -124,28 +118,93 @@ contract NotaryTools is VerusStorage {
         return true;
     }
 
-    function recover(bytes calldata dataIn) public returns (uint8) {
-       //TODO: recover with recovery or a majority of sigs from notaries recovery addresses
-        VerusObjects.upgradeInfo memory _newContractPackage = abi.decode(dataIn, (VerusObjects.upgradeInfo));
+    function revokeWithMultiSig(bytes calldata dataIn) public returns (bool) {
+
+        // Revoke with a quorum of notary sigs.
+        (VerusObjects.revokeRecoverInfo[] memory _revokePacket, address notarizerBeingRevoked) = abi.decode(dataIn, (VerusObjects.revokeRecoverInfo[], address));
+        bytes memory be; 
+
+        require(_revokePacket.length >= ((notaries.length >> 1) + 1), "not enough sigs");
+
+        for (uint i = 0; i < _revokePacket.length; i++) {
+
+            for (uint j = i + 1; j < _revokePacket.length; j++) { 
+                if (_revokePacket[i].notarizerID == _revokePacket[j].notarizerID) {
+                    revert("Duplicate signatures");
+                }
+            }
+
+            require(saltsUsed[_revokePacket[i].salt] == false, "salt Already used");
+            saltsUsed[_revokePacket[i].salt] = true;
+
+            be = bytesToString(abi.encodePacked(uint8(TYPE_REVOKE),notarizerBeingRevoked, _revokePacket[i].salt));
+            address signer = recoverString(be, _revokePacket[i]._vs, _revokePacket[i]._rs, _revokePacket[i]._ss);
+
+            if (signer != _revokePacket[i].notarizerID || notaryAddressMapping[_revokePacket[i].notarizerID].state != VerusConstants.NOTARY_VALID) {
+                    revert("Notary not Valid");
+            }
+        }
+
+        updateNotarizer(notarizerBeingRevoked, address(0), notaryAddressMapping[notarizerBeingRevoked].recovery, VerusConstants.NOTARY_REVOKED);
+
+        return true;
+    }
+
+    function recoverWithRecoveryAddress(bytes calldata dataIn) public returns (uint8) {
+
+        VerusObjects.upgradeInfo memory _newRecoveryInfo = abi.decode(dataIn, (VerusObjects.upgradeInfo));
   
         bytes memory be; 
 
-        require(saltsUsed[_newContractPackage.salt] == false, "salt Already used");
-        saltsUsed[_newContractPackage.salt] = true;
+        require(saltsUsed[_newRecoveryInfo.salt] == false, "salt Already used");
+        saltsUsed[_newRecoveryInfo.salt] = true;
         
-        require(_newContractPackage.contracts.length == NUM_ADDRESSES_FOR_REVOKE, "Input Identities wrong length");
-        require(_newContractPackage.upgradeType == TYPE_RECOVER, "Wrong type of package");
+        require(_newRecoveryInfo.contracts.length == NUM_ADDRESSES_FOR_REVOKE, "Input Identities wrong length");
+        require(_newRecoveryInfo.upgradeType == TYPE_RECOVER, "Wrong type of package");
         
-        be = bytesToString(abi.encodePacked(_newContractPackage.contracts[0],_newContractPackage.contracts[1], uint8(_newContractPackage.upgradeType), _newContractPackage.salt));
+        be = bytesToString(abi.encodePacked(_newRecoveryInfo.contracts[0],_newRecoveryInfo.contracts[1], uint8(_newRecoveryInfo.upgradeType), _newRecoveryInfo.salt));
 
-        address signer = recoverString(be, _newContractPackage._vs, _newContractPackage._rs, _newContractPackage._ss);
+        address signer = recoverString(be, _newRecoveryInfo._vs, _newRecoveryInfo._rs, _newRecoveryInfo._ss);
 
-        if (signer != notaryAddressMapping[_newContractPackage.notarizerID].recovery)
+        if (signer != notaryAddressMapping[_newRecoveryInfo.notarizerID].recovery)
         {
             return ERROR;  
         }
-        updateNotarizer(_newContractPackage.notarizerID, _newContractPackage.contracts[0], 
-                                       _newContractPackage.contracts[1], VerusConstants.NOTARY_VALID);
+        updateNotarizer(_newRecoveryInfo.notarizerID, _newRecoveryInfo.contracts[0], 
+                                       _newRecoveryInfo.contracts[1], VerusConstants.NOTARY_VALID);
+
+        return COMPLETE;
+    }
+
+    function recoverWithMultiSig(bytes calldata dataIn) public returns (uint8) {
+        
+        // Recover with a quorum of notary sigs.
+        (VerusObjects.revokeRecoverInfo[] memory _recoverPacket, address notarizerBeingRecovered, address newMainAddr, address newRevokeAddr) = abi.decode(dataIn, (VerusObjects.revokeRecoverInfo[], address, address, address));
+        bytes memory be; 
+
+        require(_recoverPacket.length >= ((notaries.length >> 1) + 1), "not enough sigs");
+        require(notaryAddressMapping[notarizerBeingRecovered].state == VerusConstants.NOTARY_VALID, "Notary not revoked");
+
+        for (uint i = 0; i < _recoverPacket.length; i++) {
+
+            for (uint j = i + 1; j < _recoverPacket.length; j++) { 
+                if (_recoverPacket[i].notarizerID == _recoverPacket[j].notarizerID) {
+                    revert("Duplicate signatures");
+                }
+            }
+
+            require(saltsUsed[_recoverPacket[i].salt] == false, "salt Already used");
+            saltsUsed[_recoverPacket[i].salt] = true;
+
+            be = bytesToString(abi.encodePacked(uint8(TYPE_RECOVER),notarizerBeingRecovered, newMainAddr, newRevokeAddr, _recoverPacket[i].salt));
+            address signer = recoverString(be, _recoverPacket[i]._vs, _recoverPacket[i]._rs, _recoverPacket[i]._ss);
+
+            if (signer != _recoverPacket[i].notarizerID || notaryAddressMapping[_recoverPacket[i].notarizerID].state != VerusConstants.NOTARY_VALID) {
+                    revert("Notary not Valid");
+            }
+        }
+
+        updateNotarizer(notarizerBeingRecovered, newMainAddr, newRevokeAddr, VerusConstants.NOTARY_VALID);
 
         return COMPLETE;
     }
@@ -163,55 +222,6 @@ contract NotaryTools is VerusStorage {
         return _string;
     }
 
-    function launchContractTokens(bytes calldata data) external {
-
-        VerusObjects.setupToken[] memory tokensToDeploy = abi.decode(data, (VerusObjects.setupToken[]));
-
-        for (uint256 i = 0; i < tokensToDeploy.length; i++) {
-
-            recordToken(
-                tokensToDeploy[i].iaddress,
-                tokensToDeploy[i].erc20ContractAddress,
-                tokensToDeploy[i].name,
-                tokensToDeploy[i].ticker,
-                tokensToDeploy[i].flags,
-                uint256(0)
-            );
-        }
-    }
-
-    function recordToken(
-        address _iaddress,
-        address ethContractAddress,
-        string memory name,
-        string memory ticker,
-        uint8 flags,
-        uint256 tokenID
-    ) private {
-
-        address ERCContract;
-
-        if (flags & VerusConstants.MAPPING_VERUS_OWNED == VerusConstants.MAPPING_VERUS_OWNED) 
-        {
-            if (flags & VerusConstants.TOKEN_LAUNCH == VerusConstants.TOKEN_LAUNCH) 
-            {
-                Token t = new Token(name, ticker); 
-                ERCContract = address(t); 
-            }
-            else if (flags & VerusConstants.TOKEN_ETH_NFT_DEFINITION == VerusConstants.TOKEN_ETH_NFT_DEFINITION)
-            {
-                ERCContract = verusToERC20mapping[VerusConstants.VerusNFTID].erc20ContractAddress;
-                tokenID = uint256(uint160(_iaddress)); //tokenID is the i address
-            }
-        }
-        else 
-        {
-            ERCContract = ethContractAddress;
-        }
-
-        tokenList.push(_iaddress);
-        verusToERC20mapping[_iaddress] = VerusObjects.mappedToken(ERCContract, flags, tokenList.length, name, tokenID);
-    }
 
     function writeCompactSize(uint newNumber) internal pure returns(bytes memory) {
         bytes memory output;

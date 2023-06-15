@@ -45,7 +45,7 @@ contract UpgradeManager is VerusStorage {
         {
             uint176 notary;
             notary = uint176(uint160(notaryAddressMapping[notaries[i]].main));
-            notary |= (uint176(0x0c14) << 160); //set at type eth
+            notary |= (uint176(0x0c14) << VerusConstants.UINT160_BITS_SIZE); //set at type eth
             claimableFees[bytes32(uint256(notary))] += notariesShare;
         }
     }
@@ -80,15 +80,15 @@ contract UpgradeManager is VerusStorage {
 
         contractsHash = address(uint160(uint256(keccak256(be))));
 
-        pendingVoteState.push(VerusObjects.voteState(contractsHash, _newContractPackage.contracts, 0, 0, _newContractPackage.startHeight, 0 ));
+        if (checkContractsCanUpgrade(contractsHash)) {
 
-    //    address[] storage newArray = pendingVoteState[contractsHash].pendingContracts;
-
-    //    for (uint j = 0; j < contracts.length; j++)
-    //    {
-    //        newArray.push(_newContractPackage.contracts[j]);
-    //    }
-
+            for (uint j = 0; j < uint(VerusConstants.AMOUNT_OF_CONTRACTS); j++)
+            {       
+                if (contracts[j] != _newContractPackage.contracts[j]) {
+                    contracts[j] = _newContractPackage.contracts[j];
+                }
+            }
+        }
     }
 
     function bytesToString (bytes memory input) private pure returns (bytes memory output)
@@ -104,29 +104,24 @@ contract UpgradeManager is VerusStorage {
         return _string;
     }
 
-    function runContractsUpgrade() public returns (uint8) {
+    function checkContractsCanUpgrade(address contractsHash) private view  returns (bool) {
 
-        for(uint i = 0; i < pendingVoteState.length; i++) 
+        uint8 countOfAgreedVotes;
+        
+        for(uint i = rollingVoteIndex; i < rollingUpgradeVotes.length; i++) 
         {
-            if (pendingVoteState[i].count == REQUIREDAMOUNTOFVOTES && 
-                pendingVoteState[i].agree >= WINNINGAMOUNT ) {
-                
-                for (uint j = 0; j < uint(VerusConstants.AMOUNT_OF_CONTRACTS); j++)
-                {       
-                        if(contracts[j] != pendingVoteState[i].pendingContracts[j]) {
-                            contracts[j] = pendingVoteState[i].pendingContracts[j];
-                        }
-                }
-
-                delete pendingVoteState;
-
-                emit contractUpdated(true);
-
-                return COMPLETE;
-
-            }
+            if (contractsHash == rollingUpgradeVotes[i])
+                countOfAgreedVotes++;
         }
-        return UPGRADE_IN_PROCESS;
+        
+        for(uint i = 0; i < rollingVoteIndex; i++) 
+        {
+            if (contractsHash == rollingUpgradeVotes[i])
+                countOfAgreedVotes++;
+        }
+
+        return countOfAgreedVotes > 50;
+   
     }
 
     function recoverSigner(bytes32 _h, uint8 _v, bytes32 _r, bytes32 _s) private pure returns (address) {

@@ -114,7 +114,7 @@ contract VerusNotarizer is VerusStorage {
 
         proofs[bytes32(uint256(verusProofheight))] = abi.encode(stateRoot, blockHash);
         
-        if (!bridgeConverterActive && (((uint256(launchedAndProposer) >> 176) & 0xff) == 1)) { //shift to read if bridge launched in packed uint256
+        if (!bridgeConverterActive && (((uint256(launchedAndProposer) >> VerusConstants.UINT176_BITS_SIZE) & 0xff) == 1)) { // shift to read if bridge launched in packed on the end of uint176 as one byes
             bridgeConverterActive = true;
             
             address submitImportsAddress = contracts[uint(VerusConstants.ContractType.SubmitImports)];
@@ -124,8 +124,8 @@ contract VerusNotarizer is VerusStorage {
             }
         }
 
-        voutAndHeight |= uint64(verusProofheight) << 32;
-        launchedAndProposer |= bytes32(uint256(voutAndHeight) << 192); //also pack in the voutnum
+        voutAndHeight |= uint64(verusProofheight) << 32; // pack two 32bit numbers into one uint64
+        launchedAndProposer |= bytes32(uint256(voutAndHeight) << 192); // Also pack in the voutnum at the end of the uint256
 
         setNotarizationProofRoot(blakeNotarizationHash, hashprevnotarization, txid, prevnotarizationtxid, launchedAndProposer, stateRoot);
 
@@ -308,7 +308,7 @@ contract VerusNotarizer is VerusStorage {
         {
             uint176 notary;
             notary = uint176(uint160(notaryAddressMapping[notaries[i]].main));
-            notary |= (uint176(0x0c14) << 160); //set at type eth
+            notary |= (uint176(0x0c14) << VerusConstants.UINT160_BITS_SIZE); //set at type eth
             claimableFees[bytes32(uint256(notary))] += notariesShare;
         }
         remainder = uint64(notaryFees % numOfNotaries);

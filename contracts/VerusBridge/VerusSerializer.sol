@@ -352,7 +352,7 @@ contract VerusSerializer {
             (temporaryRegister1, nextOffset)  = readVarint(tempSerialized, nextOffset);  // read varint (amount) returns next idx position
             (flags, nextOffset) = readVarint(tempSerialized, nextOffset);
 
-            tempTransfers[uint8(counter)].currencyAndAmount = uint256(temporaryRegister1) << 160; //shift amount and pack
+            tempTransfers[uint8(counter)].currencyAndAmount = uint256(temporaryRegister1) << VerusConstants.UINT160_BITS_SIZE; //shift amount and pack
             tempTransfers[uint8(counter)].currencyAndAmount |= uint256(uint160(tempaddress));
 
             nextOffset += 20; //skip feecurrency id always vETH, variint already 1 byte in so 19
@@ -370,7 +370,7 @@ contract VerusSerializer {
             // if destination an address read 
             if (destinationType & VerusConstants.DEST_ETH == VerusConstants.DEST_ETH)
             {
-                tempTransfers[uint8(counter)].destinationAndFlags = uint256(tempaddress == VerusConstants.VEth ? VerusConstants.TOKEN_ETH_SEND : VerusConstants.TOKEN_ERC20_SEND) << 160;
+                tempTransfers[uint8(counter)].destinationAndFlags = uint256(tempaddress == VerusConstants.VEth ? VerusConstants.TOKEN_ETH_SEND : VerusConstants.TOKEN_ERC20_SEND) << VerusConstants.UINT160_BITS_SIZE;
 
                 assembly {
                     tempaddress := mload(sub(add(add(tempSerialized, nextOffset), temporaryRegister1), 1)) //skip type +1 byte to read address

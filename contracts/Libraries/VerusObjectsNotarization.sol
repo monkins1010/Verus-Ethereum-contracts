@@ -62,7 +62,7 @@ library VerusObjectsNotarization {
         bytes32 hashOfNotarization;
         bytes32 txid;
         bytes32 stateroot;
-        bytes32 proposerPacked;  //after 22 bytes the voutnum 32bit num resides << 176
+        bytes32 proposerPacked;  
     }
 
     struct storedCProofRoot{

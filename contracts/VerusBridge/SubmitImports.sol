@@ -194,7 +194,7 @@ contract SubmitImports is VerusStorage {
     {
         uint176 bridgeKeeper;
         bridgeKeeper = uint176(uint160(msg.sender));
-        bridgeKeeper |= (uint176(0x0c14) << 160); //make ETH type '0x0c' and length '0x14'
+        bridgeKeeper |= (uint176(0x0c14) << VerusConstants.UINT160_BITS_SIZE); //make ETH type '0x0c' and length '0x14'
 
         uint176 proposer;
         bytes memory proposerBytes = bestForks[0];
@@ -238,7 +238,7 @@ contract SubmitImports is VerusStorage {
         {
             uint176 notary;
             notary = uint176(uint160(notaryAddressMapping[notaries[i]].main));
-            notary |= (uint176(0x0c14) << 160); //set at type eth
+            notary |= (uint176(0x0c14) << VerusConstants.UINT160_BITS_SIZE); //set at type eth
             claimableFees[bytes32(uint256(notary))] += notariesShare;
         }
         remainder = uint64(notaryFees % numOfNotaries);
@@ -257,7 +257,7 @@ contract SubmitImports is VerusStorage {
         claiment = uint256(uint160(msg.sender));
 
         // Check claiment is type eth with length 20 and has fees to be got.
-        claiment |= (uint256(0x0c14) << 160);
+        claiment |= (uint256(0x0c14) << VerusConstants.UINT160_BITS_SIZE);
         claimAmount = claimableFees[bytes32(claiment)];
 
         if(claimAmount > 0)
@@ -301,7 +301,7 @@ contract SubmitImports is VerusStorage {
 
         claiment = uint256(uint160(rAddress));
 
-        claiment |= (uint256(0x0214) << 160);  // is Claimient type R address and 20 bytes.
+        claiment |= (uint256(0x0214) << VerusConstants.UINT160_BITS_SIZE);  // is Claimient type R address and 20 bytes.
 
         if ((claimableFees[bytes32(claiment)] > VerusConstants.verusvETHTransactionFee) && msg.sender == ethAddress)
         {

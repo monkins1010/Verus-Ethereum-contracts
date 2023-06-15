@@ -59,6 +59,25 @@ contract TokenManager is VerusStorage {
         }
     }
 
+    
+    function launchContractTokens(bytes calldata data) external {
+
+        VerusObjects.setupToken[] memory tokensToDeploy = abi.decode(data, (VerusObjects.setupToken[]));
+
+        for (uint256 i = 0; i < tokensToDeploy.length; i++) {
+
+            recordToken(
+                tokensToDeploy[i].iaddress,
+                tokensToDeploy[i].erc20ContractAddress,
+                tokensToDeploy[i].name,
+                tokensToDeploy[i].ticker,
+                tokensToDeploy[i].flags,
+                uint256(0)
+            );
+        }
+    }
+    
+
     function recordToken(
         address _iaddress,
         address ethContractAddress,
@@ -124,13 +143,13 @@ contract TokenManager is VerusStorage {
             VerusObjects.mappedToken memory tempToken = verusToERC20mapping[address(uint160(trans[i].currencyAndAmount))];
             address destinationAddress;
             destinationAddress  = address(uint160(trans[i].destinationAndFlags));
-            sendFlags = uint32(trans[i].destinationAndFlags >> 160);
+            sendFlags = uint32(trans[i].destinationAndFlags >> VerusConstants.UINT160_BITS_SIZE);
             
             if (sendFlags & VerusConstants.TOKEN_ETH_SEND == VerusConstants.TOKEN_ETH_SEND) 
             {
-                if (!payable(destinationAddress).send((trans[i].currencyAndAmount >> 160) * VerusConstants.SATS_TO_WEI_STD)) {
+                if (!payable(destinationAddress).send((trans[i].currencyAndAmount >> VerusConstants.UINT160_BITS_SIZE) * VerusConstants.SATS_TO_WEI_STD)) {
                     // Note: Refund address is a CTransferdestination and Amount is in VerusSATS, so store as that.
-                    refundsData = abi.encodePacked(refundsData, bytes32(uint256(refundAddresses[i])), uint64((trans[i].currencyAndAmount >> 160)));
+                    refundsData = abi.encodePacked(refundsData, bytes32(uint256(refundAddresses[i])), uint64((trans[i].currencyAndAmount >> VerusConstants.UINT160_BITS_SIZE)));
                 }              
             }   
             else if (sendFlags & VerusConstants.TOKEN_ERC20_SEND == VerusConstants.TOKEN_ERC20_SEND  &&
@@ -143,7 +162,7 @@ contract TokenManager is VerusStorage {
                     bool shouldMint = (tempToken.flags & VerusConstants.MAPPING_VERUS_OWNED == VerusConstants.MAPPING_VERUS_OWNED);
                      
                     mintOrTransferToken(token, destinationAddress, 
-                            convertFromVerusNumber(uint256(trans[i].currencyAndAmount >> 160), token.decimals()), shouldMint);
+                            convertFromVerusNumber(uint256(trans[i].currencyAndAmount >> VerusConstants.UINT160_BITS_SIZE), token.decimals()), shouldMint);
                 }
             } 
             else if (tempToken.flags & VerusConstants.TOKEN_ETH_NFT_DEFINITION == VerusConstants.TOKEN_ETH_NFT_DEFINITION &&
