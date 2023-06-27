@@ -82,7 +82,7 @@ contract UpgradeManager is VerusStorage {
 
         if (checkContractsCanUpgrade(contractsHash)) {
 
-            for (uint j = 0; j < uint(VerusConstants.AMOUNT_OF_CONTRACTS); j++)
+            for (uint j = 0; j < uint(VerusConstants.NUMBER_OF_CONTRACTS); j++)
             {       
                 if (contracts[j] != _newContractPackage.contracts[j]) {
                     contracts[j] = _newContractPackage.contracts[j];

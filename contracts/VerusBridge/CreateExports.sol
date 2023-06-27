@@ -18,7 +18,7 @@ contract CreateExports is VerusStorage {
         return true;
     }
  
-    function export(bytes calldata datain) payable external {
+    function sendTransfer(bytes calldata datain) payable external {
 
         uint256 fees;
 
@@ -39,7 +39,8 @@ contract CreateExports is VerusStorage {
             require (subtractPoolSize(uint64(transfer.fees)));
         }
 
-        if (transfer.currencyvalue.currency != VerusConstants.VEth && transfer.destination.destinationtype != VerusConstants.DEST_ETHNFT) {
+        if (transfer.currencyvalue.currency != VerusConstants.VEth && 
+            verusToERC20mapping[transfer.currencyvalue.currency].flags & VerusConstants.TOKEN_ETH_NFT_DEFINITION != VerusConstants.TOKEN_ETH_NFT_DEFINITION) {
 
             VerusObjects.mappedToken memory mappedContract = verusToERC20mapping[transfer.currencyvalue.currency];
             Token token = Token(mappedContract.erc20ContractAddress); 
@@ -51,26 +52,17 @@ contract CreateExports is VerusStorage {
             //total amount kept as wei until export to verus
             exportERC20Tokens(tokenAmount, token, mappedContract.flags & VerusConstants.MAPPING_VERUS_OWNED == VerusConstants.MAPPING_VERUS_OWNED, msg.sender );
             
-        } else if (transfer.destination.destinationtype == VerusConstants.DEST_ETHNFT){
+        } else if (verusToERC20mapping[transfer.currencyvalue.currency].flags & VerusConstants.TOKEN_ETH_NFT_DEFINITION == VerusConstants.TOKEN_ETH_NFT_DEFINITION){
             //handle a NFT Import
                 
-            address destinationAddress;
-            uint8 desttype;
             address nftContract;
             uint256 tokenId;
             bytes memory serializedDest;
             serializedDest = transfer.destination.destinationaddress;  
-            // 1byte desttype + 20bytes destinationaddres + 20bytes NFT address + 32bytes NFTTokenI
-            assembly
-            {
-                desttype := mload(add(serializedDest, 1))
-                destinationAddress := mload(add(serializedDest, 21))
-                tokenId := mload(add(serializedDest, 53))  // cant have constant in assebmly == VerusConstants.VERUS_NFT_DEST_LENGTH
-            }
 
             VerusObjects.mappedToken memory mappedContract = verusToERC20mapping[transfer.currencyvalue.currency];
             nftContract = mappedContract.erc20ContractAddress;
-            require (serializedDest.length == VerusConstants.VERUS_NFT_DEST_LENGTH && (desttype == VerusConstants.DEST_PKH || desttype == VerusConstants.DEST_ID) && destinationAddress != address(0), "NFT packet wrong length/dest wrong");
+            tokenId = mappedContract.tokenID;
 
             VerusNft nft = VerusNft(nftContract);
             require (nft.getApproved(tokenId) == address(this), "NFT not approved");
@@ -81,11 +73,10 @@ contract CreateExports is VerusStorage {
             {
                 nft.burn(tokenId);
             }
-
-            transfer.destination.destinationtype = desttype;
-            transfer.destination.destinationaddress = abi.encodePacked(destinationAddress);
  
-        } 
+        } else if(transfer.currencyvalue.currency != VerusConstants.VEth) {
+            revert ("unknown type");
+        }
         _createExports(transfer, false);
     }
 
