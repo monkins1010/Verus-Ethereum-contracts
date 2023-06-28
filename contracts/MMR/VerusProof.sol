@@ -1,7 +1,7 @@
 // SPDX-License-Identifier: MIT
 // Bridge between ethereum and verus
 
-pragma solidity >=0.6.0;
+pragma solidity >=0.4.22;
 pragma abicoder v2;
 import "../Libraries/VerusObjects.sol";
 import "./VerusBlake2b.sol";

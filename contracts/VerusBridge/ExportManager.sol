@@ -1,6 +1,6 @@
 // SPDX-License-Identifier: MIT
 // Bridge between ethereum and verus
-pragma solidity >=0.6.0 <0.9.0;
+pragma solidity >=0.4.22 <0.9.0;
 pragma abicoder v2;
 
 import "../Libraries/VerusObjects.sol";
@@ -33,49 +33,34 @@ contract ExportManager is VerusStorage  {
         address gatewayID;
         address gatewayCode;
         address destAddressID;
-        uint8 destinationType;
 
         require (checkTransferFlags(transfer), "Flag Check failed");                 
        
         serializedDest = transfer.destination.destinationaddress;  
-
-        if (transfer.destination.destinationtype != VerusConstants.DEST_ETHNFT)
+        assembly 
         {
-            assembly 
-            {
-                destAddressID := mload(add(serializedDest, UINT160_SIZE))
-            }
+            destAddressID := mload(add(serializedDest, UINT160_SIZE))
         }
-        else
+
+        if (verusToERC20mapping[transfer.currencyvalue.currency].flags & VerusConstants.TOKEN_ETH_NFT_DEFINITION == VerusConstants.TOKEN_ETH_NFT_DEFINITION) 
         {
-            // Custom destination for NFT  = 1byte desttype + 20bytes destinationaddres + 20bytes NFT address + 32bytes NFTTokenID
-            require (transfer.destination.destinationaddress.length == VerusConstants.VERUS_NFT_DEST_LENGTH, "NFT destination address not 53 bytes");
             require (transfer.flags == VerusConstants.VALID, "Invalid flags for NFT transfer");
             require (transfer.currencyvalue.amount == 1, "Currency value must be 1 Satoshi");
-            assembly 
-            {
-                destinationType := mload(add(serializedDest, 1))
-                destAddressID := mload(add(serializedDest, 21))
-            }
-            require (destinationType == VerusConstants.DEST_PKH ||
-                   destinationType == VerusConstants.DEST_ID  ||
-                   destinationType == VerusConstants.DEST_SH, "NFT destination not valid");
-
+            require (transfer.destination.destinationaddress.length == VerusConstants.UINT160_SIZE, "destination address not 20 bytes");
         }
+
         // Check destination address is not zero
-        require (destAddressID != address(0), "Destination Address null");// Destination can be currency definition
-        // Check fees are correct, if pool unavailble vrsctest only fees, TODO:if pool availble vETH fees only for now
+        require (destAddressID != address(0), "Destination Address null");
 
         if (!bridgeConverterActive) {
 
             require (transfer.feecurrencyid == VerusConstants.VerusCurrencyId, "feecurrencyid != vrsc");
             
-            //VRSC pool as WEI
             if (transfer.destination.destinationtype == (VerusConstants.DEST_ETH + VerusConstants.FLAG_DEST_GATEWAY + VerusConstants.FLAG_DEST_AUX) ||
                 transfer.flags != VerusConstants.VALID)
                 return 0;
 
-            require (transfer.destination.destinationaddress.length == 20, "destination address not 20 bytes");
+            require (transfer.destination.destinationaddress.length == VerusConstants.UINT160_SIZE, "destination address not 20 bytes");
 
         } else {
             
@@ -83,11 +68,10 @@ contract ExportManager is VerusStorage  {
 
             require(transfer.feecurrencyid == VerusConstants.VEth, "Fee Currency not vETH"); //TODO:Accept more fee currencies
 
-            if ((transfer.destination.destinationtype & ~VerusConstants.FLAG_DEST_AUX) == (VerusConstants.FLAG_DEST_GATEWAY + VerusConstants.DEST_ETH)) {
+            if (transfer.destination.destinationtype == (VerusConstants.FLAG_DEST_GATEWAY + VerusConstants.DEST_ETH + VerusConstants.FLAG_DEST_AUX)) {
 
                 // destinationaddress is concatenated with the gateway back address (bridge.veth) + (gatewayCode) + 0.003 ETH in fees uint64LE
                 // destinationaddress is also concatenated with aux dest 
-                
 
                 require (transfer.currencyvalue.currency != transfer.secondreserveid, "Bounce back type not allowed");
                 assembly 
@@ -97,26 +81,18 @@ contract ExportManager is VerusStorage  {
                     bounceBackFee := mload(add(serializedDest, FEE_OFFSET))
                 }
 
-                if (transfer.destination.destinationtype & VerusConstants.FLAG_DEST_AUX == VerusConstants.FLAG_DEST_AUX) {
-                    
-                    require (transfer.destination.destinationaddress.length == (FEE_OFFSET + AUX_DEST_LENGTH), "destination address not 68 + 24 bytes");    
-                    uint32 auxDestPrefix;
-                    address auxDestAddress;
-                    
-                    assembly 
-                    {
-                        auxDestPrefix := mload(add(add(serializedDest, FEE_OFFSET), 4)) // 4bytes AUX_DEST_PREFIX_CONSTANT
-                        auxDestAddress := mload(add(add(serializedDest, FEE_OFFSET), 24)) // destaddress
-                    }
-                    require (auxDestPrefix == VerusConstants.AUX_DEST_PREFIX, "auxDestPrefix Incorrect");
-                    require (gatewayCode != address(0), "auxDestAddress must not be empty");
-
-                } else  {
-
-                    require (transfer.destination.destinationaddress.length == (FEE_OFFSET), "destination address not 68 bytes");
-
+                require (transfer.destination.destinationaddress.length == (FEE_OFFSET + AUX_DEST_LENGTH), "destination address not 68 + 24 bytes");    
+                uint32 auxDestPrefix;
+                address auxDestAddress;
+                
+                assembly 
+                {
+                    auxDestPrefix := mload(add(add(serializedDest, FEE_OFFSET), 4)) // 4bytes AUX_DEST_PREFIX_CONSTANT
+                    auxDestAddress := mload(add(add(serializedDest, FEE_OFFSET), 24)) // destaddress
                 }
-
+                
+                require (auxDestPrefix == VerusConstants.AUX_DEST_PREFIX, "auxDestPrefix Incorrect");
+                require (gatewayCode != address(0), "auxDestAddress must not be empty");
                 require (gatewayID == VerusConstants.VEth, "GatewayID not VETH");
                 require (gatewayCode == address(0), "GatewayCODE must be empty");
 
@@ -127,7 +103,7 @@ contract ExportManager is VerusStorage  {
                 requiredFees += convertFromVerusNumber(uint256(bounceBackFee),18);  //bounceback fees required as well as send fees
 
             } else if (!(transfer.destination.destinationtype == VerusConstants.DEST_PKH || transfer.destination.destinationtype == VerusConstants.DEST_ID 
-                        || transfer.destination.destinationtype == VerusConstants.DEST_SH || transfer.destination.destinationtype == VerusConstants.DEST_ETHNFT)) {
+                        || transfer.destination.destinationtype == VerusConstants.DEST_SH)) {
 
                 return 0;  
 
@@ -193,8 +169,7 @@ contract ExportManager is VerusStorage  {
         if (!(transfer.destination.destinationtype == (VerusConstants.DEST_ETH + VerusConstants.FLAG_DEST_GATEWAY + VerusConstants.FLAG_DEST_AUX) || 
                 transfer.destination.destinationtype == VerusConstants.DEST_ID ||
                 transfer.destination.destinationtype == VerusConstants.DEST_PKH || 
-                transfer.destination.destinationtype == VerusConstants.DEST_SH ||
-                transfer.destination.destinationtype == VerusConstants.DEST_ETHNFT) ||
+                transfer.destination.destinationtype == VerusConstants.DEST_SH) ||
                 sendingCurrency.flags == 0)
         {
             revert ("Invalid desttype");

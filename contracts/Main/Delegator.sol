@@ -1,5 +1,5 @@
 // SPDX-License-Identifier: MIT
-pragma solidity >=0.6.0 <0.9.0;
+pragma solidity >=0.4.22 <0.9.0;
 pragma abicoder v2;
 
 import "../Storage/StorageMaster.sol";
@@ -25,7 +25,7 @@ contract Delegator is VerusStorage {
         tokenList.push(VerusConstants.VerusNFTID);
 
         startOwner = msg.sender;
-        for (uint i = 0; i < uint(VerusConstants.AMOUNT_OF_CONTRACTS); i++) {
+        for (uint i = 0; i < uint(VerusConstants.NUMBER_OF_CONTRACTS); i++) {
             contracts.push(_newContractAddress[i]);
         }
     }
@@ -34,13 +34,13 @@ contract Delegator is VerusStorage {
         
     }
 
-    function export(VerusObjects.CReserveTransfer calldata _transfer) external payable { 
+    function sendTransfer(VerusObjects.CReserveTransfer calldata _transfer) external payable { 
 
         bool success;
         bytes memory data = abi.encode(_transfer); 
 
         address verusBridgeAddress = contracts[uint(VerusConstants.ContractType.CreateExport)];
-        (success, ) = verusBridgeAddress.delegatecall(abi.encodeWithSignature("export(bytes)", data));
+        (success, ) = verusBridgeAddress.delegatecall(abi.encodeWithSignature("sendTransfer(bytes)", data));
         require(success);
     }
 

@@ -1,7 +1,7 @@
 // SPDX-License-Identifier: MIT
 // Bridge between ethereum and verus
 
-pragma solidity >=0.6.0 < 0.9.0;
+pragma solidity >=0.4.22 < 0.9.0;
 pragma abicoder v2;
 
 // Developers notes for datatypes used:
@@ -67,10 +67,9 @@ library VerusConstants {
 
     //cCurrencydefintion constants
     uint32 constant OPTION_NFT_TOKEN = 0x800;
-    uint8 constant VERUS_NFT_DEST_LENGTH = 53;
 
     uint constant SATS_TO_WEI_STD = 10000000000;
-    uint8 constant AMOUNT_OF_CONTRACTS = 11;
+    uint8 constant NUMBER_OF_CONTRACTS = 11;
 
     enum ContractType {
         TokenManager,

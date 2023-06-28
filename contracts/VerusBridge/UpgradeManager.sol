@@ -1,5 +1,5 @@
 // SPDX-License-Identifier: MIT
-pragma solidity >=0.6.0 <0.9.0;
+pragma solidity >=0.4.22 <0.9.0;
 pragma abicoder v2;
 
 import "../Libraries/VerusObjects.sol";
@@ -82,7 +82,7 @@ contract UpgradeManager is VerusStorage {
 
         if (checkContractsCanUpgrade(contractsHash)) {
 
-            for (uint j = 0; j < uint(VerusConstants.AMOUNT_OF_CONTRACTS); j++)
+            for (uint j = 0; j < uint(VerusConstants.NUMBER_OF_CONTRACTS); j++)
             {       
                 if (contracts[j] != _newContractPackage.contracts[j]) {
                     contracts[j] = _newContractPackage.contracts[j];
