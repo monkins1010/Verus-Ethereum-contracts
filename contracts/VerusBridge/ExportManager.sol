@@ -92,7 +92,7 @@ contract ExportManager is VerusStorage  {
                 }
                 
                 require (auxDestPrefix == VerusConstants.AUX_DEST_PREFIX, "auxDestPrefix Incorrect");
-                require (gatewayCode != address(0), "auxDestAddress must not be empty");
+                require (auxDestAddress != address(0), "auxDestAddress must not be empty");
                 require (gatewayID == VerusConstants.VEth, "GatewayID not VETH");
                 require (gatewayCode == address(0), "GatewayCODE must be empty");
 
