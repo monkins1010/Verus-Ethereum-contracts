@@ -40,20 +40,19 @@ contract TokenManager is VerusStorage {
 
             if ((uint8(_tx[j].flags) & VerusConstants.MAPPING_ETHEREUM_OWNED) == VerusConstants.MAPPING_ETHEREUM_OWNED)
             {
-                outputName = getName(_tx[j].ERCContract);
-                if (bytes(outputName).length == 0) 
+                outputName = string(abi.encodePacked("[", getName(_tx[j].ERCContract), "] as "));
+                if (bytes(outputName).length < 7) 
                 {
+                    //ERC20 not found
                     continue;
                 }
-                outputName = string(abi.encodePacked("[", outputName, "] as ", _tx[j].name));
             }
-            else if (_tx[j].parent != VerusConstants.VerusSystemId)
+
+            outputName = string(abi.encodePacked(outputName, _tx[j].name));
+
+            if (_tx[j].parent != VerusConstants.VerusSystemId)
             {
-                outputName = string(abi.encodePacked(_tx[j].name, ".", verusToERC20mapping[_tx[j].parent].name));
-            }
-            else
-            {
-                outputName = _tx[j].name;
+                outputName = string(abi.encodePacked(outputName, ".", verusToERC20mapping[_tx[j].parent].name));
             }
             recordToken(_tx[j].iaddress, _tx[j].ERCContract, outputName, string(byteSlice(bytes(_tx[j].name))), uint8(_tx[j].flags), _tx[j].tokenID);
         }
