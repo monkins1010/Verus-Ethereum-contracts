@@ -390,13 +390,15 @@ contract VerusSerializer {
             if (destinationType & VerusConstants.FLAG_DEST_AUX == VerusConstants.FLAG_DEST_AUX)
             {
                 (temporaryRegister1, nextOffset) = readCompactSizeLE2(tempSerialized, nextOffset);    // get the length of the auxDest
-             
-                (temporaryRegister1, nextOffset) = readCompactSizeLE2(tempSerialized, nextOffset);    // get the length of the auxDest sub array
-                assembly {
-                    refundAddress := mload(sub(add(add(tempSerialized, nextOffset), temporaryRegister1), 1)) //skip type +1 byte to read address
-                }
-                refundAddresses[uint8(counter)] = refundAddress;
+
+                for (uint i = temporaryRegister1; i > 0; i--) {
+                    (temporaryRegister1, nextOffset) = readCompactSizeLE2(tempSerialized, nextOffset);    // get the length of the auxDest sub array
+                    assembly {
+                        refundAddress := mload(sub(add(add(tempSerialized, nextOffset), temporaryRegister1), 1)) //skip type +1 byte to read address
+                    }
+                    refundAddresses[uint8(counter)] = refundAddress;
                 nextOffset += temporaryRegister1;
+                }
 
             }
             counter++;
