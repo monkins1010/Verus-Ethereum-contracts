@@ -13,7 +13,7 @@ contract CreateExports is VerusStorage {
 
     function subtractPoolSize(uint64 _amount) private returns (bool) {
 
-        if(_amount > remainingLaunchFeeReserves) return false;
+        if((_amount + VerusConstants.MIN_VRSC_FEE) > remainingLaunchFeeReserves) return false;
         remainingLaunchFeeReserves -= _amount;
         return true;
     }
@@ -21,6 +21,8 @@ contract CreateExports is VerusStorage {
     function sendTransfer(bytes calldata datain) payable external {
 
         uint256 fees;
+        VerusObjects.mappedToken memory mappedContract;
+        uint32 ethNftFlag;
 
         VerusObjects.CReserveTransfer memory transfer = abi.decode(datain, (VerusObjects.CReserveTransfer));
 
@@ -39,20 +41,23 @@ contract CreateExports is VerusStorage {
             require (subtractPoolSize(uint64(transfer.fees)));
         }
 
-        if (transfer.currencyvalue.currency != VerusConstants.VEth && 
-            verusToERC20mapping[transfer.currencyvalue.currency].flags & VerusConstants.TOKEN_ETH_NFT_DEFINITION != VerusConstants.TOKEN_ETH_NFT_DEFINITION) {
+        if (transfer.currencyvalue.currency != VerusConstants.VEth) {
+            mappedContract = verusToERC20mapping[transfer.currencyvalue.currency];
+            ethNftFlag = mappedContract.flags & VerusConstants.TOKEN_ETH_NFT_DEFINITION;
+        }
 
-            VerusObjects.mappedToken memory mappedContract = verusToERC20mapping[transfer.currencyvalue.currency];
+        if (transfer.currencyvalue.currency != VerusConstants.VEth && ethNftFlag != VerusConstants.TOKEN_ETH_NFT_DEFINITION) {
+
             Token token = Token(mappedContract.erc20ContractAddress); 
             //Check user has allowed the verusBridgeStorage contract to spend on their behalf
             uint256 allowedTokens = token.allowance(msg.sender, address(this));
             uint256 tokenAmount = convertFromVerusNumber(transfer.currencyvalue.amount, token.decimals()); //convert to wei from verus satoshis
             require( allowedTokens >= tokenAmount);
             //transfer the tokens to the delegator contract
-            //total amount kept as wei until export to verus
+            //total amount kept as uint256 until export to verus
             exportERC20Tokens(tokenAmount, token, mappedContract.flags & VerusConstants.MAPPING_VERUS_OWNED == VerusConstants.MAPPING_VERUS_OWNED, msg.sender );
             
-        } else if (verusToERC20mapping[transfer.currencyvalue.currency].flags & VerusConstants.TOKEN_ETH_NFT_DEFINITION == VerusConstants.TOKEN_ETH_NFT_DEFINITION){
+        } else if (ethNftFlag == VerusConstants.TOKEN_ETH_NFT_DEFINITION){
             //handle a NFT Import
                 
             address nftContract;
@@ -60,7 +65,6 @@ contract CreateExports is VerusStorage {
             bytes memory serializedDest;
             serializedDest = transfer.destination.destinationaddress;  
 
-            VerusObjects.mappedToken memory mappedContract = verusToERC20mapping[transfer.currencyvalue.currency];
             nftContract = mappedContract.erc20ContractAddress;
             tokenId = mappedContract.tokenID;
 
