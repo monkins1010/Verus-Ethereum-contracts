@@ -52,6 +52,7 @@ contract CreateExports is VerusStorage {
             //Check user has allowed the verusBridgeStorage contract to spend on their behalf
             uint256 allowedTokens = token.allowance(msg.sender, address(this));
             uint256 tokenAmount = convertFromVerusNumber(transfer.currencyvalue.amount, token.decimals()); //convert to wei from verus satoshis
+            require((transfer.currencyvalue.amount + VerusConstants.MAX_VERUS_TRANSFER) < convertToVerusNumber(token.balanceOf(address(this)), token.decimals()));
             require( allowedTokens >= tokenAmount);
             //transfer the tokens to the delegator contract
             //total amount kept as uint256 until export to verus
@@ -186,6 +187,18 @@ contract CreateExports is VerusStorage {
         }
       
         return c;
+    }
+
+    function convertToVerusNumber(uint256 a,uint8 decimals) public pure returns (uint64) {
+
+        if(decimals > 8 ) {
+            return uint64(a / (10 ** (decimals - 8)));
+        }else if(decimals < 8) {
+            return uint64(a * (10 ** (8 - decimals)));
+        }else {
+            return uint64(a);
+        }
+
     }
 
 }

@@ -86,7 +86,6 @@ contract VerusCrossChainExport {
             currencyExists = inCurrencies(transfers[i].currencyvalue.currency);
             if(currencyExists > 0){
                 currencies[currencyExists - 1].amount += transfers[i].currencyvalue.amount;
-                require (currencies[currencyExists - 1].amount <= VerusConstants.MAX_VERUS_TRANSFER, "CCETransfer amount to large");   
             } else {
                 currencies.push(VerusObjects.CCurrencyValueMap(transfers[i].currencyvalue.currency,transfers[i].currencyvalue.amount));
             }
@@ -95,7 +94,6 @@ contract VerusCrossChainExport {
             feeExistsInTotals = inCurrencies(transfers[i].feecurrencyid); 
             if(feeExistsInTotals > 0){
                 currencies[feeExistsInTotals - 1].amount += transfers[i].fees;
-                require (currencies[feeExistsInTotals - 1].amount <= VerusConstants.MAX_VERUS_TRANSFER, "CCETransfer amount to large");   
             } else {
                 currencies.push(VerusObjects.CCurrencyValueMap(transfers[i].feecurrencyid, transfers[i].fees));
             }
@@ -103,7 +101,6 @@ contract VerusCrossChainExport {
             feeExists = inFees(transfers[i].feecurrencyid); 
             if(feeExists > 0){
                 fees[feeExists - 1].amount += transfers[i].fees;
-                require (fees[feeExists - 1].amount <= VerusConstants.MAX_VERUS_TRANSFER, "CCETransfer amount to large");   
             } else {
                 fees.push(VerusObjects.CCurrencyValueMap(transfers[i].feecurrencyid, transfers[i].fees));
             }
