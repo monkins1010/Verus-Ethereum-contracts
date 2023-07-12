@@ -113,14 +113,15 @@ contract VerusNotarizer is VerusStorage {
                 uint32 verusProofheight) = abi.decode(returnBytes, (bytes32, bytes32, bytes32, bytes32, bytes32, uint32));
 
         proofs[bytes32(uint256(verusProofheight))] = abi.encode(stateRoot, blockHash);
-        
-        if (!bridgeConverterActive && (((uint256(launchedAndProposer) >> VerusConstants.UINT176_BITS_SIZE) & 0xff) == 1)) { // shift to read if bridge launched in packed on the end of uint176 as one byes
-            bridgeConverterActive = true;
+
+        // If the bridge is active and VRSC remaining has not been sent
+        if (bridgeConverterActive && remainingLaunchFeeReserves != 0) { 
             
             address submitImportsAddress = contracts[uint(VerusConstants.ContractType.SubmitImports)];
             if (remainingLaunchFeeReserves > (VerusConstants.verusTransactionFee * 2)) {
                 (bool success2,) = submitImportsAddress.delegatecall(abi.encodeWithSignature("sendToVRSC(uint64,address,uint8)", 0, address(0), VerusConstants.DEST_PKH));
                 require(success2);
+                remainingLaunchFeeReserves = 0;
             }
         }
 
@@ -252,7 +253,11 @@ contract VerusNotarizer is VerusStorage {
             encodeStandardNotarization(notarizations[1], abi.encode(hashedNotarization, 
                 txidHash, stateRoot, proposer));
 
-
+            // Set bridge launched if confirmed notarization contains Bridge Launched bit packed on the end of proposer
+            if (!bridgeConverterActive && ((uint256(notarizations[1].proposerPacked) >> VerusConstants.UINT176_BITS_SIZE) & 0xff) == 1) {
+                    bridgeConverterActive = true;
+                
+            }
         }
         else
         {

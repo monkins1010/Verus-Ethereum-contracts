@@ -19,9 +19,9 @@ library VerusConstants {
     address constant public VerusNFTID = 0x9bB2772Aa50ec96ce1305D926B9CC29b7c402bAD;
     uint256 constant public transactionFee = 3000000000000000; //0.003 ETH 18 decimals
     uint256 constant public upgradeFee = 1000000000000000; //0.001 ETH 18 decimals WEI  TODO: increase for MAINNET
-    uint64 constant public verusTransactionFee = 2000000; //0.02 VRSC 10 decimals
-    uint64 constant public verusvETHTransactionFee = 300000; //0.003 vETH 10 decimals
-    uint64 constant public verusvETHReturnFee = 1000000; //0.01 vETH 10 decimals
+    uint64 constant public verusTransactionFee = 2000000; //0.02 VRSC 8 decimals
+    uint64 constant public verusvETHTransactionFee = 300000; //0.003 vETH 8 decimals
+    uint64 constant public verusvETHReturnFee = 1000000; //0.01 vETH 8 decimals
     uint64 constant public verusBridgeLaunchFeeShare = 500000000000;
     uint32 constant VALID = 1;
     uint32 constant CONVERT = 2;
@@ -70,6 +70,8 @@ library VerusConstants {
 
     uint constant SATS_TO_WEI_STD = 10000000000;
     uint8 constant NUMBER_OF_CONTRACTS = 11;
+    uint64 constant MIN_VRSC_FEE = 4000000; //0.04 VRSC 8 decimals
+    uint64 constant MAX_VERUS_TRANSFER = 5000000000000000000; //50,000,000,000.00000000
 
     enum ContractType {
         TokenManager,

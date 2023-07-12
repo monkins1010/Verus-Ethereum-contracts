@@ -34,8 +34,8 @@ contract ExportManager is VerusStorage  {
         address gatewayCode;
         address destAddressID;
 
-        require (checkTransferFlags(transfer), "Flag Check failed");                 
-       
+        require (checkTransferFlags(transfer), "Flag Check failed"); 
+ 
         serializedDest = transfer.destination.destinationaddress;  
         assembly 
         {
