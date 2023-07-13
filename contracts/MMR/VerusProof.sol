@@ -397,7 +397,7 @@ contract VerusProof is VerusStorage  {
             if (iAddress == VerusConstants.VEth)
             {
                 temp[i].erc20ContractAddress = address(0);
-                temp[i].name = "Testnet ETH";
+                temp[i].name = recordedToken.name;
                 temp[i].ticker = "ETH";
             }
             else if(recordedToken.flags & VerusConstants.TOKEN_LAUNCH == VerusConstants.TOKEN_LAUNCH )
