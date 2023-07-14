@@ -155,13 +155,17 @@ contract TokenManager is VerusStorage {
                    tempToken.flags & VerusConstants.TOKEN_LAUNCH == VerusConstants.TOKEN_LAUNCH )
             {
                 token = Token(tempToken.erc20ContractAddress);
+                bool shouldMint = (tempToken.flags & VerusConstants.MAPPING_VERUS_OWNED == VerusConstants.MAPPING_VERUS_OWNED);
                 
                 if (destinationAddress != address(0))
                 {
-                    bool shouldMint = (tempToken.flags & VerusConstants.MAPPING_VERUS_OWNED == VerusConstants.MAPPING_VERUS_OWNED);
                      
                     mintOrTransferToken(token, destinationAddress, 
                             convertFromVerusNumber(uint256(trans[i].currencyAndAmount >> VerusConstants.UINT160_BITS_SIZE), token.decimals()), shouldMint);
+                }
+                if (!shouldMint) 
+                {
+                    verusToERC20mapping[address(uint160(trans[i].currencyAndAmount))].tokenID -= uint64(trans[i].currencyAndAmount >> VerusConstants.UINT160_BITS_SIZE);
                 }
             } 
             else if (tempToken.flags & VerusConstants.TOKEN_ETH_NFT_DEFINITION == VerusConstants.TOKEN_ETH_NFT_DEFINITION &&
