@@ -193,26 +193,4 @@ contract CreateExports is VerusStorage {
       
         return c;
     }
-
-    function convertToVerusNumber(uint256 a,uint8 decimals) public pure returns (uint64) {
-        
-        uint256 temp;
-        if(decimals > 8 ) {
-            temp = a / (10 ** (decimals - 8));
-        }else if(decimals < 8) {
-            // if 
-            temp = a * (10 ** (8 - decimals));
-        }else {
-            temp = a;
-        }
-
-        // If the contract has more than the MAX amount in its reservers set to max which will cause a revert.
-        if (temp >= uint256(VerusConstants.MAX_VERUS_TRANSFER)) {
-            temp = VerusConstants.MAX_VERUS_TRANSFER;
-        }
-
-        return uint64(temp);
-
-    }
-
 }

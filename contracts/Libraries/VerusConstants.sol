@@ -71,7 +71,7 @@ library VerusConstants {
     uint constant SATS_TO_WEI_STD = 10000000000;
     uint8 constant NUMBER_OF_CONTRACTS = 11;
     uint64 constant MIN_VRSC_FEE = 4000000; //0.04 VRSC 8 decimals
-    uint64 constant MAX_VERUS_TRANSFER = 5000000000000000000; //50,000,000,000.00000000
+    uint64 constant MAX_VERUS_TRANSFER = 1000000000000000000; //10,000,000,000.00000000
 
     enum ContractType {
         TokenManager,
