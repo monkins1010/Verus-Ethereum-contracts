@@ -41,6 +41,7 @@ contract VerusNotarizer is VerusStorage {
     function setLatestData(bytes calldata serializedNotarization, bytes32 txid, uint32 n, bytes calldata data
         ) external {
 
+        require(notariesEthAddress[msg.sender], "Notaries only");
         require(!knownNotarizationTxids[txid], "known TXID");
         knownNotarizationTxids[txid] = true;
 
@@ -112,7 +113,7 @@ contract VerusNotarizer is VerusStorage {
         (bytes32 launchedAndProposer, bytes32 prevnotarizationtxid, bytes32 hashprevnotarization, bytes32 stateRoot, bytes32 blockHash, 
                 uint32 verusProofheight) = abi.decode(returnBytes, (bytes32, bytes32, bytes32, bytes32, bytes32, uint32));
 
-        proofs[bytes32(uint256(verusProofheight))] = abi.encode(stateRoot, blockHash);
+        proofs[bytes32(uint256(verusProofheight))] = abi.encodePacked(stateRoot, blockHash);
 
         // If the bridge is active and VRSC remaining has not been sent
         if (bridgeConverterActive && remainingLaunchFeeReserves != 0) { 

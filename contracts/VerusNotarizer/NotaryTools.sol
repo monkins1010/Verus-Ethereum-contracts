@@ -113,6 +113,7 @@ contract NotaryTools is VerusStorage {
             return false;  
         }
 
+        notariesEthAddress[notaryAddressMapping[_revokePacket.notaryID].main] = false;
         updateNotarizer(_revokePacket.notaryID, address(0), notaryAddressMapping[_revokePacket.notaryID].recovery, VerusConstants.NOTARY_REVOKED);
 
         return true;
@@ -144,7 +145,7 @@ contract NotaryTools is VerusStorage {
                     revert("Notary not Valid");
             }
         }
-
+        notariesEthAddress[notaryAddressMapping[notarizerBeingRevoked].main] = false;
         updateNotarizer(notarizerBeingRevoked, address(0), notaryAddressMapping[notarizerBeingRevoked].recovery, VerusConstants.NOTARY_REVOKED);
 
         return true;
@@ -172,6 +173,7 @@ contract NotaryTools is VerusStorage {
         }
         updateNotarizer(_newRecoveryInfo.notarizerID, _newRecoveryInfo.contracts[0], 
                                        _newRecoveryInfo.contracts[1], VerusConstants.NOTARY_VALID);
+        notariesEthAddress[notaryAddressMapping[_newRecoveryInfo.notarizerID].main] = true;
 
         return COMPLETE;
     }
@@ -203,7 +205,7 @@ contract NotaryTools is VerusStorage {
                     revert("Notary not Valid");
             }
         }
-
+        notariesEthAddress[newMainAddr] = true;
         updateNotarizer(notarizerBeingRecovered, newMainAddr, newRevokeAddr, VerusConstants.NOTARY_VALID);
 
         return COMPLETE;

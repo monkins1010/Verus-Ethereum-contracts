@@ -15,6 +15,7 @@ contract Delegator is VerusStorage {
         for(uint i =0; i < _notaries.length; i++) {
             notaryAddressMapping[_notaries[i]] = VerusObjects.notarizer(_notariesEthAddress[i], _notariesColdStoreEthAddress[i], VerusConstants.NOTARY_VALID);
             notaries.push(_notaries[i]);
+            notariesEthAddress[_notariesEthAddress[i]] = true;
         }
         VerusNft t = new VerusNft(); 
 
