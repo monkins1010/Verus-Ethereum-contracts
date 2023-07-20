@@ -88,6 +88,7 @@ module.exports = async function(deployer) {
         await deployer.deploy(Token, "DAI (Testnet)", "DAI");
         const TokenInst = await Token.deployed();
         testnetERC = TokenInst.address;
+        console.log("\nDAI DEPLOYED\n", TokenInst.address); 
     } 
     const launchCurrencies = abidata(testnetERC);
 
