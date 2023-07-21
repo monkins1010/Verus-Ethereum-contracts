@@ -78,8 +78,13 @@ module.exports = async function(deployer) {
         notarizationSerializerInst.address,
         UpgradeInst.address
     ];
+    
+    if (deployer.network == "development"){
+        await deployer.deploy(VerusDelegator, setup.TestVerusNotariserIDS, setup.TestVerusNotariserSigner, setup.TestVerusNotariserRecovery, allContracts);
+    } else {
+        await deployer.deploy(VerusDelegator, verusNotariserIDS, verusNotariserSigner, verusNotariserRecovery, allContracts);
+    }
 
-    await deployer.deploy(VerusDelegator, verusNotariserIDS, verusNotariserSigner, verusNotariserRecovery, allContracts);
     const VerusDelegatorInst = await VerusDelegator.deployed();
 
     let testnetERC = null;

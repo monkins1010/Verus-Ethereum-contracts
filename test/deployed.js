@@ -1,7 +1,7 @@
 const VerusDelegator = artifacts.require("../contracts/Main/Delegator.sol");
 const notaries = require('../migrations/setup.js')
 const verusDelegatorAbi = require('../build/contracts/Delegator.json');
-
+const testNotarization = require('./submitnotarization.json')
 
 contract("Verus Contracts deployed tests", async(accounts)  => {
     
@@ -13,10 +13,10 @@ contract("Verus Contracts deployed tests", async(accounts)  => {
 
     it("Notaries Deployed", async() => {
         const DelegatorInst = await VerusDelegator.deployed();
-        for (let i=0; i< notaries.verusNotariserIDS.length; i++){
+        for (let i=0; i< notaries.TestVerusNotariserIDS.length; i++){
 
             let firstnotary = await DelegatorInst.notaries.call(i);
-            assert.equal(firstnotary.toLowerCase(), notaries.verusNotariserIDS[i].toLowerCase());
+            assert.equal(firstnotary.toLowerCase(), notaries.TestVerusNotariserIDS[i].toLowerCase());
 
         }
         assert.ok(true);
@@ -107,6 +107,30 @@ contract("Verus Contracts deployed tests", async(accounts)  => {
         const previousStartHeight = await DelegatorInst.exportHeights.call(0);
         let reserveimport = await DelegatorInst.getReadyExportsByRange.call(0, reply.blockNumber + 10);
         assert.isTrue(true);
+      });
+
+      it("Submitaccpeted notarization by Notary", async () => {
+        const DelegatorInst = await VerusDelegator.deployed();
+        const contractAddress = DelegatorInst.address;
+
+        const contractInstance = new web3.eth.Contract(verusDelegatorAbi.abi, contractAddress);
+
+        let reply;
+        try {
+            reply = await contractInstance.methods.setLatestData(testNotarization.serializednotarization, testNotarization.txid, testNotarization.voutnum,  testNotarization.abiencodedSigData).send({ from: accounts[0], gas: 6000000 });  
+        } catch(e) {
+            console.log(e)
+            assert.isTrue(false);
+        }
+        // Get the contract balance after sending ETH exportHeights
+        const notarization = await contractInstance.methods.bestForks(0).call();
+
+         const NotarizationResult = {
+           txid: notarization.substring(66, 130),
+           n: parseInt(notarization.slice(202, 210), 16),
+           hash: notarization.substring(2, 66),
+        };
+        assert.equal(`0x${NotarizationResult.txid}`, testNotarization.txid, "Txid in best forks does not equal notarization");
       });
 
 });
