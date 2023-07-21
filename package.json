@@ -1,6 +1,7 @@
 {
     "scripts": {
-        "test": "node ./test/launchGanache.js; pkill -f ganache-cli"
+        "test": "node ./test/launchGanache.js; pkill -f ganache-cli",
+        "test-win": "echo To run test in windows run a terminal window with [ganache-cli -l 1500000000 ---account \"0x8e..yourprivkey, 100000000000000000000\"] And another windows with [truffle test ./test/deployed.js]"
     },
     "dependencies": {
         "@openzeppelin/contracts": "^4.5.0",
