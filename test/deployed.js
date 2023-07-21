@@ -1,7 +1,7 @@
 const VerusDelegator = artifacts.require("../contracts/Main/Delegator.sol");
 const notaries = require('../migrations/setup.js')
 const verusDelegatorAbi = require('../build/contracts/Delegator.json');
-const testNotarization = require('./submitnotarization.json')
+const testNotarization = require('./submitnotarization.js')
 
 contract("Verus Contracts deployed tests", async(accounts)  => {
     
