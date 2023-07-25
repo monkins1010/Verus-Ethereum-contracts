@@ -41,7 +41,6 @@ contract VerusNotarizer is VerusStorage {
     function setLatestData(bytes calldata serializedNotarization, bytes32 txid, uint32 n, bytes calldata data
         ) external {
 
-        require(notariesEthAddress[msg.sender], "Notaries only");
         require(!knownNotarizationTxids[txid], "known TXID");
         knownNotarizationTxids[txid] = true;
 

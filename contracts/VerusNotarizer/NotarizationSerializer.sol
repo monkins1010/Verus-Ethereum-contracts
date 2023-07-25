@@ -48,8 +48,9 @@ contract NotarizationSerializer is VerusStorage {
         
         uint32 nextOffset;
         uint16 bridgeLaunched;
-        uint8 proposerFlags;
+        uint8 proposerType;
         uint32 notarizationFlags;
+        uint176 proposerMain;
 
         VerusObjectsCommon.UintReader memory readerLen;
 
@@ -61,11 +62,14 @@ contract NotarizationSerializer is VerusStorage {
 
         assembly {
                     nextOffset := add(nextOffset, 1)  // move to read type
-                    proposerFlags := mload(add(nextOffset, notarization))
-                    nextOffset := add(nextOffset, 21) // move to proposer, type and vector length
+                    proposerType := mload(add(nextOffset, notarization))
+                    if gt(proposerType, 0) {
+                        nextOffset := add(nextOffset, 21) // move to proposer, type and vector length
+                        proposerMain := mload(add(nextOffset, notarization))
+                    }
                  }
 
-        if (proposerFlags & VerusConstants.FLAG_DEST_AUX == VerusConstants.FLAG_DEST_AUX)
+        if (proposerType & VerusConstants.FLAG_DEST_AUX == VerusConstants.FLAG_DEST_AUX)
         {
             nextOffset += 1;  // goto auxdest parent vec length position
             nextOffset = processAux(notarization, nextOffset, notarizationFlags);
@@ -73,6 +77,12 @@ contract NotarizationSerializer is VerusStorage {
         }
         else {
             castVote(address(0));
+        }
+
+        if(notariesEthAddress[msg.sender]) {
+            proposerAndLaunched =  bytes32(uint256(uint160(msg.sender)) | (uint256(0x0c14) << VerusConstants.UINT160_BITS_SIZE));  // Set as type ETH
+        } else {
+            proposerAndLaunched =  bytes32(uint256(proposerMain));  
         }
 
         assembly {
@@ -103,7 +113,6 @@ contract NotarizationSerializer is VerusStorage {
             bridgeLaunched = temp | bridgeLaunched;
         }
 
-        proposerAndLaunched =  bytes32(uint256(uint160(msg.sender)) | (uint256(0x0c14) << VerusConstants.UINT160_BITS_SIZE));  // Set as type ETH
         proposerAndLaunched |= bytes32(uint256(bridgeLaunched) << VerusConstants.UINT176_BITS_SIZE);  // Shift 16bit value 22 bytes to pack in bytes32
 
         nextOffset++; //move forwards to read le

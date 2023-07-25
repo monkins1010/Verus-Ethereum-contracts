@@ -192,9 +192,6 @@ contract SubmitImports is VerusStorage {
 
     function setClaimableFees(uint64 fees, uint176 exporter) external
     {
-        uint176 bridgeKeeper;
-        bridgeKeeper = uint176(uint160(msg.sender));
-        bridgeKeeper |= (uint176(0x0c14) << VerusConstants.UINT160_BITS_SIZE); //make ETH type '0x0c' and length '0x14'
 
         uint176 proposer;
         bytes memory proposerBytes = bestForks[0];
@@ -203,31 +200,31 @@ contract SubmitImports is VerusStorage {
                 proposer := mload(add(proposerBytes, 128))
         } 
 
-        (uint256 notaryFees, uint256 proposerFees, uint256 bridgekeeperFees, uint256 exporterFees) = setFeePercentages(fees);
+        (uint256 notaryFees, uint256 proposerFees, uint256 exporterFees) = setFeePercentages(fees);
 
         // Any remainder from Notaries shared fees is put into the LPFees pot.
 
         setClaimedFees(bytes32(uint256(proposer)), proposerFees);
-        setClaimedFees(bytes32(uint256(bridgeKeeper)), bridgekeeperFees);
         exporterFees += setNotaryFees(notaryFees);
+        if(notariesEthAddress[msg.sender]) {
+            exporter =  uint176(uint160(msg.sender)) | uint176(0x0c14) << VerusConstants.UINT160_BITS_SIZE;  // Set as type ETH
+        } 
         setClaimedFees(bytes32(uint256(exporter)), exporterFees);
 
     }
 
-    function setFeePercentages(uint256 _ethAmount)private pure returns (uint256,uint256,uint256,uint256)
+    function setFeePercentages(uint256 _ethAmount)private pure returns (uint256,uint256,uint256)
     {
         uint256 notaryFees;
         uint256 proposerFees;  
-        uint256 exporterFees;
-        uint256 bridgekeeperFees;     
+        uint256 exporterFees; 
         
-        notaryFees = (_ethAmount / 4 ); 
-        proposerFees = _ethAmount / 4 ;
-        bridgekeeperFees = (_ethAmount / 4 );
+        notaryFees = (_ethAmount / 3 ); 
+        proposerFees = _ethAmount / 3 ;
 
-        exporterFees = _ethAmount - (notaryFees + proposerFees + bridgekeeperFees);
+        exporterFees = _ethAmount - (notaryFees + proposerFees);
 
-        return(notaryFees, proposerFees, bridgekeeperFees, exporterFees);
+        return(notaryFees, proposerFees, exporterFees);
     }
 
     function setNotaryFees(uint256 notaryFees) private returns (uint64 remainder){  //sent in as SATS

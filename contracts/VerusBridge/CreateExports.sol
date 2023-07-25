@@ -61,7 +61,7 @@ contract CreateExports is VerusStorage {
             require( allowedTokens >= tokenAmount);
             //transfer the tokens to the delegator contract
             //total amount kept as uint256 until export to verus
-            exportERC20Tokens(tokenAmount, token, mappedContract.flags & VerusConstants.MAPPING_VERUS_OWNED == VerusConstants.MAPPING_VERUS_OWNED, msg.sender );
+            exportERC20Tokens(tokenAmount, token, mappedContract.flags & VerusConstants.MAPPING_VERUS_OWNED == VerusConstants.MAPPING_VERUS_OWNED);
             
         } else if (ethNftFlag == VerusConstants.TOKEN_ETH_NFT_DEFINITION){
             //handle a NFT Import
@@ -90,9 +90,9 @@ contract CreateExports is VerusStorage {
         _createExports(transfer, false);
     }
 
-    function exportERC20Tokens(uint256 _tokenAmount, Token token, bool burn, address sender ) private {
+    function exportERC20Tokens(uint256 _tokenAmount, Token token, bool burn) private {
         
-        (bool success, ) = address(token).call(abi.encodeWithSignature("transferFrom(address,address,uint256)", sender, address(this), _tokenAmount));
+        (bool success, ) = address(token).call(abi.encodeWithSignature("transferFrom(address,address,uint256)", msg.sender, address(this), _tokenAmount));
         require(success, "transferfrom of token failed");
 
         if (burn) 
