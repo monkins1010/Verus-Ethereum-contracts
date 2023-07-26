@@ -15,7 +15,9 @@ contract Delegator is VerusStorage {
         for(uint i =0; i < _notaries.length; i++) {
             notaryAddressMapping[_notaries[i]] = VerusObjects.notarizer(_notariesEthAddress[i], _notariesColdStoreEthAddress[i], VerusConstants.NOTARY_VALID);
             notaries.push(_notaries[i]);
-            notariesEthAddress[_notariesEthAddress[i]] = true;
+
+            storageGlobal[bytes32(uint256(uint160(_notariesEthAddress[i])) | uint256(VerusConstants.GLOBAL_TYPE_NOTARY_ADDRESS) << VerusConstants.UINT160_BITS_SIZE)] = VerusConstants.GLOBAL_TYPE_NOTARY_VALID;
+
         }
         VerusNft t = new VerusNft(); 
 
@@ -85,7 +87,7 @@ contract Delegator is VerusStorage {
 
     function launchContractTokens(bytes calldata data) external  {
 
-        require(verusToERC20mapping[VerusConstants.VEth].flags == 0);
+        require(verusToERC20mapping[VerusConstants.VEth].flags == 0 && startOwner == msg.sender);
         address logic = contracts[uint(VerusConstants.ContractType.TokenManager)];
 
         (bool success,) = logic.delegatecall(abi.encodeWithSignature("launchContractTokens(bytes)", data));
@@ -132,28 +134,19 @@ contract Delegator is VerusStorage {
 
     } 
 
-    function getNewProof(bool latest) public payable returns (bytes memory) {
+    function getProof(uint256 proofHeightOptions) public payable returns (bytes memory) {
                 
-        address VerusNotaryToolsAddress = contracts[uint(VerusConstants.ContractType.VerusNotaryTools)];
-        (bool success, bytes memory returnedData) = VerusNotaryToolsAddress.delegatecall(abi.encodeWithSignature("getNewProof(bool)", latest));
+        address VerusNotaryToolsAddress = contracts[uint(VerusConstants.ContractType.VerusNotarizer)];
+        (bool success, bytes memory returnedData) = VerusNotaryToolsAddress.delegatecall(abi.encodeWithSignature("getProof(uint256)", proofHeightOptions));
 
         require(success);
         return abi.decode(returnedData, (bytes));
     }
 
-    function getProofByHeight(uint256 height) external returns (bytes memory) {
-
-        address VerusNotaryToolsAddress = contracts[uint(VerusConstants.ContractType.VerusNotaryTools)];
-        (bool success, bytes memory returnedData) = VerusNotaryToolsAddress.delegatecall(abi.encodeWithSignature("getProof(uint256)", height));
-
-        require(success);
-        return abi.decode(returnedData, (bytes));
-    }
-
-    function getProofCost(bool latest) external returns (uint256) {
+    function getProofCosts(uint256 proofOption) external returns (uint256) {
                 
-        address VerusNotaryToolsAddress = contracts[uint(VerusConstants.ContractType.VerusNotaryTools)];
-        (bool success, bytes memory returnedData) = VerusNotaryToolsAddress.delegatecall(abi.encodeWithSignature("getProofCosts(bool)", latest));
+        address VerusNotaryToolsAddress = contracts[uint(VerusConstants.ContractType.VerusNotarizer)];
+        (bool success, bytes memory returnedData) = VerusNotaryToolsAddress.delegatecall(abi.encodeWithSignature("getProofCosts(uint256)", proofOption));
 
         require(success);
         return abi.decode(returnedData, (uint256));
@@ -177,15 +170,6 @@ contract Delegator is VerusStorage {
             return;
         } 
         contracts[contractNo] = newcontract;
-    }
-
-    function runContractsUpgrade() public returns (uint8) {
-      
-        address upgradeManagerAddress = contracts[uint(VerusConstants.ContractType.UpgradeManager)];
-
-        (bool success, bytes memory returnedData) = upgradeManagerAddress.delegatecall(abi.encodeWithSignature("runContractsUpgrade()"));
-        require(success);
-        return abi.decode(returnedData, (uint8));
     }
 
     function revokeWithMainAddress(bytes calldata data) external returns (bool) { 

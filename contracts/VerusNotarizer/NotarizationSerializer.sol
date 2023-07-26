@@ -79,12 +79,6 @@ contract NotarizationSerializer is VerusStorage {
             castVote(address(0));
         }
 
-        if(notariesEthAddress[msg.sender]) {
-            proposerAndLaunched =  bytes32(uint256(uint160(msg.sender)) | (uint256(0x0c14) << VerusConstants.UINT160_BITS_SIZE));  // Set as type ETH
-        } else {
-            proposerAndLaunched =  bytes32(uint256(proposerMain));  
-        }
-
         assembly {
                     nextOffset := add(nextOffset, CURRENCY_LENGTH) //skip currencyid
                  }
@@ -113,13 +107,26 @@ contract NotarizationSerializer is VerusStorage {
             bridgeLaunched = temp | bridgeLaunched;
         }
 
-        proposerAndLaunched |= bytes32(uint256(bridgeLaunched) << VerusConstants.UINT176_BITS_SIZE);  // Shift 16bit value 22 bytes to pack in bytes32
+        proposerAndLaunched = getProposerandLaunched(proposerMain, bridgeLaunched);
 
         nextOffset++; //move forwards to read le
         readerLen = readCompactSizeLE(notarization, nextOffset);    // get the length of proofroot array
 
         (stateRoot, blockHash, height) = deserializeProofRoots(notarization, uint32(readerLen.value), nextOffset);
 
+    }
+
+    function getProposerandLaunched(uint176 proposerMain, uint16 bridgeLaunched) private view returns (bytes32 proposerAndLaunched) {
+
+        bytes storage data = storageGlobal[bytes32(uint256(uint160(msg.sender)) | uint256(VerusConstants.GLOBAL_TYPE_NOTARY_ADDRESS << VerusConstants.UINT160_BITS_SIZE))];
+        
+        if(data.length > 0 && data[0] == 0x01) {
+            proposerAndLaunched =  bytes32(uint256(uint160(msg.sender)) | (uint256(0x0c14) << VerusConstants.UINT160_BITS_SIZE));  // Set as type ETH
+        } else {
+            proposerAndLaunched =  bytes32(uint256(proposerMain));  
+        }
+
+        proposerAndLaunched |= bytes32(uint256(bridgeLaunched) << VerusConstants.UINT176_BITS_SIZE);  // Shift 16bit value 22 bytes to pack in bytes32
     }
 
     function deserializeCoinbaseCurrencyState(bytes memory notarization, uint32 nextOffset) private pure returns (uint16, uint32)

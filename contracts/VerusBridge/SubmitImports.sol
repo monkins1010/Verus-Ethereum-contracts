@@ -206,9 +206,6 @@ contract SubmitImports is VerusStorage {
 
         setClaimedFees(bytes32(uint256(proposer)), proposerFees);
         exporterFees += setNotaryFees(notaryFees);
-        if(notariesEthAddress[msg.sender]) {
-            exporter =  uint176(uint160(msg.sender)) | uint176(0x0c14) << VerusConstants.UINT160_BITS_SIZE;  // Set as type ETH
-        } 
         setClaimedFees(bytes32(uint256(exporter)), exporterFees);
 
     }
