@@ -1,7 +1,7 @@
 // SPDX-License-Identifier: MIT
 // Bridge between ethereum and verus
 
-pragma solidity >=0.4.22;
+pragma solidity >=0.8.9;
 pragma abicoder v2;
 import "../Libraries/VerusObjects.sol";
 
@@ -257,7 +257,11 @@ contract NotarizationSerializer is VerusStorage {
     function castVote(address votetxid) private {
 
         rollingUpgradeVotes[rollingVoteIndex] = votetxid;
-        rollingVoteIndex = rollingVoteIndex == 99 ? 0 : rollingVoteIndex++;     
+        if(rollingVoteIndex > 98) {
+            rollingVoteIndex = 0;
+        } else {
+            rollingVoteIndex = rollingVoteIndex + 1;
+        }
 
     }
 
