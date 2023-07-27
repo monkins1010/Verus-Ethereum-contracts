@@ -102,8 +102,7 @@ contract ExportManager is VerusStorage  {
                 transferFee += bounceBackFee;
                 requiredFees += convertFromVerusNumber(uint256(bounceBackFee),18);  //bounceback fees required as well as send fees
 
-            } else if (!(transfer.destination.destinationtype == VerusConstants.DEST_PKH || transfer.destination.destinationtype == VerusConstants.DEST_ID 
-                        || transfer.destination.destinationtype == VerusConstants.DEST_SH)) {
+            } else if (!(transfer.destination.destinationtype == VerusConstants.DEST_PKH || transfer.destination.destinationtype == VerusConstants.DEST_ID)) {
 
                 return 0;  
 
@@ -168,8 +167,7 @@ contract ExportManager is VerusStorage  {
 
         if (!(transfer.destination.destinationtype == (VerusConstants.DEST_ETH + VerusConstants.FLAG_DEST_GATEWAY + VerusConstants.FLAG_DEST_AUX) || 
                 transfer.destination.destinationtype == VerusConstants.DEST_ID ||
-                transfer.destination.destinationtype == VerusConstants.DEST_PKH || 
-                transfer.destination.destinationtype == VerusConstants.DEST_SH) ||
+                transfer.destination.destinationtype == VerusConstants.DEST_PKH) ||
                 sendingCurrency.flags == 0)
         {
             revert ("Invalid desttype");
