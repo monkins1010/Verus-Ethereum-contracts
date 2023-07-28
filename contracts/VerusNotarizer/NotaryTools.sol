@@ -33,47 +33,7 @@ contract NotaryTools is VerusStorage {
         notaryAddressMapping[notarizer] = VerusObjects.notarizer(mainAddress, revokeAddress, state);
     }
 
-
-    function decodeNotarization(uint256 index) public view returns (VerusObjectsNotarization.NotarizationForks[] memory)
-    {
-        uint32 nextOffset;
-
-        bytes storage tempArray = bestForks[index];
-
-        bytes32 hashOfNotarization;
-        bytes32 txid;
-        bytes32 stateRoot;
-        bytes32 packedPositions;
-        bytes32 slotHash;
-        VerusObjectsNotarization.NotarizationForks[] memory retval = new VerusObjectsNotarization.NotarizationForks[]((tempArray.length / 128) + 1);
-        if (tempArray.length > 1)
-        {
-            bytes32 slot;
-            assembly {
-                        mstore(add(slot, 32),tempArray.slot)
-                        slotHash := keccak256(add(slot, 32), 32)
-                        }
-
-            for (int i = 0; i < int(tempArray.length / 128); i++) 
-            {
-                assembly {
-                    hashOfNotarization := sload(add(slotHash,nextOffset))
-                    nextOffset := add(nextOffset, 1)  
-                    txid := sload(add(slotHash,nextOffset))
-                    nextOffset := add(nextOffset, 1) 
-                    stateRoot := sload(add(slotHash,nextOffset))
-                    nextOffset := add(nextOffset, 1) 
-                    packedPositions :=sload(add(slotHash,nextOffset))
-                    nextOffset := add(nextOffset, 1)
-                }
-
-                retval[uint(i)] =  VerusObjectsNotarization.NotarizationForks(hashOfNotarization, txid, stateRoot, packedPositions);
-            }
-        }
-        return retval;
-    }
-
-     function recoverString(bytes memory be, uint8 vs, bytes32 rs, bytes32 ss) public pure returns (address)
+    function recoverString(bytes memory be, uint8 vs, bytes32 rs, bytes32 ss) public pure returns (address)
     {
         bytes32 hashValue;
 
@@ -81,7 +41,6 @@ contract NotaryTools is VerusStorage {
         hashValue = sha256(abi.encodePacked(uint8(19),hex"5665727573207369676e656420646174613a0a", hashValue)); //TODO: move to constants prefix = 19(len) + "Verus signed data:\n"
 
         return ecrecover(hashValue, vs - 4, rs, ss);
-
     }
 
     function revokeWithMainAddress(bytes calldata dataIn) public returns (bool) {
