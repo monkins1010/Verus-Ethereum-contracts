@@ -11,6 +11,9 @@ import "../Storage/StorageMaster.sol";
 
 
 contract SubmitImports is VerusStorage {
+
+    uint32 constant ELVCHOBJ_TXID_OFFSET = 32;
+    uint32 constant ELVCHOBJ_NVINS_OFFSET = 45;
     function sendToVRSC(uint64 value, address sendTo, uint8 destinationType) public 
     {
         VerusObjects.CReserveTransfer memory LPtransfer;
@@ -62,10 +65,10 @@ contract SubmitImports is VerusStorage {
         bytes memory elVchObj = _import.partialtransactionproof.components[0].elVchObj;
         uint32 nVins;
 
-        assembly 
+        assembly
         {
-            txidfound := mload(add(elVchObj, 32)) 
-            nVins := mload(add(elVchObj, 45)) 
+            txidfound := mload(add(elVchObj, ELVCHOBJ_TXID_OFFSET)) 
+            nVins := mload(add(elVchObj, ELVCHOBJ_NVINS_OFFSET)) 
         }
 
         if (processedTxids[txidfound]) 
@@ -101,6 +104,8 @@ contract SubmitImports is VerusStorage {
         isLastCCEInOrder(uint32(CCEHeightsAndnIndex));
    
         // clear 4 bytes above first 64 bits, i.e. clear the nIndex 32 bit number, then convert to correct nIndex
+        // Using the index for the proof (ouput of an export) - (header ( 2 * nvin )) == export output
+        // NOTE: This depeneds on the serialization of the elVchObj
 
         CCEHeightsAndnIndex  = (CCEHeightsAndnIndex & 0xffffffff00000000ffffffffffffffff) | (uint128(uint32(uint32(CCEHeightsAndnIndex >> 64) - (1 + (2 * nVins)))) << 64);  
         setLastImport(txidfound, hashOfTransfers, CCEHeightsAndnIndex);
