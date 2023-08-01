@@ -22,10 +22,8 @@ contract ExportManager is VerusStorage  {
         
     }
 
-    function checkExport(bytes calldata datain) external payable returns (uint256 fees){
+    function checkExport(VerusObjects.CReserveTransfer memory transfer) external payable returns (uint256 fees){
        
-        VerusObjects.CReserveTransfer memory transfer = abi.decode(datain, (VerusObjects.CReserveTransfer));
-
         uint256 requiredFees = VerusConstants.transactionFee;  //0.003 eth in WEI (To vrsc)
         uint64 bounceBackFee;
         uint64 transferFee;

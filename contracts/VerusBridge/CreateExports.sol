@@ -8,6 +8,7 @@ import "../Libraries/VerusObjects.sol";
 import "../Libraries/VerusConstants.sol";
 import "./Token.sol";
 import "../Storage/StorageMaster.sol";
+import "./ExportManager.sol";
 
 contract CreateExports is VerusStorage {
 
@@ -17,22 +18,36 @@ contract CreateExports is VerusStorage {
         remainingLaunchFeeReserves -= _amount;
         return true;
     }
- 
+
     function sendTransfer(bytes calldata datain) payable external {
+
+        VerusObjects.CReserveTransfer memory transfer = abi.decode(datain, (VerusObjects.CReserveTransfer));        
+        sendTransferMain(transfer);
+    }
+
+    function sendTransferDirect(bytes calldata datain) payable external {
+
+        address serializerAddress = contracts[uint(VerusConstants.ContractType.VerusSerializer)];
+
+        (bool success, bytes memory returnData) = serializerAddress.call(abi.encodeWithSignature("deserializeTransfer(bytes)",datain));
+
+        require(success, "deserializetransfer failed");  
+
+        VerusObjects.CReserveTransfer memory transfer = abi.decode(returnData, (VerusObjects.CReserveTransfer));
+        sendTransferMain(transfer);
+    }
+ 
+    function sendTransferMain(VerusObjects.CReserveTransfer memory transfer) private {
 
         uint256 fees;
         VerusObjects.mappedToken memory mappedContract;
         uint32 ethNftFlag;
-
-        VerusObjects.CReserveTransfer memory transfer = abi.decode(datain, (VerusObjects.CReserveTransfer));
-
         address verusExportManagerAddress = contracts[uint(VerusConstants.ContractType.ExportManager)];
-        bytes memory data = abi.encode(transfer); 
 
-        (bool success, bytes memory feeBytes) = verusExportManagerAddress.delegatecall(abi.encodeWithSignature("checkExport(bytes)", data));
+        (bool success, bytes memory returnData) = verusExportManagerAddress.delegatecall(abi.encodeWithSelector(ExportManager.checkExport.selector, transfer));
         require(success, "checkExport call failed");
 
-        fees = abi.decode(feeBytes, (uint256)); //fees = exportManager.checkExport(transfer, paidValue, bridgeConverterActive);
+        fees = abi.decode(returnData, (uint256)); 
 
         require(fees != 0, "CheckExport Failed Checks"); 
 

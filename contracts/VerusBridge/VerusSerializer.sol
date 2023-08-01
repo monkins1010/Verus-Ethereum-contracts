@@ -14,6 +14,7 @@ contract VerusSerializer {
     uint32 constant CCC_ID_LEN = 20;
     uint32 constant CCC_NATIVE_OFFSET = 4 + 4 + 1;
     uint32 constant CCC_TOKENID_OFFSET = 32;
+    uint32 constant ETH_SEND_GATEWAY_AND_AUX_DEST = 20 + 20 + 8 + 4 + 20;
 
     function readCompactSizeLE(bytes memory incoming, uint32 offset) public pure returns(VerusObjectsCommon.UintReader memory) {
 
@@ -466,6 +467,93 @@ contract VerusSerializer {
         return (0, offset);
     }
 
+    function deserializeTransfer(bytes memory serialized) public view returns (VerusObjects.CReserveTransfer memory transfer){ 
 
+        uint256 nextOffset;
+        address tempaddress;
+        uint64 tempReg1;
+        uint8 tempuint8;
+                    
+        assembly {
+            nextOffset := add(nextOffset, 1) //move to read the version type
+            tempuint8 := mload(add(serialized, nextOffset)) // read the version type
+            nextOffset := add(nextOffset, CCC_ID_LEN) //move to read the currencyID
+            tempaddress := mload(add(serialized, nextOffset)) // read the version currencyID
+    
+        }
+        transfer.version = tempuint8;
+
+        transfer.currencyvalue.currency = tempaddress;
+    
+        (tempReg1, nextOffset)  = readVarint(serialized, nextOffset);  // read varint (nValue) returns next idx position
+
+        transfer.currencyvalue.amount = tempReg1;  //copy the value
+
+        (tempReg1, nextOffset) = readVarint(serialized, nextOffset); //read the flags
+
+        transfer.flags = uint32(tempReg1);  //copy the flags
+
+        assembly {
+            nextOffset := add(nextOffset, CCC_ID_LEN) //move to read the destination type, note already 1 byte in so only move 19
+            tempaddress := mload(add(serialized, nextOffset)) // read the feecurrencyid
+          
+        }
+        transfer.feecurrencyid = tempaddress; //copy the feecurrency
+
+        (transfer.fees, nextOffset) = readVarint(serialized, nextOffset); //read the fees and copy into structure
+
+        assembly {
+            nextOffset := add(nextOffset, 1)
+            tempuint8 := mload(add(serialized, nextOffset))  // already at destination type location so read byte
+        }
+        transfer.destination.destinationtype = tempuint8; //copy destination type 
+
+        if (tempuint8 == (VerusConstants.DEST_ETH + VerusConstants.FLAG_DEST_GATEWAY + VerusConstants.FLAG_DEST_AUX) || 
+            tempuint8 == VerusConstants.DEST_ID ||
+            tempuint8 == VerusConstants.DEST_PKH) {
+            
+            assembly {
+            nextOffset := add(nextOffset, CCC_ID_LEN) //move to read the destinationaddress, note already at vector length. 
+            tempaddress := mload(add(serialized, nextOffset))  // read desitination address note always 20 bytes.
+            }
+
+        } else {revert();} // note only 3 types allowed at the moment
+
+        bytes memory tempBouncebacktype;
+
+        if (tempuint8 == (VerusConstants.DEST_ETH + VerusConstants.FLAG_DEST_GATEWAY + VerusConstants.FLAG_DEST_AUX)) {
+
+            assembly {
+            nextOffset := add(nextOffset, 1) //note: leave fateswayid + gatewaycode + fees + auxdest serialized and copy as a chunk
+            }
+           tempBouncebacktype = this.slice(serialized, nextOffset, nextOffset + ETH_SEND_GATEWAY_AND_AUX_DEST);
+        }
+
+        transfer.destination.destinationaddress = abi.encodePacked(tempaddress, tempBouncebacktype);
+
+        assembly {
+            nextOffset := add(nextOffset, CCC_ID_LEN) //move to read the destinationcurrency address
+            tempaddress := mload(add(serialized, nextOffset)) // read the destinationcurrency address
+        }
+
+        transfer.destcurrencyid = tempaddress;
+
+        if (transfer.flags & VerusConstants.RESERVE_TO_RESERVE == VerusConstants.RESERVE_TO_RESERVE)
+        
+         assembly {
+            nextOffset := add(nextOffset, CCC_ID_LEN) //move to read the secondreserveid
+            tempaddress := mload(add(serialized, nextOffset)) // read the secondreserveid
+        }
+
+        transfer.secondreserveid = tempaddress;
+        
+        return transfer;
+    }
+
+     function slice (bytes calldata data, uint256 start, uint256 end) public pure returns (bytes memory) {
+
+        return data[start:end];
+       
+    }
 
 }
