@@ -58,8 +58,7 @@ contract SubmitImports is VerusStorage {
     }
 
     function _createImports(bytes calldata data) external returns(uint64, uint176) {
-        
-        
+              
         VerusObjects.CReserveTransferImport memory _import = abi.decode(data, (VerusObjects.CReserveTransferImport));
         bytes32 txidfound;
         bytes memory elVchObj = _import.partialtransactionproof.components[0].elVchObj;
@@ -105,7 +104,8 @@ contract SubmitImports is VerusStorage {
    
         // clear 4 bytes above first 64 bits, i.e. clear the nIndex 32 bit number, then convert to correct nIndex
         // Using the index for the proof (ouput of an export) - (header ( 2 * nvin )) == export output
-        // NOTE: This depeneds on the serialization of the elVchObj
+        // NOTE: This depends on the serialization of the CTransaction header and the location of the vins being 45 bytes in.
+        // NOTE: Also depends on it being a partial transaction proof, header = 1
 
         CCEHeightsAndnIndex  = (CCEHeightsAndnIndex & 0xffffffff00000000ffffffffffffffff) | (uint128(uint32(uint32(CCEHeightsAndnIndex >> 64) - (1 + (2 * nVins)))) << 64);  
         setLastImport(txidfound, hashOfTransfers, CCEHeightsAndnIndex);

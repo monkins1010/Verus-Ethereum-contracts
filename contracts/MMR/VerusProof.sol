@@ -38,6 +38,7 @@ contract VerusProof is VerusStorage  {
     uint8 constant FLAG_LAUNCHCONFIRMED = 0x10;
     uint8 constant FLAG_LAUNCHCOMPLETEMARKER = 0x20;
     uint8 constant AUX_DEST_ETH_VEC_LENGTH = 22;
+    uint8 constant TX_HEADER = 1;
 
 
     function checkProof(bytes32 hashToProve, VerusObjects.CTXProof[] memory _branches) public view returns(bytes32){
@@ -80,6 +81,10 @@ contract VerusProof is VerusStorage  {
         // the first component of the import partial transaction proof is the transaction header, for each version of
         // transaction header, we have a specific offset for the hash of transfers. if we change this, we must
         // deprecate and deploy new contracts
+
+        if(_import.partialtransactionproof.components[0].elType != TX_HEADER){
+            return (uint64(0), uint128(0));
+        }
 
         for (uint i = 1; i < _import.partialtransactionproof.components.length; i++)
         {
