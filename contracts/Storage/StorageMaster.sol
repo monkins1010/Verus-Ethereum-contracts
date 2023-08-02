@@ -7,7 +7,6 @@ import "../Libraries/VerusObjects.sol";
 import "../Libraries/VerusConstants.sol";
 import "../Libraries/VerusObjectsNotarization.sol";
 
-
 contract VerusStorage {
 
     //verusbridgestorage
@@ -48,7 +47,6 @@ contract VerusStorage {
     mapping (bytes32 => bool) knownNotarizationTxids;
 
     address[] public notaries; // Notaries for enumeration
-
 
     bytes[] public bestForks; // Forks array
 

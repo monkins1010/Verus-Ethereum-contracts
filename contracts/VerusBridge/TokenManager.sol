@@ -28,7 +28,6 @@ contract TokenManager is VerusStorage {
         }
     }
 
-
     function launchToken(VerusObjects.PackedCurrencyLaunch[] memory _tx) private {
         
         for (uint j = 0; j < _tx.length; j++)

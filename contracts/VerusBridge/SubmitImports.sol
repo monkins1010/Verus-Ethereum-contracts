@@ -82,7 +82,6 @@ contract SubmitImports is VerusStorage {
         nVins = ((nVins & 0xFF00FF00) >> 8) |  ((nVins & 0x00FF00FF) << 8);
         nVins = (nVins >> 16) | (nVins << 16);
 
-
         bytes32 hashOfTransfers;
 
         // [0..139]address of reward recipricent and [140..203]int64 fees
@@ -125,7 +124,6 @@ contract SubmitImports is VerusStorage {
         return (fees, exporter);
 
     }
-
   
     function refund(bytes memory refundAmount) private  {
 

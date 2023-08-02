@@ -60,7 +60,6 @@ contract Delegator is VerusStorage {
 
         bool success;
         bytes memory returnedData;
-
         bytes memory packedData = abi.encode(data);
 
         address SubmitImportsAddress = contracts[uint(VerusConstants.ContractType.SubmitImports)];
@@ -179,6 +178,8 @@ contract Delegator is VerusStorage {
             return;
         } 
         contracts[contractNo] = newcontract;
+         //NOTE: Upgraded contracts may need a initialize() function so they can setup things in a run once.
+        newcontract.delegatecall(abi.encodeWithSignature("initialize()"));
     }
 
     function revokeWithMainAddress(bytes calldata data) external returns (bool) { 

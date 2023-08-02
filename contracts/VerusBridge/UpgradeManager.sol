@@ -86,6 +86,9 @@ contract UpgradeManager is VerusStorage {
             {       
                 if (contracts[j] != _newContractPackage.contracts[j]) {
                     contracts[j] = _newContractPackage.contracts[j];
+                    //NOTE: Upgraded contracts need a initialize() function to be present, so they can initialize
+                    (bool success,) = _newContractPackage.contracts[j].delegatecall(abi.encodeWithSignature("initialize()"));
+                    require(success);
                 }
             }
         }
