@@ -562,4 +562,37 @@ contract VerusSerializer {
        
     }
 
+        function _toLower(bytes memory bStr) internal pure returns (string memory) {
+
+        bytes memory bLower = new bytes(bStr.length);
+        for (uint i = 0; i < bStr.length; i++) {
+            // Uppercase character...
+            if ((uint8(bStr[i]) >= 65) && (uint8(bStr[i]) <= 90)) {
+                // So we add 32 to make it lowercase
+                bLower[i] = bytes1(uint8(bStr[i]) + 32);
+            } else {
+                bLower[i] = bStr[i];
+            }
+        }
+        return string(bLower);
+    }
+
+
+    function sha256d(string memory _string) internal pure returns(bytes32){
+        return sha256(abi.encodePacked(sha256(abi.encodePacked(_string))));
+    }
+
+        function checkIAddress(VerusObjects.PackedCurrencyLaunch memory _tx) public pure{
+
+        address calculated;
+
+         if(_tx.parent == VerusConstants.VerusSystemId) {
+             calculated = address(ripemd160(abi.encodePacked(sha256(abi.encodePacked(sha256d(_toLower(bytes(_tx.name))))))));
+         }
+         else {
+             calculated = address(ripemd160(abi.encodePacked(sha256(abi.encodePacked(sha256d(string(abi.encodePacked(_tx.parent,sha256d(_toLower(bytes(_tx.name)))))))))));
+         }
+        require(calculated == _tx.iaddress, "Iaddress does not match");
+    }
+
 }

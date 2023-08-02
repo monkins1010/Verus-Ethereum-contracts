@@ -17,15 +17,6 @@ import "../Storage/StorageMaster.sol";
 
 contract TokenManager is VerusStorage {
 
-    bool private locked;
-
-    modifier nonReentrant() {
-        require(!locked, "Reentrant call");
-        locked = true;
-        _;
-        locked = false;
-    }
-
     function getName(address cont) public view returns (string memory)
     {
         // Wrapper functions to enable try catch to work
@@ -37,45 +28,6 @@ contract TokenManager is VerusStorage {
         }
     }
 
-    function _toLower(bytes memory bStr) internal pure returns (string memory) {
-
-        bytes memory bLower = new bytes(bStr.length);
-        for (uint i = 0; i < bStr.length; i++) {
-            // Uppercase character...
-            if ((uint8(bStr[i]) >= 65) && (uint8(bStr[i]) <= 90)) {
-                // So we add 32 to make it lowercase
-                bLower[i] = bytes1(uint8(bStr[i]) + 32);
-            } else {
-                bLower[i] = bStr[i];
-            }
-        }
-        return string(bLower);
-    }
-
-    function sha256d(bytes32 _bytes) internal pure returns(bytes32){
-        return sha256(abi.encodePacked(sha256(abi.encodePacked(_bytes))));
-    }
-
-    function sha256d(string memory _string) internal pure returns(bytes32){
-        return sha256(abi.encodePacked(sha256(abi.encodePacked(_string))));
-    }
-
-    function sha256d(bytes memory _bytes) internal pure returns(bytes32){
-        return sha256(abi.encodePacked(sha256(abi.encodePacked(_bytes))));
-    }
-
-    function checkIAddress(VerusObjects.PackedCurrencyLaunch memory _tx) private pure{
-
-        address calculated;
-
-        if(_tx.parent == VerusConstants.VerusSystemId) {
-            calculated = address(ripemd160(abi.encodePacked(sha256(abi.encodePacked(sha256d(_toLower(bytes(_tx.name))))))));
-        }
-        else {
-            calculated = address(ripemd160(abi.encodePacked(sha256(abi.encodePacked(sha256d(abi.encodePacked(_tx.parent,sha256d(_toLower(bytes(_tx.name))))))))));
-        }
-        require(calculated == _tx.iaddress, "Iaddress does not match");
-    }
 
     function launchToken(VerusObjects.PackedCurrencyLaunch[] memory _tx) private {
         
@@ -85,18 +37,18 @@ contract TokenManager is VerusStorage {
             if (verusToERC20mapping[_tx[j].iaddress].flags > 0 || _tx[j].iaddress == address(0))
                 continue;
 
-            checkIAddress(_tx[j]); 
+            VerusSerializer(contracts[uint(VerusConstants.ContractType.VerusSerializer)]).checkIAddress(_tx[j]); 
 
             string memory outputName;
 
             if ((uint8(_tx[j].flags) & VerusConstants.MAPPING_ETHEREUM_OWNED) == VerusConstants.MAPPING_ETHEREUM_OWNED)
             {
-                outputName = string(abi.encodePacked("[", getName(_tx[j].ERCContract), "] as "));
-                if (bytes(outputName).length < 7) 
-                {
-                    //ERC20 not found
+                outputName = getName(_tx[j].ERCContract);
+
+                if (bytes(outputName).length == 0) {
                     continue;
                 }
+                outputName = string(abi.encodePacked("[", outputName, "] as "));
             }
 
             outputName = string(abi.encodePacked(outputName, _tx[j].name));
@@ -108,7 +60,6 @@ contract TokenManager is VerusStorage {
             recordToken(_tx[j].iaddress, _tx[j].ERCContract, outputName, string(byteSlice(bytes(_tx[j].name))), uint8(_tx[j].flags), _tx[j].tokenID);
         }
     }
-
     
     function launchContractTokens(bytes calldata data) external {
 
@@ -183,7 +134,7 @@ contract TokenManager is VerusStorage {
         return (refundsData);
     }
 
-    function importTransactions(VerusObjects.PackedSend[] memory trans, uint176[] memory refundAddresses) private nonReentrant returns (bytes memory refundsData){
+    function importTransactions(VerusObjects.PackedSend[] memory trans, uint176[] memory refundAddresses) private returns (bytes memory refundsData){
       
         uint32 sendFlags;
         Token token;
