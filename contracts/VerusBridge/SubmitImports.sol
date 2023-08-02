@@ -278,8 +278,8 @@ contract SubmitImports is VerusStorage {
 
         if (refundAmount > 0)
         {
-            sendToVRSC(refundAmount, address(uint160(verusAddress)), uint8(verusAddress >> 168));
             refunds[bytes32(uint256(verusAddress))] = 0;
+            sendToVRSC(refundAmount, address(uint160(verusAddress)), uint8(verusAddress >> 168));
         }
         else
         {
@@ -304,8 +304,8 @@ contract SubmitImports is VerusStorage {
 
         if ((claimableFees[bytes32(claiment)] > VerusConstants.verusvETHTransactionFee) && msg.sender == ethAddress)
         {
-            sendToVRSC(uint64(claimableFees[bytes32(claiment)]), rAddress, VerusConstants.DEST_PKH); //sent in as SATS
             claimableFees[bytes32(claiment)] = 0;
+            sendToVRSC(uint64(claimableFees[bytes32(claiment)]), rAddress, VerusConstants.DEST_PKH); //sent in as SATS
         }
         else
         {

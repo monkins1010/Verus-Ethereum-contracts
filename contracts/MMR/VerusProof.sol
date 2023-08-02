@@ -119,6 +119,7 @@ contract VerusProof is VerusStorage  {
 
             nextOffset = uint32(readerLen.offset + readerLen.value);        // add the length of the push of master to point to cc opcode
 
+            //TODO: Check any other type would fail
             assembly {
                 var1 := mload(add(firstObj, nextOffset))         // this should be OP_CHECKCRYPTOCONDITION
                 nextOffset := add(nextOffset, 1)                    // and after that...

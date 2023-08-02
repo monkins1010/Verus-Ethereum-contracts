@@ -11,10 +11,11 @@ contract VerusSerializer {
 
     uint constant ETH_ADDRESS_SIZE_BYTES = 20;
     uint32 constant CCC_PREFIX_TO_OPTIONS = 3 + 4; // already starts on the byte so 3 first
-    uint32 constant CCC_ID_LEN = 20;
+    uint32 constant VERUS_ID_LENGTH = 20;
     uint32 constant CCC_NATIVE_OFFSET = 4 + 4 + 1;
     uint32 constant CCC_TOKENID_OFFSET = 32;
     uint32 constant ETH_SEND_GATEWAY_AND_AUX_DEST = 20 + 20 + 8 + 4 + 20;
+    uint32 constant TRANSFER_GATEWAYSKIP = 56; //skip gatewayid, gatewaycode + fees
 
     function readCompactSizeLE(bytes memory incoming, uint32 offset) public pure returns(VerusObjectsCommon.UintReader memory) {
 
@@ -267,7 +268,7 @@ contract VerusSerializer {
 
         assembly {
             options := mload(add(input, nextOffset))
-            nextOffset := add(nextOffset, CCC_ID_LEN)
+            nextOffset := add(nextOffset, VERUS_ID_LENGTH)
             parent := mload(add(input, nextOffset))
             nextOffset := add(nextOffset, 1)  // one byte for name string length
             nameStringLength := and(mload(add(input, nextOffset)), 0x000000ff) // string length MAX 64 so will always be a byte
@@ -284,8 +285,8 @@ contract VerusSerializer {
         returnCurrency.name = string(tempname);
         nextOffset += nameStringLength;
         assembly {
-            nextOffset := add(nextOffset, CCC_ID_LEN) // move to read launchsystemID
-            nextOffset := add(nextOffset, CCC_ID_LEN) // move to read Native currency
+            nextOffset := add(nextOffset, VERUS_ID_LENGTH) // move to read launchsystemID
+            nextOffset := add(nextOffset, VERUS_ID_LENGTH) // move to read Native currency
             nextOffset := add(nextOffset, CCC_NATIVE_OFFSET)
             NativeCurrencyType := mload(add(input, nextOffset)) 
         }
@@ -293,7 +294,7 @@ contract VerusSerializer {
         if (NativeCurrencyType & VerusConstants.DEST_ETHNFT == VerusConstants.DEST_ETHNFT) //mapped ETH NFT
         {
             assembly {
-                nextOffset := add(add(nextOffset, CCC_ID_LEN), 1) //skip vector length 
+                nextOffset := add(add(nextOffset, VERUS_ID_LENGTH), 1) //skip vector length 
                 nativeCurrencyID := mload(add(input, nextOffset))
                 nextOffset := add(nextOffset, CCC_TOKENID_OFFSET)
                 nftID := mload(add(input, nextOffset))
@@ -305,7 +306,7 @@ contract VerusSerializer {
         else if (NativeCurrencyType & VerusConstants.DEST_ETH == VerusConstants.DEST_ETH) //mapped ETH token
         {
             assembly {
-                nextOffset := add(add(nextOffset, CCC_ID_LEN), 1) //skip vector length 
+                nextOffset := add(add(nextOffset, VERUS_ID_LENGTH), 1) //skip vector length 
                 nativeCurrencyID := mload(add(input, nextOffset))
             }
             returnCurrency.flags |= uint8(VerusConstants.TOKEN_LAUNCH);
@@ -340,13 +341,19 @@ contract VerusSerializer {
         address tempaddress;
         uint64 temporaryRegister1;
         uint8 destinationType;
-        uint256 nextOffset = 21;
+        uint256 nextOffset;
         uint176 refundAddress;
         uint64 flags;
 
         while (nextOffset <= tempSerialized.length) {
             
             assembly {
+                nextOffset := add(nextOffset, 1) // move to one byte version read
+                let version := byte(32, mload(add(tempSerialized, nextOffset))) // Read one byte at the given offset
+                if iszero(eq(version, 0x01)) {
+                    revert(0, 0) // Revert the transaction if version is not equal to 1
+                }
+                nextOffset := add(nextOffset, VERUS_ID_LENGTH)
                 tempaddress := mload(add(tempSerialized, nextOffset)) // skip version 0x01 (1 byte) and read currency being sent
             }
 
@@ -356,7 +363,7 @@ contract VerusSerializer {
             tempTransfers[uint8(counter)].currencyAndAmount = uint256(temporaryRegister1) << VerusConstants.UINT160_BITS_SIZE; //shift amount and pack
             tempTransfers[uint8(counter)].currencyAndAmount |= uint256(uint160(tempaddress));
 
-            nextOffset += 20; //skip feecurrency id always vETH, variint already 1 byte in so 19
+            nextOffset += VERUS_ID_LENGTH; //skip feecurrency id always vETH, variint already 1 byte in so 19
 
             (temporaryRegister1, nextOffset) = readVarint(tempSerialized, nextOffset); //fees read into 'temporaryRegister1' but not used
 
@@ -374,7 +381,7 @@ contract VerusSerializer {
                 tempTransfers[uint8(counter)].destinationAndFlags = uint256(tempaddress == VerusConstants.VEth ? VerusConstants.TOKEN_ETH_SEND : VerusConstants.TOKEN_ERC20_SEND) << VerusConstants.UINT160_BITS_SIZE;
 
                 assembly {
-                    tempaddress := mload(sub(add(add(tempSerialized, nextOffset), temporaryRegister1), 1)) //skip type +1 byte to read address
+                    tempaddress := mload(sub(add(add(tempSerialized, nextOffset), VERUS_ID_LENGTH), 1)) //skip type +1 byte to read address
                 }
                 tempTransfers[uint8(counter)].destinationAndFlags |= uint256(uint160(tempaddress));
             }
@@ -398,30 +405,27 @@ contract VerusSerializer {
                         refundAddress := mload(sub(add(add(tempSerialized, nextOffset), temporaryRegister1), 1)) //skip type +1 byte to read address
                     }
                     refundAddresses[uint8(counter)] = refundAddress;
-                nextOffset += temporaryRegister1;
+                    nextOffset += temporaryRegister1;
                 }
 
             }
             counter++;
             if(destinationType & VerusConstants.FLAG_DEST_GATEWAY == VerusConstants.FLAG_DEST_GATEWAY )
             {
-                 nextOffset += 56; //skip gatewayid, gatewaycode + fees
+                 nextOffset += TRANSFER_GATEWAYSKIP; //skip gatewayid, gatewaycode + fees
             }
 
-            nextOffset += 20; //skip destCurrencyID
+            nextOffset += VERUS_ID_LENGTH; //skip destCurrencyID
 
             if(destinationType & VerusConstants.RESERVE_TO_RESERVE == VerusConstants.RESERVE_TO_RESERVE)
             {
-                 nextOffset += 20; 
+                 nextOffset += VERUS_ID_LENGTH; 
             }
 
             if(flags & VerusConstants.CROSS_SYSTEM == VerusConstants.CROSS_SYSTEM )
             {
-                 nextOffset += 20; 
+                 nextOffset += VERUS_ID_LENGTH; 
             }
-
-            
-            nextOffset += 20; //offset ready for next address deserilization
 
         }
 
@@ -477,7 +481,7 @@ contract VerusSerializer {
         assembly {
             nextOffset := add(nextOffset, 1) //move to read the version type
             tempuint8 := mload(add(serialized, nextOffset)) // read the version type
-            nextOffset := add(nextOffset, CCC_ID_LEN) //move to read the currencyID
+            nextOffset := add(nextOffset, VERUS_ID_LENGTH) //move to read the currencyID
             tempaddress := mload(add(serialized, nextOffset)) // read the version currencyID
     
         }
@@ -494,7 +498,7 @@ contract VerusSerializer {
         transfer.flags = uint32(tempReg1);  //copy the flags
 
         assembly {
-            nextOffset := add(nextOffset, CCC_ID_LEN) //move to read the destination type, note already 1 byte in so only move 19
+            nextOffset := add(nextOffset, VERUS_ID_LENGTH) //move to read the destination type, note already 1 byte in so only move 19
             tempaddress := mload(add(serialized, nextOffset)) // read the feecurrencyid
           
         }
@@ -513,7 +517,8 @@ contract VerusSerializer {
             tempuint8 == VerusConstants.DEST_PKH) {
             
             assembly {
-            nextOffset := add(nextOffset, CCC_ID_LEN) //move to read the destinationaddress, note already at vector length. 
+            nextOffset := add(nextOffset, 1)  // skip vector length
+            nextOffset := add(nextOffset, VERUS_ID_LENGTH) //move to read the destinationaddress, note already at vector length. 
             tempaddress := mload(add(serialized, nextOffset))  // read desitination address note always 20 bytes.
             }
 
@@ -523,29 +528,30 @@ contract VerusSerializer {
 
         if (tempuint8 == (VerusConstants.DEST_ETH + VerusConstants.FLAG_DEST_GATEWAY + VerusConstants.FLAG_DEST_AUX)) {
 
+            tempBouncebacktype = this.slice(serialized, nextOffset, nextOffset + ETH_SEND_GATEWAY_AND_AUX_DEST);
             assembly {
-            nextOffset := add(nextOffset, 1) //note: leave fateswayid + gatewaycode + fees + auxdest serialized and copy as a chunk
+                nextOffset := add(nextOffset, ETH_SEND_GATEWAY_AND_AUX_DEST)  // skip vector length
             }
-           tempBouncebacktype = this.slice(serialized, nextOffset, nextOffset + ETH_SEND_GATEWAY_AND_AUX_DEST);
         }
 
         transfer.destination.destinationaddress = abi.encodePacked(tempaddress, tempBouncebacktype);
 
         assembly {
-            nextOffset := add(nextOffset, CCC_ID_LEN) //move to read the destinationcurrency address
+            nextOffset := add(nextOffset, VERUS_ID_LENGTH) //move to read the destinationcurrency address
             tempaddress := mload(add(serialized, nextOffset)) // read the destinationcurrency address
         }
 
         transfer.destcurrencyid = tempaddress;
 
-        if (transfer.flags & VerusConstants.RESERVE_TO_RESERVE == VerusConstants.RESERVE_TO_RESERVE)
+        if (transfer.flags & VerusConstants.RESERVE_TO_RESERVE == VerusConstants.RESERVE_TO_RESERVE) {
         
-         assembly {
-            nextOffset := add(nextOffset, CCC_ID_LEN) //move to read the secondreserveid
-            tempaddress := mload(add(serialized, nextOffset)) // read the secondreserveid
-        }
+            assembly {
+                nextOffset := add(nextOffset, VERUS_ID_LENGTH) //move to read the secondreserveid
+                tempaddress := mload(add(serialized, nextOffset)) // read the secondreserveid
+            }
 
-        transfer.secondreserveid = tempaddress;
+            transfer.secondreserveid = tempaddress;
+        }
         
         return transfer;
     }

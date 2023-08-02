@@ -1,8 +1,11 @@
 const VerusDelegator = artifacts.require("../contracts/Main/Delegator.sol");
+const VerusSerializer = artifacts.require("../contracts/VerusBridge/VerusSerializer.sol");
 const notaries = require('../migrations/setup.js')
 const verusDelegatorAbi = require('../build/contracts/Delegator.json');
+const verusSerializerAbi = require('../build/contracts/VerusSerializer.json');
 const testNotarization = require('./submitnotarization.js')
 const reservetransfer = require('./reservetransfer.ts')
+const { toBase58Check } = require("verus-typescript-primitives");
 
 contract("Verus Contracts deployed tests", async(accounts)  => {
     
@@ -42,7 +45,7 @@ contract("Verus Contracts deployed tests", async(accounts)  => {
         assert.equal(finalBalance.toString(), expectedBalance.toString(), "Contract balance is incorrect after sending ETH");
       });
 
-      it("Send 1 ETH in ReserveTransfer to Contract", async () => {
+      it("Send 1 ETH in Serialized ReserveTransfer to Contract", async () => {
         const DelegatorInst = await VerusDelegator.deployed();
         const contractAddress = DelegatorInst.address;
 
@@ -51,20 +54,7 @@ contract("Verus Contracts deployed tests", async(accounts)  => {
     
         // Send 1 ETH to the contract
         const sendAmount = web3.utils.toWei("1.003", "ether");
-
-        const CReserveTransfer = {
-            version: 1,
-            currencyvalue: { currency: "0x67460C2f56774eD27EeB8685f29f6CEC0B090B00", amount: 100000000 }, // currency sending from ethereum
-            flags: 1,
-            feecurrencyid: "0xA6ef9ea235635E328124Ff3429dB9F9E91b64e2d", // fee is vrsctest pre bridge launch, veth or others post.
-            fees: 2000000,
-            destination: { destinationtype: 2, destinationaddress: "0x9bB2772Aa50ec96ce1305D926B9CC29b7c402bAD" }, // destination address currecny is going to
-            destcurrencyid: "0xA6ef9ea235635E328124Ff3429dB9F9E91b64e2d",   // destination currency is vrsc on direct. bridge.veth on bounceback
-            destsystemid: "0x0000000000000000000000000000000000000000",     // destination system not used 
-            secondreserveid: "0x0000000000000000000000000000000000000000"    // used as return currency type on bounce back
-          }
-
-        const serializedTx = `0x${reservetransfer.toBuffer().toString('hex')}`;
+        const serializedTx = `0x${reservetransfer.prelaunchfundETH.toBuffer().toString('hex')}`;
         //console.log("reservetransfer transaction " + JSON.stringify(reservetransfer, null, 2))
         let reply
         try {
@@ -84,10 +74,7 @@ contract("Verus Contracts deployed tests", async(accounts)  => {
       it("Send 2 ETH in ReserveTransfer to Contract", async () => {
         const DelegatorInst = await VerusDelegator.deployed();
         const contractAddress = DelegatorInst.address;
-
         const contractInstance = new web3.eth.Contract(verusDelegatorAbi.abi, contractAddress);
-  
-    
         // Send 1 ETH to the contract
         const sendAmount = web3.utils.toWei("2.003", "ether");
 
@@ -118,7 +105,6 @@ contract("Verus Contracts deployed tests", async(accounts)  => {
       it("Submitaccpeted notarization by Notary", async () => {
         const DelegatorInst = await VerusDelegator.deployed();
         const contractAddress = DelegatorInst.address;
-
         const contractInstance = new web3.eth.Contract(verusDelegatorAbi.abi, contractAddress);
 
         let reply;
@@ -137,6 +123,25 @@ contract("Verus Contracts deployed tests", async(accounts)  => {
            hash: notarization.substring(2, 66),
         };
         assert.equal(`0x${NotarizationResult.txid}`, testNotarization.txid, "Txid in best forks does not equal notarization");
+      });
+
+      it("Test Serializer with bounceback", async () => {
+        const VerusSerializerInst = await VerusSerializer.deployed();
+        const contractAddress = VerusSerializerInst.address;
+        const contractInstance = new web3.eth.Contract(verusSerializerAbi.abi, contractAddress);
+
+        const prelaunchtx = `0x${reservetransfer.prelaunchfundETH.toBuffer().toString('hex')}`;
+        const bounceback = `0x${reservetransfer.bounceback.toBuffer().toString('hex')}`;
+
+        let reply;  
+        try {
+            reply = await contractInstance.methods.deserializeTransfer(bounceback).call();  
+            console.log(reply)
+        } catch(e) {
+            console.log(e.message)
+            assert.isTrue(false);
+        }
+        assert.equal(toBase58Check(Buffer.from(reply.secondreserveid.slice(2),'hex'), 102), reservetransfer.bounceback.second_reserve_id , "secondreserveid does not equal transaction");
       });
 
 });

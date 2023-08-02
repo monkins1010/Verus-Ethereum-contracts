@@ -17,6 +17,15 @@ import "../Storage/StorageMaster.sol";
 
 contract TokenManager is VerusStorage {
 
+    bool private locked;
+
+    modifier nonReentrant() {
+        require(!locked, "Reentrant call");
+        locked = true;
+        _;
+        locked = false;
+    }
+
     function getName(address cont) public view returns (string memory)
     {
         // Wrapper functions to enable try catch to work
@@ -132,7 +141,7 @@ contract TokenManager is VerusStorage {
         return (refundsData);
     }
 
-    function importTransactions(VerusObjects.PackedSend[] memory trans, uint176[] memory refundAddresses) private returns (bytes memory refundsData){
+    function importTransactions(VerusObjects.PackedSend[] memory trans, uint176[] memory refundAddresses) private nonReentrant returns (bytes memory refundsData){
       
         uint32 sendFlags;
         Token token;
