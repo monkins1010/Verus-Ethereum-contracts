@@ -205,7 +205,7 @@ contract VerusNotarizer is VerusStorage {
         for (int i = 0; i < int(bestForks.length) ; i++) 
         {
             notarizations =  decodeNotarization(uint(i));
-            // Notarization length alway +1 more as slot ready to be filled.
+            // Notarization length is always +1 more than the amount we have, as slot is ready to be filled.
             for (int j = int(notarizations.length) - 2; j >= 0; j--)
             {
                 if (hashprevnotarization == notarizations[uint(j)].hashOfNotarization ||
@@ -237,7 +237,6 @@ contract VerusNotarizer is VerusStorage {
             encodeNotarization(uint(forkIdx), notarizations[uint(0)]);
         }
 
-
         // If the position that is matched is the second stored one, then that becomes the new confirmed.
         if(forkPos == 1)
         {
@@ -257,7 +256,6 @@ contract VerusNotarizer is VerusStorage {
 
             if (!bridgeConverterActive && ((uint256(notarizations[1].proposerPacked) >> VerusConstants.UINT176_BITS_SIZE) & 0xff) == 1) {
                     bridgeConverterActive = true;
-                
             }
         }
         else
@@ -269,13 +267,11 @@ contract VerusNotarizer is VerusStorage {
 
     function checkunique(address[] memory ids, uint i) private pure
     {
-
         for (uint j = i + 1; j < ids.length; j++)
         {
             if (ids[i] == ids[j])
                 revert("duplicate signatures found");
         }
-
     }
 
     function getProofCosts(uint256 proofOption) external pure returns (uint256) {

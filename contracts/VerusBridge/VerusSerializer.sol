@@ -582,16 +582,12 @@ contract VerusSerializer {
         return sha256(abi.encodePacked(sha256(abi.encodePacked(_string))));
     }
 
-        function checkIAddress(VerusObjects.PackedCurrencyLaunch memory _tx) public pure{
+    function checkIAddress(VerusObjects.PackedCurrencyLaunch memory _tx) public pure{
 
         address calculated;
 
-         if(_tx.parent == VerusConstants.VerusSystemId) {
-             calculated = address(ripemd160(abi.encodePacked(sha256(abi.encodePacked(sha256d(_toLower(bytes(_tx.name))))))));
-         }
-         else {
-             calculated = address(ripemd160(abi.encodePacked(sha256(abi.encodePacked(sha256d(string(abi.encodePacked(_tx.parent,sha256d(_toLower(bytes(_tx.name)))))))))));
-         }
+        calculated = address(ripemd160(abi.encodePacked(sha256(abi.encodePacked(sha256d(string(abi.encodePacked(_tx.parent,sha256d(_toLower(bytes(_tx.name)))))))))));
+
         require(calculated == _tx.iaddress, "Iaddress does not match");
     }
 
