@@ -349,8 +349,8 @@ contract VerusSerializer {
             
             assembly {
                 nextOffset := add(nextOffset, 1) // move to one byte version read
-                let version := byte(32, mload(add(tempSerialized, nextOffset))) // Read one byte at the given offset
-                if iszero(eq(version, 0x01)) {
+                destinationType := mload(add(tempSerialized, nextOffset)) // Read one byte at the given offset
+                if iszero(eq(and(destinationType,0xff), 1)) {
                     revert(0, 0) // Revert the transaction if version is not equal to 1
                 }
                 nextOffset := add(nextOffset, VERUS_ID_LENGTH)

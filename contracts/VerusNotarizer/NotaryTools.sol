@@ -60,8 +60,10 @@ contract NotaryTools is VerusStorage {
         {
             return false;  
         }
+        
+        bytes storage setIndexAndValid = storageGlobal[bytes32(uint256(uint160(notaryAddressMapping[_revokePacket.notaryID].main)) | uint256(VerusConstants.GLOBAL_TYPE_NOTARY_ADDRESS << VerusConstants.UINT160_BITS_SIZE))];
+        setIndexAndValid[0] = bytes1(uint8(setIndexAndValid[0]) & ~VerusConstants.GLOBAL_TYPE_NOTARY_VALID);
 
-        storageGlobal[bytes32(uint256(uint160(notaryAddressMapping[_revokePacket.notaryID].main)) | uint256(VerusConstants.GLOBAL_TYPE_NOTARY_ADDRESS << VerusConstants.UINT160_BITS_SIZE))] = VerusConstants.GLOBAL_TYPE_NOTARY_INVALID;
         updateNotarizer(_revokePacket.notaryID, address(0), notaryAddressMapping[_revokePacket.notaryID].recovery, VerusConstants.NOTARY_REVOKED);
 
         return true;
@@ -94,7 +96,8 @@ contract NotaryTools is VerusStorage {
             }
         }
         
-        storageGlobal[bytes32(uint256(uint160(notaryAddressMapping[notarizerBeingRevoked].main)) | uint256(VerusConstants.GLOBAL_TYPE_NOTARY_ADDRESS << VerusConstants.UINT160_BITS_SIZE))] = VerusConstants.GLOBAL_TYPE_NOTARY_INVALID;
+        bytes storage setIndexAndValid = storageGlobal[bytes32(uint256(uint160(notaryAddressMapping[notarizerBeingRevoked].main)) | uint256(VerusConstants.GLOBAL_TYPE_NOTARY_ADDRESS << VerusConstants.UINT160_BITS_SIZE))];
+        setIndexAndValid[0] = bytes1(uint8(setIndexAndValid[0]) & ~VerusConstants.GLOBAL_TYPE_NOTARY_VALID);
 
         updateNotarizer(notarizerBeingRevoked, address(0), notaryAddressMapping[notarizerBeingRevoked].recovery, VerusConstants.NOTARY_REVOKED);
 
@@ -124,7 +127,8 @@ contract NotaryTools is VerusStorage {
         updateNotarizer(_newRecoveryInfo.notarizerID, _newRecoveryInfo.contracts[0], 
                                        _newRecoveryInfo.contracts[1], VerusConstants.NOTARY_VALID);
 
-        storageGlobal[bytes32(uint256(uint160(notaryAddressMapping[_newRecoveryInfo.notarizerID].main)) | uint256(VerusConstants.GLOBAL_TYPE_NOTARY_ADDRESS << VerusConstants.UINT160_BITS_SIZE))] = VerusConstants.GLOBAL_TYPE_NOTARY_VALID;
+        bytes storage setIndexAndValid = storageGlobal[bytes32(uint256(uint160(notaryAddressMapping[_newRecoveryInfo.notarizerID].main)) | uint256(VerusConstants.GLOBAL_TYPE_NOTARY_ADDRESS << VerusConstants.UINT160_BITS_SIZE))];
+        setIndexAndValid[0] = bytes1(VerusConstants.GLOBAL_TYPE_NOTARY_VALID | uint8(setIndexAndValid[0]));
                                
         return COMPLETE;
     }
@@ -157,7 +161,8 @@ contract NotaryTools is VerusStorage {
             }
         }
         
-        storageGlobal[bytes32(uint256(uint160(newMainAddr)) | uint256(VerusConstants.GLOBAL_TYPE_NOTARY_ADDRESS << VerusConstants.UINT160_BITS_SIZE))] = VerusConstants.GLOBAL_TYPE_NOTARY_VALID;
+        bytes storage setIndexAndValid = storageGlobal[bytes32(uint256(uint160(notaryAddressMapping[notarizerBeingRecovered].main)) | uint256(VerusConstants.GLOBAL_TYPE_NOTARY_ADDRESS << VerusConstants.UINT160_BITS_SIZE))];
+        setIndexAndValid[0] = bytes1(VerusConstants.GLOBAL_TYPE_NOTARY_VALID | uint8(setIndexAndValid[0]));
            
         updateNotarizer(notarizerBeingRecovered, newMainAddr, newRevokeAddr, VerusConstants.NOTARY_VALID);
 

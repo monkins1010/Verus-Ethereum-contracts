@@ -175,7 +175,7 @@ library VerusObjects {
     struct revokeInfo {
         uint8 _vs;
         bytes32 _rs;
-        bytes32  _ss;
+        bytes32 _ss;
         address notaryID;
         bytes32 salt;
     }

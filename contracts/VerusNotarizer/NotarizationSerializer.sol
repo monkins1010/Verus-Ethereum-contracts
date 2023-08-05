@@ -47,7 +47,7 @@ contract NotarizationSerializer is VerusStorage {
                                                                                     uint32 height) {
         
         uint32 nextOffset;
-        uint16 bridgeLaunched;
+        uint16 bridgeConverterLaunched;
         uint8 proposerType;
         uint32 notarizationFlags;
         uint176 proposerMain;
@@ -104,10 +104,10 @@ contract NotarizationSerializer is VerusStorage {
         {
             uint16 temp;
             (temp, nextOffset) = deserializeCoinbaseCurrencyState(notarization, nextOffset);
-            bridgeLaunched = temp | bridgeLaunched;
+            bridgeConverterLaunched = temp | bridgeConverterLaunched;
         }
 
-        proposerAndLaunched = getProposerandLaunched(proposerMain, bridgeLaunched);
+        proposerAndLaunched = getProposerandLaunched(proposerMain, uint8(bridgeConverterLaunched));
 
         nextOffset++; //move forwards to read le
         readerLen = readCompactSizeLE(notarization, nextOffset);    // get the length of proofroot array
@@ -116,17 +116,17 @@ contract NotarizationSerializer is VerusStorage {
 
     }
 
-    function getProposerandLaunched(uint176 proposerMain, uint16 bridgeLaunched) private view returns (bytes32 proposerAndLaunched) {
+    function getProposerandLaunched(uint176 proposerMain, uint8 bridgeConverterLaunched) private view returns (bytes32 proposerAndLaunched) {
 
-        bytes storage data = storageGlobal[bytes32(uint256(uint160(msg.sender)) | uint256(VerusConstants.GLOBAL_TYPE_NOTARY_ADDRESS << VerusConstants.UINT160_BITS_SIZE))];
+        bytes storage proposerIndex = storageGlobal[bytes32(uint256(uint160(msg.sender)) | uint256(VerusConstants.GLOBAL_TYPE_NOTARY_ADDRESS << VerusConstants.UINT160_BITS_SIZE))];
+        proposerAndLaunched =  bytes32(uint256(proposerMain));  
         
-        if(data.length > 0 && data[0] == 0x01) {
-            proposerAndLaunched =  bytes32(uint256(uint160(msg.sender)) | (uint256(0x0c14) << VerusConstants.UINT160_BITS_SIZE));  // Set as type ETH
-        } else {
-            proposerAndLaunched =  bytes32(uint256(proposerMain));  
+        if(proposerIndex.length > 0 && uint8(proposerIndex[0]) & VerusConstants.GLOBAL_TYPE_NOTARY_VALID == VerusConstants.GLOBAL_TYPE_NOTARY_VALID) {
+            proposerAndLaunched =  bytes32(uint256(proposerMain) | uint256(uint8(proposerIndex[0])) << VerusConstants.NOTARIZER_INDEX_OFFSET);  // Set as type ETH
+        } 
+        if (!bridgeConverterActive && bridgeConverterLaunched > 0) {
+                proposerAndLaunched |= bytes32(uint256(bridgeConverterLaunched) << VerusConstants.UINT176_BITS_SIZE);  // Shift 16bit value 22 bytes to pack in bytes32
         }
-
-        proposerAndLaunched |= bytes32(uint256(bridgeLaunched) << VerusConstants.UINT176_BITS_SIZE);  // Shift 16bit value 22 bytes to pack in bytes32
     }
 
     function deserializeCoinbaseCurrencyState(bytes memory notarization, uint32 nextOffset) private pure returns (uint16, uint32)

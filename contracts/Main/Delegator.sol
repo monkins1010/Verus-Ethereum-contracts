@@ -16,7 +16,10 @@ contract Delegator is VerusStorage {
             notaryAddressMapping[_notaries[i]] = VerusObjects.notarizer(_notariesEthAddress[i], _notariesColdStoreEthAddress[i], VerusConstants.NOTARY_VALID);
             notaries.push(_notaries[i]);
 
-            storageGlobal[bytes32(uint256(uint160(_notariesEthAddress[i])) | uint256(VerusConstants.GLOBAL_TYPE_NOTARY_ADDRESS) << VerusConstants.UINT160_BITS_SIZE)] = VerusConstants.GLOBAL_TYPE_NOTARY_VALID;
+            bytes32 notaryIndex = bytes32(uint256(uint160(_notariesEthAddress[i])) | uint256(VerusConstants.GLOBAL_TYPE_NOTARY_ADDRESS) << VerusConstants.UINT160_BITS_SIZE);
+
+            storageGlobal[notaryIndex] = new bytes(1) ;        
+            storageGlobal[notaryIndex][0] = bytes1(uint8(i + VerusConstants.GLOBAL_TYPE_NOTARY_VALID));
 
         }
         VerusNft t = new VerusNft(); 

@@ -113,7 +113,7 @@ contract VerusNotarizer is VerusStorage {
                 uint32 verusProofheight) = abi.decode(returnBytes, (bytes32, bytes32, bytes32, bytes32, bytes32, uint32));
 
         // If the bridge is active and VRSC remaining has not been sent
-        if (bridgeConverterActive && remainingLaunchFeeReserves != 0) { 
+        if (remainingLaunchFeeReserves != 0 && bridgeConverterActive) { 
             
             address submitImportsAddress = contracts[uint(VerusConstants.ContractType.SubmitImports)];
             if (remainingLaunchFeeReserves > (VerusConstants.verusTransactionFee * 2)) {
@@ -124,7 +124,7 @@ contract VerusNotarizer is VerusStorage {
         }
 
         voutAndHeight |= uint64(verusProofheight) << 32; // pack two 32bit numbers into one uint64
-        launchedAndProposer |= bytes32(uint256(voutAndHeight) << 192); // Also pack in the voutnum at the end of the uint256
+        launchedAndProposer |= bytes32(uint256(voutAndHeight) << VerusConstants.NOTARIZATION_VOUT_NUM_INDEX); // Also pack in the voutnum at the end of the uint256
 
         setNotarizationProofRoot(blakeNotarizationHash, hashprevnotarization, txid, prevnotarizationtxid, launchedAndProposer, stateRoot, blockHash);
 

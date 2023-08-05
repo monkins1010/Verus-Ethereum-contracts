@@ -198,33 +198,33 @@ contract SubmitImports is VerusStorage {
 
         uint176 proposer;
         bytes memory proposerBytes = bestForks[0];
+        uint8 notarizationSubmitterIndex;
 
         assembly {
                 proposer := mload(add(proposerBytes, 128))
+                notarizationSubmitterIndex := mload(add(proposerBytes, 106))
         } 
 
-        (uint256 notaryFees, uint256 proposerFees, uint256 exporterFees) = setFeePercentages(fees);
+        bytes storage importerSubmitter = storageGlobal[bytes32(uint256(uint160(msg.sender)) | uint256(VerusConstants.GLOBAL_TYPE_NOTARY_ADDRESS << VerusConstants.UINT160_BITS_SIZE))];
+        //TODO: Change VALID instead of in the same byte as a flag, to byte [1] to avoid lots of | and ~ etc.
+        uint16 notarysPresent = uint16(uint8(importerSubmitter[0]) & VerusConstants.GLOBAL_TYPE_NOTARY_VALID) | uint16(uint8(notarizationSubmitterIndex) & VerusConstants.GLOBAL_TYPE_NOTARY_VALID) << 8;
+        uint64 divisionNumber;
+        uint64 feeShare;
 
-        // Any remainder from Notaries shared fees is put into the LPFees pot.
+        divisionNumber = 3 + notarysPresent == 0 ? 0 : notarysPresent < 0x8080 ? 1 : 2;
 
-        setClaimedFees(bytes32(uint256(proposer)), proposerFees);
-        exporterFees += setNotaryFees(notaryFees);
-        setClaimedFees(bytes32(uint256(exporter)), exporterFees);
-
-    }
-
-    function setFeePercentages(uint256 _ethAmount)private pure returns (uint256,uint256,uint256)
-    {
-        uint256 notaryFees;
-        uint256 proposerFees;  
-        uint256 exporterFees; 
+        feeShare = fees / divisionNumber;
+        setClaimedFees(bytes32(uint256(proposer)), feeShare + setNotaryFees(feeShare));  // any reminder from notary division goes to proposer
+        setClaimedFees(bytes32(uint256(exporter)), feeShare + (fees % divisionNumber)); // any reminder from main division goes to exporter
         
-        notaryFees = (_ethAmount / 3 ); 
-        proposerFees = _ethAmount / 3 ;
+        if(uint8(importerSubmitter[0]) & VerusConstants.GLOBAL_TYPE_NOTARY_VALID == VerusConstants.GLOBAL_TYPE_NOTARY_VALID) {
+            setNotaryClaimedFees(uint8(importerSubmitter[0]) & ~VerusConstants.GLOBAL_TYPE_NOTARY_VALID, feeShare);
+        }
 
-        exporterFees = _ethAmount - (notaryFees + proposerFees);
+        if(uint8(importerSubmitter[0]) & VerusConstants.GLOBAL_TYPE_NOTARY_VALID == VerusConstants.GLOBAL_TYPE_NOTARY_VALID) {
+            setNotaryClaimedFees(uint8(notarizationSubmitterIndex) & ~VerusConstants.GLOBAL_TYPE_NOTARY_VALID, feeShare);
+        }
 
-        return(notaryFees, proposerFees, exporterFees);
     }
 
     function setNotaryFees(uint256 notaryFees) private returns (uint64 remainder){  //sent in as SATS
@@ -244,6 +244,14 @@ contract SubmitImports is VerusStorage {
     function setClaimedFees(bytes32 _address, uint256 fees) public  {
 
         claimableFees[_address] += fees;
+    }
+
+    function setNotaryClaimedFees(uint8 i, uint256 fees) private  {
+
+        uint176 notary;
+        notary = uint176(uint160(notaryAddressMapping[notaries[i]].main));
+        notary |= (uint176(0x0c14) << VerusConstants.UINT160_BITS_SIZE); //set at type eth
+        claimableFees[bytes32(uint256(notary))] += fees;
     }
 
     function claimfees() public {
