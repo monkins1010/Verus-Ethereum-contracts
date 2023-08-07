@@ -63,7 +63,7 @@ contract NotarizationSerializer is VerusStorage {
         assembly {
                     nextOffset := add(nextOffset, 1)  // move to read type
                     proposerType := mload(add(nextOffset, notarization))
-                    if gt(proposerType, 0) {
+                    if gt(and(proposerType, 0xff), 0) {
                         nextOffset := add(nextOffset, 21) // move to proposer, type and vector length
                         proposerMain := mload(add(nextOffset, notarization))
                     }
@@ -118,11 +118,13 @@ contract NotarizationSerializer is VerusStorage {
 
     function getProposerandLaunched(uint176 proposerMain, uint8 bridgeConverterLaunched) private view returns (bytes32 proposerAndLaunched) {
 
-        bytes storage proposerIndex = storageGlobal[bytes32(uint256(uint160(msg.sender)) | uint256(VerusConstants.GLOBAL_TYPE_NOTARY_ADDRESS << VerusConstants.UINT160_BITS_SIZE))];
-        proposerAndLaunched =  bytes32(uint256(proposerMain));  
-        
-        if(proposerIndex.length > 0 && uint8(proposerIndex[0]) & VerusConstants.GLOBAL_TYPE_NOTARY_VALID == VerusConstants.GLOBAL_TYPE_NOTARY_VALID) {
-            proposerAndLaunched =  bytes32(uint256(proposerMain) | uint256(uint8(proposerIndex[0])) << VerusConstants.NOTARIZER_INDEX_OFFSET);  // Set as type ETH
+       proposerAndLaunched = bytes32(uint256(proposerMain));
+       
+       // if the msg.sender is a valid notary then add their index in with the valid flag to a byte
+       if(notaryAddressMapping[msg.sender].state == VerusConstants.NOTARY_VALID) {
+            //pack in the notarizers ID and valid flag at the defined location, NOTE: the notarisers index can be [0].
+            proposerAndLaunched |= bytes32(uint256(uint8(uint160(notaryAddressMapping[msg.sender].recovery)) // .recovery == to the index | 0x80
+                                        | VerusConstants.GLOBAL_TYPE_NOTARY_VALID_HIGH_BIT) << VerusConstants.NOTARIZER_INDEX_AND_FLAGS_OFFSET);
         } 
         if (!bridgeConverterActive && bridgeConverterLaunched > 0) {
                 proposerAndLaunched |= bytes32(uint256(bridgeConverterLaunched) << VerusConstants.UINT176_BITS_SIZE);  // Shift 16bit value 22 bytes to pack in bytes32
@@ -131,7 +133,6 @@ contract NotarizationSerializer is VerusStorage {
 
     function deserializeCoinbaseCurrencyState(bytes memory notarization, uint32 nextOffset) private pure returns (uint16, uint32)
     {
-        
         address currencyid;
         uint16 bridgeLaunched;
         uint16 flags;

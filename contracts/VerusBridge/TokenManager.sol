@@ -77,7 +77,6 @@ contract TokenManager is VerusStorage {
         }
     }
     
-
     function recordToken(
         address _iaddress,
         address ethContractAddress,

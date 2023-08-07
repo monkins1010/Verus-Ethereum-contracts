@@ -250,7 +250,7 @@ contract VerusNotarizer is VerusStorage {
             encodeStandardNotarization(notarizations[1], abi.encode(hashedNotarization, 
                 txidHash, stateRoot, proposer));
 
-            proofs[bytes32(uint256(uint32(uint256(proposer >> 224))))] = abi.encodePacked(stateRoot, blockHash, uint32(uint256(notarizations[1].proposerPacked) >> 224));
+            proofs[bytes32(uint256(uint32(uint256(proposer >> OFFSET_FOR_HEIGHT))))] = abi.encodePacked(stateRoot, blockHash, uint32(uint256(notarizations[1].proposerPacked) >> OFFSET_FOR_HEIGHT));
 
             // Set bridge launched if confirmed notarization contains Bridge Launched bit packed on the end of proposer
 

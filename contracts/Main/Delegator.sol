@@ -15,12 +15,8 @@ contract Delegator is VerusStorage {
         for(uint i =0; i < _notaries.length; i++) {
             notaryAddressMapping[_notaries[i]] = VerusObjects.notarizer(_notariesEthAddress[i], _notariesColdStoreEthAddress[i], VerusConstants.NOTARY_VALID);
             notaries.push(_notaries[i]);
-
-            bytes32 notaryIndex = bytes32(uint256(uint160(_notariesEthAddress[i])) | uint256(VerusConstants.GLOBAL_TYPE_NOTARY_ADDRESS) << VerusConstants.UINT160_BITS_SIZE);
-
-            storageGlobal[notaryIndex] = new bytes(1) ;        
-            storageGlobal[notaryIndex][0] = bytes1(uint8(i + VerusConstants.GLOBAL_TYPE_NOTARY_VALID));
-
+            //TODO: This is a mapping from ETH address to notary that enables a quick lookup (not present in testnet)
+            notaryAddressMapping[_notariesEthAddress[i]] = VerusObjects.notarizer(_notaries[i], address(uint160(i)), VerusConstants.NOTARY_VALID);
         }
         VerusNft t = new VerusNft(); 
 
@@ -181,8 +177,11 @@ contract Delegator is VerusStorage {
             return;
         } 
         contracts[contractNo] = newcontract;
-         //NOTE: Upgraded contracts may need a initialize() function so they can setup things in a run once.
-        newcontract.delegatecall(abi.encodeWithSignature("initialize()"));
+        
+        //NOTE: Upgraded contracts may need a initialize() function so they can setup things in a run once.
+        //TODO: (not present in testnet)
+        (bool success,) = newcontract.delegatecall(abi.encodeWithSignature("initialize()"));
+        success;
     }
 
     function revokeWithMainAddress(bytes calldata data) external returns (bool) { 

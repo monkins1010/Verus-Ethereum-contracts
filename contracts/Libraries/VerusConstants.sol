@@ -88,15 +88,15 @@ library VerusConstants {
 
     uint8 constant UINT160_SIZE = 20;
     uint8 constant UINT64_SIZE = 8;
-    uint8 constant UINT176_BITS_SIZE = 176;
-    uint8 constant NOTARIZER_INDEX_OFFSET = 184;
     uint8 constant UINT160_BITS_SIZE = 160;
+    uint8 constant UINT176_BITS_SIZE = 176;
+    uint8 constant NOTARIZER_INDEX_AND_FLAGS_OFFSET = 184;
     uint8 constant NOTARIZATION_VOUT_NUM_INDEX = 192;
+    uint8 constant NOTARIZATION_VALID_BIT_SHIFT = 7;
 
     //Global Generic Variable types
 
-    uint8 constant GLOBAL_TYPE_NOTARY_ADDRESS = 1;
-    uint8 constant GLOBAL_TYPE_NOTARY_VALID = 0x80;
+    uint8 constant GLOBAL_TYPE_NOTARY_VALID_HIGH_BIT = 0x80;
     uint8 constant GLOBAL_TYPE_NOTARY_MASK = 0x7f;
 }
 

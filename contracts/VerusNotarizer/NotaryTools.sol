@@ -61,10 +61,9 @@ contract NotaryTools is VerusStorage {
             return false;  
         }
         
-        bytes storage setIndexAndValid = storageGlobal[bytes32(uint256(uint160(notaryAddressMapping[_revokePacket.notaryID].main)) | uint256(VerusConstants.GLOBAL_TYPE_NOTARY_ADDRESS << VerusConstants.UINT160_BITS_SIZE))];
-        setIndexAndValid[0] = bytes1(uint8(setIndexAndValid[0]) & ~VerusConstants.GLOBAL_TYPE_NOTARY_VALID);
-
-        updateNotarizer(_revokePacket.notaryID, address(0), notaryAddressMapping[_revokePacket.notaryID].recovery, VerusConstants.NOTARY_REVOKED);
+        // Set Notaries ETH mapping to revoked
+        notaryAddressMapping[notaryAddressMapping[_revokePacket.notaryID].main].state = VerusConstants.NOTARY_REVOKED;
+        notaryAddressMapping[_revokePacket.notaryID].state = VerusConstants.NOTARY_REVOKED;
 
         return true;
     }
@@ -95,11 +94,9 @@ contract NotaryTools is VerusStorage {
                     revert("Notary not Valid");
             }
         }
-        
-        bytes storage setIndexAndValid = storageGlobal[bytes32(uint256(uint160(notaryAddressMapping[notarizerBeingRevoked].main)) | uint256(VerusConstants.GLOBAL_TYPE_NOTARY_ADDRESS << VerusConstants.UINT160_BITS_SIZE))];
-        setIndexAndValid[0] = bytes1(uint8(setIndexAndValid[0]) & ~VerusConstants.GLOBAL_TYPE_NOTARY_VALID);
 
-        updateNotarizer(notarizerBeingRevoked, address(0), notaryAddressMapping[notarizerBeingRevoked].recovery, VerusConstants.NOTARY_REVOKED);
+        notaryAddressMapping[notaryAddressMapping[notarizerBeingRevoked].main].state = VerusConstants.NOTARY_REVOKED;
+        notaryAddressMapping[notarizerBeingRevoked].state = VerusConstants.NOTARY_REVOKED;
 
         return true;
     }
@@ -124,12 +121,18 @@ contract NotaryTools is VerusStorage {
         {
             return ERROR;  
         }
+
+        // notaries index stored in recover address location as not used for Ethereum                               
+        address notaryIndex = notaryAddressMapping[notaryAddressMapping[_newRecoveryInfo.notarizerID].main].recovery; 
+
+        // delete old ETH address mapping
+        delete notaryAddressMapping[notaryAddressMapping[_newRecoveryInfo.notarizerID].main];
+
+        // create new ETH address mapping
+        notaryAddressMapping[_newRecoveryInfo.contracts[0]] = VerusObjects.notarizer(_newRecoveryInfo.notarizerID, notaryIndex, VerusConstants.NOTARY_VALID);
+                              
         updateNotarizer(_newRecoveryInfo.notarizerID, _newRecoveryInfo.contracts[0], 
                                        _newRecoveryInfo.contracts[1], VerusConstants.NOTARY_VALID);
-
-        bytes storage setIndexAndValid = storageGlobal[bytes32(uint256(uint160(notaryAddressMapping[_newRecoveryInfo.notarizerID].main)) | uint256(VerusConstants.GLOBAL_TYPE_NOTARY_ADDRESS << VerusConstants.UINT160_BITS_SIZE))];
-        setIndexAndValid[0] = bytes1(VerusConstants.GLOBAL_TYPE_NOTARY_VALID | uint8(setIndexAndValid[0]));
-                               
         return COMPLETE;
     }
 
@@ -160,11 +163,15 @@ contract NotaryTools is VerusStorage {
                     revert("Notary not Valid");
             }
         }
-        
-        bytes storage setIndexAndValid = storageGlobal[bytes32(uint256(uint160(notaryAddressMapping[notarizerBeingRecovered].main)) | uint256(VerusConstants.GLOBAL_TYPE_NOTARY_ADDRESS << VerusConstants.UINT160_BITS_SIZE))];
-        setIndexAndValid[0] = bytes1(VerusConstants.GLOBAL_TYPE_NOTARY_VALID | uint8(setIndexAndValid[0]));
-           
+
         updateNotarizer(notarizerBeingRecovered, newMainAddr, newRevokeAddr, VerusConstants.NOTARY_VALID);
+        address notaryIndex = notaryAddressMapping[notaryAddressMapping[notarizerBeingRecovered].main].recovery;
+
+        // delete old ETH address mapping
+        delete notaryAddressMapping[notaryAddressMapping[notarizerBeingRecovered].main];
+
+        notaryAddressMapping[newMainAddr] = VerusObjects.notarizer(notarizerBeingRecovered, notaryIndex, VerusConstants.NOTARY_VALID);
+          
 
         return COMPLETE;
     }

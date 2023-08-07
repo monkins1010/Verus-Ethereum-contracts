@@ -14,6 +14,8 @@ contract SubmitImports is VerusStorage {
 
     uint32 constant ELVCHOBJ_TXID_OFFSET = 32;
     uint32 constant ELVCHOBJ_NVINS_OFFSET = 45;
+    uint32 constant FORKS_NOTARY_INDEX = 106;  // this is txid + stateroot + blockhash + NOTARIZER_INDEX_AND_FLAGS_OFFSET 
+    uint32 constant FORKS_NOTARY_PROPOSER_POSITION = 128;
     function sendToVRSC(uint64 value, address sendTo, uint8 destinationType) public 
     {
         VerusObjects.CReserveTransfer memory LPtransfer;
@@ -196,33 +198,34 @@ contract SubmitImports is VerusStorage {
     function setClaimableFees(uint64 fees, uint176 exporter) external
     {
 
-        uint176 proposer;
         bytes memory proposerBytes = bestForks[0];
-        uint8 notarizationSubmitterIndex;
+        uint8 notaryImporterState = notaryAddressMapping[msg.sender].state;
+        uint176 proposer;
+        uint8 notarizationSubmitterData;
 
         assembly {
-                proposer := mload(add(proposerBytes, 128))
-                notarizationSubmitterIndex := mload(add(proposerBytes, 106))
+                proposer := mload(add(proposerBytes, FORKS_NOTARY_PROPOSER_POSITION))
+                notarizationSubmitterData := mload(add(proposerBytes, FORKS_NOTARY_INDEX))
         } 
 
-        bytes storage importerSubmitter = storageGlobal[bytes32(uint256(uint160(msg.sender)) | uint256(VerusConstants.GLOBAL_TYPE_NOTARY_ADDRESS << VerusConstants.UINT160_BITS_SIZE))];
-        //TODO: Change VALID instead of in the same byte as a flag, to byte [1] to avoid lots of | and ~ etc.
-        uint16 notarysPresent = uint16(uint8(importerSubmitter[0]) & VerusConstants.GLOBAL_TYPE_NOTARY_VALID) | uint16(uint8(notarizationSubmitterIndex) & VerusConstants.GLOBAL_TYPE_NOTARY_VALID) << 8;
         uint64 divisionNumber;
         uint64 feeShare;
+        uint8 notarizationSubmittedValid = notarizationSubmitterData >> VerusConstants.NOTARIZATION_VALID_BIT_SHIFT; //shift down to get 1 or 0
 
-        divisionNumber = 3 + notarysPresent == 0 ? 0 : notarysPresent < 0x8080 ? 1 : 2;
+        divisionNumber = 3 + (notaryImporterState & VerusConstants.NOTARY_VALID) + notarizationSubmittedValid; //the importsubmitter is the msg.sender
 
         feeShare = fees / divisionNumber;
         setClaimedFees(bytes32(uint256(proposer)), feeShare + setNotaryFees(feeShare));  // any reminder from notary division goes to proposer
         setClaimedFees(bytes32(uint256(exporter)), feeShare + (fees % divisionNumber)); // any reminder from main division goes to exporter
         
-        if(uint8(importerSubmitter[0]) & VerusConstants.GLOBAL_TYPE_NOTARY_VALID == VerusConstants.GLOBAL_TYPE_NOTARY_VALID) {
-            setNotaryClaimedFees(uint8(importerSubmitter[0]) & ~VerusConstants.GLOBAL_TYPE_NOTARY_VALID, feeShare);
+        if(notaryImporterState == VerusConstants.NOTARY_VALID) { //check the import submitter is valid
+            setNotaryClaimedFees(uint176(uint160(msg.sender)), feeShare);
         }
 
-        if(uint8(importerSubmitter[0]) & VerusConstants.GLOBAL_TYPE_NOTARY_VALID == VerusConstants.GLOBAL_TYPE_NOTARY_VALID) {
-            setNotaryClaimedFees(uint8(notarizationSubmitterIndex) & ~VerusConstants.GLOBAL_TYPE_NOTARY_VALID, feeShare);
+        if(notarizationSubmittedValid == VerusConstants.NOTARY_VALID) { //check the import submitter is valid
+            // remove high bit and leave index, then use index to find notary
+            address notaryEthAddress = notaryAddressMapping[notaries[notarizationSubmitterData & ~VerusConstants.GLOBAL_TYPE_NOTARY_VALID_HIGH_BIT]].main;
+            setNotaryClaimedFees(uint176(uint160(notaryEthAddress)), feeShare); 
         }
 
     }
@@ -246,10 +249,8 @@ contract SubmitImports is VerusStorage {
         claimableFees[_address] += fees;
     }
 
-    function setNotaryClaimedFees(uint8 i, uint256 fees) private  {
+    function setNotaryClaimedFees(uint176 notary, uint256 fees) private  {
 
-        uint176 notary;
-        notary = uint176(uint160(notaryAddressMapping[notaries[i]].main));
         notary |= (uint176(0x0c14) << VerusConstants.UINT160_BITS_SIZE); //set at type eth
         claimableFees[bytes32(uint256(notary))] += fees;
     }
@@ -257,19 +258,19 @@ contract SubmitImports is VerusStorage {
     function claimfees() public {
 
         uint256 claimAmount;
-        uint256 claiment;
+        uint256 claimant;
 
-        claiment = uint256(uint160(msg.sender));
+        claimant = uint256(uint160(msg.sender));
 
-        // Check claiment is type eth with length 20 and has fees to be got.
-        claiment |= (uint256(0x0c14) << VerusConstants.UINT160_BITS_SIZE);
-        claimAmount = claimableFees[bytes32(claiment)];
+        // Check claimant is type eth with length 20 and has fees to be got.
+        claimant |= (uint256(0x0c14) << VerusConstants.UINT160_BITS_SIZE);
+        claimAmount = claimableFees[bytes32(claimant)];
 
         if(claimAmount > 0)
         {
             //stored as SATS convert to WEI
+            claimableFees[bytes32(claimant)] = 0;
             payable(msg.sender).transfer(claimAmount * VerusConstants.SATS_TO_WEI_STD);
-            claimableFees[bytes32(claiment)] = 0;
         }
         else
         {
@@ -302,16 +303,16 @@ contract SubmitImports is VerusStorage {
         address rAddress = address(ripemd160(abi.encodePacked(sha256(abi.encodePacked(leadingByte, publicKeyX)))));
         address ethAddress = address(uint160(uint256(keccak256(abi.encodePacked(publicKeyX, publicKeyY)))));
 
-        uint256 claiment; 
+        uint256 claimant; 
 
-        claiment = uint256(uint160(rAddress));
+        claimant = uint256(uint160(rAddress));
 
-        claiment |= (uint256(0x0214) << VerusConstants.UINT160_BITS_SIZE);  // is Claimient type R address and 20 bytes.
+        claimant |= (uint256(0x0214) << VerusConstants.UINT160_BITS_SIZE);  // is Claimient type R address and 20 bytes.
 
-        if ((claimableFees[bytes32(claiment)] > VerusConstants.verusvETHTransactionFee) && msg.sender == ethAddress)
+        if ((claimableFees[bytes32(claimant)] > VerusConstants.verusvETHTransactionFee) && msg.sender == ethAddress)
         {
-            claimableFees[bytes32(claiment)] = 0;
-            sendToVRSC(uint64(claimableFees[bytes32(claiment)]), rAddress, VerusConstants.DEST_PKH); //sent in as SATS
+            claimableFees[bytes32(claimant)] = 0;
+            sendToVRSC(uint64(claimableFees[bytes32(claimant)]), rAddress, VerusConstants.DEST_PKH); //sent in as SATS
         }
         else
         {
