@@ -117,9 +117,9 @@ contract VerusNotarizer is VerusStorage {
             
             address submitImportsAddress = contracts[uint(VerusConstants.ContractType.SubmitImports)];
             if (remainingLaunchFeeReserves > (VerusConstants.verusTransactionFee * 2)) {
-                remainingLaunchFeeReserves = 0;
                 (bool success2,) = submitImportsAddress.delegatecall(abi.encodeWithSignature("sendToVRSC(uint64,address,uint8)", 0, address(0), VerusConstants.DEST_PKH));
                 require(success2);
+                remainingLaunchFeeReserves = 0;
             }
         }
 
