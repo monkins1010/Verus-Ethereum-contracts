@@ -341,14 +341,13 @@ contract VerusSerializer {
         address tempaddress;
         uint64 temporaryRegister1;
         uint8 destinationType;
-        uint256 nextOffset;
+        uint256 nextOffset = 1;
         uint176 refundAddress;
         uint64 flags;
 
         while (nextOffset <= tempSerialized.length) {
             
             assembly {
-                nextOffset := add(nextOffset, 1) // move to one byte version read
                 destinationType := mload(add(tempSerialized, nextOffset)) // Read one byte at the given offset
                 if iszero(eq(and(destinationType,0xff), 1)) {
                     revert(0, 0) // Revert the transaction if version is not equal to 1
