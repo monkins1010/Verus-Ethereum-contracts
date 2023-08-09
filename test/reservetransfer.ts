@@ -58,5 +58,29 @@ const prelaunchfundETH = new ReserveTransfer({
       second_reserve_id: "iJhCezBExJHvtyH3fGhNnt2NhU4Ztkf2yq"
     })
 
+    const verusReserveTransfer = new ReserveTransfer({  // The bridge currency has to be launched for this TX ETH -> VRSCTEST back to ETH address
+      values: new CurrencyValueMap({
+        value_map: new Map([
+          ["iCtawpxUiCc2sEupt7Z4u8SDAncGZpgSKm", new BN(100000000, 10)]  //swap 1 ETH
+        ]),
+        multivalue: false
+      }),
+      version: new BN(1, 10),
+      flags: new BN(VALID, 10),   //
+      fee_currency_id: "iCtawpxUiCc2sEupt7Z4u8SDAncGZpgSKm",  // fee currency veth
+      fee_amount: new BN(300000, 10),   // 0.003 ETH FEE SATS (8 decimal places)
+      transfer_destination: new TransferDestination({
+        type: new BN(DEST_ETH + FLAG_DEST_AUX, 10),
+        destination_bytes: Buffer.from("9bB2772Aa50ec96ce1305D926B9CC29b7c402bAD", 'hex'),
+        aux_dests:[new TransferDestination({
+          type: new BN(DEST_PKH, 10),
+          destination_bytes: Buffer.from("9bB2772Aa50ec96ce1305D926B9CC29b7c402bAD", 'hex')})]
+      }),
+      dest_currency_id: "iCtawpxUiCc2sEupt7Z4u8SDAncGZpgSKm"
+    })
+
+const twoReserveTransfers = [verusReserveTransfer, verusReserveTransfer];
+
 module.exports.prelaunchfundETH = prelaunchfundETH;
 module.exports.bounceback = bounceback;
+module.exports.twoReserveTransfers = twoReserveTransfers;

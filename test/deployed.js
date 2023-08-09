@@ -125,7 +125,7 @@ contract("Verus Contracts deployed tests", async(accounts)  => {
         assert.equal(`0x${NotarizationResult.txid}`, testNotarization.txid, "Txid in best forks does not equal notarization");
       });
 
-      it("Test Serializer with bounceback", async () => {
+      it("Test Serializer with bounceback sendTransfer", async () => {
         const VerusSerializerInst = await VerusSerializer.deployed();
         const contractAddress = VerusSerializerInst.address;
         const contractInstance = new web3.eth.Contract(verusSerializerAbi.abi, contractAddress);
@@ -136,12 +136,32 @@ contract("Verus Contracts deployed tests", async(accounts)  => {
         let reply;  
         try {
             reply = await contractInstance.methods.deserializeTransfer(bounceback).call();  
-            console.log(reply)
+         //   console.log(reply)
         } catch(e) {
             console.log(e.message)
             assert.isTrue(false);
         }
         assert.equal(toBase58Check(Buffer.from(reply.secondreserveid.slice(2),'hex'), 102), reservetransfer.bounceback.second_reserve_id , "secondreserveid does not equal transaction");
+      });
+
+      it("Deserialize two Reserve transfers", async () => {
+        const VerusSerializerInst = await VerusSerializer.deployed();
+        const contractAddress = VerusSerializerInst.address;
+        const contractInstance = new web3.eth.Contract(verusSerializerAbi.abi, contractAddress);
+
+        // convert the two reserveTransfers to a single hex string
+        const twoTransfersSerialized = Buffer.concat([reservetransfer.twoReserveTransfers[0].toBuffer(), reservetransfer.twoReserveTransfers[1].toBuffer()]).toString('hex');
+
+        let reply;  
+        try {
+            reply = await contractInstance.methods.deserializeTransfers(`0x${twoTransfersSerialized}`, 2).call();  
+           // console.log(reply)
+        } catch(e) {
+            console.log(e.message)
+            assert.isTrue(false);
+        }
+        const txOne = new web3.utils.BN(reply.tempTransfers[0].currencyAndAmount).toString('hex').slice(7); 
+        assert.equal(toBase58Check(Buffer.from(txOne,'hex'), 102), reservetransfer.twoReserveTransfers[0].reserve_values.value_map.keys().next().value , "transfer currency does not equal transaction");
       });
 
 });
