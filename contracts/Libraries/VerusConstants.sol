@@ -47,10 +47,13 @@ library VerusConstants {
     uint32 constant MAPPING_VERUS_OWNED = 2;
     uint32 constant MAPPING_PARTOF_BRIDGEVETH = 4;
     uint32 constant MAPPING_ISBRIDGE_CURRENCY = 8;
-    uint32 constant TOKEN_ERC20_SEND = 16;   //TODO: Make these tokens down to a new set
+    uint32 constant MAPPING_ETH_NFT_DEFINITION = 128;
+    //uint32 constant MAPPING_IS_GATEWAY = 256;  // TODO: Enable when supported
+    //uint32 constant MAPPING_IS_PBAAS_CHAIN = 512;  //TODO: Enable when supported
+    uint32 constant TOKEN_ERC20_SEND = 16;   
     uint32 constant TOKEN_LAUNCH = 32;
     uint32 constant TOKEN_ETH_SEND = 64;
-    uint32 constant TOKEN_ETH_NFT_DEFINITION = 128;  //TODO: this should be part of mapping
+    //uint32 constant PROOF_ETHNOTARIZATION = 3; //TODO: Enable when supported
 
     uint32 constant AUX_DEST_PREFIX = 0x01160214;
 

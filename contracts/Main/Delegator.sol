@@ -21,7 +21,7 @@ contract Delegator is VerusStorage {
         VerusNft t = new VerusNft(); 
 
         verusToERC20mapping[VerusConstants.VerusNFTID] = 
-            VerusObjects.mappedToken(address(t), uint8(VerusConstants.MAPPING_VERUS_OWNED + VerusConstants.TOKEN_ETH_NFT_DEFINITION),
+            VerusObjects.mappedToken(address(t), uint8(VerusConstants.MAPPING_VERUS_OWNED + VerusConstants.MAPPING_ETH_NFT_DEFINITION),
                 0, "VerusNFT", uint256(0));  
 
         tokenList.push(VerusConstants.VerusNFTID);

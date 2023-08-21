@@ -40,7 +40,7 @@ contract ExportManager is VerusStorage  {
             destAddressID := mload(add(serializedDest, UINT160_SIZE))
         }
 
-        if (verusToERC20mapping[transfer.currencyvalue.currency].flags & VerusConstants.TOKEN_ETH_NFT_DEFINITION == VerusConstants.TOKEN_ETH_NFT_DEFINITION) 
+        if (verusToERC20mapping[transfer.currencyvalue.currency].flags & VerusConstants.MAPPING_ETH_NFT_DEFINITION == VerusConstants.MAPPING_ETH_NFT_DEFINITION) 
         {
             require (transfer.flags == VerusConstants.VALID, "Invalid flags for NFT transfer");
             require (transfer.currencyvalue.amount == 1, "Currency value must be 1 Satoshi");

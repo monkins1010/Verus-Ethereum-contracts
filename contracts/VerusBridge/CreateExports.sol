@@ -58,10 +58,10 @@ contract CreateExports is VerusStorage {
 
         if (transfer.currencyvalue.currency != VerusConstants.VEth) {
             mappedContract = verusToERC20mapping[transfer.currencyvalue.currency];
-            ethNftFlag = mappedContract.flags & VerusConstants.TOKEN_ETH_NFT_DEFINITION;
+            ethNftFlag = mappedContract.flags & VerusConstants.MAPPING_ETH_NFT_DEFINITION;
         }
 
-        if (transfer.currencyvalue.currency != VerusConstants.VEth && ethNftFlag != VerusConstants.TOKEN_ETH_NFT_DEFINITION) {
+        if (transfer.currencyvalue.currency != VerusConstants.VEth && ethNftFlag != VerusConstants.MAPPING_ETH_NFT_DEFINITION) {
 
             Token token = Token(mappedContract.erc20ContractAddress); 
             //Check user has allowed the verusBridgeStorage contract to spend on their behalf
@@ -78,7 +78,7 @@ contract CreateExports is VerusStorage {
             //total amount kept as uint256 until export to verus
             exportERC20Tokens(tokenAmount, token, mappedContract.flags & VerusConstants.MAPPING_VERUS_OWNED == VerusConstants.MAPPING_VERUS_OWNED);
             
-        } else if (ethNftFlag == VerusConstants.TOKEN_ETH_NFT_DEFINITION){
+        } else if (ethNftFlag == VerusConstants.MAPPING_ETH_NFT_DEFINITION){
             //handle a NFT Import
                 
             address nftContract;

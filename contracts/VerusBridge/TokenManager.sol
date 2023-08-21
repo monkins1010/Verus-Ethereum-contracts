@@ -40,7 +40,7 @@ contract TokenManager is VerusStorage {
 
             string memory outputName;
 
-            if ((uint8(_tx[j].flags) & VerusConstants.MAPPING_ETHEREUM_OWNED) == VerusConstants.MAPPING_ETHEREUM_OWNED)
+            if ((_tx[j].flags & VerusConstants.MAPPING_ETHEREUM_OWNED) == VerusConstants.MAPPING_ETHEREUM_OWNED)
             {
                 outputName = getName(_tx[j].ERCContract);
 
@@ -95,7 +95,7 @@ contract TokenManager is VerusStorage {
                 Token t = new Token(name, ticker); 
                 ERCContract = address(t); 
             }
-            else if (flags & VerusConstants.TOKEN_ETH_NFT_DEFINITION == VerusConstants.TOKEN_ETH_NFT_DEFINITION)
+            else if (flags & VerusConstants.MAPPING_ETH_NFT_DEFINITION == VerusConstants.MAPPING_ETH_NFT_DEFINITION)
             {
                 ERCContract = verusToERC20mapping[VerusConstants.VerusNFTID].erc20ContractAddress;
                 tokenID = uint256(uint160(_iaddress)); //tokenID is the i address
@@ -168,7 +168,7 @@ contract TokenManager is VerusStorage {
                     verusToERC20mapping[address(uint160(trans[i].currencyAndAmount))].tokenID -= uint64(trans[i].currencyAndAmount >> VerusConstants.UINT160_BITS_SIZE);
                 }
             } 
-            else if (tempToken.flags & VerusConstants.TOKEN_ETH_NFT_DEFINITION == VerusConstants.TOKEN_ETH_NFT_DEFINITION &&
+            else if (tempToken.flags & VerusConstants.MAPPING_ETH_NFT_DEFINITION == VerusConstants.MAPPING_ETH_NFT_DEFINITION &&
                    tempToken.flags & VerusConstants.MAPPING_ETHEREUM_OWNED == VerusConstants.MAPPING_ETHEREUM_OWNED )
             {
                 if (destinationAddress != address(0))
@@ -176,7 +176,7 @@ contract TokenManager is VerusStorage {
                     ERC721(tempToken.erc20ContractAddress).transferFrom(address(this), destinationAddress, tempToken.tokenID);
                 }
             }
-            else if (tempToken.flags & VerusConstants.TOKEN_ETH_NFT_DEFINITION == VerusConstants.TOKEN_ETH_NFT_DEFINITION &&
+            else if (tempToken.flags & VerusConstants.MAPPING_ETH_NFT_DEFINITION == VerusConstants.MAPPING_ETH_NFT_DEFINITION &&
                    tempToken.flags & VerusConstants.MAPPING_VERUS_OWNED == VerusConstants.MAPPING_VERUS_OWNED )
             {
 

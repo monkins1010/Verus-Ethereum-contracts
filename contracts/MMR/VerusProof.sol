@@ -416,7 +416,7 @@ contract VerusProof is VerusStorage  {
                 temp[i].name = recordedToken.name;
                 temp[i].ticker = token.symbol();
             }
-            else if(recordedToken.flags & VerusConstants.TOKEN_ETH_NFT_DEFINITION == VerusConstants.TOKEN_ETH_NFT_DEFINITION)
+            else if(recordedToken.flags & VerusConstants.MAPPING_ETH_NFT_DEFINITION == VerusConstants.MAPPING_ETH_NFT_DEFINITION)
             {
                 temp[i].erc20ContractAddress = recordedToken.erc20ContractAddress;
                 temp[i].name = recordedToken.name;

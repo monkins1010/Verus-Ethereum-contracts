@@ -77,7 +77,7 @@ library VerusObjects {
 
     struct PackedSend {
         uint256 currencyAndAmount;    //tokenID
-        uint256 destinationAndFlags;  //iaddress + flags or name and flags
+        uint256 destinationAndFlags;  //ETH address concatenated with flags
     }
 
     struct PackedCurrencyLaunch {

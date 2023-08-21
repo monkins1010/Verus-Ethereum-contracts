@@ -299,7 +299,7 @@ contract VerusSerializer {
                 nextOffset := add(nextOffset, CCC_TOKENID_OFFSET)
                 nftID := mload(add(input, nextOffset))
             }
-            returnCurrency.flags |= uint8(VerusConstants.TOKEN_ETH_NFT_DEFINITION);
+            returnCurrency.flags |= uint8(VerusConstants.MAPPING_ETH_NFT_DEFINITION);
             returnCurrency.flags |= uint8(VerusConstants.MAPPING_ETHEREUM_OWNED);
             returnCurrency.tokenID = nftID;
         }
@@ -314,7 +314,7 @@ contract VerusSerializer {
         }
         else if (options & VerusConstants.OPTION_NFT_TOKEN == VerusConstants.OPTION_NFT_TOKEN) //minted NFT from verus
         {
-            returnCurrency.flags |= uint8(VerusConstants.TOKEN_ETH_NFT_DEFINITION);
+            returnCurrency.flags |= uint8(VerusConstants.MAPPING_ETH_NFT_DEFINITION);
             returnCurrency.flags |= uint8(VerusConstants.MAPPING_VERUS_OWNED);
             nativeCurrencyID = VerusConstants.VerusNFTID;
         }
