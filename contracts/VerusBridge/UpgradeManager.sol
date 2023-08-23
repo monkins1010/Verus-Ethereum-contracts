@@ -22,26 +22,9 @@ contract UpgradeManager is VerusStorage {
     event contractUpdated(bool);
     address internal contractOwner;
 
-    function initialize() private {
-        // Runonce function that is only called by the newcontract being upgraded.
-        remainingLaunchFeeReserves = 0;
-        for(uint i = 0; i < notaries.length; i++) {
-            address notarysETHAddress;
-            uint8 notaryflags;
-            notarysETHAddress = notaryAddressMapping[notaries[i]].main;
-            notaryflags = notaryAddressMapping[notaries[i]].state;
-
-            notaryAddressMapping[notarysETHAddress] = VerusObjects.notarizer(notaries[i], address(uint160(i)), notaryflags);
-        }
-    }
 
     function upgradeContracts(bytes calldata data) external payable returns (uint8) {
 
-        // TODO: Remove once testnetupgraded.
-        if(remainingLaunchFeeReserves != 0) {
-            initialize();
-            return COMPLETE;
-        }
 
         require(msg.value > VerusConstants.upgradeFee);
 
