@@ -1,7 +1,7 @@
 // SPDX-License-Identifier: MIT
 // Bridge between ethereum and verus
 
-pragma solidity >=0.4.22 < 0.9.0;
+pragma solidity >=0.8.9;
 pragma abicoder v2;
 
 // Developers notes for datatypes used:
@@ -34,7 +34,6 @@ library VerusConstants {
     uint32 constant INVALID_FLAGS = 0xffffffff - (VALID + CONVERT + RESERVE_TO_RESERVE + IMPORT_TO_SOURCE);
 
     uint8 constant DEST_PKH = 2;
-    uint8 constant DEST_SH = 3;
     uint8 constant DEST_ID = 4;
     uint8 constant DEST_REGISTERCURRENCY = 6;
     uint8 constant DEST_ETH = 9;
@@ -48,10 +47,13 @@ library VerusConstants {
     uint32 constant MAPPING_VERUS_OWNED = 2;
     uint32 constant MAPPING_PARTOF_BRIDGEVETH = 4;
     uint32 constant MAPPING_ISBRIDGE_CURRENCY = 8;
-    uint32 constant TOKEN_ERC20_SEND = 16;   //TODO: Make these tokens down to a new set
+    uint32 constant MAPPING_ETH_NFT_DEFINITION = 128;
+    //uint32 constant MAPPING_IS_GATEWAY = 256;  // TODO: Enable when supported
+    //uint32 constant MAPPING_IS_PBAAS_CHAIN = 512;  //TODO: Enable when supported
+    uint32 constant TOKEN_ERC20_SEND = 16;   
     uint32 constant TOKEN_LAUNCH = 32;
     uint32 constant TOKEN_ETH_SEND = 64;
-    uint32 constant TOKEN_ETH_NFT_DEFINITION = 128;  //TODO: this should be part of mapping
+    //uint32 constant PROOF_ETHNOTARIZATION = 3; //TODO: Enable when supported
 
     uint32 constant AUX_DEST_PREFIX = 0x01160214;
 
@@ -71,7 +73,7 @@ library VerusConstants {
     uint constant SATS_TO_WEI_STD = 10000000000;
     uint8 constant NUMBER_OF_CONTRACTS = 11;
     uint64 constant MIN_VRSC_FEE = 4000000; //0.04 VRSC 8 decimals
-    uint64 constant MAX_VERUS_TRANSFER = 5000000000000000000; //50,000,000,000.00000000
+    uint64 constant MAX_VERUS_TRANSFER = 1000000000000000000; //10,000,000,000.00000000
 
     enum ContractType {
         TokenManager,
@@ -89,8 +91,16 @@ library VerusConstants {
 
     uint8 constant UINT160_SIZE = 20;
     uint8 constant UINT64_SIZE = 8;
-    uint8 constant UINT176_BITS_SIZE = 176;
     uint8 constant UINT160_BITS_SIZE = 160;
+    uint8 constant UINT176_BITS_SIZE = 176;
+    uint8 constant NOTARIZER_INDEX_AND_FLAGS_OFFSET = 184;
+    uint8 constant NOTARIZATION_VOUT_NUM_INDEX = 192;
+    uint8 constant NOTARIZATION_VALID_BIT_SHIFT = 7;
+
+    //Global Generic Variable types
+
+    uint8 constant GLOBAL_TYPE_NOTARY_VALID_HIGH_BIT = 0x80;
+    uint8 constant GLOBAL_TYPE_NOTARY_MASK = 0x7f;
 }
 
 //TODO: extra constants to add 176, 92 etc..

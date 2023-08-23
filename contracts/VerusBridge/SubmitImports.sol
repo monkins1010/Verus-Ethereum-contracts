@@ -1,7 +1,7 @@
 // SPDX-License-Identifier: MIT
 // Bridge between ethereum and verus
 
-pragma solidity >=0.4.22 <0.9.0;
+pragma solidity >=0.8.9;
 pragma abicoder v2;
 
 import "../Libraries/VerusObjects.sol";
@@ -11,6 +11,11 @@ import "../Storage/StorageMaster.sol";
 
 
 contract SubmitImports is VerusStorage {
+
+    uint32 constant ELVCHOBJ_TXID_OFFSET = 32;
+    uint32 constant ELVCHOBJ_NVINS_OFFSET = 45;
+    uint32 constant FORKS_NOTARY_INDEX = 106;  // this is txid + stateroot + blockhash + NOTARIZER_INDEX_AND_FLAGS_OFFSET 
+    uint32 constant FORKS_NOTARY_PROPOSER_POSITION = 128;
     function sendToVRSC(uint64 value, address sendTo, uint8 destinationType) public 
     {
         VerusObjects.CReserveTransfer memory LPtransfer;
@@ -55,17 +60,16 @@ contract SubmitImports is VerusStorage {
     }
 
     function _createImports(bytes calldata data) external returns(uint64, uint176) {
-        
-        
+              
         VerusObjects.CReserveTransferImport memory _import = abi.decode(data, (VerusObjects.CReserveTransferImport));
         bytes32 txidfound;
         bytes memory elVchObj = _import.partialtransactionproof.components[0].elVchObj;
         uint32 nVins;
 
-        assembly 
+        assembly
         {
-            txidfound := mload(add(elVchObj, 32)) 
-            nVins := mload(add(elVchObj, 45)) 
+            txidfound := mload(add(elVchObj, ELVCHOBJ_TXID_OFFSET)) 
+            nVins := mload(add(elVchObj, ELVCHOBJ_NVINS_OFFSET)) 
         }
 
         if (processedTxids[txidfound]) 
@@ -79,7 +83,6 @@ contract SubmitImports is VerusStorage {
         // reverse 32bit endianess
         nVins = ((nVins & 0xFF00FF00) >> 8) |  ((nVins & 0x00FF00FF) << 8);
         nVins = (nVins >> 16) | (nVins << 16);
-
 
         bytes32 hashOfTransfers;
 
@@ -101,6 +104,9 @@ contract SubmitImports is VerusStorage {
         isLastCCEInOrder(uint32(CCEHeightsAndnIndex));
    
         // clear 4 bytes above first 64 bits, i.e. clear the nIndex 32 bit number, then convert to correct nIndex
+        // Using the index for the proof (ouput of an export) - (header ( 2 * nvin )) == export output
+        // NOTE: This depends on the serialization of the CTransaction header and the location of the vins being 45 bytes in.
+        // NOTE: Also depends on it being a partial transaction proof, header = 1
 
         CCEHeightsAndnIndex  = (CCEHeightsAndnIndex & 0xffffffff00000000ffffffffffffffff) | (uint128(uint32(uint32(CCEHeightsAndnIndex >> 64) - (1 + (2 * nVins)))) << 64);  
         setLastImport(txidfound, hashOfTransfers, CCEHeightsAndnIndex);
@@ -120,7 +126,6 @@ contract SubmitImports is VerusStorage {
         return (fees, exporter);
 
     }
-
   
     function refund(bytes memory refundAmount) private  {
 
@@ -192,42 +197,37 @@ contract SubmitImports is VerusStorage {
 
     function setClaimableFees(uint64 fees, uint176 exporter) external
     {
-        uint176 bridgeKeeper;
-        bridgeKeeper = uint176(uint160(msg.sender));
-        bridgeKeeper |= (uint176(0x0c14) << VerusConstants.UINT160_BITS_SIZE); //make ETH type '0x0c' and length '0x14'
 
-        uint176 proposer;
         bytes memory proposerBytes = bestForks[0];
+        uint8 notaryImporterState = notaryAddressMapping[msg.sender].state;
+        uint176 proposer;
+        uint8 notarizationSubmitterData;
 
         assembly {
-                proposer := mload(add(proposerBytes, 128))
+                proposer := mload(add(proposerBytes, FORKS_NOTARY_PROPOSER_POSITION))
+                notarizationSubmitterData := mload(add(proposerBytes, FORKS_NOTARY_INDEX))
         } 
 
-        (uint256 notaryFees, uint256 proposerFees, uint256 bridgekeeperFees, uint256 exporterFees) = setFeePercentages(fees);
+        uint64 divisionNumber;
+        uint64 feeShare;
+        uint8 notarizationSubmittedValid = notarizationSubmitterData >> VerusConstants.NOTARIZATION_VALID_BIT_SHIFT; //shift down to get 1 or 0
 
-        // Any remainder from Notaries shared fees is put into the LPFees pot.
+        divisionNumber = 3 + (notaryImporterState & VerusConstants.NOTARY_VALID) + notarizationSubmittedValid; //the importsubmitter is the msg.sender
 
-        setClaimedFees(bytes32(uint256(proposer)), proposerFees);
-        setClaimedFees(bytes32(uint256(bridgeKeeper)), bridgekeeperFees);
-        exporterFees += setNotaryFees(notaryFees);
-        setClaimedFees(bytes32(uint256(exporter)), exporterFees);
-
-    }
-
-    function setFeePercentages(uint256 _ethAmount)private pure returns (uint256,uint256,uint256,uint256)
-    {
-        uint256 notaryFees;
-        uint256 proposerFees;  
-        uint256 exporterFees;
-        uint256 bridgekeeperFees;     
+        feeShare = fees / divisionNumber;
+        setClaimedFees(bytes32(uint256(proposer)), feeShare + setNotaryFees(feeShare));  // any reminder from notary division goes to proposer
+        setClaimedFees(bytes32(uint256(exporter)), feeShare + (fees % divisionNumber)); // any reminder from main division goes to exporter
         
-        notaryFees = (_ethAmount / 4 ); 
-        proposerFees = _ethAmount / 4 ;
-        bridgekeeperFees = (_ethAmount / 4 );
+        if(notaryImporterState == VerusConstants.NOTARY_VALID) { //check the import submitter is valid
+            setNotaryClaimedFees(uint176(uint160(msg.sender)), feeShare);
+        }
 
-        exporterFees = _ethAmount - (notaryFees + proposerFees + bridgekeeperFees);
+        if(notarizationSubmittedValid == VerusConstants.NOTARY_VALID) { //check the import submitter is valid
+            // remove high bit and leave index, then use index to find notary
+            address notaryEthAddress = notaryAddressMapping[notaries[notarizationSubmitterData & ~VerusConstants.GLOBAL_TYPE_NOTARY_VALID_HIGH_BIT]].main;
+            setNotaryClaimedFees(uint176(uint160(notaryEthAddress)), feeShare); 
+        }
 
-        return(notaryFees, proposerFees, bridgekeeperFees, exporterFees);
     }
 
     function setNotaryFees(uint256 notaryFees) private returns (uint64 remainder){  //sent in as SATS
@@ -249,22 +249,28 @@ contract SubmitImports is VerusStorage {
         claimableFees[_address] += fees;
     }
 
+    function setNotaryClaimedFees(uint176 notary, uint256 fees) private  {
+
+        notary |= (uint176(0x0c14) << VerusConstants.UINT160_BITS_SIZE); //set at type eth
+        claimableFees[bytes32(uint256(notary))] += fees;
+    }
+
     function claimfees() public {
 
         uint256 claimAmount;
-        uint256 claiment;
+        uint256 claimant;
 
-        claiment = uint256(uint160(msg.sender));
+        claimant = uint256(uint160(msg.sender));
 
-        // Check claiment is type eth with length 20 and has fees to be got.
-        claiment |= (uint256(0x0c14) << VerusConstants.UINT160_BITS_SIZE);
-        claimAmount = claimableFees[bytes32(claiment)];
+        // Check claimant is type eth with length 20 and has fees to be got.
+        claimant |= (uint256(0x0c14) << VerusConstants.UINT160_BITS_SIZE);
+        claimAmount = claimableFees[bytes32(claimant)];
 
         if(claimAmount > 0)
         {
             //stored as SATS convert to WEI
+            claimableFees[bytes32(claimant)] = 0;
             payable(msg.sender).transfer(claimAmount * VerusConstants.SATS_TO_WEI_STD);
-            claimableFees[bytes32(claiment)] = 0;
         }
         else
         {
@@ -279,8 +285,8 @@ contract SubmitImports is VerusStorage {
 
         if (refundAmount > 0)
         {
-            sendToVRSC(refundAmount, address(uint160(verusAddress)), uint8(verusAddress >> 168));
             refunds[bytes32(uint256(verusAddress))] = 0;
+            sendToVRSC(refundAmount, address(uint160(verusAddress)), uint8(verusAddress >> 168));
         }
         else
         {
@@ -297,16 +303,16 @@ contract SubmitImports is VerusStorage {
         address rAddress = address(ripemd160(abi.encodePacked(sha256(abi.encodePacked(leadingByte, publicKeyX)))));
         address ethAddress = address(uint160(uint256(keccak256(abi.encodePacked(publicKeyX, publicKeyY)))));
 
-        uint256 claiment; 
+        uint256 claimant; 
 
-        claiment = uint256(uint160(rAddress));
+        claimant = uint256(uint160(rAddress));
 
-        claiment |= (uint256(0x0214) << VerusConstants.UINT160_BITS_SIZE);  // is Claimient type R address and 20 bytes.
+        claimant |= (uint256(0x0214) << VerusConstants.UINT160_BITS_SIZE);  // is Claimient type R address and 20 bytes.
 
-        if ((claimableFees[bytes32(claiment)] > VerusConstants.verusvETHTransactionFee) && msg.sender == ethAddress)
+        if ((claimableFees[bytes32(claimant)] > VerusConstants.verusvETHTransactionFee) && msg.sender == ethAddress)
         {
-            sendToVRSC(uint64(claimableFees[bytes32(claiment)]), rAddress, VerusConstants.DEST_PKH); //sent in as SATS
-            claimableFees[bytes32(claiment)] = 0;
+            claimableFees[bytes32(claimant)] = 0;
+            sendToVRSC(uint64(claimableFees[bytes32(claimant)]), rAddress, VerusConstants.DEST_PKH); //sent in as SATS
         }
         else
         {

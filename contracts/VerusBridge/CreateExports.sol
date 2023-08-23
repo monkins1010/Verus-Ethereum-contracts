@@ -1,13 +1,14 @@
 // SPDX-License-Identifier: MIT
 // Bridge between ethereum and verus
 
-pragma solidity >=0.4.22 <0.9.0;
+pragma solidity >=0.8.9;
 pragma abicoder v2;
 
 import "../Libraries/VerusObjects.sol";
 import "../Libraries/VerusConstants.sol";
 import "./Token.sol";
 import "../Storage/StorageMaster.sol";
+import "./ExportManager.sol";
 
 contract CreateExports is VerusStorage {
 
@@ -17,22 +18,36 @@ contract CreateExports is VerusStorage {
         remainingLaunchFeeReserves -= _amount;
         return true;
     }
- 
+
     function sendTransfer(bytes calldata datain) payable external {
+
+        VerusObjects.CReserveTransfer memory transfer = abi.decode(datain, (VerusObjects.CReserveTransfer));        
+        sendTransferMain(transfer);
+    }
+
+    function sendTransferDirect(bytes calldata datain) payable external {
+
+        address serializerAddress = contracts[uint(VerusConstants.ContractType.VerusSerializer)];
+
+        (bool success, bytes memory returnData) = serializerAddress.call(abi.encodeWithSignature("deserializeTransfer(bytes)",datain));
+
+        require(success, "deserializetransfer failed");  
+
+        VerusObjects.CReserveTransfer memory transfer = abi.decode(returnData, (VerusObjects.CReserveTransfer));
+        sendTransferMain(transfer);
+    }
+ 
+    function sendTransferMain(VerusObjects.CReserveTransfer memory transfer) private {
 
         uint256 fees;
         VerusObjects.mappedToken memory mappedContract;
         uint32 ethNftFlag;
-
-        VerusObjects.CReserveTransfer memory transfer = abi.decode(datain, (VerusObjects.CReserveTransfer));
-
         address verusExportManagerAddress = contracts[uint(VerusConstants.ContractType.ExportManager)];
-        bytes memory data = abi.encode(transfer); 
 
-        (bool success, bytes memory feeBytes) = verusExportManagerAddress.delegatecall(abi.encodeWithSignature("checkExport(bytes)", data));
+        (bool success, bytes memory returnData) = verusExportManagerAddress.delegatecall(abi.encodeWithSelector(ExportManager.checkExport.selector, transfer));
         require(success, "checkExport call failed");
 
-        fees = abi.decode(feeBytes, (uint256)); //fees = exportManager.checkExport(transfer, paidValue, bridgeConverterActive);
+        fees = abi.decode(returnData, (uint256)); 
 
         require(fees != 0, "CheckExport Failed Checks"); 
 
@@ -43,22 +58,27 @@ contract CreateExports is VerusStorage {
 
         if (transfer.currencyvalue.currency != VerusConstants.VEth) {
             mappedContract = verusToERC20mapping[transfer.currencyvalue.currency];
-            ethNftFlag = mappedContract.flags & VerusConstants.TOKEN_ETH_NFT_DEFINITION;
+            ethNftFlag = mappedContract.flags & VerusConstants.MAPPING_ETH_NFT_DEFINITION;
         }
 
-        if (transfer.currencyvalue.currency != VerusConstants.VEth && ethNftFlag != VerusConstants.TOKEN_ETH_NFT_DEFINITION) {
+        if (transfer.currencyvalue.currency != VerusConstants.VEth && ethNftFlag != VerusConstants.MAPPING_ETH_NFT_DEFINITION) {
 
             Token token = Token(mappedContract.erc20ContractAddress); 
             //Check user has allowed the verusBridgeStorage contract to spend on their behalf
             uint256 allowedTokens = token.allowance(msg.sender, address(this));
             uint256 tokenAmount = convertFromVerusNumber(transfer.currencyvalue.amount, token.decimals()); //convert to wei from verus satoshis
-            require(transfer.currencyvalue.amount + convertToVerusNumber(token.balanceOf(address(this)), token.decimals()) < VerusConstants.MAX_VERUS_TRANSFER);
+            if (mappedContract.flags & VerusConstants.MAPPING_ETHEREUM_OWNED == VerusConstants.MAPPING_ETHEREUM_OWNED) {
+
+                require((transfer.currencyvalue.amount + mappedContract.tokenID) < VerusConstants.MAX_VERUS_TRANSFER);
+                verusToERC20mapping[transfer.currencyvalue.currency].tokenID += transfer.currencyvalue.amount;
+
+            }
             require( allowedTokens >= tokenAmount);
             //transfer the tokens to the delegator contract
             //total amount kept as uint256 until export to verus
-            exportERC20Tokens(tokenAmount, token, mappedContract.flags & VerusConstants.MAPPING_VERUS_OWNED == VerusConstants.MAPPING_VERUS_OWNED, msg.sender );
+            exportERC20Tokens(tokenAmount, token, mappedContract.flags & VerusConstants.MAPPING_VERUS_OWNED == VerusConstants.MAPPING_VERUS_OWNED);
             
-        } else if (ethNftFlag == VerusConstants.TOKEN_ETH_NFT_DEFINITION){
+        } else if (ethNftFlag == VerusConstants.MAPPING_ETH_NFT_DEFINITION){
             //handle a NFT Import
                 
             address nftContract;
@@ -85,9 +105,9 @@ contract CreateExports is VerusStorage {
         _createExports(transfer, false);
     }
 
-    function exportERC20Tokens(uint256 _tokenAmount, Token token, bool burn, address sender ) private {
+    function exportERC20Tokens(uint256 _tokenAmount, Token token, bool burn) private {
         
-        (bool success, ) = address(token).call(abi.encodeWithSignature("transferFrom(address,address,uint256)", sender, address(this), _tokenAmount));
+        (bool success, ) = address(token).call(abi.encodeWithSignature("transferFrom(address,address,uint256)", msg.sender, address(this), _tokenAmount));
         require(success, "transferfrom of token failed");
 
         if (burn) 
@@ -188,17 +208,4 @@ contract CreateExports is VerusStorage {
       
         return c;
     }
-
-    function convertToVerusNumber(uint256 a,uint8 decimals) public pure returns (uint64) {
-
-        if(decimals > 8 ) {
-            return uint64(a / (10 ** (decimals - 8)));
-        }else if(decimals < 8) {
-            return uint64(a * (10 ** (8 - decimals)));
-        }else {
-            return uint64(a);
-        }
-
-    }
-
 }

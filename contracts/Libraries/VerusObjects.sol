@@ -1,7 +1,7 @@
 // SPDX-License-Identifier: MIT
 // Bridge between ethereum and verus
 
-pragma solidity >=0.4.22 <0.9.0;
+pragma solidity >=0.8.9;
 pragma abicoder v2;
 
 import "./VerusObjectsCommon.sol";
@@ -77,7 +77,7 @@ library VerusObjects {
 
     struct PackedSend {
         uint256 currencyAndAmount;    //tokenID
-        uint256 destinationAndFlags;  //iaddress + flags or name and flags
+        uint256 destinationAndFlags;  //ETH address concatenated with flags
     }
 
     struct PackedCurrencyLaunch {
@@ -175,7 +175,7 @@ library VerusObjects {
     struct revokeInfo {
         uint8 _vs;
         bytes32 _rs;
-        bytes32  _ss;
+        bytes32 _ss;
         address notaryID;
         bytes32 salt;
     }

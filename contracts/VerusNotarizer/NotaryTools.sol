@@ -1,7 +1,7 @@
 // SPDX-License-Identifier: MIT
 // Bridge between ethereum and verus
 
-pragma solidity >=0.4.22 <0.9.0;
+pragma solidity >=0.8.9;
 pragma abicoder v2;
 
 import "../Libraries/VerusConstants.sol";
@@ -33,58 +33,7 @@ contract NotaryTools is VerusStorage {
         notaryAddressMapping[notarizer] = VerusObjects.notarizer(mainAddress, revokeAddress, state);
     }
 
-
-    function getProof(uint256 height) public view returns (bytes memory) {
-
-        VerusObjectsNotarization.NotarizationForks[] memory latestForks;
-
-        latestForks = decodeNotarization(0);
-
-        require(height < uint256(latestForks[0].proposerPacked >> OFFSET_FOR_HEIGHT), "Latest proofs require paid service");
-
-        return proofs[bytes32(height)];
-    }
-
-    function decodeNotarization(uint256 index) public view returns (VerusObjectsNotarization.NotarizationForks[] memory)
-    {
-        uint32 nextOffset;
-
-        bytes storage tempArray = bestForks[index];
-
-        bytes32 hashOfNotarization;
-        bytes32 txid;
-        bytes32 stateRoot;
-        bytes32 packedPositions;
-        bytes32 slotHash;
-        VerusObjectsNotarization.NotarizationForks[] memory retval = new VerusObjectsNotarization.NotarizationForks[]((tempArray.length / 128) + 1);
-        if (tempArray.length > 1)
-        {
-            bytes32 slot;
-            assembly {
-                        mstore(add(slot, 32),tempArray.slot)
-                        slotHash := keccak256(add(slot, 32), 32)
-                        }
-
-            for (int i = 0; i < int(tempArray.length / 128); i++) 
-            {
-                assembly {
-                    hashOfNotarization := sload(add(slotHash,nextOffset))
-                    nextOffset := add(nextOffset, 1)  
-                    txid := sload(add(slotHash,nextOffset))
-                    nextOffset := add(nextOffset, 1) 
-                    stateRoot := sload(add(slotHash,nextOffset))
-                    nextOffset := add(nextOffset, 1) 
-                    packedPositions :=sload(add(slotHash,nextOffset))
-                    nextOffset := add(nextOffset, 1)
-                }
-
-                retval[uint(i)] =  VerusObjectsNotarization.NotarizationForks(hashOfNotarization, txid, stateRoot, packedPositions);
-            }
-        }
-        return retval;
-    }
-
-     function recoverString(bytes memory be, uint8 vs, bytes32 rs, bytes32 ss) public pure returns (address)
+    function recoverString(bytes memory be, uint8 vs, bytes32 rs, bytes32 ss) public pure returns (address)
     {
         bytes32 hashValue;
 
@@ -92,7 +41,6 @@ contract NotaryTools is VerusStorage {
         hashValue = sha256(abi.encodePacked(uint8(19),hex"5665727573207369676e656420646174613a0a", hashValue)); //TODO: move to constants prefix = 19(len) + "Verus signed data:\n"
 
         return ecrecover(hashValue, vs - 4, rs, ss);
-
     }
 
     function revokeWithMainAddress(bytes calldata dataIn) public returns (bool) {
@@ -112,8 +60,10 @@ contract NotaryTools is VerusStorage {
         {
             return false;  
         }
-
-        updateNotarizer(_revokePacket.notaryID, address(0), notaryAddressMapping[_revokePacket.notaryID].recovery, VerusConstants.NOTARY_REVOKED);
+        
+        // Set Notaries ETH mapping to revoked
+        notaryAddressMapping[notaryAddressMapping[_revokePacket.notaryID].main].state = VerusConstants.NOTARY_REVOKED;
+        notaryAddressMapping[_revokePacket.notaryID].state = VerusConstants.NOTARY_REVOKED;
 
         return true;
     }
@@ -145,7 +95,8 @@ contract NotaryTools is VerusStorage {
             }
         }
 
-        updateNotarizer(notarizerBeingRevoked, address(0), notaryAddressMapping[notarizerBeingRevoked].recovery, VerusConstants.NOTARY_REVOKED);
+        notaryAddressMapping[notaryAddressMapping[notarizerBeingRevoked].main].state = VerusConstants.NOTARY_REVOKED;
+        notaryAddressMapping[notarizerBeingRevoked].state = VerusConstants.NOTARY_REVOKED;
 
         return true;
     }
@@ -170,9 +121,18 @@ contract NotaryTools is VerusStorage {
         {
             return ERROR;  
         }
+
+        // notaries index stored in recover address location as not used for Ethereum                               
+        address notaryIndex = notaryAddressMapping[notaryAddressMapping[_newRecoveryInfo.notarizerID].main].recovery; 
+
+        // delete old ETH address mapping
+        delete notaryAddressMapping[notaryAddressMapping[_newRecoveryInfo.notarizerID].main];
+
+        // create new ETH address mapping
+        notaryAddressMapping[_newRecoveryInfo.contracts[0]] = VerusObjects.notarizer(_newRecoveryInfo.notarizerID, notaryIndex, VerusConstants.NOTARY_VALID);
+                              
         updateNotarizer(_newRecoveryInfo.notarizerID, _newRecoveryInfo.contracts[0], 
                                        _newRecoveryInfo.contracts[1], VerusConstants.NOTARY_VALID);
-
         return COMPLETE;
     }
 
@@ -205,6 +165,13 @@ contract NotaryTools is VerusStorage {
         }
 
         updateNotarizer(notarizerBeingRecovered, newMainAddr, newRevokeAddr, VerusConstants.NOTARY_VALID);
+        address notaryIndex = notaryAddressMapping[notaryAddressMapping[notarizerBeingRecovered].main].recovery;
+
+        // delete old ETH address mapping
+        delete notaryAddressMapping[notaryAddressMapping[notarizerBeingRecovered].main];
+
+        notaryAddressMapping[newMainAddr] = VerusObjects.notarizer(notarizerBeingRecovered, notaryIndex, VerusConstants.NOTARY_VALID);
+          
 
         return COMPLETE;
     }

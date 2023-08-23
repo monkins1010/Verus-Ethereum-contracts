@@ -1,6 +1,6 @@
 // SPDX-License-Identifier: MIT
 // Bridge between ethereum and verus
-pragma solidity >=0.4.22 <0.9.0;
+pragma solidity >=0.8.9;
 pragma abicoder v2;
 
 import "../Libraries/VerusObjects.sol";
@@ -22,10 +22,8 @@ contract ExportManager is VerusStorage  {
         
     }
 
-    function checkExport(bytes calldata datain) external payable returns (uint256 fees){
+    function checkExport(VerusObjects.CReserveTransfer memory transfer) external payable returns (uint256 fees){
        
-        VerusObjects.CReserveTransfer memory transfer = abi.decode(datain, (VerusObjects.CReserveTransfer));
-
         uint256 requiredFees = VerusConstants.transactionFee;  //0.003 eth in WEI (To vrsc)
         uint64 bounceBackFee;
         uint64 transferFee;
@@ -42,7 +40,7 @@ contract ExportManager is VerusStorage  {
             destAddressID := mload(add(serializedDest, UINT160_SIZE))
         }
 
-        if (verusToERC20mapping[transfer.currencyvalue.currency].flags & VerusConstants.TOKEN_ETH_NFT_DEFINITION == VerusConstants.TOKEN_ETH_NFT_DEFINITION) 
+        if (verusToERC20mapping[transfer.currencyvalue.currency].flags & VerusConstants.MAPPING_ETH_NFT_DEFINITION == VerusConstants.MAPPING_ETH_NFT_DEFINITION) 
         {
             require (transfer.flags == VerusConstants.VALID, "Invalid flags for NFT transfer");
             require (transfer.currencyvalue.amount == 1, "Currency value must be 1 Satoshi");
@@ -102,8 +100,7 @@ contract ExportManager is VerusStorage  {
                 transferFee += bounceBackFee;
                 requiredFees += convertFromVerusNumber(uint256(bounceBackFee),18);  //bounceback fees required as well as send fees
 
-            } else if (!(transfer.destination.destinationtype == VerusConstants.DEST_PKH || transfer.destination.destinationtype == VerusConstants.DEST_ID 
-                        || transfer.destination.destinationtype == VerusConstants.DEST_SH)) {
+            } else if (!(transfer.destination.destinationtype == VerusConstants.DEST_PKH || transfer.destination.destinationtype == VerusConstants.DEST_ID)) {
 
                 return 0;  
 
@@ -168,8 +165,7 @@ contract ExportManager is VerusStorage  {
 
         if (!(transfer.destination.destinationtype == (VerusConstants.DEST_ETH + VerusConstants.FLAG_DEST_GATEWAY + VerusConstants.FLAG_DEST_AUX) || 
                 transfer.destination.destinationtype == VerusConstants.DEST_ID ||
-                transfer.destination.destinationtype == VerusConstants.DEST_PKH || 
-                transfer.destination.destinationtype == VerusConstants.DEST_SH) ||
+                transfer.destination.destinationtype == VerusConstants.DEST_PKH) ||
                 sendingCurrency.flags == 0)
         {
             revert ("Invalid desttype");

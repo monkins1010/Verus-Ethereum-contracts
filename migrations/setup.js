@@ -113,3 +113,11 @@ const dai = ["0xcce5d18f305474f1e0e0ec1c507d8c85e7315fdf",
 // Setup the tokens to be launched with the contract here.  Important this must match the vETH definitions.
 
 exports.arrayofcurrencies = [vrsctest, bridgeeth, veth, dai]
+
+exports.TestVerusNotariserIDS = ["0xb26820ee0c9b1276aac834cf457026a575dfce84", "0x51f9f5f053ce16cb7ca070f5c68a1cb0616ba624", "0x65374d6a8b853a5f61070ad7d774ee54621f9638"];
+
+// These are the equivelent ETH addresses of the notaries Spending R addresses
+exports.TestVerusNotariserSigner = ["0xD010dEBcBf4183188B00cafd8902e34a2C1E9f41", "0xD010dEBcBf4183188B00cafd8902e34a2C1E9f41", "0xD010dEBcBf4183188B00cafd8902e34a2C1E9f41"];
+
+// These are the equivelent ETH addresses of the notaries Recovery R addresses
+exports.TestVerusNotariserRecovery = ["0xD010dEBcBf4183188B00cafd8902e34a2C1E9f41", "0xD3258AD271066B7a780C68e527A6ee69ecA15b7F", "0x68f56bA248E23b7d5DE4Def67592a1366431d345"];

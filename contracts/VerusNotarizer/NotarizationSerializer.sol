@@ -1,7 +1,7 @@
 // SPDX-License-Identifier: MIT
 // Bridge between ethereum and verus
 
-pragma solidity >=0.4.22;
+pragma solidity >=0.8.9;
 pragma abicoder v2;
 import "../Libraries/VerusObjects.sol";
 
@@ -47,9 +47,10 @@ contract NotarizationSerializer is VerusStorage {
                                                                                     uint32 height) {
         
         uint32 nextOffset;
-        uint16 bridgeLaunched;
-        uint8 proposerFlags;
+        uint16 bridgeConverterLaunched;
+        uint8 proposerType;
         uint32 notarizationFlags;
+        uint176 proposerMain;
 
         VerusObjectsCommon.UintReader memory readerLen;
 
@@ -61,11 +62,14 @@ contract NotarizationSerializer is VerusStorage {
 
         assembly {
                     nextOffset := add(nextOffset, 1)  // move to read type
-                    proposerFlags := mload(add(nextOffset, notarization))
-                    nextOffset := add(nextOffset, 21) // move to proposer, type and vector length
+                    proposerType := mload(add(nextOffset, notarization))
+                    if gt(and(proposerType, 0xff), 0) {
+                        nextOffset := add(nextOffset, 21) // move to proposer, type and vector length
+                        proposerMain := mload(add(nextOffset, notarization))
+                    }
                  }
 
-        if (proposerFlags & VerusConstants.FLAG_DEST_AUX == VerusConstants.FLAG_DEST_AUX)
+        if (proposerType & VerusConstants.FLAG_DEST_AUX == VerusConstants.FLAG_DEST_AUX)
         {
             nextOffset += 1;  // goto auxdest parent vec length position
             nextOffset = processAux(notarization, nextOffset, notarizationFlags);
@@ -100,11 +104,10 @@ contract NotarizationSerializer is VerusStorage {
         {
             uint16 temp;
             (temp, nextOffset) = deserializeCoinbaseCurrencyState(notarization, nextOffset);
-            bridgeLaunched = temp | bridgeLaunched;
+            bridgeConverterLaunched = temp | bridgeConverterLaunched;
         }
 
-        proposerAndLaunched =  bytes32(uint256(uint160(msg.sender)) | (uint256(0x0c14) << VerusConstants.UINT160_BITS_SIZE));  // Set as type ETH
-        proposerAndLaunched |= bytes32(uint256(bridgeLaunched) << VerusConstants.UINT176_BITS_SIZE);  // Shift 16bit value 22 bytes to pack in bytes32
+        proposerAndLaunched = getProposerandLaunched(proposerMain, uint8(bridgeConverterLaunched));
 
         nextOffset++; //move forwards to read le
         readerLen = readCompactSizeLE(notarization, nextOffset);    // get the length of proofroot array
@@ -113,9 +116,23 @@ contract NotarizationSerializer is VerusStorage {
 
     }
 
+    function getProposerandLaunched(uint176 proposerMain, uint8 bridgeConverterLaunched) private view returns (bytes32 proposerAndLaunched) {
+
+       proposerAndLaunched = bytes32(uint256(proposerMain));
+       
+       // if the msg.sender is a valid notary then add their index in with the valid flag to a byte
+       if(notaryAddressMapping[msg.sender].state == VerusConstants.NOTARY_VALID) {
+            //pack in the notarizers ID and valid flag at the defined location, NOTE: the notarisers index can be [0].
+            proposerAndLaunched |= bytes32(uint256(uint8(uint160(notaryAddressMapping[msg.sender].recovery)) // .recovery == to the index | 0x80
+                                        | VerusConstants.GLOBAL_TYPE_NOTARY_VALID_HIGH_BIT) << VerusConstants.NOTARIZER_INDEX_AND_FLAGS_OFFSET);
+        } 
+        if (!bridgeConverterActive && bridgeConverterLaunched > 0) {
+                proposerAndLaunched |= bytes32(uint256(bridgeConverterLaunched) << VerusConstants.UINT176_BITS_SIZE);  // Shift 16bit value 22 bytes to pack in bytes32
+        }
+    }
+
     function deserializeCoinbaseCurrencyState(bytes memory notarization, uint32 nextOffset) private pure returns (uint16, uint32)
     {
-        
         address currencyid;
         uint16 bridgeLaunched;
         uint16 flags;
@@ -241,7 +258,11 @@ contract NotarizationSerializer is VerusStorage {
     function castVote(address votetxid) private {
 
         rollingUpgradeVotes[rollingVoteIndex] = votetxid;
-        rollingVoteIndex = rollingVoteIndex == 99 ? 0 : rollingVoteIndex++;     
+        if(rollingVoteIndex > 98) {
+            rollingVoteIndex = 0;
+        } else {
+            rollingVoteIndex = rollingVoteIndex + 1;
+        }
 
     }
 

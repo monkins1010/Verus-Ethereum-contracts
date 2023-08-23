@@ -38,6 +38,8 @@ contract VerusProof is VerusStorage  {
     uint8 constant FLAG_LAUNCHCONFIRMED = 0x10;
     uint8 constant FLAG_LAUNCHCOMPLETEMARKER = 0x20;
     uint8 constant AUX_DEST_ETH_VEC_LENGTH = 22;
+    uint8 constant TX_HEADER = 1;
+    uint8 constant NUM_TX_PROOFS = 3;
 
 
     function checkProof(bytes32 hashToProve, VerusObjects.CTXProof[] memory _branches) public view returns(bytes32){
@@ -75,11 +77,15 @@ contract VerusProof is VerusStorage  {
 
     }
     
-    function checkTransfers(VerusObjects.CReserveTransferImport memory _import, bytes32 hashedTransfers) public view returns (uint256, uint176) {
+    function checkExportAndTransfers(VerusObjects.CReserveTransferImport memory _import, bytes32 hashedTransfers) public view returns (uint256, uint176) {
 
         // the first component of the import partial transaction proof is the transaction header, for each version of
         // transaction header, we have a specific offset for the hash of transfers. if we change this, we must
         // deprecate and deploy new contracts
+
+        if(_import.partialtransactionproof.components[0].elType != TX_HEADER){
+            return (uint64(0), uint128(0));
+        }
 
         for (uint i = 1; i < _import.partialtransactionproof.components.length; i++)
         {
@@ -113,6 +119,7 @@ contract VerusProof is VerusStorage  {
 
             nextOffset = uint32(readerLen.offset + readerLen.value);        // add the length of the push of master to point to cc opcode
 
+            //TODO: Check any other type would fail
             assembly {
                 var1 := mload(add(firstObj, nextOffset))         // this should be OP_CHECKCRYPTOCONDITION
                 nextOffset := add(nextOffset, 1)                    // and after that...
@@ -275,7 +282,7 @@ contract VerusProof is VerusStorage  {
         bytes32 testHash;
   
         hashInProgress = _import.partialtransactionproof.components[0].elVchObj.createHash();
-        if (_import.partialtransactionproof.components[0].elType == 1 )
+        if (_import.partialtransactionproof.components[0].elType == TX_HEADER )
         {
             txRoot = checkProof(hashInProgress, _import.partialtransactionproof.components[0].elProof);           
         }
@@ -305,7 +312,7 @@ contract VerusProof is VerusStorage  {
         uint64 fees;
         uint128 heightsAndTXNum;
 
-        (tmp, exporter) = checkTransfers(_import, hashOfTransfers);
+        (tmp, exporter) = checkExportAndTransfers(_import, hashOfTransfers);
 
         fees = uint64(tmp >> 128);
         heightsAndTXNum = uint128(tmp);
@@ -316,6 +323,8 @@ contract VerusProof is VerusStorage  {
         { 
             revert("Components do not validate"); 
         }
+        
+        require(_import.partialtransactionproof.txproof.length == NUM_TX_PROOFS);
 
         retStateRoot = checkProof(txRoot, _import.partialtransactionproof.txproof);
         confirmedStateRoot = getLastConfirmedVRSCStateRoot();
@@ -397,7 +406,7 @@ contract VerusProof is VerusStorage  {
             if (iAddress == VerusConstants.VEth)
             {
                 temp[i].erc20ContractAddress = address(0);
-                temp[i].name = "Testnet ETH";
+                temp[i].name = recordedToken.name;
                 temp[i].ticker = "ETH";
             }
             else if(recordedToken.flags & VerusConstants.TOKEN_LAUNCH == VerusConstants.TOKEN_LAUNCH )
@@ -407,7 +416,7 @@ contract VerusProof is VerusStorage  {
                 temp[i].name = recordedToken.name;
                 temp[i].ticker = token.symbol();
             }
-            else if(recordedToken.flags & VerusConstants.TOKEN_ETH_NFT_DEFINITION == VerusConstants.TOKEN_ETH_NFT_DEFINITION)
+            else if(recordedToken.flags & VerusConstants.MAPPING_ETH_NFT_DEFINITION == VerusConstants.MAPPING_ETH_NFT_DEFINITION)
             {
                 temp[i].erc20ContractAddress = recordedToken.erc20ContractAddress;
                 temp[i].name = recordedToken.name;

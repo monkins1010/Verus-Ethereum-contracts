@@ -1,7 +1,7 @@
 // SPDX-License-Identifier: MIT
 // Bridge between ethereum and verus
 
-pragma solidity >=0.4.22 <0.9.0;
+pragma solidity >=0.8.9;
 pragma abicoder v2;
 
 import "../Libraries/VerusConstants.sol";
@@ -24,7 +24,7 @@ contract VerusNotarizer is VerusStorage {
     uint8 constant COMPLETE = 2;
     uint8 constant ERROR = 4;
     uint32 constant CONFIRMED_PROPOSER = 128;
-    uint32 constant LATEST_PROPOSER = 256;
+    uint32 constant PROOF_HEIGHT_LOCATION = 68;
 
 
     // notarization vdxf key
@@ -112,10 +112,8 @@ contract VerusNotarizer is VerusStorage {
         (bytes32 launchedAndProposer, bytes32 prevnotarizationtxid, bytes32 hashprevnotarization, bytes32 stateRoot, bytes32 blockHash, 
                 uint32 verusProofheight) = abi.decode(returnBytes, (bytes32, bytes32, bytes32, bytes32, bytes32, uint32));
 
-        proofs[bytes32(uint256(verusProofheight))] = abi.encode(stateRoot, blockHash);
-
         // If the bridge is active and VRSC remaining has not been sent
-        if (bridgeConverterActive && remainingLaunchFeeReserves != 0) { 
+        if (remainingLaunchFeeReserves != 0 && bridgeConverterActive) { 
             
             address submitImportsAddress = contracts[uint(VerusConstants.ContractType.SubmitImports)];
             if (remainingLaunchFeeReserves > (VerusConstants.verusTransactionFee * 2)) {
@@ -126,9 +124,9 @@ contract VerusNotarizer is VerusStorage {
         }
 
         voutAndHeight |= uint64(verusProofheight) << 32; // pack two 32bit numbers into one uint64
-        launchedAndProposer |= bytes32(uint256(voutAndHeight) << 192); // Also pack in the voutnum at the end of the uint256
+        launchedAndProposer |= bytes32(uint256(voutAndHeight) << VerusConstants.NOTARIZATION_VOUT_NUM_INDEX); // Also pack in the voutnum at the end of the uint256
 
-        setNotarizationProofRoot(blakeNotarizationHash, hashprevnotarization, txid, prevnotarizationtxid, launchedAndProposer, stateRoot);
+        setNotarizationProofRoot(blakeNotarizationHash, hashprevnotarization, txid, prevnotarizationtxid, launchedAndProposer, stateRoot, blockHash);
 
         emit NewNotarization(blakeNotarizationHash);
 
@@ -197,7 +195,7 @@ contract VerusNotarizer is VerusStorage {
     }
 
     function setNotarizationProofRoot(bytes32 hashedNotarization, 
-            bytes32 hashprevnotarization, bytes32 txidHash, bytes32 hashprevtxid, bytes32 proposer, bytes32 stateRoot) private 
+            bytes32 hashprevnotarization, bytes32 txidHash, bytes32 hashprevtxid, bytes32 proposer, bytes32 stateRoot, bytes32 blockHash) private 
     {
         
         int forkIdx = -1;
@@ -207,7 +205,7 @@ contract VerusNotarizer is VerusStorage {
         for (int i = 0; i < int(bestForks.length) ; i++) 
         {
             notarizations =  decodeNotarization(uint(i));
-            // Notarization length alway +1 more as slot ready to be filled.
+            // Notarization length is always +1 more than the amount we have, as slot is ready to be filled.
             for (int j = int(notarizations.length) - 2; j >= 0; j--)
             {
                 if (hashprevnotarization == notarizations[uint(j)].hashOfNotarization ||
@@ -239,7 +237,6 @@ contract VerusNotarizer is VerusStorage {
             encodeNotarization(uint(forkIdx), notarizations[uint(0)]);
         }
 
-
         // If the position that is matched is the second stored one, then that becomes the new confirmed.
         if(forkPos == 1)
         {
@@ -253,10 +250,12 @@ contract VerusNotarizer is VerusStorage {
             encodeStandardNotarization(notarizations[1], abi.encode(hashedNotarization, 
                 txidHash, stateRoot, proposer));
 
+            proofs[bytes32(uint256(uint32(uint256(proposer >> OFFSET_FOR_HEIGHT))))] = abi.encodePacked(stateRoot, blockHash, uint32(uint256(notarizations[1].proposerPacked) >> OFFSET_FOR_HEIGHT));
+
             // Set bridge launched if confirmed notarization contains Bridge Launched bit packed on the end of proposer
+
             if (!bridgeConverterActive && ((uint256(notarizations[1].proposerPacked) >> VerusConstants.UINT176_BITS_SIZE) & 0xff) == 1) {
                     bridgeConverterActive = true;
-                
             }
         }
         else
@@ -268,41 +267,82 @@ contract VerusNotarizer is VerusStorage {
 
     function checkunique(address[] memory ids, uint i) private pure
     {
-
         for (uint j = i + 1; j < ids.length; j++)
         {
             if (ids[i] == ids[j])
                 revert("duplicate signatures found");
         }
-
     }
 
-    function getNewProof(bool latest) public payable returns (bytes memory) {
+    function getProofCosts(uint256 proofOption) external pure returns (uint256) {
+        uint256[3] memory feePrices = [uint256(0.01 ether),uint256(0.005 ether),uint256(0.0025 ether)];
+        return feePrices[proofOption];
+    }
 
-        uint256 feeCost;
+    //users can pass in 0,1,2 to get the latest confirmed / priorconfirmed  / second prior confirmed statroot and blockhash.
+    //otherwise if they enter a height the proof is free.
+    // returned value is uint32 height bytes32 blockhash and bytes32 stateroot serialized together. 
+    function getProof(uint256 proofHeightOptions) public payable returns (bytes memory) {
 
-        feeCost = latest ? (0.0125 ether) : (0.00625 ether);
+        uint256 feePrice;
+        uint256 feeShare;
+        uint256 remainder;
 
-        require(msg.value == feeCost, "Not enough fee");
-
-        uint256 feeShare = (msg.value / VerusConstants.SATS_TO_WEI_STD) / 2;
-        uint256 remainder = (msg.value / VerusConstants.SATS_TO_WEI_STD) % 2;
+        // Price for proofs being returned.
+        uint256[3] memory feePrices = [uint256(0.01 ether),uint256(0.005 ether),uint256(0.0025 ether)];
 
         uint256 proposerAndHeight;
-        bytes memory proposerBytes = bestForks[0];
-
-        uint32 proposeroffset = latest ? LATEST_PROPOSER : CONFIRMED_PROPOSER;
+        bytes memory tempBytes = bestForks[0];
 
         assembly {
-                proposerAndHeight := mload(add(proposerBytes, proposeroffset))
+            proposerAndHeight := mload(add(tempBytes, CONFIRMED_PROPOSER))
         } 
         
-        // Proposer and notaries get share of fees
-        // any remainder from divide by 2 or divide by notaries gets added
-        feeShare += setNotaryFees(feeShare);
-        setClaimedFees(bytes32(uint256(uint176(proposerAndHeight))), (feeShare + remainder));
+        if (proofHeightOptions < 3) {
+            feePrice = feePrices[proofHeightOptions];
+            feeShare = (msg.value / VerusConstants.SATS_TO_WEI_STD) / 2;
+            remainder = (msg.value / VerusConstants.SATS_TO_WEI_STD) % 2;
+        
+            require(msg.value == feePrice, "Not enough fee");
 
-        return proofs[(bytes32(proposerAndHeight >> OFFSET_FOR_HEIGHT))];
+            // Proposer and notaries get share of fees
+            // any remainder from divide by 2 or equal share to the notaries gets added to proposers share.
+            feeShare += setNotaryFees(feeShare);
+            setClaimedFees(bytes32(uint256(uint176(proposerAndHeight))), (feeShare + remainder));
+        }
+
+        if (proofHeightOptions == 0) {
+            // if the most recent confrimed is requested just get the height from the bestforks
+            return abi.encodePacked(uint32(proposerAndHeight >> OFFSET_FOR_HEIGHT), proofs[(bytes32(proposerAndHeight >> OFFSET_FOR_HEIGHT))]);
+
+        } else if(proofHeightOptions == 1 || proofHeightOptions == 2) {
+
+            // if the prior confirmed or second prior confirmed notarization is required extract the height from the newest confirmed.
+
+            tempBytes = proofs[(bytes32(proposerAndHeight >> OFFSET_FOR_HEIGHT))];
+            uint32 previousConfirmedHeight;
+
+            assembly {
+                previousConfirmedHeight := mload(add(tempBytes, PROOF_HEIGHT_LOCATION))
+            } 
+
+            if(proofHeightOptions == 1) {
+                return abi.encodePacked(uint32(previousConfirmedHeight), proofs[bytes32(uint256(previousConfirmedHeight))]);
+            }
+
+            tempBytes = proofs[bytes32(uint256(previousConfirmedHeight))];
+
+            uint32 secondPreviousConfirmedHeight;
+            assembly {
+                secondPreviousConfirmedHeight := mload(add(tempBytes, PROOF_HEIGHT_LOCATION))
+            } 
+
+            return abi.encodePacked(uint32(secondPreviousConfirmedHeight), proofs[bytes32(uint256(secondPreviousConfirmedHeight))]);
+
+        } else {
+
+           return abi.encodePacked(uint32(proofHeightOptions),proofs[bytes32(proofHeightOptions)]);
+        }
     }
 
     function setNotaryFees(uint256 notaryFees) private returns (uint64 remainder){  //sent in as SATS
@@ -319,10 +359,9 @@ contract VerusNotarizer is VerusStorage {
         remainder = uint64(notaryFees % numOfNotaries);
     }
 
-    function setClaimedFees(bytes32 _address, uint256 fees) private returns (uint256)
+    function setClaimedFees(bytes32 _address, uint256 fees) private
     {
         claimableFees[_address] += fees;
-        return claimableFees[_address];
     }
 
     function serializeUint32(uint32 number) public pure returns(uint32){

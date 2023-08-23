@@ -1,7 +1,7 @@
 // SPDX-License-Identifier: MIT
 // Bridge between ethereum and verus
 
-pragma solidity >=0.4.22 < 0.9.0;
+pragma solidity >=0.8.9;
 pragma abicoder v2;   
 import "../Libraries/VerusObjects.sol";
 import "../Libraries/VerusObjectsNotarization.sol";
@@ -11,9 +11,11 @@ contract VerusSerializer {
 
     uint constant ETH_ADDRESS_SIZE_BYTES = 20;
     uint32 constant CCC_PREFIX_TO_OPTIONS = 3 + 4; // already starts on the byte so 3 first
-    uint32 constant CCC_ID_LEN = 20;
+    uint32 constant VERUS_ID_LENGTH = 20;
     uint32 constant CCC_NATIVE_OFFSET = 4 + 4 + 1;
     uint32 constant CCC_TOKENID_OFFSET = 32;
+    uint32 constant ETH_SEND_GATEWAY_AND_AUX_DEST = 20 + 20 + 8 + 4 + 20;
+    uint32 constant TRANSFER_GATEWAYSKIP = 56; //skip gatewayid, gatewaycode + fees
 
     function readCompactSizeLE(bytes memory incoming, uint32 offset) public pure returns(VerusObjectsCommon.UintReader memory) {
 
@@ -266,7 +268,7 @@ contract VerusSerializer {
 
         assembly {
             options := mload(add(input, nextOffset))
-            nextOffset := add(nextOffset, CCC_ID_LEN)
+            nextOffset := add(nextOffset, VERUS_ID_LENGTH)
             parent := mload(add(input, nextOffset))
             nextOffset := add(nextOffset, 1)  // one byte for name string length
             nameStringLength := and(mload(add(input, nextOffset)), 0x000000ff) // string length MAX 64 so will always be a byte
@@ -283,8 +285,8 @@ contract VerusSerializer {
         returnCurrency.name = string(tempname);
         nextOffset += nameStringLength;
         assembly {
-            nextOffset := add(nextOffset, CCC_ID_LEN) // move to read launchsystemID
-            nextOffset := add(nextOffset, CCC_ID_LEN) // move to read Native currency
+            nextOffset := add(nextOffset, VERUS_ID_LENGTH) // move to read launchsystemID
+            nextOffset := add(nextOffset, VERUS_ID_LENGTH) // move to read Native currency
             nextOffset := add(nextOffset, CCC_NATIVE_OFFSET)
             NativeCurrencyType := mload(add(input, nextOffset)) 
         }
@@ -292,19 +294,19 @@ contract VerusSerializer {
         if (NativeCurrencyType & VerusConstants.DEST_ETHNFT == VerusConstants.DEST_ETHNFT) //mapped ETH NFT
         {
             assembly {
-                nextOffset := add(add(nextOffset, CCC_ID_LEN), 1) //skip vector length 
+                nextOffset := add(add(nextOffset, VERUS_ID_LENGTH), 1) //skip vector length 
                 nativeCurrencyID := mload(add(input, nextOffset))
                 nextOffset := add(nextOffset, CCC_TOKENID_OFFSET)
                 nftID := mload(add(input, nextOffset))
             }
-            returnCurrency.flags |= uint8(VerusConstants.TOKEN_ETH_NFT_DEFINITION);
+            returnCurrency.flags |= uint8(VerusConstants.MAPPING_ETH_NFT_DEFINITION);
             returnCurrency.flags |= uint8(VerusConstants.MAPPING_ETHEREUM_OWNED);
             returnCurrency.tokenID = nftID;
         }
         else if (NativeCurrencyType & VerusConstants.DEST_ETH == VerusConstants.DEST_ETH) //mapped ETH token
         {
             assembly {
-                nextOffset := add(add(nextOffset, CCC_ID_LEN), 1) //skip vector length 
+                nextOffset := add(add(nextOffset, VERUS_ID_LENGTH), 1) //skip vector length 
                 nativeCurrencyID := mload(add(input, nextOffset))
             }
             returnCurrency.flags |= uint8(VerusConstants.TOKEN_LAUNCH);
@@ -312,7 +314,7 @@ contract VerusSerializer {
         }
         else if (options & VerusConstants.OPTION_NFT_TOKEN == VerusConstants.OPTION_NFT_TOKEN) //minted NFT from verus
         {
-            returnCurrency.flags |= uint8(VerusConstants.TOKEN_ETH_NFT_DEFINITION);
+            returnCurrency.flags |= uint8(VerusConstants.MAPPING_ETH_NFT_DEFINITION);
             returnCurrency.flags |= uint8(VerusConstants.MAPPING_VERUS_OWNED);
             nativeCurrencyID = VerusConstants.VerusNFTID;
         }
@@ -339,13 +341,18 @@ contract VerusSerializer {
         address tempaddress;
         uint64 temporaryRegister1;
         uint8 destinationType;
-        uint256 nextOffset = 21;
+        uint256 nextOffset = 1;
         uint176 refundAddress;
         uint64 flags;
 
         while (nextOffset <= tempSerialized.length) {
             
             assembly {
+                destinationType := mload(add(tempSerialized, nextOffset)) // Read one byte at the given offset
+                if iszero(eq(and(destinationType,0xff), 1)) {
+                    revert(0, 0) // Revert the transaction if version is not equal to 1
+                }
+                nextOffset := add(nextOffset, VERUS_ID_LENGTH)
                 tempaddress := mload(add(tempSerialized, nextOffset)) // skip version 0x01 (1 byte) and read currency being sent
             }
 
@@ -355,7 +362,7 @@ contract VerusSerializer {
             tempTransfers[uint8(counter)].currencyAndAmount = uint256(temporaryRegister1) << VerusConstants.UINT160_BITS_SIZE; //shift amount and pack
             tempTransfers[uint8(counter)].currencyAndAmount |= uint256(uint160(tempaddress));
 
-            nextOffset += 20; //skip feecurrency id always vETH, variint already 1 byte in so 19
+            nextOffset += VERUS_ID_LENGTH; //skip feecurrency id always vETH, variint already 1 byte in so 19
 
             (temporaryRegister1, nextOffset) = readVarint(tempSerialized, nextOffset); //fees read into 'temporaryRegister1' but not used
 
@@ -373,7 +380,7 @@ contract VerusSerializer {
                 tempTransfers[uint8(counter)].destinationAndFlags = uint256(tempaddress == VerusConstants.VEth ? VerusConstants.TOKEN_ETH_SEND : VerusConstants.TOKEN_ERC20_SEND) << VerusConstants.UINT160_BITS_SIZE;
 
                 assembly {
-                    tempaddress := mload(sub(add(add(tempSerialized, nextOffset), temporaryRegister1), 1)) //skip type +1 byte to read address
+                    tempaddress := mload(sub(add(add(tempSerialized, nextOffset), VERUS_ID_LENGTH), 1)) //skip type +1 byte to read address
                 }
                 tempTransfers[uint8(counter)].destinationAndFlags |= uint256(uint160(tempaddress));
             }
@@ -397,30 +404,27 @@ contract VerusSerializer {
                         refundAddress := mload(sub(add(add(tempSerialized, nextOffset), temporaryRegister1), 1)) //skip type +1 byte to read address
                     }
                     refundAddresses[uint8(counter)] = refundAddress;
-                nextOffset += temporaryRegister1;
+                    nextOffset += temporaryRegister1;
                 }
 
             }
             counter++;
             if(destinationType & VerusConstants.FLAG_DEST_GATEWAY == VerusConstants.FLAG_DEST_GATEWAY )
             {
-                 nextOffset += 56; //skip gatewayid, gatewaycode + fees
+                 nextOffset += TRANSFER_GATEWAYSKIP; //skip gatewayid, gatewaycode + fees
             }
 
-            nextOffset += 20; //skip destCurrencyID
+            nextOffset += VERUS_ID_LENGTH; //skip destCurrencyID
 
             if(destinationType & VerusConstants.RESERVE_TO_RESERVE == VerusConstants.RESERVE_TO_RESERVE)
             {
-                 nextOffset += 20; 
+                 nextOffset += VERUS_ID_LENGTH; 
             }
 
             if(flags & VerusConstants.CROSS_SYSTEM == VerusConstants.CROSS_SYSTEM )
             {
-                 nextOffset += 20; 
+                 nextOffset += VERUS_ID_LENGTH; 
             }
-
-            
-            nextOffset += 20; //offset ready for next address deserilization
 
         }
 
@@ -466,6 +470,124 @@ contract VerusSerializer {
         return (0, offset);
     }
 
+    function deserializeTransfer(bytes memory serialized) public view returns (VerusObjects.CReserveTransfer memory transfer){ 
 
+        uint256 nextOffset;
+        address tempaddress;
+        uint64 tempReg1;
+        uint8 tempuint8;
+                    
+        assembly {
+            nextOffset := add(nextOffset, 1) //move to read the version type
+            tempuint8 := mload(add(serialized, nextOffset)) // read the version type
+            nextOffset := add(nextOffset, VERUS_ID_LENGTH) //move to read the currencyID
+            tempaddress := mload(add(serialized, nextOffset)) // read the version currencyID
+    
+        }
+        transfer.version = tempuint8;
+
+        transfer.currencyvalue.currency = tempaddress;
+    
+        (tempReg1, nextOffset)  = readVarint(serialized, nextOffset);  // read varint (nValue) returns next idx position
+
+        transfer.currencyvalue.amount = tempReg1;  //copy the value
+
+        (tempReg1, nextOffset) = readVarint(serialized, nextOffset); //read the flags
+
+        transfer.flags = uint32(tempReg1);  //copy the flags
+
+        assembly {
+            nextOffset := add(nextOffset, VERUS_ID_LENGTH) //move to read the destination type, note already 1 byte in so only move 19
+            tempaddress := mload(add(serialized, nextOffset)) // read the feecurrencyid
+          
+        }
+        transfer.feecurrencyid = tempaddress; //copy the feecurrency
+
+        (transfer.fees, nextOffset) = readVarint(serialized, nextOffset); //read the fees and copy into structure
+
+        assembly {
+            nextOffset := add(nextOffset, 1)
+            tempuint8 := mload(add(serialized, nextOffset))  // already at destination type location so read byte
+        }
+        transfer.destination.destinationtype = tempuint8; //copy destination type 
+
+        if (tempuint8 == (VerusConstants.DEST_ETH + VerusConstants.FLAG_DEST_GATEWAY + VerusConstants.FLAG_DEST_AUX) || 
+            tempuint8 == VerusConstants.DEST_ID ||
+            tempuint8 == VerusConstants.DEST_PKH) {
+            
+            assembly {
+            nextOffset := add(nextOffset, 1)  // skip vector length
+            nextOffset := add(nextOffset, VERUS_ID_LENGTH) //move to read the destinationaddress, note already at vector length. 
+            tempaddress := mload(add(serialized, nextOffset))  // read desitination address note always 20 bytes.
+            }
+
+        } else {revert();} // note only 3 types allowed at the moment
+
+        bytes memory tempBouncebacktype;
+
+        if (tempuint8 == (VerusConstants.DEST_ETH + VerusConstants.FLAG_DEST_GATEWAY + VerusConstants.FLAG_DEST_AUX)) {
+
+            tempBouncebacktype = this.slice(serialized, nextOffset, nextOffset + ETH_SEND_GATEWAY_AND_AUX_DEST);
+            assembly {
+                nextOffset := add(nextOffset, ETH_SEND_GATEWAY_AND_AUX_DEST)  // skip vector length
+            }
+        }
+
+        transfer.destination.destinationaddress = abi.encodePacked(tempaddress, tempBouncebacktype);
+
+        assembly {
+            nextOffset := add(nextOffset, VERUS_ID_LENGTH) //move to read the destinationcurrency address
+            tempaddress := mload(add(serialized, nextOffset)) // read the destinationcurrency address
+        }
+
+        transfer.destcurrencyid = tempaddress;
+
+        if (transfer.flags & VerusConstants.RESERVE_TO_RESERVE == VerusConstants.RESERVE_TO_RESERVE) {
+        
+            assembly {
+                nextOffset := add(nextOffset, VERUS_ID_LENGTH) //move to read the secondreserveid
+                tempaddress := mload(add(serialized, nextOffset)) // read the secondreserveid
+            }
+
+            transfer.secondreserveid = tempaddress;
+        }
+        
+        return transfer;
+    }
+
+     function slice (bytes calldata data, uint256 start, uint256 end) public pure returns (bytes memory) {
+
+        return data[start:end];
+       
+    }
+
+        function _toLower(bytes memory bStr) internal pure returns (string memory) {
+
+        bytes memory bLower = new bytes(bStr.length);
+        for (uint i = 0; i < bStr.length; i++) {
+            // Uppercase character...
+            if ((uint8(bStr[i]) >= 65) && (uint8(bStr[i]) <= 90)) {
+                // So we add 32 to make it lowercase
+                bLower[i] = bytes1(uint8(bStr[i]) + 32);
+            } else {
+                bLower[i] = bStr[i];
+            }
+        }
+        return string(bLower);
+    }
+
+
+    function sha256d(string memory _string) internal pure returns(bytes32){
+        return sha256(abi.encodePacked(sha256(abi.encodePacked(_string))));
+    }
+
+    function checkIAddress(VerusObjects.PackedCurrencyLaunch memory _tx) public pure{
+
+        address calculated;
+
+        calculated = address(ripemd160(abi.encodePacked(sha256(abi.encodePacked(sha256d(string(abi.encodePacked(_tx.parent,sha256d(_toLower(bytes(_tx.name)))))))))));
+
+        require(calculated == _tx.iaddress, "Iaddress does not match");
+    }
 
 }

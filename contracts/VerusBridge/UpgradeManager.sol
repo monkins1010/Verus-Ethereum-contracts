@@ -1,5 +1,5 @@
 // SPDX-License-Identifier: MIT
-pragma solidity >=0.4.22 <0.9.0;
+pragma solidity >=0.8.9;
 pragma abicoder v2;
 
 import "../Libraries/VerusObjects.sol";
@@ -22,7 +22,9 @@ contract UpgradeManager is VerusStorage {
     event contractUpdated(bool);
     address internal contractOwner;
 
+
     function upgradeContracts(bytes calldata data) external payable returns (uint8) {
+
 
         require(msg.value > VerusConstants.upgradeFee);
 
@@ -86,6 +88,9 @@ contract UpgradeManager is VerusStorage {
             {       
                 if (contracts[j] != _newContractPackage.contracts[j]) {
                     contracts[j] = _newContractPackage.contracts[j];
+                    //NOTE: Upgraded contracts need a initialize() function to be present, so they can initialize
+                    (bool success,) = _newContractPackage.contracts[j].delegatecall(abi.encodeWithSignature("initialize()"));
+                    require(success);
                 }
             }
         }
@@ -108,13 +113,7 @@ contract UpgradeManager is VerusStorage {
 
         uint8 countOfAgreedVotes;
         
-        for(uint i = rollingVoteIndex; i < rollingUpgradeVotes.length; i++) 
-        {
-            if (contractsHash == rollingUpgradeVotes[i])
-                countOfAgreedVotes++;
-        }
-        
-        for(uint i = 0; i < rollingVoteIndex; i++) 
+        for(uint i = 0; i < rollingUpgradeVotes.length; i++) 
         {
             if (contractsHash == rollingUpgradeVotes[i])
                 countOfAgreedVotes++;

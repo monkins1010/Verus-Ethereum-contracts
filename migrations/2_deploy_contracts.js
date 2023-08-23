@@ -14,6 +14,7 @@ var ExportManager = artifacts.require("./VerusBridge/ExportManager.sol");
 var VerusBlake2b = artifacts.require("./MMR/VerusBlake2b.sol");
 var VerusMMR = artifacts.require("./MMR/VerusMMR.sol");
 var VerusDelegator = artifacts.require("./Main/Delegator.sol");
+var Token = artifacts.require("./VerusBridge/Token.sol");
 
 const abi = web3.eth.abi
 
@@ -77,22 +78,41 @@ module.exports = async function(deployer) {
         notarizationSerializerInst.address,
         UpgradeInst.address
     ];
+    
+    if (deployer.network == "development"){
+        await deployer.deploy(VerusDelegator, setup.TestVerusNotariserIDS, setup.TestVerusNotariserSigner, setup.TestVerusNotariserRecovery, allContracts);
+    } else {
+        await deployer.deploy(VerusDelegator, verusNotariserIDS, verusNotariserSigner, verusNotariserRecovery, allContracts);
+    }
 
-    await deployer.deploy(VerusDelegator, verusNotariserIDS, verusNotariserSigner, verusNotariserRecovery, allContracts);
     const VerusDelegatorInst = await VerusDelegator.deployed();
 
-    const launchCurrencies = abidata();
+    let testnetERC = null;
+    if (deployer.network == "development"){
+        
+        await deployer.deploy(Token, "DAI (Testnet)", "DAI");
+        const TokenInst = await Token.deployed();
+        testnetERC = TokenInst.address;
+        console.log("\nDAI DEPLOYED\n", TokenInst.address); 
+    } 
+    const launchCurrencies = abidata(testnetERC);
+
     await VerusDelegatorInst.launchContractTokens(launchCurrencies);
 
     const settingString = "\ndelegatorcontractaddress=" + VerusDelegatorInst.address + "\n\n" +
         "export const DELEGATOR_ADD = \"" + VerusDelegatorInst.address + "\";";
 
-    console.log("Settings to be pasted into *.conf file and website constants \n\n", settingString);        
+    console.log("\nSettings to be pasted into *.conf file and website constants \n", settingString);        
 };
 
-const abidata = () => {
+const abidata = (testnetERC) => {
     
     let arrayofcurrencies = setup.arrayofcurrencies;
+
+    if(testnetERC){
+        // if running ganache test replace contract with adhoc one.
+        arrayofcurrencies[3][1] = testnetERC;
+    }
 
     let data = abi.encodeParameter(
         'tuple(address,address,address,uint8,string,string,uint256)[]',

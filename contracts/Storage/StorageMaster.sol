@@ -1,12 +1,11 @@
 // SPDX-License-Identifier: MIT
-pragma solidity >=0.4.22 <0.9.0;
+pragma solidity >=0.8.9;
 pragma abicoder v2;
 
 import "../VerusBridge/Token.sol";
 import "../Libraries/VerusObjects.sol";
 import "../Libraries/VerusConstants.sol";
 import "../Libraries/VerusObjectsNotarization.sol";
-
 
 contract VerusStorage {
 
@@ -38,7 +37,7 @@ contract VerusStorage {
     address[] public contracts;  // List of all known contracts Delegator trusts to use (contracts replacable on upgrade)
 
     VerusObjects.voteState[] public pendingVoteState; // Potential contract upgrades
-    address[100] public rollingUpgradeVotes; //TODO: change voting mechanism
+    address[100] public rollingUpgradeVotes; 
     uint8 public rollingVoteIndex;
     mapping (bytes32 => bool) public saltsUsed;   //salts used for upgrades and revoking.
 

@@ -1,7 +1,7 @@
 // SPDX-License-Identifier: MIT
 // Bridge between ethereum and verus
 
-pragma solidity >=0.4.20;
+pragma solidity >=0.8.9;
 pragma abicoder v2;
 
 import "./Token.sol";
@@ -36,16 +36,18 @@ contract TokenManager is VerusStorage {
             if (verusToERC20mapping[_tx[j].iaddress].flags > 0 || _tx[j].iaddress == address(0))
                 continue;
 
+            VerusSerializer(contracts[uint(VerusConstants.ContractType.VerusSerializer)]).checkIAddress(_tx[j]); 
+
             string memory outputName;
 
-            if ((uint8(_tx[j].flags) & VerusConstants.MAPPING_ETHEREUM_OWNED) == VerusConstants.MAPPING_ETHEREUM_OWNED)
+            if ((_tx[j].flags & VerusConstants.MAPPING_ETHEREUM_OWNED) == VerusConstants.MAPPING_ETHEREUM_OWNED)
             {
-                outputName = string(abi.encodePacked("[", getName(_tx[j].ERCContract), "] as "));
-                if (bytes(outputName).length < 7) 
-                {
-                    //ERC20 not found
+                outputName = getName(_tx[j].ERCContract);
+
+                if (bytes(outputName).length == 0) {
                     continue;
                 }
+                outputName = string(abi.encodePacked("[", outputName, "] as "));
             }
 
             outputName = string(abi.encodePacked(outputName, _tx[j].name));
@@ -57,7 +59,6 @@ contract TokenManager is VerusStorage {
             recordToken(_tx[j].iaddress, _tx[j].ERCContract, outputName, string(byteSlice(bytes(_tx[j].name))), uint8(_tx[j].flags), _tx[j].tokenID);
         }
     }
-
     
     function launchContractTokens(bytes calldata data) external {
 
@@ -76,7 +77,6 @@ contract TokenManager is VerusStorage {
         }
     }
     
-
     function recordToken(
         address _iaddress,
         address ethContractAddress,
@@ -95,7 +95,7 @@ contract TokenManager is VerusStorage {
                 Token t = new Token(name, ticker); 
                 ERCContract = address(t); 
             }
-            else if (flags & VerusConstants.TOKEN_ETH_NFT_DEFINITION == VerusConstants.TOKEN_ETH_NFT_DEFINITION)
+            else if (flags & VerusConstants.MAPPING_ETH_NFT_DEFINITION == VerusConstants.MAPPING_ETH_NFT_DEFINITION)
             {
                 ERCContract = verusToERC20mapping[VerusConstants.VerusNFTID].erc20ContractAddress;
                 tokenID = uint256(uint160(_iaddress)); //tokenID is the i address
@@ -155,16 +155,20 @@ contract TokenManager is VerusStorage {
                    tempToken.flags & VerusConstants.TOKEN_LAUNCH == VerusConstants.TOKEN_LAUNCH )
             {
                 token = Token(tempToken.erc20ContractAddress);
+                bool shouldMint = (tempToken.flags & VerusConstants.MAPPING_VERUS_OWNED == VerusConstants.MAPPING_VERUS_OWNED);
                 
                 if (destinationAddress != address(0))
                 {
-                    bool shouldMint = (tempToken.flags & VerusConstants.MAPPING_VERUS_OWNED == VerusConstants.MAPPING_VERUS_OWNED);
                      
                     mintOrTransferToken(token, destinationAddress, 
                             convertFromVerusNumber(uint256(trans[i].currencyAndAmount >> VerusConstants.UINT160_BITS_SIZE), token.decimals()), shouldMint);
                 }
+                if (!shouldMint) 
+                {
+                    verusToERC20mapping[address(uint160(trans[i].currencyAndAmount))].tokenID -= uint64(trans[i].currencyAndAmount >> VerusConstants.UINT160_BITS_SIZE);
+                }
             } 
-            else if (tempToken.flags & VerusConstants.TOKEN_ETH_NFT_DEFINITION == VerusConstants.TOKEN_ETH_NFT_DEFINITION &&
+            else if (tempToken.flags & VerusConstants.MAPPING_ETH_NFT_DEFINITION == VerusConstants.MAPPING_ETH_NFT_DEFINITION &&
                    tempToken.flags & VerusConstants.MAPPING_ETHEREUM_OWNED == VerusConstants.MAPPING_ETHEREUM_OWNED )
             {
                 if (destinationAddress != address(0))
@@ -172,7 +176,7 @@ contract TokenManager is VerusStorage {
                     ERC721(tempToken.erc20ContractAddress).transferFrom(address(this), destinationAddress, tempToken.tokenID);
                 }
             }
-            else if (tempToken.flags & VerusConstants.TOKEN_ETH_NFT_DEFINITION == VerusConstants.TOKEN_ETH_NFT_DEFINITION &&
+            else if (tempToken.flags & VerusConstants.MAPPING_ETH_NFT_DEFINITION == VerusConstants.MAPPING_ETH_NFT_DEFINITION &&
                    tempToken.flags & VerusConstants.MAPPING_VERUS_OWNED == VerusConstants.MAPPING_VERUS_OWNED )
             {
 
