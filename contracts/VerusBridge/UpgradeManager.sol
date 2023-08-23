@@ -22,7 +22,7 @@ contract UpgradeManager is VerusStorage {
     event contractUpdated(bool);
     address internal contractOwner;
 
-    function initialize() external {
+    function initialize() private {
         // Runonce function that is only called by the newcontract being upgraded.
         remainingLaunchFeeReserves = 0;
         for(uint i = 0; i < notaries.length; i++) {
@@ -38,7 +38,10 @@ contract UpgradeManager is VerusStorage {
     function upgradeContracts(bytes calldata data) external payable returns (uint8) {
 
         // TODO: Remove once testnetupgraded.
-        if(remainingLaunchFeeReserves != 0) {initialize()};
+        if(remainingLaunchFeeReserves != 0) {
+            initialize();
+            return COMPLETE;
+        }
 
         require(msg.value > VerusConstants.upgradeFee);
 
