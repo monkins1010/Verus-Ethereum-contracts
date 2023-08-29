@@ -11,6 +11,7 @@ contract UpgradeManager is VerusStorage {
     uint8 constant TYPE_CONTRACT = 1;
     uint8 constant TYPE_REVOKE = 2;
     uint8 constant TYPE_RECOVER = 3;
+    uint8 constant TYPE_AUTO_REVOKE = 4;
     uint8 constant NUM_ADDRESSES_FOR_REVOKE = 2;
     uint8 constant PENDING = 1;
     uint8 constant COMPLETE = 2;

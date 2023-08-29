@@ -22,6 +22,7 @@ contract NotaryTools is VerusStorage {
     uint8 constant OFFSET_FOR_HEIGHT = 224;
     uint8 constant TYPE_REVOKE = 2;
     uint8 constant TYPE_RECOVER = 3;
+    uint8 constant TYPE_AUTO_REVOKE = 4;
     uint8 constant NUM_ADDRESSES_FOR_REVOKE = 2;
     uint8 constant COMPLETE = 2;
     uint8 constant ERROR = 4;
@@ -45,6 +46,13 @@ contract NotaryTools is VerusStorage {
 
     function revokeWithMainAddress(bytes calldata dataIn) public returns (bool) {
 
+        if (dataIn.length == 1 && dataIn[0] == TYPE_AUTO_REVOKE) {
+            notaryAddressMapping[notaryAddressMapping[msg.sender].main].state = VerusConstants.NOTARY_REVOKED;
+            notaryAddressMapping[msg.sender].state = VerusConstants.NOTARY_REVOKED;
+
+            return true;
+        }
+        
         VerusObjects.revokeInfo memory _revokePacket = abi.decode(dataIn, (VerusObjects.revokeInfo));
         
         bytes memory be; 

@@ -397,7 +397,7 @@ contract VerusSerializer {
             if (destinationType & VerusConstants.FLAG_DEST_AUX == VerusConstants.FLAG_DEST_AUX)
             {
                 (temporaryRegister1, nextOffset) = readCompactSizeLE2(tempSerialized, nextOffset);    // get the length of the auxDest
-
+                //TODO: read type and if a NFT then mark it as an NFT
                 for (uint i = temporaryRegister1; i > 0; i--) {
                     (temporaryRegister1, nextOffset) = readCompactSizeLE2(tempSerialized, nextOffset);    // get the length of the auxDest sub array
                     assembly {
