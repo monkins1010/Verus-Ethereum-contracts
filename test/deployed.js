@@ -164,4 +164,136 @@ contract("Verus Contracts deployed tests", async(accounts)  => {
         assert.equal(toBase58Check(Buffer.from(txOne,'hex'), 102), reservetransfer.twoReserveTransfers[0].reserve_values.value_map.keys().next().value , "transfer currency does not equal transaction");
       });
 
+      it("Deserialize a Reserve transfer with a mapped ERC721", async () => {
+        const VerusSerializerInst = await VerusSerializer.deployed();
+        const contractAddress = VerusSerializerInst.address;
+        const contractInstance = new web3.eth.Contract(verusSerializerAbi.abi, contractAddress);
+
+        // convert the two reserveTransfers to a single hex string
+        const erc721transfer = reservetransfer.erc721transferETH.toBuffer().toString('hex');
+
+        let reply;  
+        try {
+            reply = await contractInstance.methods.deserializeTransfers(`0x${erc721transfer}${erc721transfer}${reservetransfer.twoReserveTransfers[0].toBuffer().toString('hex')}`, 3).call();  
+           // console.log(reply)
+        } catch(e) {
+            console.log(e.message)
+            assert.isTrue(false);
+        }
+
+        assert.equal(toBase58Check(Buffer.from(reply.launchTxs[0].iaddress.slice(2), 'hex'), 102), "i7VSq7gm2xe7vWnjK9SvJvTUvy5rcLfozZ" , "transfer currency does not equal transaction");
+        assert.equal(reply.launchTxs[0].ERCContract, "0x39Ec448b891c476e166b3C3242A90830DB556661" , "ERC721 does not equal transaction");
+        assert.equal(reply.launchTxs[0].flags, 129 , "ERC20 does not equal transaction");
+      });
+
+      it("Deserialize a Reserve transfer with a verus owned ERC721", async () => {
+        const VerusSerializerInst = await VerusSerializer.deployed();
+        const contractAddress = VerusSerializerInst.address;
+        const contractInstance = new web3.eth.Contract(verusSerializerAbi.abi, contractAddress);
+
+        // convert the two reserveTransfers to a single hex string
+        const erc721transfer = reservetransfer.erc721transferVerus.toBuffer().toString('hex');
+
+        let reply;  
+        try {
+            reply = await contractInstance.methods.deserializeTransfers(`0x${erc721transfer}${erc721transfer}${reservetransfer.twoReserveTransfers[0].toBuffer().toString('hex')}`, 3).call();  
+           // console.log(reply)
+        } catch(e) {
+            console.log(e.message)
+            assert.isTrue(false);
+        }
+
+        assert.equal(toBase58Check(Buffer.from(reply.launchTxs[0].iaddress.slice(2), 'hex'), 102), "i7VSq7gm2xe7vWnjK9SvJvTUvy5rcLfozZ" , "transfer currency (chad7) does not equal transaction");
+        assert.equal(reply.launchTxs[0].ERCContract, "0x9bB2772Aa50ec96ce1305D926B9CC29b7c402bAD" , "ERC721 does not equal verus ERC721 NFT address");
+      });
+
+      it("Deserialize a Reserve transfer with a verus owned ERC20", async () => {
+        const VerusSerializerInst = await VerusSerializer.deployed();
+        const contractAddress = VerusSerializerInst.address;
+        const contractInstance = new web3.eth.Contract(verusSerializerAbi.abi, contractAddress);
+
+        // convert the two reserveTransfers to a single hex string
+        const erc20verustoken = reservetransfer.erc20verustoken.toBuffer().toString('hex');
+
+        let reply;  
+        try {
+            reply = await contractInstance.methods.deserializeTransfers(`0x${erc20verustoken}${erc20verustoken}${reservetransfer.twoReserveTransfers[0].toBuffer().toString('hex')}`, 3).call();  
+           // console.log(reply)
+        } catch(e) {
+            console.log(e.message)
+            assert.isTrue(false);
+        }
+
+        assert.equal(toBase58Check(Buffer.from(reply.launchTxs[0].iaddress.slice(2), 'hex'), 102), "i7VSq7gm2xe7vWnjK9SvJvTUvy5rcLfozZ" , "transfer currency (chad7) does not equal transaction");
+        assert.equal(reply.launchTxs[0].ERCContract, "0x0000000000000000000000000000000000000000" , "ERC20 does not equal verus ERC20 NFT address");
+      });
+
+      it("Deserialize a Reserve transfer with a ETH owned ERC20", async () => {
+        const VerusSerializerInst = await VerusSerializer.deployed();
+        const contractAddress = VerusSerializerInst.address;
+        const contractInstance = new web3.eth.Contract(verusSerializerAbi.abi, contractAddress);
+
+        // convert the two reserveTransfers to a single hex string
+        const erc20ETHtoken = reservetransfer.erc20ETHtoken.toBuffer().toString('hex');
+
+        let reply;  
+        try {
+            reply = await contractInstance.methods.deserializeTransfers(`0x${erc20ETHtoken}${erc20ETHtoken}${reservetransfer.twoReserveTransfers[0].toBuffer().toString('hex')}`, 3).call();  
+           // console.log(reply)
+        } catch(e) {
+            console.log(e.message)
+            assert.isTrue(false);
+        }
+
+        assert.equal(toBase58Check(Buffer.from(reply.launchTxs[0].iaddress.slice(2), 'hex'), 102), "i7VSq7gm2xe7vWnjK9SvJvTUvy5rcLfozZ" , "transfer currency (chad7) does not equal transaction");
+        assert.equal(reply.launchTxs[0].ERCContract, "0xB897f2448054bc5b133268A53090e110D101FFf0" , "ERC20 does not equal DAI address (first Currency Export)");
+        assert.equal(reply.launchTxs[1].ERCContract, "0xB897f2448054bc5b133268A53090e110D101FFf0" , "ERC20 does not equal DAI address (second Currency Export)");
+      });
+
+      it("Deserialize a Reserve transfer with a ERC1155 Verus mapped nft", async () => {
+        const VerusSerializerInst = await VerusSerializer.deployed();
+        const contractAddress = VerusSerializerInst.address;
+        const contractInstance = new web3.eth.Contract(verusSerializerAbi.abi, contractAddress);
+
+        // convert the two reserveTransfers to a single hex string
+        const erc1155VerusNFT = reservetransfer.erc1155VerusNFT.toBuffer().toString('hex');
+
+        let reply;  
+        try {
+            reply = await contractInstance.methods.deserializeTransfers(`0x${erc1155VerusNFT}${erc1155VerusNFT}${reservetransfer.twoReserveTransfers[0].toBuffer().toString('hex')}`, 3).call();  
+           // console.log(reply)
+        } catch(e) {
+            console.log(e.message)
+            assert.isTrue(false);
+        }
+
+        assert.equal(toBase58Check(Buffer.from(reply.launchTxs[0].iaddress.slice(2), 'hex'), 102), "iAwycBuMcPJii45bKNTEfSnD9W9iXMiKGg" , "transfer currency (id2) does not equal transaction");
+        assert.equal(reply.launchTxs[0].ERCContract, "0xF7F25BFC8a4E4a4413243Cc5388e5a056cb4235b" , "ERC1155 does not equal the correct address (first Currency Export)");
+        assert.equal(reply.launchTxs[1].ERCContract, "0xF7F25BFC8a4E4a4413243Cc5388e5a056cb4235b" , "ERC1155 does not equal the correct (second Currency Export)");
+        assert.equal(reply.launchTxs[0].flags, "17" , "Ethereum mapped currency does not have the correct flags ");
+      });
+
+      it("Deserialize a Reserve transfer with a ERC1155 to token mapping", async () => {
+        const VerusSerializerInst = await VerusSerializer.deployed();
+        const contractAddress = VerusSerializerInst.address;
+        const contractInstance = new web3.eth.Contract(verusSerializerAbi.abi, contractAddress);
+
+        // convert the two reserveTransfers to a single hex string
+        const erc1155Token = reservetransfer.erc1155Token.toBuffer().toString('hex');
+
+        let reply;  
+        try {
+            reply = await contractInstance.methods.deserializeTransfers(`0x${erc1155Token}${erc1155Token}${reservetransfer.twoReserveTransfers[0].toBuffer().toString('hex')}`, 3).call();  
+           // console.log(reply)
+        } catch(e) {
+            console.log(e.message)
+            assert.isTrue(false);
+        }
+
+        assert.equal(toBase58Check(Buffer.from(reply.launchTxs[0].iaddress.slice(2), 'hex'), 102), "iAwycBuMcPJii45bKNTEfSnD9W9iXMiKGg" , "transfer currency (id2) does not equal transaction");
+        assert.equal(reply.launchTxs[0].ERCContract, "0x0000000000000000000000000000000000000000" , "ERC1155 does not equal the correct (first Currency Export)");
+        assert.equal(reply.launchTxs[1].ERCContract, "0x0000000000000000000000000000000000000000" , "ERC1155 does not equal the correct (second Currency Export)");
+        assert.equal(reply.launchTxs[0].flags, "65" , "Ethereum mapped currency does not have the correct flags ");
+      });
+
 });

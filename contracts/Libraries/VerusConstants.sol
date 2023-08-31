@@ -43,17 +43,20 @@ library VerusConstants {
     uint8 constant CURRENT_VERSION = 1;
 
     // deploy & launch Token flags These must match the constants in deploycontracts.js
+    uint32 constant MAPPING_INVALID = 0;
     uint32 constant MAPPING_ETHEREUM_OWNED = 1;
     uint32 constant MAPPING_VERUS_OWNED = 2;
     uint32 constant MAPPING_PARTOF_BRIDGEVETH = 4;
     uint32 constant MAPPING_ISBRIDGE_CURRENCY = 8;
-    uint32 constant MAPPING_ETH_NFT_DEFINITION = 128;
-    //uint32 constant MAPPING_IS_GATEWAY = 256;  // TODO: Enable when supported
-    //uint32 constant MAPPING_IS_PBAAS_CHAIN = 512;  //TODO: Enable when supported
-    uint32 constant TOKEN_ERC20_SEND = 16;   
-    uint32 constant TOKEN_LAUNCH = 32;
+    uint32 constant MAPPING_ERC1155_NFT_DEFINITION = 16;
+    uint32 constant MAPPING_ERC20_DEFINITION = 32;
+    uint32 constant MAPPING_ERC1155_ERC_DEFINITION = 64;
+    uint32 constant MAPPING_ERC721_NFT_DEFINITION = 128;
+    
+    // send flags
+    uint32 constant TOKEN_ERC_SEND = 16;   
     uint32 constant TOKEN_ETH_SEND = 64;
-    //uint32 constant PROOF_ETHNOTARIZATION = 3; //TODO: Enable when supported
+
 
     uint32 constant AUX_DEST_PREFIX = 0x01160214;
 

@@ -46,7 +46,7 @@ contract NotaryTools is VerusStorage {
 
     function revokeWithMainAddress(bytes calldata dataIn) public returns (bool) {
 
-        if (dataIn.length == 1 && dataIn[0] == TYPE_AUTO_REVOKE) {
+        if (dataIn.length == 1 && uint8(dataIn[0]) == TYPE_AUTO_REVOKE) {
             notaryAddressMapping[notaryAddressMapping[msg.sender].main].state = VerusConstants.NOTARY_REVOKED;
             notaryAddressMapping[msg.sender].state = VerusConstants.NOTARY_REVOKED;
 

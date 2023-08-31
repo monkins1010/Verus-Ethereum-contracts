@@ -257,7 +257,7 @@ contract VerusSerializer {
                     returns (VerusObjects.PackedCurrencyLaunch memory returnCurrency)
     {
         uint32 nextOffset;
-        uint32 nameStringLength;
+        uint32 tempUint32;
         address parent;
         address nativeCurrencyID;
         uint256 nftID;
@@ -270,24 +270,24 @@ contract VerusSerializer {
             options := mload(add(input, nextOffset))
             nextOffset := add(nextOffset, VERUS_ID_LENGTH)
             parent := mload(add(input, nextOffset))
-            nextOffset := add(nextOffset, 1)  // one byte for name string length
-            nameStringLength := and(mload(add(input, nextOffset)), 0x000000ff) // string length MAX 64 so will always be a byte
+            nextOffset := add(nextOffset, 1)  // one byte move forwards to read string length
+            tempUint32 := and(mload(add(input, nextOffset)), 0x000000ff) // string length MAX 64 so will always be a byte
         }
 
         options = serializeUint32(options);  //reverse endian
         returnCurrency.parent = parent;
-        bytes memory tempname = new bytes(nameStringLength);
+        bytes memory tempname = new bytes(tempUint32);
 
-        for (uint32 i = 0; i < nameStringLength; i++) { //pack a max of 19 bytes of the id name into token name
+        for (uint32 i = 0; i < tempUint32; i++) { 
             tempname[i] = input[i + nextOffset];
         }
         
         returnCurrency.name = string(tempname);
-        nextOffset += nameStringLength;
+        nextOffset += tempUint32;
         assembly {
             nextOffset := add(nextOffset, VERUS_ID_LENGTH) // move to read launchsystemID
-            nextOffset := add(nextOffset, VERUS_ID_LENGTH) // move to read Native currency
-            nextOffset := add(nextOffset, CCC_NATIVE_OFFSET)
+            nextOffset := add(nextOffset, VERUS_ID_LENGTH) // move to read systemID
+            nextOffset := add(nextOffset, CCC_NATIVE_OFFSET) // move to read the native currency type
             NativeCurrencyType := mload(add(input, nextOffset)) 
         }
        
@@ -299,29 +299,55 @@ contract VerusSerializer {
                 nextOffset := add(nextOffset, CCC_TOKENID_OFFSET)
                 nftID := mload(add(input, nextOffset))
             }
-            returnCurrency.flags |= uint8(VerusConstants.MAPPING_ETH_NFT_DEFINITION);
             returnCurrency.flags |= uint8(VerusConstants.MAPPING_ETHEREUM_OWNED);
             returnCurrency.tokenID = nftID;
         }
-        else if (NativeCurrencyType & VerusConstants.DEST_ETH == VerusConstants.DEST_ETH) //mapped ETH token
+        else if (NativeCurrencyType & VerusConstants.DEST_ETH == VerusConstants.DEST_ETH &&
+                 NativeCurrencyType & VerusConstants.FLAG_DEST_AUX == 0) //mapped ETH token
         {
             assembly {
                 nextOffset := add(add(nextOffset, VERUS_ID_LENGTH), 1) //skip vector length 
                 nativeCurrencyID := mload(add(input, nextOffset))
             }
-            returnCurrency.flags |= uint8(VerusConstants.TOKEN_LAUNCH);
+            returnCurrency.flags |= uint8(VerusConstants.MAPPING_ERC20_DEFINITION);
             returnCurrency.flags |= uint8(VerusConstants.MAPPING_ETHEREUM_OWNED);
         }
         else if (options & VerusConstants.OPTION_NFT_TOKEN == VerusConstants.OPTION_NFT_TOKEN) //minted NFT from verus
         {
-            returnCurrency.flags |= uint8(VerusConstants.MAPPING_ETH_NFT_DEFINITION);
+            returnCurrency.flags |= uint8(VerusConstants.MAPPING_ERC721_NFT_DEFINITION);
             returnCurrency.flags |= uint8(VerusConstants.MAPPING_VERUS_OWNED);
             nativeCurrencyID = VerusConstants.VerusNFTID;
         }
         else if (NativeCurrencyType == 0x00) //minted ERC20 from verus
         {
-            returnCurrency.flags |= uint8(VerusConstants.TOKEN_LAUNCH);
+            returnCurrency.flags |= uint8(VerusConstants.MAPPING_ERC20_DEFINITION);
             returnCurrency.flags |= uint8(VerusConstants.MAPPING_VERUS_OWNED);
+        }
+        
+        if (NativeCurrencyType & VerusConstants.FLAG_DEST_AUX == VerusConstants.FLAG_DEST_AUX) {
+
+            assembly {
+                nextOffset := add(nextOffset, 1) //move to vector length 
+            }
+            (address tokenAddress, uint256 tokenId) = readAuxDestETHNFTAddress(input, nextOffset);
+
+            if(tokenAddress != nativeCurrencyID || (nftID != uint256(0) && tokenId != nftID)) {
+                // if the auxdest does not match the ERC addres or the NFT ID does not match the auxdest NFT ID then the currency is invalid
+                returnCurrency.flags = uint8(VerusConstants.MAPPING_INVALID);
+                return returnCurrency;
+            }
+            returnCurrency.flags |= uint8(VerusConstants.MAPPING_ETHEREUM_OWNED);
+            
+            if (NativeCurrencyType & VerusConstants.DEST_ETHNFT == VerusConstants.DEST_ETHNFT ) {                
+                returnCurrency.flags |= uint8(VerusConstants.MAPPING_ERC1155_NFT_DEFINITION);
+            } else {
+                returnCurrency.flags |= uint8(VerusConstants.MAPPING_ERC1155_ERC_DEFINITION);
+            }
+
+        } else if (NativeCurrencyType & VerusConstants.DEST_ETHNFT == VerusConstants.DEST_ETHNFT){
+
+            returnCurrency.flags |= uint8(VerusConstants.MAPPING_ERC721_NFT_DEFINITION);
+            returnCurrency.flags |= uint8(VerusConstants.MAPPING_ETHEREUM_OWNED);
         }
 
         returnCurrency.ERCContract = nativeCurrencyID;
@@ -374,22 +400,24 @@ contract VerusSerializer {
 
             (temporaryRegister1, nextOffset) = readCompactSizeLE2(tempSerialized, nextOffset);    // get the length of the destination
 
-            // if destination an address read 
+            // if destination an ERC Send (ETH, ERC20, ERC721, ERC1155)
             if (destinationType & VerusConstants.DEST_ETH == VerusConstants.DEST_ETH)
             {
-                tempTransfers[uint8(counter)].destinationAndFlags = uint256(tempaddress == VerusConstants.VEth ? VerusConstants.TOKEN_ETH_SEND : VerusConstants.TOKEN_ERC20_SEND) << VerusConstants.UINT160_BITS_SIZE;
-
                 assembly {
                     tempaddress := mload(sub(add(add(tempSerialized, nextOffset), VERUS_ID_LENGTH), 1)) //skip type +1 byte to read address
                 }
-                tempTransfers[uint8(counter)].destinationAndFlags |= uint256(uint160(tempaddress));
+                tempTransfers[uint8(counter)].destinationAndFlags = uint256(uint160(tempaddress));
             }
             else if (destinationType & VerusConstants.DEST_REGISTERCURRENCY == VerusConstants.DEST_REGISTERCURRENCY || 
-                                destinationType & VerusConstants.DEST_ETHNFT == VerusConstants.DEST_ETHNFT)
+                          destinationType & VerusConstants.DEST_ETHNFT == VerusConstants.DEST_ETHNFT)  //TODO: check whether a DEST_ETHNFT is applicable here?    
             { 
                 launchTxs[(counter >> 24 & 0xff)] = currencyParser(tempSerialized, nextOffset);
-                launchTxs[(counter >> 24 & 0xff)].iaddress = address(uint160(tempTransfers[uint8(counter)].currencyAndAmount));
-                counter += 0x1000000; //This is the Launch currency counter packed into the 4th byte
+
+                if (launchTxs[(counter >> 24 & 0xff)].flags != 0) {
+                    // if the currency is valid then set the iaddress to the currencyID and increment the counter.
+                    launchTxs[(counter >> 24 & 0xff)].iaddress = address(uint160(tempTransfers[uint8(counter)].currencyAndAmount));
+                    counter += 0x1000000; //This is the Launch currency counter packed into the 4th byte
+                }
             }
 
             nextOffset += temporaryRegister1;
@@ -397,7 +425,6 @@ contract VerusSerializer {
             if (destinationType & VerusConstants.FLAG_DEST_AUX == VerusConstants.FLAG_DEST_AUX)
             {
                 (temporaryRegister1, nextOffset) = readCompactSizeLE2(tempSerialized, nextOffset);    // get the length of the auxDest
-                //TODO: read type and if a NFT then mark it as an NFT
                 for (uint i = temporaryRegister1; i > 0; i--) {
                     (temporaryRegister1, nextOffset) = readCompactSizeLE2(tempSerialized, nextOffset);    // get the length of the auxDest sub array
                     assembly {
@@ -590,4 +617,27 @@ contract VerusSerializer {
         require(calculated == _tx.iaddress, "Iaddress does not match");
     }
 
+    function readAuxDestETHNFTAddress(bytes memory input, uint256 nextOffset) internal pure returns(address, uint256) { 
+
+        uint64 temporaryRegister1;
+        address ETHaddress;
+        uint256 tokenID;
+        (temporaryRegister1, nextOffset) = readCompactSizeLE2(input, nextOffset);    // get the length of the auxDest
+
+        if (temporaryRegister1 == 1) {
+            (temporaryRegister1, nextOffset) = readCompactSizeLE2(input, nextOffset);    // get the length of the auxDest sub array, this will be a CReserveDestination
+            if (uint8(input[nextOffset - 1]) == VerusConstants.DEST_ETHNFT) {
+
+                assembly {
+                    nextOffset := add(nextOffset, 1) //move to vector length
+                    nextOffset := add(nextOffset, VERUS_ID_LENGTH) //move to ETH address
+                    ETHaddress := mload(add(input, nextOffset)) 
+                    nextOffset := add(nextOffset, CCC_TOKENID_OFFSET) //move to ETH address
+                    tokenID := mload(add(input, nextOffset)) 
+                }
+            return (ETHaddress, tokenID);
+            }  
+        }
+        return (ETHaddress, tokenID);
+    }
 }
