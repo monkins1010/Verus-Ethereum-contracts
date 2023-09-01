@@ -183,7 +183,8 @@ contract("Verus Contracts deployed tests", async(accounts)  => {
 
         assert.equal(toBase58Check(Buffer.from(reply.launchTxs[0].iaddress.slice(2), 'hex'), 102), "i7VSq7gm2xe7vWnjK9SvJvTUvy5rcLfozZ" , "transfer currency does not equal transaction");
         assert.equal(reply.launchTxs[0].ERCContract, "0x39Ec448b891c476e166b3C3242A90830DB556661" , "ERC721 does not equal transaction");
-        assert.equal(reply.launchTxs[0].flags, 129 , "ERC20 does not equal transaction");
+        assert.equal(reply.launchTxs[0].flags, "129" , "ERC721 does not equal transaction");
+        assert.equal(reply.launchTxs[0].tokenID, 255 , "ERC721 TokenID does not equal the correct (first Currency Export)");
       });
 
       it("Deserialize a Reserve transfer with a verus owned ERC721", async () => {
@@ -205,6 +206,7 @@ contract("Verus Contracts deployed tests", async(accounts)  => {
 
         assert.equal(toBase58Check(Buffer.from(reply.launchTxs[0].iaddress.slice(2), 'hex'), 102), "i7VSq7gm2xe7vWnjK9SvJvTUvy5rcLfozZ" , "transfer currency (chad7) does not equal transaction");
         assert.equal(reply.launchTxs[0].ERCContract, "0x9bB2772Aa50ec96ce1305D926B9CC29b7c402bAD" , "ERC721 does not equal verus ERC721 NFT address");
+        assert.equal(reply.launchTxs[0].flags, "130" , "Ethereum mapped currency does not have the correct flags ");
       });
 
       it("Deserialize a Reserve transfer with a verus owned ERC20", async () => {
@@ -226,6 +228,7 @@ contract("Verus Contracts deployed tests", async(accounts)  => {
 
         assert.equal(toBase58Check(Buffer.from(reply.launchTxs[0].iaddress.slice(2), 'hex'), 102), "i7VSq7gm2xe7vWnjK9SvJvTUvy5rcLfozZ" , "transfer currency (chad7) does not equal transaction");
         assert.equal(reply.launchTxs[0].ERCContract, "0x0000000000000000000000000000000000000000" , "ERC20 does not equal verus ERC20 NFT address");
+        assert.equal(reply.launchTxs[0].flags, "34" , "Ethereum mapped currency does not have the correct flags ");
       });
 
       it("Deserialize a Reserve transfer with a ETH owned ERC20", async () => {
@@ -248,6 +251,7 @@ contract("Verus Contracts deployed tests", async(accounts)  => {
         assert.equal(toBase58Check(Buffer.from(reply.launchTxs[0].iaddress.slice(2), 'hex'), 102), "i7VSq7gm2xe7vWnjK9SvJvTUvy5rcLfozZ" , "transfer currency (chad7) does not equal transaction");
         assert.equal(reply.launchTxs[0].ERCContract, "0xB897f2448054bc5b133268A53090e110D101FFf0" , "ERC20 does not equal DAI address (first Currency Export)");
         assert.equal(reply.launchTxs[1].ERCContract, "0xB897f2448054bc5b133268A53090e110D101FFf0" , "ERC20 does not equal DAI address (second Currency Export)");
+        assert.equal(reply.launchTxs[0].flags, "33" , "Ethereum mapped currency does not have the correct flags ");
       });
 
       it("Deserialize a Reserve transfer with a ERC1155 Verus mapped nft", async () => {
@@ -270,6 +274,8 @@ contract("Verus Contracts deployed tests", async(accounts)  => {
         assert.equal(toBase58Check(Buffer.from(reply.launchTxs[0].iaddress.slice(2), 'hex'), 102), "iAwycBuMcPJii45bKNTEfSnD9W9iXMiKGg" , "transfer currency (id2) does not equal transaction");
         assert.equal(reply.launchTxs[0].ERCContract, "0xF7F25BFC8a4E4a4413243Cc5388e5a056cb4235b" , "ERC1155 does not equal the correct address (first Currency Export)");
         assert.equal(reply.launchTxs[1].ERCContract, "0xF7F25BFC8a4E4a4413243Cc5388e5a056cb4235b" , "ERC1155 does not equal the correct (second Currency Export)");
+        assert.equal(reply.launchTxs[0].tokenID, 255 , "ERC1155 TokenID does not equal the correct (first Currency Export)");
+        assert.equal(reply.launchTxs[1].tokenID, 255 , "ERC1155 TokenID does not equal the correct (second Currency Export)");
         assert.equal(reply.launchTxs[0].flags, "17" , "Ethereum mapped currency does not have the correct flags ");
       });
 
@@ -291,8 +297,10 @@ contract("Verus Contracts deployed tests", async(accounts)  => {
         }
 
         assert.equal(toBase58Check(Buffer.from(reply.launchTxs[0].iaddress.slice(2), 'hex'), 102), "iAwycBuMcPJii45bKNTEfSnD9W9iXMiKGg" , "transfer currency (id2) does not equal transaction");
-        assert.equal(reply.launchTxs[0].ERCContract, "0x0000000000000000000000000000000000000000" , "ERC1155 does not equal the correct (first Currency Export)");
-        assert.equal(reply.launchTxs[1].ERCContract, "0x0000000000000000000000000000000000000000" , "ERC1155 does not equal the correct (second Currency Export)");
+        assert.equal(reply.launchTxs[0].ERCContract, "0xF7F25BFC8a4E4a4413243Cc5388e5a056cb4235b" , "ERC1155 does not equal the correct (first Currency Export)");
+        assert.equal(reply.launchTxs[1].ERCContract, "0xF7F25BFC8a4E4a4413243Cc5388e5a056cb4235b" , "ERC1155 does not equal the correct (second Currency Export)");
+        assert.equal(reply.launchTxs[0].tokenID, 255 , "ERC1155 TokenID does not equal the correct (first Currency Export)");
+        assert.equal(reply.launchTxs[1].tokenID, 255 , "ERC1155 TokenID does not equal the correct (second Currency Export)");
         assert.equal(reply.launchTxs[0].flags, "65" , "Ethereum mapped currency does not have the correct flags ");
       });
 

@@ -33,6 +33,7 @@ library VerusConstants {
 
     uint32 constant INVALID_FLAGS = 0xffffffff - (VALID + CONVERT + RESERVE_TO_RESERVE + IMPORT_TO_SOURCE);
 
+    uint8 constant DEST_PK = 1;
     uint8 constant DEST_PKH = 2;
     uint8 constant DEST_ID = 4;
     uint8 constant DEST_REGISTERCURRENCY = 6;
