@@ -14,6 +14,7 @@ const PRECONVERT = 4
 const CROSS_SYSTEM = 0x40           
 const IMPORT_TO_SOURCE = 0x200          
 const RESERVE_TO_RESERVE = 0x400  
+const CURRENCY_EXPORT = 0x2000
 
 
 const prelaunchfundETH = new ReserveTransfer({
@@ -196,6 +197,25 @@ const erc1155Token = new ReserveTransfer({
   dest_currency_id: "iCtawpxUiCc2sEupt7Z4u8SDAncGZpgSKm"
 })
 
+const testErcVerus = new ReserveTransfer({  
+  values: new CurrencyValueMap({
+    value_map: new Map([
+      ["iAwycBuMcPJii45bKNTEfSnD9W9iXMiKGg", new BN(0, 10)]  //swap 1 ETH
+    ]),
+    multivalue: false
+  }),
+  version: new BN(1, 10),
+  flags: new BN(VALID + CROSS_SYSTEM + CURRENCY_EXPORT, 10),   //
+  fee_currency_id: "iCtawpxUiCc2sEupt7Z4u8SDAncGZpgSKm",  // fee currency veth
+  fee_amount: new BN(540000, 10),   // 0.0054 ETH FEE SATS (8 decimal places)
+  transfer_destination: new TransferDestination({
+    type: new BN(DEST_REGISTERCURRENCY, 10),
+    destination_bytes: Buffer.from("0100000020000000a6ef9ea235635e328124ff3429db9f9e91b64e2d0865726332306d6170a6ef9ea235635e328124ff3429db9f9e91b64e2d67460c2f56774ed27eeb8685f29f6cec0b090b0001000000030000000914b897f2448054bc5b133268a53090e110d101fff000000000000000000000000000000000000000008a0600000000000000000000000000000000000001a6ef9ea235635e328124ff3429db9f9e91b64e2d000100e1f505000000000001000000000000000001000000000000000001000000000000000000000000000000a49faec70003f98800", 'hex'),
+  }),
+  dest_currency_id: "iCtawpxUiCc2sEupt7Z4u8SDAncGZpgSKm",
+  dest_system_id: "iCtawpxUiCc2sEupt7Z4u8SDAncGZpgSKm"
+})
+
 const twoReserveTransfers = [verusReserveTransfer, verusReserveTransfer];
 
 module.exports.prelaunchfundETH = prelaunchfundETH;
@@ -207,3 +227,4 @@ module.exports.erc20verustoken = erc20verustoken;
 module.exports.erc20ETHtoken = erc20ETHtoken;
 module.exports.erc1155VerusNFT = erc1155VerusNFT;
 module.exports.erc1155Token = erc1155Token;
+module.exports.testErcVerus = testErcVerus;

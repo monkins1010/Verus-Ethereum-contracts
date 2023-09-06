@@ -90,7 +90,8 @@ library VerusConstants {
         ExportManager,
         SubmitImports,
         NotarizationSerializer,
-        UpgradeManager
+        UpgradeManager,
+        NFTHolder
     } 
 
     uint8 constant UINT160_SIZE = 20;

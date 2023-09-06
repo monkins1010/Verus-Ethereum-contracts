@@ -632,7 +632,8 @@ contract VerusSerializer {
 
         if (temporaryRegister1 == 1) {
             (temporaryRegister1, nextOffset) = readCompactSizeLE2(input, nextOffset);    // get the length of the auxDest sub array, this will be a CReserveDestination
-            if (uint8(input[nextOffset - 1]) == VerusConstants.DEST_PK) {
+            if (uint8(input[nextOffset - 1]) == VerusConstants.DEST_PK && uint8(input[nextOffset]) == 0x21 //check for PKH and 33 bytes
+                && uint8(input[nextOffset + 1]) == VerusConstants.DEST_PKH) {
 
                 assembly {
                     nextOffset := add(nextOffset, 1) //move to vector length

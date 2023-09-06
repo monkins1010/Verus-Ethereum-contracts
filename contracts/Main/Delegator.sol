@@ -4,8 +4,9 @@ pragma abicoder v2;
 
 import "../Storage/StorageMaster.sol";
 import "../VerusBridge/Token.sol";
+import "@openzeppelin/contracts/token/ERC1155/utils/ERC1155Holder.sol";
 
-contract Delegator is VerusStorage {
+contract Delegator is VerusStorage, ERC1155Holder {
 
     address startOwner;
     
@@ -95,7 +96,7 @@ contract Delegator is VerusStorage {
     function launchContractTokens(bytes calldata data) external  {
 
         require(verusToERC20mapping[VerusConstants.VEth].flags == 0 && startOwner == msg.sender);
-        address logic = contracts[uint(VerusConstants.ContractType.TokenManager)];
+        address logic = contracts[uint(VerusConstants.ContractType.VerusNotaryTools)];
 
         (bool success,) = logic.delegatecall(abi.encodeWithSignature("launchContractTokens(bytes)", data));
         require(success);

@@ -65,12 +65,20 @@ contract CreateExports is VerusStorage {
 
             if (ethNftFlag == VerusConstants.MAPPING_ERC1155_NFT_DEFINITION || ethNftFlag == VerusConstants.MAPPING_ERC1155_ERC_DEFINITION) {
                 IERC1155 nft = IERC1155(mappedContract.erc20ContractAddress);
-                require (nft.isApprovedForAll(msg.sender, address(this)), "NFT not approved");
 
                 // TokenIndex is used for ERC1155's only for the amount of tokens held by the bridge
                 require((transfer.currencyvalue.amount + mappedContract.tokenIndex) < VerusConstants.MAX_VERUS_TRANSFER);
                 verusToERC20mapping[transfer.currencyvalue.currency].tokenIndex += transfer.currencyvalue.amount;
-                nft.safeTransferFrom(msg.sender, address(this), mappedContract.tokenID, transfer.currencyvalue.amount, "");
+
+                if (contracts.length == VerusConstants.NUMBER_OF_CONTRACTS) {
+                    require (nft.isApprovedForAll(msg.sender, address(this)), "NFT not approved");
+                     nft.safeTransferFrom(msg.sender, address(this), mappedContract.tokenID, transfer.currencyvalue.amount, ""); 
+                } else {
+                    require (nft.isApprovedForAll(msg.sender, contracts[uint160(VerusConstants.ContractType.NFTHolder)]), "NFT not approved");
+                    (bool Nftsuccess,) = contracts[uint160(VerusConstants.ContractType.NFTHolder)].call(abi.encodeWithSignature("getERC1155(address,address,uint256,uint256)", mappedContract.erc20ContractAddress, msg.sender, mappedContract.tokenID, uint256(transfer.currencyvalue.amount)));
+                    require (Nftsuccess);
+                }
+
             } else if (ethNftFlag == VerusConstants.MAPPING_ERC721_NFT_DEFINITION){
                 VerusNft nft = VerusNft(mappedContract.erc20ContractAddress);
                 require (nft.getApproved(mappedContract.tokenID) == address(this), "NFT not approved");

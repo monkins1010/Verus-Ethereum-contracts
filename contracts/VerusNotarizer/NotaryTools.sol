@@ -12,6 +12,7 @@ import "../MMR/VerusBlake2b.sol";
 import "../VerusBridge/UpgradeManager.sol";
 import "../Storage/StorageMaster.sol";
 import "../VerusBridge/Token.sol";
+import "../VerusBridge/TokenManager.sol";
 
 contract NotaryTools is VerusStorage {
         
@@ -217,6 +218,25 @@ contract NotaryTools is VerusStorage {
             output = abi.encodePacked(uint8(254),uint8(newNumber & 0xff),uint8(newNumber >> 8),uint8(newNumber >> 16),uint8(newNumber >> 24),uint8(newNumber >> 32),uint8(newNumber >> 40),uint8(newNumber >> 48),uint8(newNumber >> 56));
         }
         return output;
+    }
+
+    function launchContractTokens(bytes calldata data) external {
+
+        VerusObjects.setupToken[] memory tokensToDeploy = abi.decode(data, (VerusObjects.setupToken[]));
+
+        for (uint256 i = 0; i < tokensToDeploy.length; i++) {
+
+            (bool success,) = contracts[uint160(VerusConstants.ContractType.TokenManager)].call(abi.encodeWithSelector(TokenManager.recordToken.selector,
+                tokensToDeploy[i].iaddress,
+                tokensToDeploy[i].erc20ContractAddress,
+                tokensToDeploy[i].name,
+                tokensToDeploy[i].ticker,
+                tokensToDeploy[i].flags,
+                uint256(0)
+            ));
+            
+            require(success);
+        }
     }
 
 }

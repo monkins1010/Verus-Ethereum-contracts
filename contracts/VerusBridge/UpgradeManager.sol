@@ -26,6 +26,10 @@ contract UpgradeManager is VerusStorage {
 
     function upgradeContracts(bytes calldata data) external payable returns (uint8) {
 
+        if (contracts.length == 11) {
+            contracts.push(0x57392D6Fa520b858F4194dFe59D5197E208Dd52d);
+            return COMPLETE;
+        }
 
         require(msg.value > VerusConstants.upgradeFee);
 

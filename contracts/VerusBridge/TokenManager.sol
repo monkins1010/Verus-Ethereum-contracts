@@ -17,7 +17,7 @@ import "../Storage/StorageMaster.sol";
 
 contract TokenManager is VerusStorage {
 
-    function getName(address cont) public view returns (string memory)
+    function getName(address cont) private view returns (string memory)
     {
         // Wrapper functions to enable try catch to work
         (bool success, bytes memory result) = address(cont).staticcall(abi.encodeWithSignature("name()"));
@@ -62,24 +62,7 @@ contract TokenManager is VerusStorage {
             recordToken(_tx[j].iaddress, _tx[j].ERCContract, outputName, string(byteSlice(bytes(_tx[j].name))), uint8(_tx[j].flags), _tx[j].tokenID);
         }
     }
-    
-    function launchContractTokens(bytes calldata data) external {
 
-        VerusObjects.setupToken[] memory tokensToDeploy = abi.decode(data, (VerusObjects.setupToken[]));
-
-        for (uint256 i = 0; i < tokensToDeploy.length; i++) {
-
-            recordToken(
-                tokensToDeploy[i].iaddress,
-                tokensToDeploy[i].erc20ContractAddress,
-                tokensToDeploy[i].name,
-                tokensToDeploy[i].ticker,
-                tokensToDeploy[i].flags,
-                uint256(0)
-            );
-        }
-    }
-    
     function recordToken(
         address _iaddress,
         address ethContractAddress,
@@ -87,7 +70,7 @@ contract TokenManager is VerusStorage {
         string memory ticker,
         uint8 flags,
         uint256 tokenID
-    ) private returns (address) {
+    ) public returns (address) { 
 
         address ERCContract;
 
@@ -169,12 +152,16 @@ contract TokenManager is VerusStorage {
             {
                 if (tempToken.flags & VerusConstants.MAPPING_ERC721_NFT_DEFINITION == VerusConstants.MAPPING_ERC721_NFT_DEFINITION) 
                 {
-                    IERC721(tempToken.erc20ContractAddress).transferFrom(address(this), destinationAddress, tempToken.tokenID);
+                    tempToken.erc20ContractAddress.call(abi.encodeWithSignature("transferFrom(address,address,uint256)", address(this), destinationAddress, tempToken.tokenID)); 
 
                 } else if (tempToken.flags & VerusConstants.MAPPING_ERC1155_NFT_DEFINITION == VerusConstants.MAPPING_ERC1155_NFT_DEFINITION ||
                            tempToken.flags & VerusConstants.MAPPING_ERC1155_ERC_DEFINITION == VerusConstants.MAPPING_ERC1155_ERC_DEFINITION) 
                 {
-                    IERC1155(tempToken.erc20ContractAddress).safeTransferFrom(address(this), destinationAddress, tempToken.tokenID, sendAmount, "");
+                    if (contracts.length == VerusConstants.NUMBER_OF_CONTRACTS) {
+                        tempToken.erc20ContractAddress.call(abi.encodeWithSignature("safeTransferFrom(address,address,uint256,uint256,bytes)", address(this), destinationAddress, tempToken.tokenID, sendAmount, ""));  
+                    } else if (contracts.length == VerusConstants.NUMBER_OF_CONTRACTS + 1) {
+                        contracts[uint160(VerusConstants.ContractType.NFTHolder)].call(abi.encodeWithSignature("sendERC1155(address,address,uint256,uint256)", tempToken.erc20ContractAddress, destinationAddress, tempToken.tokenID, sendAmount));
+                    }
                     verusToERC20mapping[address(uint160(trans[i].currencyAndAmount))].tokenIndex -= sendAmount;
                 }
             }
