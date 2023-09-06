@@ -82,7 +82,7 @@ contract CreateExports is VerusStorage {
             } else if (ethNftFlag == VerusConstants.MAPPING_ERC721_NFT_DEFINITION){
                 VerusNft nft = VerusNft(mappedContract.erc20ContractAddress);
                 require (nft.getApproved(mappedContract.tokenID) == address(this), "NFT not approved");
-                nft.transferFrom(msg.sender, address(this), mappedContract.tokenID);
+                nft.safeTransferFrom(msg.sender, address(this), mappedContract.tokenID, "");
 
                 if (transfer.currencyvalue.currency == VerusConstants.VerusNFTID) {
                     nft.burn(mappedContract.tokenID);

@@ -5,8 +5,9 @@ pragma abicoder v2;
 import "../Storage/StorageMaster.sol";
 import "../VerusBridge/Token.sol";
 import "@openzeppelin/contracts/token/ERC1155/utils/ERC1155Holder.sol";
+import "@openzeppelin/contracts/token/ERC721/utils/ERC721Holder.sol";
 
-contract Delegator is VerusStorage, ERC1155Holder {
+contract Delegator is VerusStorage, ERC1155Holder, ERC721Holder {
 
     address startOwner;
     
