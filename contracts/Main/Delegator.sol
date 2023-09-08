@@ -4,8 +4,10 @@ pragma abicoder v2;
 
 import "../Storage/StorageMaster.sol";
 import "../VerusBridge/Token.sol";
+import "@openzeppelin/contracts/token/ERC1155/utils/ERC1155Holder.sol";
+import "@openzeppelin/contracts/token/ERC721/utils/ERC721Holder.sol";
 
-contract Delegator is VerusStorage {
+contract Delegator is VerusStorage, ERC1155Holder, ERC721Holder {
 
     address startOwner;
     
@@ -21,7 +23,7 @@ contract Delegator is VerusStorage {
         VerusNft t = new VerusNft(); 
 
         verusToERC20mapping[VerusConstants.VerusNFTID] = 
-            VerusObjects.mappedToken(address(t), uint8(VerusConstants.MAPPING_VERUS_OWNED + VerusConstants.MAPPING_ETH_NFT_DEFINITION),
+            VerusObjects.mappedToken(address(t), uint8(VerusConstants.MAPPING_VERUS_OWNED + VerusConstants.MAPPING_ERC721_NFT_DEFINITION),
                 0, "VerusNFT", uint256(0));  
 
         tokenList.push(VerusConstants.VerusNFTID);
@@ -95,7 +97,7 @@ contract Delegator is VerusStorage {
     function launchContractTokens(bytes calldata data) external  {
 
         require(verusToERC20mapping[VerusConstants.VEth].flags == 0 && startOwner == msg.sender);
-        address logic = contracts[uint(VerusConstants.ContractType.TokenManager)];
+        address logic = contracts[uint(VerusConstants.ContractType.VerusNotaryTools)];
 
         (bool success,) = logic.delegatecall(abi.encodeWithSignature("launchContractTokens(bytes)", data));
         require(success);

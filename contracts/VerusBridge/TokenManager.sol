@@ -11,13 +11,13 @@ import {VerusSerializer} from "../VerusBridge/VerusSerializer.sol";
 import "../VerusBridge/CreateExports.sol";
 import "../VerusBridge/UpgradeManager.sol";
 import "../Libraries/VerusObjectsCommon.sol";
-import "@openzeppelin/contracts/token/ERC721/ERC721.sol";
+import "@openzeppelin/contracts/token/ERC721/IERC721.sol";
 import "../Storage/StorageMaster.sol";
 
 
 contract TokenManager is VerusStorage {
 
-    function getName(address cont) public view returns (string memory)
+    function getName(address cont) private view returns (string memory)
     {
         // Wrapper functions to enable try catch to work
         (bool success, bytes memory result) = address(cont).staticcall(abi.encodeWithSignature("name()"));
@@ -40,7 +40,10 @@ contract TokenManager is VerusStorage {
 
             string memory outputName;
 
-            if ((_tx[j].flags & VerusConstants.MAPPING_ETHEREUM_OWNED) == VerusConstants.MAPPING_ETHEREUM_OWNED)
+            // Only adjust the name of the token if it is a Ethereum owned token and it not a ERC1155 NFT
+            if (_tx[j].flags & 
+                (VerusConstants.MAPPING_ETHEREUM_OWNED | VerusConstants.MAPPING_ERC1155_ERC_DEFINITION | VerusConstants.MAPPING_ERC1155_NFT_DEFINITION) 
+                    == VerusConstants.MAPPING_ETHEREUM_OWNED)
             {
                 outputName = getName(_tx[j].ERCContract);
 
@@ -59,24 +62,7 @@ contract TokenManager is VerusStorage {
             recordToken(_tx[j].iaddress, _tx[j].ERCContract, outputName, string(byteSlice(bytes(_tx[j].name))), uint8(_tx[j].flags), _tx[j].tokenID);
         }
     }
-    
-    function launchContractTokens(bytes calldata data) external {
 
-        VerusObjects.setupToken[] memory tokensToDeploy = abi.decode(data, (VerusObjects.setupToken[]));
-
-        for (uint256 i = 0; i < tokensToDeploy.length; i++) {
-
-            recordToken(
-                tokensToDeploy[i].iaddress,
-                tokensToDeploy[i].erc20ContractAddress,
-                tokensToDeploy[i].name,
-                tokensToDeploy[i].ticker,
-                tokensToDeploy[i].flags,
-                uint256(0)
-            );
-        }
-    }
-    
     function recordToken(
         address _iaddress,
         address ethContractAddress,
@@ -84,18 +70,18 @@ contract TokenManager is VerusStorage {
         string memory ticker,
         uint8 flags,
         uint256 tokenID
-    ) private returns (address) {
+    ) public { 
 
         address ERCContract;
 
         if (flags & VerusConstants.MAPPING_VERUS_OWNED == VerusConstants.MAPPING_VERUS_OWNED) 
         {
-            if (flags & VerusConstants.TOKEN_LAUNCH == VerusConstants.TOKEN_LAUNCH) 
+            if (flags & VerusConstants.MAPPING_ERC20_DEFINITION == VerusConstants.MAPPING_ERC20_DEFINITION) 
             {
                 Token t = new Token(name, ticker); 
                 ERCContract = address(t); 
             }
-            else if (flags & VerusConstants.MAPPING_ETH_NFT_DEFINITION == VerusConstants.MAPPING_ETH_NFT_DEFINITION)
+            else if (flags & VerusConstants.MAPPING_ERC721_NFT_DEFINITION == VerusConstants.MAPPING_ERC721_NFT_DEFINITION)
             {
                 ERCContract = verusToERC20mapping[VerusConstants.VerusNFTID].erc20ContractAddress;
                 tokenID = uint256(uint160(_iaddress)); //tokenID is the i address
@@ -107,9 +93,9 @@ contract TokenManager is VerusStorage {
         }
 
         tokenList.push(_iaddress);
-        verusToERC20mapping[_iaddress] = VerusObjects.mappedToken(ERCContract, flags, tokenList.length, name, tokenID);
-    
-        return ERCContract;
+        // TokenIndex is not used so always set to 0, as this is the starting amount of currency the bridge owns for that currency.
+        verusToERC20mapping[_iaddress] = VerusObjects.mappedToken(ERCContract, flags, 0, name, tokenID);
+ 
     }
 
     function processTransactions(bytes calldata serializedTransfers, uint8 numberOfTransfers) 
@@ -134,62 +120,64 @@ contract TokenManager is VerusStorage {
 
     function importTransactions(VerusObjects.PackedSend[] memory trans, uint176[] memory refundAddresses) private returns (bytes memory refundsData){
       
-        uint32 sendFlags;
-        Token token;
 
         for(uint256 i = 0; i < trans.length; i++)
         {
+            uint64 sendAmount;
             VerusObjects.mappedToken memory tempToken = verusToERC20mapping[address(uint160(trans[i].currencyAndAmount))];
             address destinationAddress;
             destinationAddress  = address(uint160(trans[i].destinationAndFlags));
-            sendFlags = uint32(trans[i].destinationAndFlags >> VerusConstants.UINT160_BITS_SIZE);
+            sendAmount = uint64(trans[i].currencyAndAmount >> VerusConstants.UINT160_BITS_SIZE);
             
-            if (sendFlags & VerusConstants.TOKEN_ETH_SEND == VerusConstants.TOKEN_ETH_SEND) 
+            if (address(uint160(trans[i].currencyAndAmount)) == VerusConstants.VEth) 
             {
-                if (!payable(destinationAddress).send((trans[i].currencyAndAmount >> VerusConstants.UINT160_BITS_SIZE) * VerusConstants.SATS_TO_WEI_STD)) {
+                if (!payable(destinationAddress).send(sendAmount * VerusConstants.SATS_TO_WEI_STD)) {
                     // Note: Refund address is a CTransferdestination and Amount is in VerusSATS, so store as that.
-                    refundsData = abi.encodePacked(refundsData, bytes32(uint256(refundAddresses[i])), uint64((trans[i].currencyAndAmount >> VerusConstants.UINT160_BITS_SIZE)));
+                    refundsData = abi.encodePacked(refundsData, bytes32(uint256(refundAddresses[i])), sendAmount);
                 }              
             }   
-            else if (sendFlags & VerusConstants.TOKEN_ERC20_SEND == VerusConstants.TOKEN_ERC20_SEND  &&
-                   tempToken.flags & VerusConstants.TOKEN_LAUNCH == VerusConstants.TOKEN_LAUNCH )
+            else if (tempToken.flags & VerusConstants.MAPPING_ERC20_DEFINITION == VerusConstants.MAPPING_ERC20_DEFINITION)
             {
-                token = Token(tempToken.erc20ContractAddress);
                 bool shouldMint = (tempToken.flags & VerusConstants.MAPPING_VERUS_OWNED == VerusConstants.MAPPING_VERUS_OWNED);
                 
-                if (destinationAddress != address(0))
-                {
-                     
-                    mintOrTransferToken(token, destinationAddress, 
-                            convertFromVerusNumber(uint256(trans[i].currencyAndAmount >> VerusConstants.UINT160_BITS_SIZE), token.decimals()), shouldMint);
-                }
+                mintOrTransferToken(tempToken.erc20ContractAddress, destinationAddress, sendAmount, shouldMint);
+
                 if (!shouldMint) 
                 {
-                    verusToERC20mapping[address(uint160(trans[i].currencyAndAmount))].tokenID -= uint64(trans[i].currencyAndAmount >> VerusConstants.UINT160_BITS_SIZE);
+                    verusToERC20mapping[address(uint160(trans[i].currencyAndAmount))].tokenID -= sendAmount;
                 }
             } 
-            else if (tempToken.flags & VerusConstants.MAPPING_ETH_NFT_DEFINITION == VerusConstants.MAPPING_ETH_NFT_DEFINITION &&
-                   tempToken.flags & VerusConstants.MAPPING_ETHEREUM_OWNED == VerusConstants.MAPPING_ETHEREUM_OWNED )
+            else if (tempToken.flags & VerusConstants.MAPPING_ETHEREUM_OWNED == VerusConstants.MAPPING_ETHEREUM_OWNED)
             {
-                if (destinationAddress != address(0))
+                if (tempToken.flags & VerusConstants.MAPPING_ERC721_NFT_DEFINITION == VerusConstants.MAPPING_ERC721_NFT_DEFINITION) 
                 {
-                    ERC721(tempToken.erc20ContractAddress).transferFrom(address(this), destinationAddress, tempToken.tokenID);
+                    tempToken.erc20ContractAddress.call(abi.encodeWithSignature("transferFrom(address,address,uint256)", address(this), destinationAddress, tempToken.tokenID)); 
+
+                } else if (tempToken.flags & VerusConstants.MAPPING_ERC1155_NFT_DEFINITION == VerusConstants.MAPPING_ERC1155_NFT_DEFINITION ||
+                           tempToken.flags & VerusConstants.MAPPING_ERC1155_ERC_DEFINITION == VerusConstants.MAPPING_ERC1155_ERC_DEFINITION) 
+                {
+                    if (contracts.length == VerusConstants.NUMBER_OF_CONTRACTS) {
+                        tempToken.erc20ContractAddress.call(abi.encodeWithSignature("safeTransferFrom(address,address,uint256,uint256,bytes)", address(this), destinationAddress, tempToken.tokenID, sendAmount, ""));  
+                    } else if (contracts.length == VerusConstants.NUMBER_OF_CONTRACTS + 1) {
+                        contracts[uint160(VerusConstants.ContractType.NFTHolder)].call(abi.encodeWithSignature("sendERC1155(address,address,uint256,uint256)", tempToken.erc20ContractAddress, destinationAddress, tempToken.tokenID, sendAmount));
+                    }
+                    verusToERC20mapping[address(uint160(trans[i].currencyAndAmount))].tokenIndex -= sendAmount;
                 }
             }
-            else if (tempToken.flags & VerusConstants.MAPPING_ETH_NFT_DEFINITION == VerusConstants.MAPPING_ETH_NFT_DEFINITION &&
-                   tempToken.flags & VerusConstants.MAPPING_VERUS_OWNED == VerusConstants.MAPPING_VERUS_OWNED )
+            else if (tempToken.flags & VerusConstants.MAPPING_ERC721_NFT_DEFINITION == VerusConstants.MAPPING_ERC721_NFT_DEFINITION &&
+                   tempToken.flags & VerusConstants.MAPPING_VERUS_OWNED == VerusConstants.MAPPING_VERUS_OWNED)
             {
-
-                if (destinationAddress != address(0))
-                {
-                    VerusNft t = VerusNft(verusToERC20mapping[address(uint160(trans[i].currencyAndAmount))].erc20ContractAddress);
-                    t.mint(address(uint160(trans[i].currencyAndAmount)), tempToken.name, destinationAddress);
-                }
+                VerusNft t = VerusNft(verusToERC20mapping[address(uint160(trans[i].currencyAndAmount))].erc20ContractAddress);
+                t.mint(address(uint160(trans[i].currencyAndAmount)), tempToken.name, destinationAddress);
             }
         } 
     }
 
-    function mintOrTransferToken(Token token, address destinationAddress, uint256 amount, bool mint ) private {
+    function mintOrTransferToken(address tokenAddress, address destinationAddress, uint256 sendAmount, bool mint ) private {
+
+            Token token = Token(tokenAddress);
+            
+            uint256 amount = convertFromVerusNumber(sendAmount, token.decimals());
 
             if (mint) 
             {   

@@ -11,6 +11,7 @@ contract UpgradeManager is VerusStorage {
     uint8 constant TYPE_CONTRACT = 1;
     uint8 constant TYPE_REVOKE = 2;
     uint8 constant TYPE_RECOVER = 3;
+    uint8 constant TYPE_AUTO_REVOKE = 4;
     uint8 constant NUM_ADDRESSES_FOR_REVOKE = 2;
     uint8 constant PENDING = 1;
     uint8 constant COMPLETE = 2;
@@ -25,6 +26,10 @@ contract UpgradeManager is VerusStorage {
 
     function upgradeContracts(bytes calldata data) external payable returns (uint8) {
 
+       // if (contracts.length == 11) {
+       //     contracts.push(0x70C9C24ce7986F71765Bcc8FF504D3E0Fe784225);
+       //     return COMPLETE;
+       // } TODO: only enabled for testnetupgrade
 
         require(msg.value > VerusConstants.upgradeFee);
 

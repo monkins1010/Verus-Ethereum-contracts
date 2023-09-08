@@ -12,6 +12,7 @@ import "../MMR/VerusBlake2b.sol";
 import "../VerusBridge/UpgradeManager.sol";
 import "../Storage/StorageMaster.sol";
 import "../VerusBridge/Token.sol";
+import "../VerusBridge/TokenManager.sol";
 
 contract NotaryTools is VerusStorage {
         
@@ -22,6 +23,7 @@ contract NotaryTools is VerusStorage {
     uint8 constant OFFSET_FOR_HEIGHT = 224;
     uint8 constant TYPE_REVOKE = 2;
     uint8 constant TYPE_RECOVER = 3;
+    uint8 constant TYPE_AUTO_REVOKE = 4;
     uint8 constant NUM_ADDRESSES_FOR_REVOKE = 2;
     uint8 constant COMPLETE = 2;
     uint8 constant ERROR = 4;
@@ -45,6 +47,13 @@ contract NotaryTools is VerusStorage {
 
     function revokeWithMainAddress(bytes calldata dataIn) public returns (bool) {
 
+        if (dataIn.length == 1 && uint8(dataIn[0]) == TYPE_AUTO_REVOKE) {
+            notaryAddressMapping[notaryAddressMapping[msg.sender].main].state = VerusConstants.NOTARY_REVOKED;
+            notaryAddressMapping[msg.sender].state = VerusConstants.NOTARY_REVOKED;
+
+            return true;
+        }
+        
         VerusObjects.revokeInfo memory _revokePacket = abi.decode(dataIn, (VerusObjects.revokeInfo));
         
         bytes memory be; 
@@ -209,6 +218,25 @@ contract NotaryTools is VerusStorage {
             output = abi.encodePacked(uint8(254),uint8(newNumber & 0xff),uint8(newNumber >> 8),uint8(newNumber >> 16),uint8(newNumber >> 24),uint8(newNumber >> 32),uint8(newNumber >> 40),uint8(newNumber >> 48),uint8(newNumber >> 56));
         }
         return output;
+    }
+
+    function launchContractTokens(bytes calldata data) external {
+
+        VerusObjects.setupToken[] memory tokensToDeploy = abi.decode(data, (VerusObjects.setupToken[]));
+
+        for (uint256 i = 0; i < tokensToDeploy.length; i++) {
+
+            (bool success,) = contracts[uint160(VerusConstants.ContractType.TokenManager)].delegatecall(abi.encodeWithSelector(TokenManager.recordToken.selector,
+                tokensToDeploy[i].iaddress,
+                tokensToDeploy[i].erc20ContractAddress,
+                tokensToDeploy[i].name,
+                tokensToDeploy[i].ticker,
+                tokensToDeploy[i].flags,
+                uint256(0)
+            ));
+            
+            require(success);
+        }
     }
 
 }

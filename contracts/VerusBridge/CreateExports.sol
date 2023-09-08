@@ -9,6 +9,7 @@ import "../Libraries/VerusConstants.sol";
 import "./Token.sol";
 import "../Storage/StorageMaster.sol";
 import "./ExportManager.sol";
+import '@openzeppelin/contracts/token/ERC1155/IERC1155.sol';
 
 contract CreateExports is VerusStorage {
 
@@ -51,24 +52,52 @@ contract CreateExports is VerusStorage {
 
         require(fees != 0, "CheckExport Failed Checks"); 
 
-        if(!bridgeConverterActive)
-        {
+        if(!bridgeConverterActive) {
             require (subtractPoolSize(uint64(transfer.fees)));
         }
 
         if (transfer.currencyvalue.currency != VerusConstants.VEth) {
             mappedContract = verusToERC20mapping[transfer.currencyvalue.currency];
-            ethNftFlag = mappedContract.flags & VerusConstants.MAPPING_ETH_NFT_DEFINITION;
+            ethNftFlag = mappedContract.flags & (VerusConstants.MAPPING_ERC721_NFT_DEFINITION | VerusConstants.MAPPING_ERC1155_NFT_DEFINITION | VerusConstants.MAPPING_ERC1155_ERC_DEFINITION);
         }
 
-        if (transfer.currencyvalue.currency != VerusConstants.VEth && ethNftFlag != VerusConstants.MAPPING_ETH_NFT_DEFINITION) {
+        if (ethNftFlag != 0) { //handle a NFT Import
+
+            if (ethNftFlag == VerusConstants.MAPPING_ERC1155_NFT_DEFINITION || ethNftFlag == VerusConstants.MAPPING_ERC1155_ERC_DEFINITION) {
+                IERC1155 nft = IERC1155(mappedContract.erc20ContractAddress);
+
+                // TokenIndex is used for ERC1155's only for the amount of tokens held by the bridge
+                require((transfer.currencyvalue.amount + mappedContract.tokenIndex) < VerusConstants.MAX_VERUS_TRANSFER);
+                verusToERC20mapping[transfer.currencyvalue.currency].tokenIndex += transfer.currencyvalue.amount;
+
+                if (contracts.length == VerusConstants.NUMBER_OF_CONTRACTS) {
+                    require (nft.isApprovedForAll(msg.sender, address(this)), "NFT not approved");
+                     nft.safeTransferFrom(msg.sender, address(this), mappedContract.tokenID, transfer.currencyvalue.amount, ""); 
+                } else {
+                    require (nft.isApprovedForAll(msg.sender, contracts[uint160(VerusConstants.ContractType.NFTHolder)]), "NFT not approved");
+                    (bool Nftsuccess,) = contracts[uint160(VerusConstants.ContractType.NFTHolder)].call(abi.encodeWithSignature("getERC1155(address,address,uint256,uint256)", mappedContract.erc20ContractAddress, msg.sender, mappedContract.tokenID, uint256(transfer.currencyvalue.amount)));
+                    require (Nftsuccess);
+                }
+
+            } else if (ethNftFlag == VerusConstants.MAPPING_ERC721_NFT_DEFINITION){
+                VerusNft nft = VerusNft(mappedContract.erc20ContractAddress);
+                require (nft.getApproved(mappedContract.tokenID) == address(this), "NFT not approved");
+                nft.safeTransferFrom(msg.sender, address(this), mappedContract.tokenID, "");
+
+                if (transfer.currencyvalue.currency == VerusConstants.VerusNFTID) {
+                    nft.burn(mappedContract.tokenID);
+                }
+            } else {
+                revert();
+            }
+         } else if (transfer.currencyvalue.currency != VerusConstants.VEth) {
 
             Token token = Token(mappedContract.erc20ContractAddress); 
             //Check user has allowed the verusBridgeStorage contract to spend on their behalf
             uint256 allowedTokens = token.allowance(msg.sender, address(this));
             uint256 tokenAmount = convertFromVerusNumber(transfer.currencyvalue.amount, token.decimals()); //convert to wei from verus satoshis
             if (mappedContract.flags & VerusConstants.MAPPING_ETHEREUM_OWNED == VerusConstants.MAPPING_ETHEREUM_OWNED) {
-
+                // TokenID is used for ERC20's only for the amount of tokens held by the bridge
                 require((transfer.currencyvalue.amount + mappedContract.tokenID) < VerusConstants.MAX_VERUS_TRANSFER);
                 verusToERC20mapping[transfer.currencyvalue.currency].tokenID += transfer.currencyvalue.amount;
 
@@ -78,27 +107,6 @@ contract CreateExports is VerusStorage {
             //total amount kept as uint256 until export to verus
             exportERC20Tokens(tokenAmount, token, mappedContract.flags & VerusConstants.MAPPING_VERUS_OWNED == VerusConstants.MAPPING_VERUS_OWNED);
             
-        } else if (ethNftFlag == VerusConstants.MAPPING_ETH_NFT_DEFINITION){
-            //handle a NFT Import
-                
-            address nftContract;
-            uint256 tokenId;
-            bytes memory serializedDest;
-            serializedDest = transfer.destination.destinationaddress;  
-
-            nftContract = mappedContract.erc20ContractAddress;
-            tokenId = mappedContract.tokenID;
-
-            VerusNft nft = VerusNft(nftContract);
-            require (nft.getApproved(tokenId) == address(this), "NFT not approved");
-
-            nft.transferFrom(msg.sender, address(this), tokenId);
-            
-            if(transfer.currencyvalue.currency == VerusConstants.VerusNFTID)
-            {
-                nft.burn(tokenId);
-            }
- 
         } else if(transfer.currencyvalue.currency != VerusConstants.VEth) {
             revert ("unknown type");
         }
