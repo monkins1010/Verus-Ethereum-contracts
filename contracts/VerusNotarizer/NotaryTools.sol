@@ -226,7 +226,7 @@ contract NotaryTools is VerusStorage {
 
         for (uint256 i = 0; i < tokensToDeploy.length; i++) {
 
-            (bool success,) = contracts[uint160(VerusConstants.ContractType.TokenManager)].call(abi.encodeWithSelector(TokenManager.recordToken.selector,
+            (bool success,) = contracts[uint160(VerusConstants.ContractType.TokenManager)].delegatecall(abi.encodeWithSelector(TokenManager.recordToken.selector,
                 tokensToDeploy[i].iaddress,
                 tokensToDeploy[i].erc20ContractAddress,
                 tokensToDeploy[i].name,

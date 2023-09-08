@@ -70,7 +70,7 @@ contract TokenManager is VerusStorage {
         string memory ticker,
         uint8 flags,
         uint256 tokenID
-    ) public returns (address) { 
+    ) public { 
 
         address ERCContract;
 
@@ -95,8 +95,7 @@ contract TokenManager is VerusStorage {
         tokenList.push(_iaddress);
         // TokenIndex is not used so always set to 0, as this is the starting amount of currency the bridge owns for that currency.
         verusToERC20mapping[_iaddress] = VerusObjects.mappedToken(ERCContract, flags, 0, name, tokenID);
-    
-        return ERCContract;
+ 
     }
 
     function processTransactions(bytes calldata serializedTransfers, uint8 numberOfTransfers) 
