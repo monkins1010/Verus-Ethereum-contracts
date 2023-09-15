@@ -13,6 +13,17 @@ import '@openzeppelin/contracts/token/ERC1155/IERC1155.sol';
 
 contract CreateExports is VerusStorage {
 
+    address immutable VETH;
+    address immutable BRIDGE;
+    address immutable VERUS;
+
+    constructor(address vETH, address Bridge, address Verus){
+
+        VETH = vETH;
+        BRIDGE = Bridge;
+        VERUS = Verus;
+    }
+
     function subtractPoolSize(uint64 _amount) private returns (bool) {
 
         if((_amount + VerusConstants.MIN_VRSC_FEE) > remainingLaunchFeeReserves) return false;
@@ -56,7 +67,7 @@ contract CreateExports is VerusStorage {
             require (subtractPoolSize(uint64(transfer.fees)));
         }
 
-        if (transfer.currencyvalue.currency != VerusConstants.VEth) {
+        if (transfer.currencyvalue.currency != VETH) {
             mappedContract = verusToERC20mapping[transfer.currencyvalue.currency];
             ethNftFlag = mappedContract.flags & (VerusConstants.MAPPING_ERC721_NFT_DEFINITION | VerusConstants.MAPPING_ERC1155_NFT_DEFINITION | VerusConstants.MAPPING_ERC1155_ERC_DEFINITION);
         }
@@ -84,13 +95,13 @@ contract CreateExports is VerusStorage {
                 require (nft.getApproved(mappedContract.tokenID) == address(this), "NFT not approved");
                 nft.safeTransferFrom(msg.sender, address(this), mappedContract.tokenID, "");
 
-                if (transfer.currencyvalue.currency == VerusConstants.VerusNFTID) {
+                if (transfer.currencyvalue.currency == verusToERC20mapping[tokenList[VerusConstants.NFT_POSITION]].erc20ContractAddress) {
                     nft.burn(mappedContract.tokenID);
                 }
             } else {
                 revert();
             }
-         } else if (transfer.currencyvalue.currency != VerusConstants.VEth) {
+         } else if (transfer.currencyvalue.currency != VETH) {
 
             Token token = Token(mappedContract.erc20ContractAddress); 
             //Check user has allowed the verusBridgeStorage contract to spend on their behalf
@@ -107,7 +118,7 @@ contract CreateExports is VerusStorage {
             //total amount kept as uint256 until export to verus
             exportERC20Tokens(tokenAmount, token, mappedContract.flags & VerusConstants.MAPPING_VERUS_OWNED == VerusConstants.MAPPING_VERUS_OWNED);
             
-        } else if(transfer.currencyvalue.currency != VerusConstants.VEth) {
+        } else if(transfer.currencyvalue.currency != VETH) {
             revert ("unknown type");
         }
         _createExports(transfer, false);

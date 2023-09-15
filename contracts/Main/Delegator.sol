@@ -22,11 +22,12 @@ contract Delegator is VerusStorage, ERC1155Holder, ERC721Holder {
         }
         VerusNft t = new VerusNft(); 
 
-        verusToERC20mapping[VerusConstants.VerusNFTID] = 
+        //NOTE: VerusNFT contract is mapped by its unique contract address, as there is no i-address for it.
+        verusToERC20mapping[address(t)] = 
             VerusObjects.mappedToken(address(t), uint8(VerusConstants.MAPPING_VERUS_OWNED + VerusConstants.MAPPING_ERC721_NFT_DEFINITION),
                 0, "VerusNFT", uint256(0));  
 
-        tokenList.push(VerusConstants.VerusNFTID);
+        tokenList.push(address(t));
 
         startOwner = msg.sender;
         for (uint i = 0; i < uint(VerusConstants.NUMBER_OF_CONTRACTS); i++) {
@@ -96,7 +97,7 @@ contract Delegator is VerusStorage, ERC1155Holder, ERC721Holder {
 
     function launchContractTokens(bytes calldata data) external  {
 
-        require(contracts.length == 1 && startOwner == msg.sender);
+        require(tokenList.length == 1 && startOwner == msg.sender);
         address logic = contracts[uint(VerusConstants.ContractType.VerusNotaryTools)];
 
         (bool success,) = logic.delegatecall(abi.encodeWithSignature("launchContractTokens(bytes)", data));

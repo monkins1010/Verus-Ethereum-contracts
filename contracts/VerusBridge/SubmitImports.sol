@@ -12,6 +12,17 @@ import "../Storage/StorageMaster.sol";
 
 contract SubmitImports is VerusStorage {
 
+    address immutable VETH;
+    address immutable BRIDGE;
+    address immutable VERUS;
+
+    constructor(address vETH, address Bridge, address Verus){
+
+        VETH = vETH;
+        BRIDGE = Bridge;
+        VERUS = Verus;
+    }
+
     uint32 constant ELVCHOBJ_TXID_OFFSET = 32;
     uint32 constant ELVCHOBJ_NVINS_OFFSET = 45;
     uint32 constant FORKS_NOTARY_INDEX = 106;  // this is txid + stateroot + blockhash + NOTARIZER_INDEX_AND_FLAGS_OFFSET 
@@ -23,7 +34,7 @@ contract SubmitImports is VerusStorage {
       
         LPtransfer.version = 1;
         LPtransfer.destination.destinationtype = destinationType;
-        LPtransfer.destcurrencyid = VerusConstants.VerusBridgeAddress;
+        LPtransfer.destcurrencyid = BRIDGE;
         LPtransfer.destsystemid = address(0);
         LPtransfer.secondreserveid = address(0);
 
@@ -37,15 +48,15 @@ contract SubmitImports is VerusStorage {
         }
         
         if (value == 0) {
-            LPtransfer.currencyvalue.currency = VerusConstants.VerusCurrencyId;
+            LPtransfer.currencyvalue.currency = VERUS;
             LPtransfer.fees = VerusConstants.verusTransactionFee; 
-            LPtransfer.feecurrencyid = VerusConstants.VerusCurrencyId;
+            LPtransfer.feecurrencyid = VERUS; 
             LPtransfer.currencyvalue.amount = uint64(remainingLaunchFeeReserves - VerusConstants.verusTransactionFee);
             forceNewCCE = true;
         } else {
-            LPtransfer.currencyvalue.currency = VerusConstants.VEth;
+            LPtransfer.currencyvalue.currency = VETH;
             LPtransfer.fees = VerusConstants.verusvETHTransactionFee; 
-            LPtransfer.feecurrencyid = VerusConstants.VEth;
+            LPtransfer.feecurrencyid = VETH;
             LPtransfer.currencyvalue.amount = uint64(value - VerusConstants.verusvETHTransactionFee);  
             forceNewCCE = false;
         } 
@@ -282,6 +293,7 @@ contract SubmitImports is VerusStorage {
     {
         uint64 refundAmount;
         refundAmount = uint64(refunds[bytes32(uint256(verusAddress))]);
+        require(bridgeConverterActive, "Bridge converter not active");
 
         if (refundAmount > 0)
         {
@@ -296,6 +308,7 @@ contract SubmitImports is VerusStorage {
 
     function sendfees(bytes32 publicKeyX, bytes32 publicKeyY) public 
     {
+        require(bridgeConverterActive, "Bridge converter not active");
         uint8 leadingByte;
 
         leadingByte = (uint256(publicKeyY) & 1) == 1 ? 0x03 : 0x02;

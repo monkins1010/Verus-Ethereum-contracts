@@ -11,12 +11,7 @@ pragma abicoder v2;
 
 
 library VerusConstants {
-    address constant public VEth = 0x67460C2f56774eD27EeB8685f29f6CEC0B090B00;
-    address constant public VerusSystemId = 0xA6ef9ea235635E328124Ff3429dB9F9E91b64e2d;
-    address constant public VerusCurrencyId = 0xA6ef9ea235635E328124Ff3429dB9F9E91b64e2d;
-    address constant public VerusUSDCId = 0xF0A1263056c30E221F0F851C36b767ffF2544f7F;
-    address constant public VerusBridgeAddress = 0xffEce948b8A38bBcC813411D2597f7f8485a0689;
-    address constant public VerusNFTID = 0x9bB2772Aa50ec96ce1305D926B9CC29b7c402bAD;
+
     uint256 constant public transactionFee = 3000000000000000; //0.003 ETH 18 decimals
     uint256 constant public upgradeFee = 1000000000000000; //0.001 ETH 18 decimals WEI  TODO: increase for MAINNET
     uint64 constant public verusTransactionFee = 2000000; //0.02 VRSC 8 decimals
@@ -30,6 +25,7 @@ library VerusConstants {
     uint32 constant IMPORT_TO_SOURCE = 0x200;          
     uint32 constant RESERVE_TO_RESERVE = 0x400; 
     uint32 constant CURRENCY_EXPORT = 0x2000;
+    uint8 constant NFT_POSITION = 0;
 
     uint32 constant INVALID_FLAGS = 0xffffffff - (VALID + CONVERT + RESERVE_TO_RESERVE + IMPORT_TO_SOURCE);
 

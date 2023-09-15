@@ -17,6 +17,17 @@ import "../Storage/StorageMaster.sol";
 
 contract TokenManager is VerusStorage {
 
+    address immutable VETH;
+    address immutable BRIDGE;
+    address immutable VERUS;
+
+    constructor(address vETH, address Bridge, address Verus){
+
+        VETH = vETH;
+        BRIDGE = Bridge;
+        VERUS = Verus;
+    }
+
     function getName(address cont) private view returns (string memory)
     {
         // Wrapper functions to enable try catch to work
@@ -55,7 +66,7 @@ contract TokenManager is VerusStorage {
 
             outputName = string(abi.encodePacked(outputName, _tx[j].name));
 
-            if (_tx[j].parent != VerusConstants.VerusSystemId)
+            if (_tx[j].parent != VERUS)
             {
                 outputName = string(abi.encodePacked(outputName, ".", verusToERC20mapping[_tx[j].parent].name));
             }
@@ -83,7 +94,7 @@ contract TokenManager is VerusStorage {
             }
             else if (flags & VerusConstants.MAPPING_ERC721_NFT_DEFINITION == VerusConstants.MAPPING_ERC721_NFT_DEFINITION)
             {
-                ERCContract = verusToERC20mapping[VerusConstants.VerusNFTID].erc20ContractAddress;
+                ERCContract = verusToERC20mapping[tokenList[VerusConstants.NFT_POSITION]].erc20ContractAddress;
                 tokenID = uint256(uint160(_iaddress)); //tokenID is the i address
             }
         }
@@ -129,7 +140,7 @@ contract TokenManager is VerusStorage {
             destinationAddress  = address(uint160(trans[i].destinationAndFlags));
             sendAmount = uint64(trans[i].currencyAndAmount >> VerusConstants.UINT160_BITS_SIZE);
             
-            if (address(uint160(trans[i].currencyAndAmount)) == VerusConstants.VEth) 
+            if (address(uint160(trans[i].currencyAndAmount)) == VETH) 
             {
                 if (!payable(destinationAddress).send(sendAmount * VerusConstants.SATS_TO_WEI_STD)) {
                     // Note: Refund address is a CTransferdestination and Amount is in VerusSATS, so store as that.

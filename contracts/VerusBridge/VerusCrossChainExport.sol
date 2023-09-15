@@ -10,6 +10,17 @@ import "../VerusBridge/VerusSerializer.sol";
 
 contract VerusCrossChainExport {
 
+    address immutable VETH;
+    address immutable BRIDGE;
+    address immutable VERUS;
+
+    constructor(address vETH, address Bridge, address Verus){
+
+        VETH = vETH;
+        BRIDGE = Bridge;
+        VERUS = Verus;
+    }
+
     VerusObjects.CCurrencyValueMap[] currencies;
     VerusObjects.CCurrencyValueMap[] fees;
 
@@ -65,14 +76,14 @@ contract VerusCrossChainExport {
         workingCCE.flags = 2;
         workingCCE.sourceheightstart = startheight;
         workingCCE.sourceheightend = endheight;
-        workingCCE.sourcesystemid = VerusConstants.VEth;
+        workingCCE.sourcesystemid = VETH;
         workingCCE.hashtransfers = hashedTransfers;
-        workingCCE.destinationsystemid = VerusConstants.VerusSystemId;
+        workingCCE.destinationsystemid = VERUS;
 
         if (bridgeReady) { 
-            workingCCE.destinationcurrencyid = VerusConstants.VerusBridgeAddress;  //NOTE:transfers are bundled by type
+            workingCCE.destinationcurrencyid = BRIDGE;  //NOTE:transfers are bundled by type
         } else {
-            workingCCE.destinationcurrencyid = VerusConstants.VerusCurrencyId; 
+            workingCCE.destinationcurrencyid = VERUS; 
         }
 
         workingCCE.numinputs = uint32(transfers.length);

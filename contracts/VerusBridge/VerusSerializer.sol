@@ -329,7 +329,7 @@ contract VerusSerializer {
         
             returnCurrency.flags |= uint8(VerusConstants.MAPPING_ERC721_NFT_DEFINITION);
             returnCurrency.flags |= uint8(VerusConstants.MAPPING_VERUS_OWNED);
-            nativeCurrencyID = VerusConstants.VerusNFTID;
+            nativeCurrencyID = address(0); //The Verus NFT contract is not known by this contract so it will be set when the NFT is minted.
         }
         else { // Verus owned ERC20, ERC20 contract not known yet.
         
