@@ -11,6 +11,17 @@ import "../Storage/StorageMaster.sol";
 
 contract NotarizationSerializer is VerusStorage {
 
+    address immutable VETH;
+    address immutable BRIDGE;
+    address immutable VERUS;
+
+    constructor(address vETH, address Bridge, address Verus){
+
+        VETH = vETH;
+        BRIDGE = Bridge;
+        VERUS = Verus;
+    }
+
     uint8 constant CURRENCY_LENGTH = 20;
     uint8 constant BYTES32_LENGTH = 32;
     uint8 constant TWO2BYTES32_LENGTH = 64;
@@ -131,7 +142,7 @@ contract NotarizationSerializer is VerusStorage {
         }
     }
 
-    function deserializeCoinbaseCurrencyState(bytes memory notarization, uint32 nextOffset) private pure returns (uint16, uint32)
+    function deserializeCoinbaseCurrencyState(bytes memory notarization, uint32 nextOffset) private view returns (uint16, uint32)
     {
         address currencyid;
         uint16 bridgeLaunched;
@@ -145,7 +156,7 @@ contract NotarizationSerializer is VerusStorage {
             currencyid := mload(add(notarization, nextOffset))      // currencyid 
         }
         flags = (flags >> 8) | (flags << 8);
-        if ((currencyid == VerusConstants.VerusBridgeAddress) && flags & (FLAG_FRACTIONAL + FLAG_REFUNDING + FLAG_LAUNCHCONFIRMED + FLAG_LAUNCHCOMPLETEMARKER) == 
+        if ((currencyid == BRIDGE) && flags & (FLAG_FRACTIONAL + FLAG_REFUNDING + FLAG_LAUNCHCONFIRMED + FLAG_LAUNCHCOMPLETEMARKER) == 
             (FLAG_FRACTIONAL + FLAG_LAUNCHCONFIRMED + FLAG_LAUNCHCOMPLETEMARKER)) 
         {
             bridgeLaunched = 1;
@@ -174,7 +185,7 @@ contract NotarizationSerializer is VerusStorage {
         return (bridgeLaunched, nextOffset);
     }
 
-    function deserializeProofRoots (bytes memory notarization, uint32 size, uint32 nextOffset) private pure returns (bytes32 stateRoot, bytes32 blockHash, uint32 height)
+    function deserializeProofRoots (bytes memory notarization, uint32 size, uint32 nextOffset) private view returns (bytes32 stateRoot, bytes32 blockHash, uint32 height)
     {
         for (uint i = 0; i < size; i++)
         {
@@ -199,7 +210,7 @@ contract NotarizationSerializer is VerusStorage {
                 nextOffset := add(nextOffset, BYTES32_LENGTH) // move to power
             }
             
-            if(systemID == VerusConstants.VerusCurrencyId)
+            if(systemID == VERUS)
             {
                 stateRoot = tempStateRoot;
                 blockHash = tempBlockHash;

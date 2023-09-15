@@ -67,6 +67,15 @@ module.exports = {
             networkCheckTimeout: 10000,
         },
 
+        mainnet: {
+            provider: () => { return new HDWalletProvider(privateKeys, 'wss://mainnet.infura.io/ws/v3/.....') },
+            network_id: 1, // 1 = ethereum mainnet
+            confirmations: 0, // # of confs to wait between deployments. (default: 0)
+            timeoutBlocks: 50, // # of blocks before a deployment times out  (minimum/default: 50)
+            skipDryRun: false, // Skip dry run before migrations? (default: false for public nets )
+            networkCheckTimeout: 10000,
+        },
+
         // Useful for private networks
         // private: {
         // provider: () => new HDWalletProvider(mnemonic, `https://network.io`),

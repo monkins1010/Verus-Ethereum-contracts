@@ -12,6 +12,17 @@ import "./VerusMMR.sol";
 import "../Storage/StorageMaster.sol";
 
 contract VerusProof is VerusStorage  {
+    
+    address immutable VETH;
+    address immutable BRIDGE;
+    address immutable VERUS;
+
+    constructor(address vETH, address Bridge, address Verus){
+
+        VETH = vETH;
+        BRIDGE = Bridge;
+        VERUS = Verus;
+    }
 
     using VerusBlake2b for bytes;
     
@@ -241,8 +252,8 @@ contract VerusProof is VerusStorage  {
         }
 
         if (!(hashedTransfers == hashReserveTransfers &&
-                systemSourceID == VerusConstants.VerusSystemId &&
-                destSystemID == VerusConstants.VEth)) {
+                systemSourceID == VERUS &&
+                destSystemID == VETH)) {
 
             revert("CCE information does not checkout");
         }
@@ -403,7 +414,7 @@ contract VerusProof is VerusStorage  {
             temp[i].iaddress = iAddress;
             temp[i].flags = recordedToken.flags;
 
-            if (iAddress == VerusConstants.VEth)
+            if (iAddress == VETH)
             {
                 temp[i].erc20ContractAddress = address(0);
                 temp[i].name = recordedToken.name;

@@ -11,6 +11,17 @@ import "../Storage/StorageMaster.sol";
 
 contract ExportManager is VerusStorage  {
 
+    address immutable VETH;
+    address immutable BRIDGE;
+    address immutable VERUS;
+
+    constructor(address vETH, address Bridge, address Verus){
+
+        VETH = vETH;
+        BRIDGE = Bridge;
+        VERUS = Verus;
+    }
+
     uint8 constant UINT160_SIZE = 20; 
     uint8 constant FEE_OFFSET = 20 + 20 + 20 + 8; // 3 x 20bytes address + 64bit uint // 3 x 20bytes address + 64bit uint
     // Aux dest can only be one vector, of one vector which is a CTransferDestiantion of an R address.
@@ -25,8 +36,8 @@ contract ExportManager is VerusStorage  {
     function checkExport(VerusObjects.CReserveTransfer memory transfer) external payable returns (uint256 fees){
        
         uint256 requiredFees = VerusConstants.transactionFee;  //0.003 eth in WEI (To vrsc)
-        uint64 bounceBackFee;
-        uint64 transferFee;
+        int64 bounceBackFee;
+        int64 transferFee;
         bytes memory serializedDest;
         address gatewayID;
         address gatewayCode;
@@ -54,7 +65,7 @@ contract ExportManager is VerusStorage  {
 
         if (!bridgeConverterActive) {
 
-            require (transfer.feecurrencyid == VerusConstants.VerusCurrencyId, "feecurrencyid != vrsc");
+            require (transfer.feecurrencyid == VERUS, "feecurrencyid != vrsc");
             
             if (transfer.destination.destinationtype == (VerusConstants.DEST_ETH + VerusConstants.FLAG_DEST_GATEWAY + VerusConstants.FLAG_DEST_AUX) ||
                 transfer.flags != VerusConstants.VALID)
@@ -64,9 +75,9 @@ contract ExportManager is VerusStorage  {
 
         } else {
             
-            transferFee = uint64(transfer.fees);
+            transferFee = int64(transfer.fees);
 
-            require(transfer.feecurrencyid == VerusConstants.VEth, "Fee Currency not vETH"); //TODO:Accept more fee currencies
+            require(transfer.feecurrencyid == VETH, "Fee Currency not vETH"); //TODO:Accept more fee currencies
 
             if (transfer.destination.destinationtype == (VerusConstants.FLAG_DEST_GATEWAY + VerusConstants.DEST_ETH + VerusConstants.FLAG_DEST_AUX)) {
 
@@ -93,14 +104,14 @@ contract ExportManager is VerusStorage  {
                 
                 require (auxDestPrefix == VerusConstants.AUX_DEST_PREFIX, "auxDestPrefix Incorrect");
                 require (auxDestAddress != address(0), "auxDestAddress must not be empty");
-                require (gatewayID == VerusConstants.VEth, "GatewayID not VETH");
+                require (gatewayID == VETH, "GatewayID not VETH");
                 require (gatewayCode == address(0), "GatewayCODE must be empty");
 
-                bounceBackFee = reverse(bounceBackFee);
-                require (bounceBackFee >= VerusConstants.verusvETHReturnFee, "Return fee not >= 0.01ETH");
+                bounceBackFee = reverse(uint64(bounceBackFee));
+                require (bounceBackFee >= int64(VerusConstants.verusvETHReturnFee), "Return fee not >= 0.01ETH");
 
                 transferFee += bounceBackFee;
-                requiredFees += convertFromVerusNumber(uint256(bounceBackFee),18);  //bounceback fees required as well as send fees
+                requiredFees += convertFromVerusNumber(uint64(bounceBackFee),18);  //bounceback fees required as well as send fees
 
             } else if (!(transfer.destination.destinationtype == VerusConstants.DEST_PKH || transfer.destination.destinationtype == VerusConstants.DEST_ID)) {
 
@@ -116,22 +127,22 @@ contract ExportManager is VerusStorage  {
 
         if (bridgeConverterActive)
         { 
-            if (convertFromVerusNumber(transferFee, 18) < requiredFees)
+            if (convertFromVerusNumber(uint64(transferFee), 18) < requiredFees)
             {
                 revert ("ETH Fees to Low");
             }            
-            else if (transfer.currencyvalue.currency == VerusConstants.VEth && 
-                msg.value < convertFromVerusNumber(uint256(amount + transferFee), 18))
+            else if (transfer.currencyvalue.currency == VETH && 
+                msg.value < convertFromVerusNumber(uint256(amount + uint64(transferFee)), 18))
             {
                 revert ("ETH sent < (amount + fees)");
             } 
-            else if (transfer.currencyvalue.currency != VerusConstants.VEth &&
-                    msg.value < convertFromVerusNumber(transferFee, 18))
+            else if (transfer.currencyvalue.currency != VETH &&
+                    msg.value < convertFromVerusNumber(uint64(transferFee), 18))
             {
                 revert ("ETH fee sent < fees for token");
             } 
 
-            return transferFee;
+            return uint64(transferFee);
         }
         else 
         {
@@ -139,12 +150,12 @@ contract ExportManager is VerusStorage  {
             {
                 revert ("Invalid VRSC fee");
             }
-            else if (transfer.currencyvalue.currency == VerusConstants.VEth &&
+            else if (transfer.currencyvalue.currency == VETH &&
                      (convertFromVerusNumber(amount, 18) + requiredFees) != msg.value)
             {
                 revert ("ETH Fee to low");
             }
-            else if(transfer.currencyvalue.currency != VerusConstants.VEth && requiredFees != msg.value)
+            else if(transfer.currencyvalue.currency != VETH && requiredFees != msg.value)
             {
                 revert ("ETH Fee to low (token)");
             }
@@ -175,7 +186,7 @@ contract ExportManager is VerusStorage  {
 
         if (transfer.flags == VerusConstants.VALID && transfer.secondreserveid == address(0))
         {
-            require (transfer.destcurrencyid == (bridgeConverterActive ? VerusConstants.VerusBridgeAddress : VerusConstants.VerusCurrencyId),  
+            require (transfer.destcurrencyid == (bridgeConverterActive ? BRIDGE : VERUS),  
                         "Invalid desttype");
         }
         else if (transfer.flags == (VerusConstants.VALID + VerusConstants.CONVERT + VerusConstants.RESERVE_TO_RESERVE))
@@ -208,20 +219,20 @@ contract ExportManager is VerusStorage  {
 
     }
 
-    function reverse(uint64 input) public pure returns (uint64 v) 
+    function reverse(uint64 input) public pure returns (int64) 
     {
-        v = input;
-
         // swap bytes
-        v = ((v & 0xFF00FF00FF00FF00) >> 8) |
-            ((v & 0x00FF00FF00FF00FF) << 8);
+        input = ((input & 0xFF00FF00FF00FF00) >> 8) |
+            ((input & 0x00FF00FF00FF00FF) << 8);
 
         // swap 2-byte long pairs
-        v = ((v & 0xFFFF0000FFFF0000) >> 16) |
-            ((v & 0x0000FFFF0000FFFF) << 16);
+        input = ((input & 0xFFFF0000FFFF0000) >> 16) |
+            ((input & 0x0000FFFF0000FFFF) << 16);
 
         // swap 4-byte long pairs
-        v = (v >> 32) | (v << 32);
+        input = (input >> 32) | (input << 32);
+
+        return int64(input);
     }
 
     function convertFromVerusNumber(uint256 a,uint8 decimals) public pure returns (uint256) {

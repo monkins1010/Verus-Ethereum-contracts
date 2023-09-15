@@ -12,6 +12,17 @@ import "../VerusBridge/UpgradeManager.sol";
 import "../Storage/StorageMaster.sol";
 
 contract VerusNotarizer is VerusStorage {
+
+    address immutable VETH;
+    address immutable BRIDGE;
+    address immutable VERUS;
+
+    constructor(address vETH, address Bridge, address Verus){
+
+        VETH = vETH;
+        BRIDGE = Bridge;
+        VERUS = Verus;
+    }
         
     uint8 constant FLAG_FRACTIONAL = 1;
     uint8 constant FLAG_REFUNDING = 4;
@@ -73,7 +84,7 @@ contract VerusNotarizer is VerusStorage {
                     vdxfcode,
                     uint8(1),
                     txidHash,
-                    VerusConstants.VerusSystemId,
+                    VERUS,
                     serializeUint32(blockheights[i]),
                     notaryAddresses[i], 
                     keccakNotarizationHash));

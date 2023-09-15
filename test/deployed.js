@@ -1,11 +1,12 @@
 const VerusDelegator = artifacts.require("../contracts/Main/Delegator.sol");
 const VerusSerializer = artifacts.require("../contracts/VerusBridge/VerusSerializer.sol");
-const notaries = require('../migrations/setup.js')
+const { getNotarizerIDS } = require('../migrations/setup.js')
 const verusDelegatorAbi = require('../build/contracts/Delegator.json');
 const verusSerializerAbi = require('../build/contracts/VerusSerializer.json');
 const testNotarization = require('./submitnotarization.js')
 const reservetransfer = require('./reservetransfer.ts')
 const { toBase58Check } = require("verus-typescript-primitives");
+const ERC721 = require("../build/contracts/ERC721.json");
 
 contract("Verus Contracts deployed tests", async(accounts)  => {
     
@@ -17,10 +18,13 @@ contract("Verus Contracts deployed tests", async(accounts)  => {
 
     it("Notaries Deployed", async() => {
         const DelegatorInst = await VerusDelegator.deployed();
-        for (let i=0; i< notaries.TestVerusNotariserIDS.length; i++){
+
+        const notaries = getNotarizerIDS("development")[0]
+
+        for (let i=0; i< notaries.length; i++){
 
             let firstnotary = await DelegatorInst.notaries.call(i);
-            assert.equal(firstnotary.toLowerCase(), notaries.TestVerusNotariserIDS[i].toLowerCase());
+            assert.equal(firstnotary.toLowerCase(), notaries[i].toLowerCase());
 
         }
         assert.ok(true);
@@ -205,7 +209,7 @@ contract("Verus Contracts deployed tests", async(accounts)  => {
         }
 
         assert.equal(toBase58Check(Buffer.from(reply.launchTxs[0].iaddress.slice(2), 'hex'), 102), "i7VSq7gm2xe7vWnjK9SvJvTUvy5rcLfozZ" , "transfer currency (chad7) does not equal transaction");
-        assert.equal(reply.launchTxs[0].ERCContract, "0x9bB2772Aa50ec96ce1305D926B9CC29b7c402bAD" , "ERC721 does not equal verus ERC721 NFT address");
+        assert.equal(reply.launchTxs[0].ERCContract, "0x0000000000000000000000000000000000000000" , "ERC721 does not equal an empty address");
         assert.equal(reply.launchTxs[0].flags, "130" , "Ethereum mapped currency does not have the correct flags ");
       });
 
@@ -302,6 +306,24 @@ contract("Verus Contracts deployed tests", async(accounts)  => {
         assert.equal(reply.launchTxs[0].tokenID, 255 , "ERC1155 TokenID does not equal the correct (first Currency Export)");
         assert.equal(reply.launchTxs[1].tokenID, 255 , "ERC1155 TokenID does not equal the correct (second Currency Export)");
         assert.equal(reply.launchTxs[0].flags, "65" , "Ethereum mapped currency does not have the correct flags ");
+      });
+
+      it("Check Verus ERC721 has launched", async () => {
+        const DelegatorInst = await VerusDelegator.deployed();
+        let tokensList = await DelegatorInst.getTokenList.call(0,0);
+
+        const NFTContract = new web3.eth.Contract(ERC721.abi, tokensList[0].erc20ContractAddress);
+       
+        let reply;  
+        try {
+           reply = await NFTContract.methods.name().call(); ;
+
+        } catch(e) {
+            console.log(e.message)
+            assert.isTrue(false);
+        }
+
+        assert.equal(reply, "VerusNFT" , "Verus ERC721 name does not equal transaction");
       });
 
 });
