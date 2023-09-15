@@ -96,7 +96,7 @@ contract Delegator is VerusStorage, ERC1155Holder, ERC721Holder {
 
     function launchContractTokens(bytes calldata data) external  {
 
-        require(verusToERC20mapping[VerusConstants.VEth].flags == 0 && startOwner == msg.sender);
+        require(contracts.length == 1 && startOwner == msg.sender);
         address logic = contracts[uint(VerusConstants.ContractType.VerusNotaryTools)];
 
         (bool success,) = logic.delegatecall(abi.encodeWithSignature("launchContractTokens(bytes)", data));
