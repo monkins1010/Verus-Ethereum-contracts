@@ -208,37 +208,27 @@ contract SubmitImports is VerusStorage {
 
     function setClaimableFees(uint64 fees, uint176 exporter) external
     {
+        uint64 transactionBaseCost;
 
-        bytes memory proposerBytes = bestForks[0];
-        uint8 notaryImporterState = notaryAddressMapping[msg.sender].state;
-        uint176 proposer;
-        uint8 notarizationSubmitterData;
+        transactionBaseCost = uint64((tx.gasprice * VerusConstants.VERUS_IMPORT_GAS_USEAGE) / VerusConstants.SATS_TO_WEI_STD);
 
-        assembly {
-                proposer := mload(add(proposerBytes, FORKS_NOTARY_PROPOSER_POSITION))
-                notarizationSubmitterData := mload(add(proposerBytes, FORKS_NOTARY_INDEX))
-        } 
+        if (fees <= transactionBaseCost) {
 
-        uint64 divisionNumber;
-        uint64 feeShare;
-        uint8 notarizationSubmittedValid = notarizationSubmitterData >> VerusConstants.NOTARIZATION_VALID_BIT_SHIFT; //shift down to get 1 or 0
+            setNotaryFees(fees);
+           
+        } else {
 
-        divisionNumber = 3 + (notaryImporterState & VerusConstants.NOTARY_VALID) + notarizationSubmittedValid; //the importsubmitter is the msg.sender
+            bytes memory proposerBytes = bestForks[0];
+            uint176 proposer;
+            assembly {
+                    proposer := mload(add(proposerBytes, FORKS_NOTARY_PROPOSER_POSITION))
+            } 
+            uint64 feeShare;
 
-        feeShare = fees / divisionNumber;
-        setClaimedFees(bytes32(uint256(proposer)), feeShare + setNotaryFees(feeShare));  // any reminder from notary division goes to proposer
-        setClaimedFees(bytes32(uint256(exporter)), feeShare + (fees % divisionNumber)); // any reminder from main division goes to exporter
-        
-        if(notaryImporterState == VerusConstants.NOTARY_VALID) { //check the import submitter is valid
-            setNotaryClaimedFees(uint176(uint160(msg.sender)), feeShare);
+            feeShare = (fees - transactionBaseCost) / 3;
+            setClaimedFees(bytes32(uint256(proposer)), feeShare + setNotaryFees(transactionBaseCost + feeShare));  // any reminder from notary division goes to proposer
+            setClaimedFees(bytes32(uint256(exporter)), feeShare + ((fees - transactionBaseCost) % 3)); // any reminder from main division goes to exporter
         }
-
-        if(notarizationSubmittedValid == VerusConstants.NOTARY_VALID) { //check the import submitter is valid
-            // remove high bit and leave index, then use index to find notary
-            address notaryEthAddress = notaryAddressMapping[notaries[notarizationSubmitterData & ~VerusConstants.GLOBAL_TYPE_NOTARY_VALID_HIGH_BIT]].main;
-            setNotaryClaimedFees(uint176(uint160(notaryEthAddress)), feeShare); 
-        }
-
     }
 
     function setNotaryFees(uint256 notaryFees) private returns (uint64 remainder){  //sent in as SATS

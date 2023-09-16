@@ -18,6 +18,7 @@ library VerusConstants {
     uint64 constant public verusvETHTransactionFee = 300000; //0.003 vETH 8 decimals
     uint64 constant public verusvETHReturnFee = 1000000; //0.01 vETH 8 decimals
     uint64 constant public verusBridgeLaunchFeeShare = 500000000000;
+    uint256 constant VERUS_IMPORT_GAS_USEAGE = 2400000;
     uint32 constant VALID = 1;
     uint32 constant CONVERT = 2;
     uint32 constant CROSS_SYSTEM = 0x40; 
