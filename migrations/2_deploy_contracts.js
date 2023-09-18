@@ -101,7 +101,7 @@ module.exports = async function(deployer) {
         testnetERC = TokenInst.address;
         console.log("\nDAI DEPLOYED\n", TokenInst.address); 
     } 
-    const launchCurrencies = getCurrencies(testnetERC);
+    const launchCurrencies = getCurrencies(testnetERC, deployer);
 
     await VerusDelegatorInst.launchContractTokens(launchCurrencies);
 
@@ -111,10 +111,11 @@ module.exports = async function(deployer) {
     console.log("\nSettings to be pasted into *.conf file and website constants \n", settingString);        
 };
 
-const getCurrencies = (developmentERC) => {
+const getCurrencies = (developmentERC, deployer) => {
     
     // if testnetERC is not null then we are running ganache test and need to replace the DAI address with the testnetERC address.
-    let currencies = arrayofcurrencies(deployer.network == "development" || deployer.network == "goerli");
+    let isTestnet = deployer.network == "development" || deployer.network == "goerli" || deployer.network == "goerli-fork"
+    let currencies = arrayofcurrencies(isTestnet);
 
     if(developmentERC){
         // if running ganache test replace DAI ERC20 contract with adhoc one.
