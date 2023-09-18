@@ -117,29 +117,17 @@ contract NotarizationSerializer is VerusStorage {
             (temp, nextOffset) = deserializeCoinbaseCurrencyState(notarization, nextOffset);
             bridgeConverterLaunched = temp | bridgeConverterLaunched;
         }
-
-        proposerAndLaunched = getProposerandLaunched(proposerMain, uint8(bridgeConverterLaunched));
+        
+        proposerAndLaunched = bytes32(uint256(proposerMain));
+       
+        if (!bridgeConverterActive && bridgeConverterLaunched > 0) {
+                proposerAndLaunched |= bytes32(uint256(bridgeConverterLaunched) << VerusConstants.UINT176_BITS_SIZE);  // Shift 16bit value 22 bytes to pack in bytes32
+        }
 
         nextOffset++; //move forwards to read le
         readerLen = readCompactSizeLE(notarization, nextOffset);    // get the length of proofroot array
 
         (stateRoot, blockHash, height) = deserializeProofRoots(notarization, uint32(readerLen.value), nextOffset);
-
-    }
-
-    function getProposerandLaunched(uint176 proposerMain, uint8 bridgeConverterLaunched) private view returns (bytes32 proposerAndLaunched) {
-
-       proposerAndLaunched = bytes32(uint256(proposerMain));
-       
-       // if the msg.sender is a valid notary then add their index in with the valid flag to a byte
-       if(notaryAddressMapping[msg.sender].state == VerusConstants.NOTARY_VALID) {
-            //pack in the notarizers ID and valid flag at the defined location, NOTE: the notarisers index can be [0].
-            proposerAndLaunched |= bytes32(uint256(uint8(uint160(notaryAddressMapping[msg.sender].recovery)) // .recovery == to the index | 0x80
-                                        | VerusConstants.GLOBAL_TYPE_NOTARY_VALID_HIGH_BIT) << VerusConstants.NOTARIZER_INDEX_AND_FLAGS_OFFSET);
-        } 
-        if (!bridgeConverterActive && bridgeConverterLaunched > 0) {
-                proposerAndLaunched |= bytes32(uint256(bridgeConverterLaunched) << VerusConstants.UINT176_BITS_SIZE);  // Shift 16bit value 22 bytes to pack in bytes32
-        }
     }
 
     function deserializeCoinbaseCurrencyState(bytes memory notarization, uint32 nextOffset) private view returns (uint16, uint32)

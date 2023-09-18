@@ -17,8 +17,6 @@ contract Delegator is VerusStorage, ERC1155Holder, ERC721Holder {
         for(uint i =0; i < _notaries.length; i++) {
             notaryAddressMapping[_notaries[i]] = VerusObjects.notarizer(_notariesEthAddress[i], _notariesColdStoreEthAddress[i], VerusConstants.NOTARY_VALID);
             notaries.push(_notaries[i]);
-            //TODO: This is a mapping from ETH address to notary that enables a quick lookup (not present in testnet)
-            notaryAddressMapping[_notariesEthAddress[i]] = VerusObjects.notarizer(_notaries[i], address(uint160(i)), VerusConstants.NOTARY_VALID);
         }
         VerusNft t = new VerusNft(); 
 
