@@ -111,14 +111,14 @@ module.exports = async function(deployer) {
     console.log("\nSettings to be pasted into *.conf file and website constants \n", settingString);        
 };
 
-const getCurrencies = (testnetERC) => {
+const getCurrencies = (developmentERC) => {
     
     // if testnetERC is not null then we are running ganache test and need to replace the DAI address with the testnetERC address.
-    let currencies = arrayofcurrencies(testnetERC != null);
+    let currencies = arrayofcurrencies(deployer.network == "development" || deployer.network == "goerli");
 
-    if(testnetERC){
-        // if running ganache test replace contract with adhoc one.
-        currencies[3][1] = testnetERC;
+    if(developmentERC){
+        // if running ganache test replace DAI ERC20 contract with adhoc one.
+        currencies[3][1] = developmentERC;
     }
 
     let data = abi.encodeParameter(
