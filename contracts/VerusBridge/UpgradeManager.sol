@@ -30,7 +30,7 @@ contract UpgradeManager is VerusStorage {
 
         require(msg.value > VerusConstants.upgradeFee);
 
-        setNotaryFees(msg.value / VerusConstants.SATS_TO_WEI_STD);
+        claimableFees[bytes32(uint256(uint160(VerusConstants.VDXF_SYSTEM_NOTARIZATION_NOTARYFEEPOOL)))] += (msg.value / VerusConstants.SATS_TO_WEI_STD);
 
         VerusObjects.upgradeInfo memory _newContractPackage;
 
@@ -39,19 +39,6 @@ contract UpgradeManager is VerusStorage {
         checkValidContractUpgrade(_newContractPackage);
             
         return PENDING; 
-    }
-
-    function setNotaryFees(uint256 notaryFees) private {  //sent in as SATS
-      
-        uint256 numOfNotaries = notaries.length;
-        uint64 notariesShare = uint64(notaryFees / numOfNotaries);
-        for (uint i=0; i < numOfNotaries; i++)
-        {
-            uint176 notary;
-            notary = uint176(uint160(notaryAddressMapping[notaries[i]].main));
-            notary |= (uint176(0x0c14) << VerusConstants.UINT160_BITS_SIZE); //set at type eth
-            claimableFees[bytes32(uint256(notary))] += notariesShare;
-        }
     }
 
     function recoverString(bytes memory be, uint8 vs, bytes32 rs, bytes32 ss) private pure returns (address)

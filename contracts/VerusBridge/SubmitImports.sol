@@ -214,38 +214,27 @@ contract SubmitImports is VerusStorage {
 
         if (fees <= transactionBaseCost) {
 
-            setNotaryFees(fees);
+            claimableFees[bytes32(uint256(uint160(VerusConstants.VDXF_SYSTEM_NOTARIZATION_NOTARYFEEPOOL)))] += fees;
            
         } else {
 
             bytes memory proposerBytes = bestForks[0];
             uint176 proposer;
+
             assembly {
                     proposer := mload(add(proposerBytes, FORKS_NOTARY_PROPOSER_POSITION))
             } 
+
             uint64 feeShare;
 
             feeShare = (fees - transactionBaseCost) / 3;
-            setClaimedFees(bytes32(uint256(proposer)), feeShare + setNotaryFees(transactionBaseCost + feeShare));  // any reminder from notary division goes to proposer
-            setClaimedFees(bytes32(uint256(exporter)), feeShare + ((fees - transactionBaseCost) % 3)); // any reminder from main division goes to exporter
+            claimableFees[bytes32(uint256(uint160(VerusConstants.VDXF_SYSTEM_NOTARIZATION_NOTARYFEEPOOL)))] += feeShare;
+            setClaimedFees(bytes32(uint256(proposer)), feeShare); // 1/3 to proposer
+            setClaimedFees(bytes32(uint256(exporter)), feeShare + ((fees - transactionBaseCost) % 3)); // any remainder from main division goes to exporter
         }
     }
 
-    function setNotaryFees(uint256 notaryFees) private returns (uint64 remainder){  //sent in as SATS
-      
-        uint256 numOfNotaries = notaries.length;
-        uint64 notariesShare = uint64(notaryFees / numOfNotaries);
-        for (uint i=0; i < numOfNotaries; i++)
-        {
-            uint176 notary;
-            notary = uint176(uint160(notaryAddressMapping[notaries[i]].main));
-            notary |= (uint176(0x0c14) << VerusConstants.UINT160_BITS_SIZE); //set at type eth
-            claimableFees[bytes32(uint256(notary))] += notariesShare;
-        }
-        remainder = uint64(notaryFees % numOfNotaries);
-    }
-
-    function setClaimedFees(bytes32 _address, uint256 fees) public  {
+    function setClaimedFees(bytes32 _address, uint256 fees) private  {
 
         claimableFees[_address] += fees;
     }
@@ -260,7 +249,6 @@ contract SubmitImports is VerusStorage {
 
         uint256 claimAmount;
         uint256 claimant;
-
         claimant = uint256(uint160(msg.sender));
 
         // Check claimant is type eth with length 20 and has fees to be got.
@@ -273,9 +261,50 @@ contract SubmitImports is VerusStorage {
             claimableFees[bytes32(claimant)] = 0;
             payable(msg.sender).transfer(claimAmount * VerusConstants.SATS_TO_WEI_STD);
         }
-        else
+        else if ((claimableFees[bytes32(uint256(uint160(VerusConstants.VDXF_SYSTEM_NOTARIZATION_NOTARYFEEPOOL)))] *  VerusConstants.SATS_TO_WEI_STD) 
+                    > (tx.gasprice * VerusConstants.SEND_NOTARY_PAYMENT_FEE))
         {
-            revert("No fees avaiable");
+            bool notaryFound = false;
+            for (uint i = 0; i < notaries.length; i++)
+            {
+                if (notaryAddressMapping[notaries[i]].main == msg.sender)
+                {
+                    notaryFound = true;
+                }
+            }
+
+            if(notaryFound) {
+
+                uint256 txReimburse;
+
+                txReimburse = (tx.gasprice * notaries.length * VerusConstants.SEND_GAS_PRICE);
+
+                if (claimableFees[bytes32(0)] > 0) {
+                    // When there is no proposer fees are sent to bytes(0)
+                    claimableFees[bytes32(uint256(uint160(VerusConstants.VDXF_SYSTEM_NOTARIZATION_NOTARYFEEPOOL)))] += claimableFees[bytes32(0)];
+                    claimableFees[bytes32(0)] = 0;
+                }
+
+                claimAmount = claimableFees[bytes32(uint256(uint160(VerusConstants.VDXF_SYSTEM_NOTARIZATION_NOTARYFEEPOOL)))] - txReimburse;
+
+                claimableFees[bytes32(uint256(uint160(VerusConstants.VDXF_SYSTEM_NOTARIZATION_NOTARYFEEPOOL)))] = 0;
+
+                uint256 claimShare;
+                
+                claimShare = claimAmount / notaries.length;
+
+                for (uint i = 0; i < notaries.length; i++)
+                {
+                    if (notaryAddressMapping[notaries[i]].state == VerusConstants.NOTARY_VALID)
+                    {
+                        claimAmount -= claimShare;
+                        payable(notaryAddressMapping[notaries[i]].main).transfer(claimShare * VerusConstants.SATS_TO_WEI_STD);
+                    }
+                }
+                claimableFees[bytes32(uint256(uint160(VerusConstants.VDXF_SYSTEM_NOTARIZATION_NOTARYFEEPOOL)))] = claimAmount;
+                payable(msg.sender).transfer(txReimburse);
+
+            }
         }
     }
 
