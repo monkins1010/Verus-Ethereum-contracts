@@ -10,12 +10,20 @@ import "./Token.sol";
 import "../Storage/StorageMaster.sol";
 import "./ExportManager.sol";
 import '@openzeppelin/contracts/token/ERC1155/IERC1155.sol';
+import '@openzeppelin/contracts/token/ERC20/utils/SafeERC20.sol';
+
+abstract contract JoinLike {
+    function join(address, uint256) external virtual;
+    function exit(address, uint256) external virtual;
+}
 
 contract CreateExports is VerusStorage {
 
     address immutable VETH;
     address immutable BRIDGE;
     address immutable VERUS;
+
+    using SafeERC20 for Token;
 
     constructor(address vETH, address Bridge, address Verus){
 
@@ -81,14 +89,9 @@ contract CreateExports is VerusStorage {
                 require((transfer.currencyvalue.amount + mappedContract.tokenIndex) < VerusConstants.MAX_VERUS_TRANSFER);
                 verusToERC20mapping[transfer.currencyvalue.currency].tokenIndex += transfer.currencyvalue.amount;
 
-                if (contracts.length == VerusConstants.NUMBER_OF_CONTRACTS) {
-                    require (nft.isApprovedForAll(msg.sender, address(this)), "NFT not approved");
-                     nft.safeTransferFrom(msg.sender, address(this), mappedContract.tokenID, transfer.currencyvalue.amount, ""); 
-                } else {
-                    require (nft.isApprovedForAll(msg.sender, contracts[uint160(VerusConstants.ContractType.NFTHolder)]), "NFT not approved");
-                    (bool Nftsuccess,) = contracts[uint160(VerusConstants.ContractType.NFTHolder)].call(abi.encodeWithSignature("getERC1155(address,address,uint256,uint256)", mappedContract.erc20ContractAddress, msg.sender, mappedContract.tokenID, uint256(transfer.currencyvalue.amount)));
-                    require (Nftsuccess);
-                }
+                require (nft.isApprovedForAll(msg.sender, address(this)), "NFT not approved");
+                nft.safeTransferFrom(msg.sender, address(this), mappedContract.tokenID, transfer.currencyvalue.amount, ""); 
+      
 
             } else if (ethNftFlag == VerusConstants.MAPPING_ERC721_NFT_DEFINITION){
                 VerusNft nft = VerusNft(mappedContract.erc20ContractAddress);
@@ -107,13 +110,14 @@ contract CreateExports is VerusStorage {
             //Check user has allowed the verusBridgeStorage contract to spend on their behalf
             uint256 allowedTokens = token.allowance(msg.sender, address(this));
             uint256 tokenAmount = convertFromVerusNumber(transfer.currencyvalue.amount, token.decimals()); //convert to wei from verus satoshis
+            require( allowedTokens >= tokenAmount);
+
             if (mappedContract.flags & VerusConstants.MAPPING_ETHEREUM_OWNED == VerusConstants.MAPPING_ETHEREUM_OWNED) {
                 // TokenID is used for ERC20's only for the amount of tokens held by the bridge
                 require((transfer.currencyvalue.amount + mappedContract.tokenID) < VerusConstants.MAX_VERUS_TRANSFER);
                 verusToERC20mapping[transfer.currencyvalue.currency].tokenID += transfer.currencyvalue.amount;
 
             }
-            require( allowedTokens >= tokenAmount);
             //transfer the tokens to the delegator contract
             //total amount kept as uint256 until export to verus
             exportERC20Tokens(tokenAmount, token, mappedContract.flags & VerusConstants.MAPPING_VERUS_OWNED == VerusConstants.MAPPING_VERUS_OWNED);
@@ -126,8 +130,10 @@ contract CreateExports is VerusStorage {
 
     function exportERC20Tokens(uint256 _tokenAmount, Token token, bool burn) private {
         
-        (bool success, ) = address(token).call(abi.encodeWithSignature("transferFrom(address,address,uint256)", msg.sender, address(this), _tokenAmount));
-        require(success, "transferfrom of token failed");
+        token.safeTransferFrom(msg.sender, address(this), _tokenAmount);
+        if (address(token) != contracts[uint(VerusConstants.ContractType.MakerContract)]) {
+            JoinLike(uint(VerusConstants.ContractType.MakerContract)).join(address(this), _tokenAmount);
+        }
 
         if (burn) 
         {

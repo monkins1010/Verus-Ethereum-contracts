@@ -91,7 +91,7 @@ library VerusConstants {
         SubmitImports,
         NotarizationSerializer,
         UpgradeManager,
-        NFTHolder
+        MakerContract
     } 
 
     uint8 constant UINT160_SIZE = 20;

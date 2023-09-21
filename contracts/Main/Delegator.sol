@@ -31,6 +31,7 @@ contract Delegator is VerusStorage, ERC1155Holder, ERC721Holder {
         for (uint i = 0; i < uint(VerusConstants.NUMBER_OF_CONTRACTS); i++) {
             contracts.push(_newContractAddress[i]);
         }
+        contracts.push(address(0)); // todo add maker contract here
     }
     
     receive() external payable {

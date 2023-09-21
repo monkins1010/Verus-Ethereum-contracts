@@ -167,11 +167,9 @@ contract TokenManager is VerusStorage {
                 } else if (tempToken.flags & VerusConstants.MAPPING_ERC1155_NFT_DEFINITION == VerusConstants.MAPPING_ERC1155_NFT_DEFINITION ||
                            tempToken.flags & VerusConstants.MAPPING_ERC1155_ERC_DEFINITION == VerusConstants.MAPPING_ERC1155_ERC_DEFINITION) 
                 {
-                    if (contracts.length == VerusConstants.NUMBER_OF_CONTRACTS) {
-                        tempToken.erc20ContractAddress.call(abi.encodeWithSignature("safeTransferFrom(address,address,uint256,uint256,bytes)", address(this), destinationAddress, tempToken.tokenID, sendAmount, ""));  
-                    } else if (contracts.length == VerusConstants.NUMBER_OF_CONTRACTS + 1) {
-                        contracts[uint160(VerusConstants.ContractType.NFTHolder)].call(abi.encodeWithSignature("sendERC1155(address,address,uint256,uint256)", tempToken.erc20ContractAddress, destinationAddress, tempToken.tokenID, sendAmount));
-                    }
+
+                    tempToken.erc20ContractAddress.call(abi.encodeWithSignature("safeTransferFrom(address,address,uint256,uint256,bytes)", address(this), destinationAddress, tempToken.tokenID, sendAmount, ""));  
+
                     verusToERC20mapping[address(uint160(trans[i].currencyAndAmount))].tokenIndex -= sendAmount;
                 }
             }
