@@ -58,14 +58,20 @@ const id = {
         VRSC: "0x1Af5b8015C64d39Ab44C60EAd8317f9F5a9B6C4C",
         BRIDGE: "0x0200EbbD26467B866120D84A0d37c82CdE0acAEB",
         DAI: "0x8b72F1c2D326d376aDd46698E385Cf624f0CA1dA",
-        DAIERC20: "0x6B175474E89094C44Da98b954EedeAC495271d0F"
+        DAIERC20: "0x6B175474E89094C44Da98b954EedeAC495271d0F",
+        DsrManagerERC20: "0x373238337Bfe1146fb49989fc222523f83081dDb",
+        MKR: "0x65b5aac6a4aa0eb656ab6b8812184e7545b6a221",
+        MKRERC20: "0x9f8f72aa9304c8b593d555f12ef6589cc3a579a2"
     },
     testnet: {
         VETH: "0x67460C2f56774eD27EeB8685f29f6CEC0B090B00",
         VRSC: "0xA6ef9ea235635E328124Ff3429dB9F9E91b64e2d",
         BRIDGE: "0xffEce948b8A38bBcC813411D2597f7f8485a0689",
         DAI: "0xcce5d18f305474f1e0e0ec1c507d8c85e7315fdf",
-        DAIERC20: "0xB897f2448054bc5b133268A53090e110D101FFf0"
+        DAIERC20: "0x11fE4B6AE13d2a6055C8D9cF65c55bac32B5d844", //NOTE: Testnet DAI on maintestnet is 0xB897f2448054bc5b133268A53090e110D101FFf0
+        DsrManagerERC20: "0xF7F0de3744C82825D77EdA8ce78f07A916fB6bE7",
+        MKR: "0x005005b2b10a897fed36fbd71c878213a7a169bf" , 
+        MKRERC20: "0x9f8f72aa9304c8b593d555f12ef6589cc3a579a2"  // TODO: Change this to testnet MKR
     },
     emptyuint160: "0x0000000000000000000000000000000000000000",
     emptyuint256: "0x0000000000000000000000000000000000000000000000000000000000000000"
@@ -80,10 +86,23 @@ const returnConstructorCurrencies = (isTestnet = false) => {
     ]
 }
 
+const getDAI = (isTestnet = false) => {
+    return isTestnet ? id.testnet.DAI : id.mainnet.DAI;
+}
+
+const getDSRMANAGER = (isTestnet = false) => {
+    return isTestnet ? id.testnet.DsrManagerERC20 : id.mainnet.DsrManagerERC20;
+}
+
+const getDAIERC20Address = (isTestnet = false) => {
+    return isTestnet ? id.testnet.DAIERC20 : id.mainnet.DAIERC20;
+}
 // currencies that are defined are in this format:
 // iaddress in hex, ERC20 contract, parent, token options, name, ticker, NFTtokenID.
 const returnSetupCurrencies = (isTestnet = false) => {
 
+    //NOTE: IMPORTANT THIS ORDER MATTERS. DO NOT CHANGE IT. ONLY ADD TO THE END.
+    
     const vrsc = [
         isTestnet ? id.testnet.VRSC : id.mainnet.VRSC,
         id.emptyuint160, 
@@ -120,10 +139,24 @@ const returnSetupCurrencies = (isTestnet = false) => {
         "DAI",
         id.emptyuint256];
 
-    return [vrsc, bridgeeth, veth, dai];
+    const mkr = [
+        isTestnet ? id.testnet.MKR : id.mainnet.MKR,
+        isTestnet ? id.testnet.MKRERC20 : id.mainnet.MKRERC20,
+        isTestnet ? id.testnet.VRSC : id.mainnet.VRSC, 
+        MAPPING_ETHEREUM_OWNED + MAPPING_PARTOF_BRIDGEVETH + MAPPING_ERC20_DEFINITION, 
+        isTestnet ? "MKR (Testnet)" : "DAI", 
+        "MKR",
+        id.emptyuint256];
+
+    // Add new currencies here.
+
+    return [vrsc, bridgeeth, veth, dai, mkr];
 }
 
 exports.id = id;
 exports.getNotarizerIDS = getNotarizerIDS;
 exports.arrayofcurrencies = returnSetupCurrencies;
 exports.returnConstructorCurrencies = returnConstructorCurrencies;
+exports.getDAI = getDAI;
+exports.getDSRMANAGER = getDSRMANAGER;  
+exports.getDAIERC20Address = getDAIERC20Address;

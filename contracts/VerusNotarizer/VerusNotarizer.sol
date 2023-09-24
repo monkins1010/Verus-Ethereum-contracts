@@ -10,6 +10,7 @@ import "./NotarizationSerializer.sol";
 import "../MMR/VerusBlake2b.sol";
 import "../VerusBridge/UpgradeManager.sol";
 import "../Storage/StorageMaster.sol";
+import "../VerusBridge/SubmitImports.sol";
 
 contract VerusNotarizer is VerusStorage {
 
@@ -105,11 +106,9 @@ contract VerusNotarizer is VerusStorage {
         }
 
         checkNotarization(serializedNotarization, txid, uint64(n));
-
     }
 
     function checkNotarization(bytes calldata serializedNotarization, bytes32 txid, uint64 voutAndHeight ) private {
-
     
         bytes32 blakeNotarizationHash;
 
@@ -128,7 +127,7 @@ contract VerusNotarizer is VerusStorage {
             
             address submitImportsAddress = contracts[uint(VerusConstants.ContractType.SubmitImports)];
             if (remainingLaunchFeeReserves > (VerusConstants.verusTransactionFee * 2)) {
-                (bool success2,) = submitImportsAddress.delegatecall(abi.encodeWithSignature("sendToVRSC(uint64,address,uint8)", 0, address(0), VerusConstants.DEST_PKH));
+                (bool success2,) = submitImportsAddress.delegatecall(abi.encodeWithSelector(SubmitImports.sendToVRSC.selector, 0, address(0), VerusConstants.DEST_PKH, VERUS));
                 require(success2);
                 remainingLaunchFeeReserves = 0;
             }
@@ -140,7 +139,6 @@ contract VerusNotarizer is VerusStorage {
         setNotarizationProofRoot(blakeNotarizationHash, hashprevnotarization, txid, prevnotarizationtxid, launchedAndProposer, stateRoot, blockHash);
 
         emit NewNotarization(blakeNotarizationHash);
-
     }
 
     function decodeNotarization(uint index) public view returns (VerusObjectsNotarization.NotarizationForks[] memory)
