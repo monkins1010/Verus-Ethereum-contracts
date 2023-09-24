@@ -27,7 +27,7 @@ const { returnConstructorCurrencies,
     getDSRMANAGER,
     getDAIERC20Address } = setup;
     
-    module.exports = async function(deployer) {
+module.exports = async function(deployer) {
         
     const isTestnet = deployer.network == "development" || deployer.network == "goerli" || deployer.network == "goerli-fork";
     
@@ -123,6 +123,7 @@ const getCurrencies = async (deployer) => {
         
         await deployer.deploy(Token, "DAI (Testnet)", "DAI");
         const TokenInst = await Token.deployed();
+        TokenInst.mint(deployer.networks.goerli.from, 100000000000000000000000);
         console.log("\nDAI DEPLOYED\n", TokenInst.address); 
         currencies[3][1] = TokenInst.address;
         globalDAI = TokenInst.address;
@@ -132,6 +133,7 @@ const getCurrencies = async (deployer) => {
 
         await deployer.deploy(Token, "MKR (Testnet)", "MKR"); //TODO: Replace if there is an offical Goerli ERC20 MKR
         const TokenInst = await Token.deployed();
+        TokenInst.mint(deployer.networks.goerli.from, 100000000000000000000000);
         console.log("\nMKR DEPLOYED\n", TokenInst.address); 
         currencies[4][1] = TokenInst.address;
     }
