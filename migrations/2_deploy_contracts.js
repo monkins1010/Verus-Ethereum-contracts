@@ -54,7 +54,7 @@ module.exports = async function(deployer) {
     await deployer.deploy(NotarizationSerializer, ...currencyConstants, DAI);
     const notarizationSerializerInst = await NotarizationSerializer.deployed();
     
-    await deployer.deploy(VerusTokenManager, ...currencyConstants, DAI, DSRMANAGER)
+    await deployer.deploy(VerusTokenManager, ...currencyConstants, DAIERC20, DSRMANAGER)
     const tokenInst = await VerusTokenManager.deployed();
     
     await deployer.link(VerusBlake2b, VerusNotarizer);

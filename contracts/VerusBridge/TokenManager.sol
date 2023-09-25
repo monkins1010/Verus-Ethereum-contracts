@@ -18,20 +18,22 @@ contract TokenManager is VerusStorage {
 
     address immutable VETH;
     address immutable VERUS;
-    address immutable DAI;
+    address immutable DAIERC20ADDRESS;
     address immutable DSRMANAGER;
 
     enum SendTypes {ETH, ERC20, ERC20MINT ,ERC721, ERC1155}
 
     uint8 constant SEND_FAILED = 1;
     uint8 constant SEND_SUCCESS = 2;
-    uint8 constant SEND_SUCCESS_NFT = 3;
+    uint8 constant SEND_SUCCESS_ERC1155 = 3;
+    uint8 constant SEND_SUCCESS_ERC721 = 4;
+    uint8 constant SEND_SUCCESS_ERC20_MINTED = 5;
 
-    constructor(address vETH, address, address Verus, address Dai, address dsrManager){
+    constructor(address vETH, address, address Verus, address DaiERC20Address, address dsrManager){
 
         VETH = vETH;
         VERUS = Verus;
-        DAI = Dai;
+        DAIERC20ADDRESS = DaiERC20Address;
         DSRMANAGER = dsrManager;
     }
 
@@ -182,20 +184,22 @@ contract TokenManager is VerusStorage {
             }
 
             if(result > 0) {
-                result = sendCurrencyToETHAddress(tempToken.erc20ContractAddress, currencyiAddress, destinationAddress, sendAmount, result, tempToken.tokenID); 
+                result = sendCurrencyToETHAddress(tempToken.erc20ContractAddress, destinationAddress, sendAmount, result, tempToken.tokenID); 
             }
 
             if (result == SEND_FAILED) {
                 refundsData = abi.encodePacked(refundsData, refundAddresses[i], sendAmount, currencyiAddress);
             } else if (result == SEND_SUCCESS) {
                 verusToERC20mapping[currencyiAddress].tokenID -= sendAmount;
+            } else if (result == SEND_SUCCESS_ERC1155) {
+                verusToERC20mapping[currencyiAddress].tokenIndex += sendAmount;
             }
 
         } 
     }
 
     // Returns true if successful transfer
-    function sendCurrencyToETHAddress(address tokenERCAddress, address tokenIAddress, address destinationAddress, uint256 sendAmount, uint8 sendType, uint256 TokenId ) private returns (uint8){
+    function sendCurrencyToETHAddress(address tokenERCAddress, address destinationAddress, uint256 sendAmount, uint8 sendType, uint256 TokenId ) private returns (uint8){
 
             Token token; 
 
@@ -211,9 +215,8 @@ contract TokenManager is VerusStorage {
 
             if(sendType == uint8(SendTypes.ERC20)) {
 
-                if (tokenIAddress == DAI) {
+                if (tokenERCAddress == DAIERC20ADDRESS)  {
                     DsrManager(DSRMANAGER).exit(destinationAddress, amount);
-                    verusToERC20mapping[VerusConstants.VDXF_SYSTEM_DAI_HOLDINGS].tokenID -= amount;
                     return SEND_SUCCESS;
                 } else {
                     return token.transfer(destinationAddress, amount) ? SEND_SUCCESS : SEND_FAILED;
@@ -222,19 +225,19 @@ contract TokenManager is VerusStorage {
             else if(sendType == uint8(SendTypes.ERC20MINT)) {
                 
                 token.mint(destinationAddress, amount);
-                return SEND_SUCCESS;
+                return SEND_SUCCESS_ERC20_MINTED;
             }
             else if(sendType == uint8(SendTypes.ERC721)) {
 
                 try IERC721(tokenERCAddress).transferFrom(address(this), destinationAddress, TokenId) {
-                    return SEND_SUCCESS_NFT; 
+                    return SEND_SUCCESS_ERC721; 
                 } catch {
                     return SEND_FAILED; 
                 }
             }
             else if(sendType == uint8(SendTypes.ERC1155)) {
                 try IERC1155(tokenERCAddress).safeTransferFrom(address(this), destinationAddress, TokenId, sendAmount, "") {
-                    return SEND_SUCCESS_NFT; 
+                    return SEND_SUCCESS_ERC1155; 
                 } catch {
                     return SEND_FAILED; 
                 }
