@@ -5,3 +5,5 @@ dist
 build/
 *.json
 *.log
+truffle-config.js
+.env
