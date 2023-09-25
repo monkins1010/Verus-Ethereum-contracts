@@ -48,7 +48,6 @@ contract NotaryTools is VerusStorage {
     function revokeWithMainAddress(bytes calldata dataIn) public returns (bool) {
 
         if (dataIn.length == 1 && uint8(dataIn[0]) == TYPE_AUTO_REVOKE) {
-            notaryAddressMapping[notaryAddressMapping[msg.sender].main].state = VerusConstants.NOTARY_REVOKED;
             notaryAddressMapping[msg.sender].state = VerusConstants.NOTARY_REVOKED;
 
             return true;
@@ -70,8 +69,6 @@ contract NotaryTools is VerusStorage {
             return false;  
         }
         
-        // Set Notaries ETH mapping to revoked
-        notaryAddressMapping[notaryAddressMapping[_revokePacket.notaryID].main].state = VerusConstants.NOTARY_REVOKED;
         notaryAddressMapping[_revokePacket.notaryID].state = VerusConstants.NOTARY_REVOKED;
 
         return true;
@@ -104,7 +101,6 @@ contract NotaryTools is VerusStorage {
             }
         }
 
-        notaryAddressMapping[notaryAddressMapping[notarizerBeingRevoked].main].state = VerusConstants.NOTARY_REVOKED;
         notaryAddressMapping[notarizerBeingRevoked].state = VerusConstants.NOTARY_REVOKED;
 
         return true;
@@ -130,16 +126,7 @@ contract NotaryTools is VerusStorage {
         {
             return ERROR;  
         }
-
-        // notaries index stored in recover address location as not used for Ethereum                               
-        address notaryIndex = notaryAddressMapping[notaryAddressMapping[_newRecoveryInfo.notarizerID].main].recovery; 
-
-        // delete old ETH address mapping
-        delete notaryAddressMapping[notaryAddressMapping[_newRecoveryInfo.notarizerID].main];
-
-        // create new ETH address mapping
-        notaryAddressMapping[_newRecoveryInfo.contracts[0]] = VerusObjects.notarizer(_newRecoveryInfo.notarizerID, notaryIndex, VerusConstants.NOTARY_VALID);
-                              
+                 
         updateNotarizer(_newRecoveryInfo.notarizerID, _newRecoveryInfo.contracts[0], 
                                        _newRecoveryInfo.contracts[1], VerusConstants.NOTARY_VALID);
         return COMPLETE;
@@ -174,13 +161,6 @@ contract NotaryTools is VerusStorage {
         }
 
         updateNotarizer(notarizerBeingRecovered, newMainAddr, newRevokeAddr, VerusConstants.NOTARY_VALID);
-        address notaryIndex = notaryAddressMapping[notaryAddressMapping[notarizerBeingRecovered].main].recovery;
-
-        // delete old ETH address mapping
-        delete notaryAddressMapping[notaryAddressMapping[notarizerBeingRecovered].main];
-
-        notaryAddressMapping[newMainAddr] = VerusObjects.notarizer(notarizerBeingRecovered, notaryIndex, VerusConstants.NOTARY_VALID);
-          
 
         return COMPLETE;
     }

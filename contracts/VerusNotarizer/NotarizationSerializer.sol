@@ -14,12 +14,14 @@ contract NotarizationSerializer is VerusStorage {
     address immutable VETH;
     address immutable BRIDGE;
     address immutable VERUS;
+    address immutable DAI;
 
-    constructor(address vETH, address Bridge, address Verus){
+    constructor(address vETH, address Bridge, address Verus, address Dai){
 
         VETH = vETH;
         BRIDGE = Bridge;
         VERUS = Verus;
+        DAI = Dai;
     }
 
     uint8 constant CURRENCY_LENGTH = 20;
@@ -34,6 +36,7 @@ contract NotarizationSerializer is VerusStorage {
     uint8 constant VOTE_BYTE_POSITION = 22;
     uint8 constant REQUIREDAMOUNTOFVOTES = 100;
     uint8 constant WINNINGAMOUNT = 51;
+    uint8 constant UINT64_BYTES_SIZE = 8;
 
     function readVarint(bytes memory buf, uint32 idx) public pure returns (uint32 v, uint32 retidx) {
 
@@ -50,7 +53,7 @@ contract NotarizationSerializer is VerusStorage {
         revert(); // i=10, invalid varint stream
     }
 
-    function deserializeNotarization(bytes memory notarization) public returns (bytes32 proposerAndLaunched, 
+    function deserializeNotarization(bytes memory notarization) external returns (bytes32 proposerAndLaunched, 
                                                                                     bytes32 prevnotarizationtxid, 
                                                                                     bytes32 hashprevcrossnotarization, 
                                                                                     bytes32 stateRoot, 
@@ -104,45 +107,33 @@ contract NotarizationSerializer is VerusStorage {
                     nextOffset := add(nextOffset, BYTES32_LENGTH) // move to read hashprevcrossnotarization
                     hashprevcrossnotarization := mload(add(notarization, nextOffset))      // hashprevcrossnotarization 
                     nextOffset := add(nextOffset, 4) //skip prevheight
-                    nextOffset := add(nextOffset, 1) //skip prevheight
+                    nextOffset := add(nextOffset, 1) //move to read length of notarizationcurrencystate
                 }
 
         readerLen = readCompactSizeLE(notarization, nextOffset);    // get the length of the currencyState
 
-        nextOffset = readerLen.offset - 1;   //readCompactSizeLE returns 1 byte after and wants one byte after 
+        nextOffset = readerLen.offset - 1;   //readCompactSizeLE returns offset of next byte so move back to start of currencyState
 
         for (uint i = 0; i < readerLen.value; i++)
         {
-            uint16 temp;
+            uint16 temp; // store the currency state flags
             (temp, nextOffset) = deserializeCoinbaseCurrencyState(notarization, nextOffset);
-            bridgeConverterLaunched = temp | bridgeConverterLaunched;
+            bridgeConverterLaunched |= temp;
         }
-
-        proposerAndLaunched = getProposerandLaunched(proposerMain, uint8(bridgeConverterLaunched));
+        
+        proposerAndLaunched = bytes32(uint256(proposerMain));
+       
+        if (!bridgeConverterActive && bridgeConverterLaunched > 0) {
+                proposerAndLaunched |= bytes32(uint256(bridgeConverterLaunched) << VerusConstants.UINT176_BITS_SIZE);  // Shift 16bit value 22 bytes to pack in bytes32
+        }
 
         nextOffset++; //move forwards to read le
         readerLen = readCompactSizeLE(notarization, nextOffset);    // get the length of proofroot array
 
         (stateRoot, blockHash, height) = deserializeProofRoots(notarization, uint32(readerLen.value), nextOffset);
-
     }
 
-    function getProposerandLaunched(uint176 proposerMain, uint8 bridgeConverterLaunched) private view returns (bytes32 proposerAndLaunched) {
-
-       proposerAndLaunched = bytes32(uint256(proposerMain));
-       
-       // if the msg.sender is a valid notary then add their index in with the valid flag to a byte
-       if(notaryAddressMapping[msg.sender].state == VerusConstants.NOTARY_VALID) {
-            //pack in the notarizers ID and valid flag at the defined location, NOTE: the notarisers index can be [0].
-            proposerAndLaunched |= bytes32(uint256(uint8(uint160(notaryAddressMapping[msg.sender].recovery)) // .recovery == to the index | 0x80
-                                        | VerusConstants.GLOBAL_TYPE_NOTARY_VALID_HIGH_BIT) << VerusConstants.NOTARIZER_INDEX_AND_FLAGS_OFFSET);
-        } 
-        if (!bridgeConverterActive && bridgeConverterLaunched > 0) {
-                proposerAndLaunched |= bytes32(uint256(bridgeConverterLaunched) << VerusConstants.UINT176_BITS_SIZE);  // Shift 16bit value 22 bytes to pack in bytes32
-        }
-    }
-
-    function deserializeCoinbaseCurrencyState(bytes memory notarization, uint32 nextOffset) private view returns (uint16, uint32)
+    function deserializeCoinbaseCurrencyState(bytes memory notarization, uint32 nextOffset) private returns (uint16, uint32)
     {
         address currencyid;
         uint16 bridgeLaunched;
@@ -169,7 +160,17 @@ contract NotarizationSerializer is VerusStorage {
 
         readerLen = readCompactSizeLE(notarization, nextOffset);        // get the length currencies
 
-        nextOffset = nextOffset + (uint32(readerLen.value) * BYTES32_LENGTH) + 2;       // currencys, wights, reserves arrarys
+        // reserves[2] contain the scaled reserve amounts for ETH and DAI
+        uint daiToEthRatio;
+        if (currencyid == BRIDGE) {
+            daiToEthRatio = storeDAIConversionrate(notarization, nextOffset, uint8(readerLen.value));
+        }
+
+        if (bridgeConverterActive) {
+            //NOTE: to convert ETH to DAI ratio we do reserves[0]DAI / reserves[1]ETH
+            claimableFees[bytes32(uint256(uint160(VerusConstants.VDXF_ETH_TO_DAI_CONVERSION_RATIO)))] = daiToEthRatio; //store the fees in the notaryFeePool
+        }
+        nextOffset = nextOffset + (uint32(readerLen.value) * BYTES32_LENGTH) + 2;  
 
         readerLen = readVarintStruct(notarization, nextOffset);        // get the length of the initialsupply
         readerLen = readVarintStruct(notarization, readerLen.offset);        // get the length of the emitted
@@ -180,9 +181,69 @@ contract NotarizationSerializer is VerusStorage {
                 }
 
         readerLen = readCompactSizeLE(notarization, nextOffset);    // get the length of the reservein array of uint64
-        nextOffset = readerLen.offset + (uint32(readerLen.value) * 60) + 6;                 //skip 60 bytes of rest of state knowing array size always same as first
+        nextOffset = readerLen.offset + (uint32(readerLen.value) * 60) + 6;     //skip 60 bytes of rest of state knowing array size always same as first
 
         return (bridgeLaunched, nextOffset);
+    }
+
+    function storeDAIConversionrate (bytes memory notarization, uint32 nextOffset, uint8 currenciesLen) private view returns (uint) {
+        
+        uint8 ethIndex;
+        uint8 daiIndex;
+        for (uint8 i = 0; i < currenciesLen; i++)
+        {
+            address currency;
+            assembly {
+                    nextOffset := add(nextOffset, CURRENCY_LENGTH) // move to  read currency length
+                    currency := mload(add(notarization, nextOffset)) // move to  read currencyid
+                }
+            if (currency == VETH)
+            {
+               ethIndex = i;
+            }
+            if (currency == DAI)
+            {
+               daiIndex = i;
+            }
+        }
+
+        //Skip the weights
+        nextOffset = nextOffset + 1 + (uint32(currenciesLen) * 4) + 1; //move to read len of reserves
+
+        //read the reserves, position [0] for DAI, [1] for ETH
+        uint[2] memory reserves;
+
+        for (uint8 i = 0; i < currenciesLen; i++)
+        {
+            uint64 reserve;
+            assembly {
+                    nextOffset := add(nextOffset, UINT64_BYTES_SIZE) // move to  read currency length
+                    reserve := mload(add(notarization, nextOffset)) // move to  read currencyid
+                }
+            if (i == daiIndex)
+            {
+               reserves[0] = serializeUint64(reserve);
+            }
+            else if (i == ethIndex)
+            {
+               reserves[1] = serializeUint64(reserve);
+            }
+        }
+
+        assembly {                    
+            nextOffset := add(nextOffset, 1) // move forward to read next varint.
+        }
+
+        //NOTE: to convert ETH to DAI ratio we do reserves[0]DAI / reserves[1]ETH
+
+        uint256 ethToDaiRatio;
+        
+        if (reserves[0] > 0 && reserves[1] > 0)
+         { 
+            ethToDaiRatio = reserves[0] / reserves[1];
+         }
+
+        return ethToDaiRatio;  
     }
 
     function deserializeProofRoots (bytes memory notarization, uint32 size, uint32 nextOffset) private view returns (bytes32 stateRoot, bytes32 blockHash, uint32 height)
@@ -306,6 +367,20 @@ contract NotarizationSerializer is VerusStorage {
         number = ((number & 0xFF00FF00) >> 8) | ((number & 0x00FF00FF) << 8);
         number = (number >> 16) | (number << 16);
         return number;
+    }
+
+    function serializeUint64(uint64 v) public pure returns(uint64){
+        
+        v = ((v & 0xFF00FF00FF00FF00) >> 8) |
+        ((v & 0x00FF00FF00FF00FF) << 8);
+
+        // swap 2-byte long pairs
+        v = ((v & 0xFFFF0000FFFF0000) >> 16) |
+            ((v & 0x0000FFFF0000FFFF) << 16);
+
+        // swap 4-byte long pairs
+        v = (v >> 32) | (v << 32);
+        return v;
     }
 }
 

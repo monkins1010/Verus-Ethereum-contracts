@@ -10,6 +10,7 @@ import "./NotarizationSerializer.sol";
 import "../MMR/VerusBlake2b.sol";
 import "../VerusBridge/UpgradeManager.sol";
 import "../Storage/StorageMaster.sol";
+import "../VerusBridge/SubmitImports.sol";
 
 contract VerusNotarizer is VerusStorage {
 
@@ -105,11 +106,9 @@ contract VerusNotarizer is VerusStorage {
         }
 
         checkNotarization(serializedNotarization, txid, uint64(n));
-
     }
 
     function checkNotarization(bytes calldata serializedNotarization, bytes32 txid, uint64 voutAndHeight ) private {
-
     
         bytes32 blakeNotarizationHash;
 
@@ -128,7 +127,7 @@ contract VerusNotarizer is VerusStorage {
             
             address submitImportsAddress = contracts[uint(VerusConstants.ContractType.SubmitImports)];
             if (remainingLaunchFeeReserves > (VerusConstants.verusTransactionFee * 2)) {
-                (bool success2,) = submitImportsAddress.delegatecall(abi.encodeWithSignature("sendToVRSC(uint64,address,uint8)", 0, address(0), VerusConstants.DEST_PKH));
+                (bool success2,) = submitImportsAddress.delegatecall(abi.encodeWithSelector(SubmitImports.sendToVRSC.selector, 0, address(0), VerusConstants.DEST_PKH, VERUS));
                 require(success2);
                 remainingLaunchFeeReserves = 0;
             }
@@ -140,7 +139,6 @@ contract VerusNotarizer is VerusStorage {
         setNotarizationProofRoot(blakeNotarizationHash, hashprevnotarization, txid, prevnotarizationtxid, launchedAndProposer, stateRoot, blockHash);
 
         emit NewNotarization(blakeNotarizationHash);
-
     }
 
     function decodeNotarization(uint index) public view returns (VerusObjectsNotarization.NotarizationForks[] memory)
@@ -318,12 +316,12 @@ contract VerusNotarizer is VerusStorage {
 
             // Proposer and notaries get share of fees
             // any remainder from divide by 2 or equal share to the notaries gets added to proposers share.
-            feeShare += setNotaryFees(feeShare);
+            claimableFees[bytes32(uint256(uint160(VerusConstants.VDXF_SYSTEM_NOTARIZATION_NOTARYFEEPOOL)))] += feeShare;
             setClaimedFees(bytes32(uint256(uint176(proposerAndHeight))), (feeShare + remainder));
         }
 
         if (proofHeightOptions == 0) {
-            // if the most recent confrimed is requested just get the height from the bestforks
+            // if the most recent confirmed is requested just get the height from the bestforks
             return abi.encodePacked(uint32(proposerAndHeight >> OFFSET_FOR_HEIGHT), proofs[(bytes32(proposerAndHeight >> OFFSET_FOR_HEIGHT))]);
 
         } else if(proofHeightOptions == 1 || proofHeightOptions == 2) {
@@ -352,22 +350,8 @@ contract VerusNotarizer is VerusStorage {
 
         } else {
 
-           return abi.encodePacked(uint32(proofHeightOptions),proofs[bytes32(proofHeightOptions)]);
+           return abi.encodePacked(uint32(proofHeightOptions), proofs[bytes32(proofHeightOptions)]);
         }
-    }
-
-    function setNotaryFees(uint256 notaryFees) private returns (uint64 remainder){  //sent in as SATS
-      
-        uint256 numOfNotaries = notaries.length;
-        uint64 notariesShare = uint64(notaryFees / numOfNotaries);
-        for (uint i=0; i < numOfNotaries; i++)
-        {
-            uint176 notary;
-            notary = uint176(uint160(notaryAddressMapping[notaries[i]].main));
-            notary |= (uint176(0x0c14) << VerusConstants.UINT160_BITS_SIZE); //set at type eth
-            claimableFees[bytes32(uint256(notary))] += notariesShare;
-        }
-        remainder = uint64(notaryFees % numOfNotaries);
     }
 
     function setClaimedFees(bytes32 _address, uint256 fees) private

@@ -10,10 +10,10 @@ const ERC721 = require("../build/contracts/ERC721.json");
 
 contract("Verus Contracts deployed tests", async(accounts)  => {
     
-    it("Currencies Deployed", async() => {
+    it("All 6 Currencies Deployed", async() => {
         const DelegatorInst = await VerusDelegator.deployed();
         let tokensList = await DelegatorInst.getTokenList.call(0,0);
-        assert.equal(tokensList.length, 5);
+        assert.equal(tokensList.length, 6, "Not all currencies were deployed");
     });
 
     it("Notaries Deployed", async() => {
@@ -106,7 +106,7 @@ contract("Verus Contracts deployed tests", async(accounts)  => {
         assert.isTrue(true);
       });
 
-      it("Submitaccpeted notarization by Notary", async () => {
+      it("Submit accepeted notarization by Notary", async () => {
         const DelegatorInst = await VerusDelegator.deployed();
         const contractAddress = DelegatorInst.address;
         const contractInstance = new web3.eth.Contract(verusDelegatorAbi.abi, contractAddress);

@@ -27,7 +27,10 @@ contract SubmitImports is VerusStorage {
     uint32 constant ELVCHOBJ_NVINS_OFFSET = 45;
     uint32 constant FORKS_NOTARY_INDEX = 106;  // this is txid + stateroot + blockhash + NOTARIZER_INDEX_AND_FLAGS_OFFSET 
     uint32 constant FORKS_NOTARY_PROPOSER_POSITION = 128;
-    function sendToVRSC(uint64 value, address sendTo, uint8 destinationType) public 
+    uint32 constant TYPE_REFUND = 1;
+    uint constant TYPE_BYTE_LOCATION_IN_UINT176 = 168;
+
+    function sendToVRSC(uint64 value, address sendTo, uint8 destinationType, address sendingCurrency) public 
     {
         VerusObjects.CReserveTransfer memory LPtransfer;
         bool forceNewCCE;
@@ -54,7 +57,7 @@ contract SubmitImports is VerusStorage {
             LPtransfer.currencyvalue.amount = uint64(remainingLaunchFeeReserves - VerusConstants.verusTransactionFee);
             forceNewCCE = true;
         } else {
-            LPtransfer.currencyvalue.currency = VETH;
+            LPtransfer.currencyvalue.currency = sendingCurrency; // was VETH;
             LPtransfer.fees = VerusConstants.verusvETHTransactionFee; 
             LPtransfer.feecurrencyid = VETH;
             LPtransfer.currencyvalue.amount = uint64(value - VerusConstants.verusvETHTransactionFee);  
@@ -128,11 +131,12 @@ contract SubmitImports is VerusStorage {
 
         (success, returnBytes) = verusTokenManagerAddress.delegatecall(abi.encodeWithSignature("processTransactions(bytes,uint8)", _import.serializedTransfers, uint8(CCEHeightsAndnIndex >> 96)));
         require(success);
-
-        bytes memory refundsData;
-        (refundsData) = abi.decode(returnBytes, (bytes));
         
-        refund(refundsData);
+        if (returnBytes.length > 0) {
+            // If there are any fees to be claimed, send them to the exporter.
+            setClaimedFees(bytes32(uint256(exporter)), fees);
+        }
+        refund(abi.decode(returnBytes, (bytes)));
 
         return (fees, exporter);
 
@@ -140,17 +144,33 @@ contract SubmitImports is VerusStorage {
   
     function refund(bytes memory refundAmount) private  {
 
-        // Note each refund is 40 bytes = 32bytes + uint64 
-        for(uint i = 0; i < (refundAmount.length / 40); i = i + 40) {
+        if (refundAmount.length == 0) return; //early return if no refunds.
 
-            bytes32 verusAddress;
+        // Note each refund is 50 bytes = 22bytes(uint176) + uint64 + uint160 (currency)
+        for(uint i = 0; i < (refundAmount.length / 50); i = i + 50) {
+
+            uint176 verusAddress;
             uint64 amount;
+            uint160 currency;
             assembly 
             {
-                verusAddress := mload(add(add(refundAmount, 32), i))
-                amount := mload(add(add(refundAmount, 40), i))
+                verusAddress := mload(add(add(refundAmount, 22), i))
+                amount := mload(add(add(refundAmount, 30), i))
+                currency := mload(add(add(refundAmount, 50), i))
             }
-            refunds[verusAddress] += amount; //verusNotarizerStorage.setOrAppendRefund(verusAddress, amount);
+
+            bytes32 refundAddress;
+
+            // As we are using global storage for refunds, the leftmost byte is the TYPE_REFUND;
+            refundAddress = bytes32(uint256(verusAddress) | uint256(TYPE_REFUND) << 244);
+
+            if (storageGlobal[refundAddress].length == 0) {
+                storageGlobal[refundAddress] = abi.encodePacked(currency, amount);
+            } else {
+                //if the user already has refunds concat the new refund to the end of the existing refunds.
+                storageGlobal[refundAddress] = abi.encodePacked(storageGlobal[refundAddress], currency, amount);
+            }   
+
         }
      }
 
@@ -208,54 +228,33 @@ contract SubmitImports is VerusStorage {
 
     function setClaimableFees(uint64 fees, uint176 exporter) external
     {
+        uint64 transactionBaseCost;
 
-        bytes memory proposerBytes = bestForks[0];
-        uint8 notaryImporterState = notaryAddressMapping[msg.sender].state;
-        uint176 proposer;
-        uint8 notarizationSubmitterData;
+        transactionBaseCost = uint64((tx.gasprice * VerusConstants.VERUS_IMPORT_GAS_USEAGE) / VerusConstants.SATS_TO_WEI_STD);
 
-        assembly {
-                proposer := mload(add(proposerBytes, FORKS_NOTARY_PROPOSER_POSITION))
-                notarizationSubmitterData := mload(add(proposerBytes, FORKS_NOTARY_INDEX))
-        } 
+        if (fees <= transactionBaseCost) {
 
-        uint64 divisionNumber;
-        uint64 feeShare;
-        uint8 notarizationSubmittedValid = notarizationSubmitterData >> VerusConstants.NOTARIZATION_VALID_BIT_SHIFT; //shift down to get 1 or 0
+            claimableFees[bytes32(uint256(uint160(VerusConstants.VDXF_SYSTEM_NOTARIZATION_NOTARYFEEPOOL)))] += fees;
+           
+        } else {
 
-        divisionNumber = 3 + (notaryImporterState & VerusConstants.NOTARY_VALID) + notarizationSubmittedValid; //the importsubmitter is the msg.sender
+            bytes memory proposerBytes = bestForks[0];
+            uint176 proposer;
 
-        feeShare = fees / divisionNumber;
-        setClaimedFees(bytes32(uint256(proposer)), feeShare + setNotaryFees(feeShare));  // any reminder from notary division goes to proposer
-        setClaimedFees(bytes32(uint256(exporter)), feeShare + (fees % divisionNumber)); // any reminder from main division goes to exporter
-        
-        if(notaryImporterState == VerusConstants.NOTARY_VALID) { //check the import submitter is valid
-            setNotaryClaimedFees(uint176(uint160(msg.sender)), feeShare);
+            assembly {
+                    proposer := mload(add(proposerBytes, FORKS_NOTARY_PROPOSER_POSITION))
+            } 
+
+            uint64 feeShare;
+
+            feeShare = (fees - transactionBaseCost) / 3;
+            claimableFees[bytes32(uint256(uint160(VerusConstants.VDXF_SYSTEM_NOTARIZATION_NOTARYFEEPOOL)))] += feeShare;
+            setClaimedFees(bytes32(uint256(proposer)), feeShare); // 1/3 to proposer
+            setClaimedFees(bytes32(uint256(exporter)), feeShare + ((fees - transactionBaseCost) % 3)); // any remainder from main division goes to exporter
         }
-
-        if(notarizationSubmittedValid == VerusConstants.NOTARY_VALID) { //check the import submitter is valid
-            // remove high bit and leave index, then use index to find notary
-            address notaryEthAddress = notaryAddressMapping[notaries[notarizationSubmitterData & ~VerusConstants.GLOBAL_TYPE_NOTARY_VALID_HIGH_BIT]].main;
-            setNotaryClaimedFees(uint176(uint160(notaryEthAddress)), feeShare); 
-        }
-
     }
 
-    function setNotaryFees(uint256 notaryFees) private returns (uint64 remainder){  //sent in as SATS
-      
-        uint256 numOfNotaries = notaries.length;
-        uint64 notariesShare = uint64(notaryFees / numOfNotaries);
-        for (uint i=0; i < numOfNotaries; i++)
-        {
-            uint176 notary;
-            notary = uint176(uint160(notaryAddressMapping[notaries[i]].main));
-            notary |= (uint176(0x0c14) << VerusConstants.UINT160_BITS_SIZE); //set at type eth
-            claimableFees[bytes32(uint256(notary))] += notariesShare;
-        }
-        remainder = uint64(notaryFees % numOfNotaries);
-    }
-
-    function setClaimedFees(bytes32 _address, uint256 fees) public  {
+    function setClaimedFees(bytes32 _address, uint256 fees) private  {
 
         claimableFees[_address] += fees;
     }
@@ -270,7 +269,6 @@ contract SubmitImports is VerusStorage {
 
         uint256 claimAmount;
         uint256 claimant;
-
         claimant = uint256(uint160(msg.sender));
 
         // Check claimant is type eth with length 20 and has fees to be got.
@@ -283,26 +281,89 @@ contract SubmitImports is VerusStorage {
             claimableFees[bytes32(claimant)] = 0;
             payable(msg.sender).transfer(claimAmount * VerusConstants.SATS_TO_WEI_STD);
         }
-        else
+        else if ((claimableFees[bytes32(uint256(uint160(VerusConstants.VDXF_SYSTEM_NOTARIZATION_NOTARYFEEPOOL)))] *  VerusConstants.SATS_TO_WEI_STD) 
+                    > (tx.gasprice * VerusConstants.SEND_NOTARY_PAYMENT_FEE))
         {
-            revert("No fees avaiable");
+            bool notaryFound = false;
+            for (uint i = 0; i < notaries.length; i++)
+            {
+                if (notaryAddressMapping[notaries[i]].main == msg.sender)
+                {
+                    notaryFound = true;
+                }
+            }
+
+            if(notaryFound) {
+
+                uint256 txReimburse;
+
+                txReimburse = (tx.gasprice * notaries.length * VerusConstants.SEND_GAS_PRICE);
+
+                if (claimableFees[bytes32(0)] > 0) {
+                    // When there is no proposer fees are sent to bytes(0)
+                    claimableFees[bytes32(uint256(uint160(VerusConstants.VDXF_SYSTEM_NOTARIZATION_NOTARYFEEPOOL)))] += claimableFees[bytes32(0)];
+                    claimableFees[bytes32(0)] = 0;
+                }
+
+                claimAmount = claimableFees[bytes32(uint256(uint160(VerusConstants.VDXF_SYSTEM_NOTARIZATION_NOTARYFEEPOOL)))] - txReimburse;
+
+                claimableFees[bytes32(uint256(uint160(VerusConstants.VDXF_SYSTEM_NOTARIZATION_NOTARYFEEPOOL)))] = 0;
+
+                uint256 claimShare;
+                
+                claimShare = claimAmount / notaries.length;
+
+                for (uint i = 0; i < notaries.length; i++)
+                {
+                    if (notaryAddressMapping[notaries[i]].state == VerusConstants.NOTARY_VALID)
+                    {
+                        claimAmount -= claimShare;
+                        payable(notaryAddressMapping[notaries[i]].main).transfer(claimShare * VerusConstants.SATS_TO_WEI_STD);
+                    }
+                }
+                claimableFees[bytes32(uint256(uint160(VerusConstants.VDXF_SYSTEM_NOTARIZATION_NOTARYFEEPOOL)))] = claimAmount;
+                payable(msg.sender).transfer(txReimburse);
+
+            }
         }
     }
 
     function claimRefund(uint176 verusAddress) public 
     {
         uint64 refundAmount;
-        refundAmount = uint64(refunds[bytes32(uint256(verusAddress))]);
+        bytes memory refundData;
+        bytes32 refundAddressFormatted;
+
+        refundAddressFormatted = bytes32(uint256(verusAddress) | uint256(TYPE_REFUND) << 244);
+
+        refundData = storageGlobal[refundAddressFormatted];
         require(bridgeConverterActive, "Bridge converter not active");
 
-        if (refundAmount > 0)
+        if (refundData.length > 0)
         {
-            refunds[bytes32(uint256(verusAddress))] = 0;
-            sendToVRSC(refundAmount, address(uint160(verusAddress)), uint8(verusAddress >> 168));
+            for(uint i = 0; i < (refundData.length / 48); i = i + 48) {
+
+                uint64 amount;
+                address currency;
+                assembly 
+                {
+                    currency := mload(add(add(refundData, 20), i))
+                    amount := mload(add(add(refundData, 28), i))
+                }
+
+                delete storageGlobal[refundAddressFormatted];
+                sendToVRSC(refundAmount, address(uint160(verusAddress)), uint8(verusAddress >> TYPE_BYTE_LOCATION_IN_UINT176), currency);
+            }
+        }
+        else if (uint64(claimableFees[bytes32(uint256(verusAddress))]) > 0)
+        {
+            refundAmount = uint64(claimableFees[bytes32(uint256(verusAddress))]);
+            delete  claimableFees[bytes32(uint256(verusAddress))];
+            sendToVRSC(refundAmount, address(uint160(verusAddress)), uint8(verusAddress >> TYPE_BYTE_LOCATION_IN_UINT176), VETH);
         }
         else
         {
-            revert("No fees avaiable");
+            revert("No refunds avaiable");
         }
     }
 
@@ -324,8 +385,10 @@ contract SubmitImports is VerusStorage {
 
         if ((claimableFees[bytes32(claimant)] > VerusConstants.verusvETHTransactionFee) && msg.sender == ethAddress)
         {
+            uint64 feeShare;
+            feeShare = uint64(claimableFees[bytes32(claimant)]);
             claimableFees[bytes32(claimant)] = 0;
-            sendToVRSC(uint64(claimableFees[bytes32(claimant)]), rAddress, VerusConstants.DEST_PKH); //sent in as SATS
+            payable(msg.sender).transfer(feeShare * VerusConstants.SATS_TO_WEI_STD);
         }
         else
         {

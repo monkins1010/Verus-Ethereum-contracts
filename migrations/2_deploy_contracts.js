@@ -18,58 +18,69 @@ var Token = artifacts.require("./VerusBridge/Token.sol");
 
 const abi = web3.eth.abi
 
-const { verusNotariserIDS, 
-        verusNotariserSigner, 
-        verusNotariserRecovery,
-        TestVerusNotariserIDS,
-        TestVerusNotariserSigner,
-        TestVerusNotariserRecovery,
-        returnConstructorCurrencies, 
-        arrayofcurrencies,
-        getNotarizerIDS } = setup;
+let globalDAI = null;
 
+const { returnConstructorCurrencies, 
+    arrayofcurrencies,
+    getNotarizerIDS,
+    getDAI,
+    getDSRMANAGER,
+    getDAIERC20Address } = setup;
+    
 module.exports = async function(deployer) {
+        
+    const isTestnet = deployer.network == "development" || deployer.network == "goerli" || deployer.network == "goerli-fork";
+    
+    const currencyConstants = returnConstructorCurrencies(isTestnet);
+    const DAI = getDAI(isTestnet);
+    const DSRMANAGER = getDSRMANAGER(isTestnet);
+    let DAIERC20 = getDAIERC20Address(isTestnet);
+    const launchCurrencies = await getCurrencies(deployer);
+    
+    if (deployer.network == "development") { 
 
-    const currencyConstants = returnConstructorCurrencies(deployer.network == "development" || deployer.network == "goerli");
-
+        DAIERC20 = globalDAI;
+    }
+    
     await deployer.deploy(UpgradeManager);
     const UpgradeInst = await UpgradeManager.deployed();
-
+    
     await deployer.deploy(VerusBlake2b);
     await VerusBlake2b.deployed();
-
+    
     await deployer.deploy(VerusSerializer, ...currencyConstants);
     const serializerInst = await VerusSerializer.deployed();
-
-    await deployer.deploy(NotarizationSerializer, ...currencyConstants);
+    
+    await deployer.deploy(NotarizationSerializer, ...currencyConstants, DAI);
     const notarizationSerializerInst = await NotarizationSerializer.deployed();
-
-    await deployer.deploy(VerusTokenManager, ...currencyConstants)
+    
+    await deployer.deploy(VerusTokenManager, ...currencyConstants, DAI, DSRMANAGER)
     const tokenInst = await VerusTokenManager.deployed();
-
+    
     await deployer.link(VerusBlake2b, VerusNotarizer);
     await deployer.deploy(VerusNotarizer, ...currencyConstants);
     const notarizerInst = await VerusNotarizer.deployed();
-
+    
     await deployer.deploy(VerusMMR);
     await VerusMMR.deployed();
     await deployer.link(VerusMMR, VerusProof);
     await deployer.link(VerusBlake2b, VerusProof);
     await deployer.deploy(VerusProof, ...currencyConstants);
     const ProofInst = await VerusProof.deployed();
-
+    
     await deployer.deploy(VerusCCE, ...currencyConstants);
     const CCEInst = await VerusCCE.deployed();
-
+    
     await deployer.deploy(ExportManager, ...currencyConstants);
     const ExportManInst = await ExportManager.deployed();
 
-    await deployer.deploy(CreateExports, ...currencyConstants);
-    const CreateExportsInst = await CreateExports.deployed();
 
+    await deployer.deploy(CreateExports, ...currencyConstants, DAI, DSRMANAGER, DAIERC20);
+    const CreateExportsInst = await CreateExports.deployed();
+    
     await deployer.deploy(SubmitImports, ...currencyConstants);
     const SubmitImportsInst = await SubmitImports.deployed();
-
+    
     await deployer.deploy(VerusNotaryTools);
     const VerusNotaryToolsInst = await VerusNotaryTools.deployed();
     
@@ -93,15 +104,6 @@ module.exports = async function(deployer) {
 
     const VerusDelegatorInst = await VerusDelegator.deployed();
 
-    let testnetERC = null;
-    if (deployer.network == "development"){
-        
-        await deployer.deploy(Token, "DAI (Testnet)", "DAI");
-        const TokenInst = await Token.deployed();
-        testnetERC = TokenInst.address;
-        console.log("\nDAI DEPLOYED\n", TokenInst.address); 
-    } 
-    const launchCurrencies = getCurrencies(testnetERC);
 
     await VerusDelegatorInst.launchContractTokens(launchCurrencies);
 
@@ -111,14 +113,29 @@ module.exports = async function(deployer) {
     console.log("\nSettings to be pasted into *.conf file and website constants \n", settingString);        
 };
 
-const getCurrencies = (testnetERC) => {
+const getCurrencies = async (deployer) => {
     
     // if testnetERC is not null then we are running ganache test and need to replace the DAI address with the testnetERC address.
-    let currencies = arrayofcurrencies(testnetERC != null);
+    let isTestnet = deployer.network == "development" || deployer.network == "goerli" || deployer.network == "goerli-fork"
+    let currencies = arrayofcurrencies(isTestnet);
 
-    if(testnetERC){
-        // if running ganache test replace contract with adhoc one.
-        currencies[3][1] = testnetERC;
+    if (deployer.network == "development"){
+        
+        await deployer.deploy(Token, "DAI (Testnet)", "DAI");
+        const TokenInst = await Token.deployed();
+        TokenInst.mint(deployer.networks.goerli.from, 100000000000000000000000);
+        console.log("\nDAI DEPLOYED\n", TokenInst.address); 
+        currencies[3][1] = TokenInst.address;
+        globalDAI = TokenInst.address;
+    } 
+
+    if (deployer.network == "development" || deployer.network == "goerli" || deployer.network == "goerli-fork") {
+
+        await deployer.deploy(Token, "MKR (Testnet)", "MKR"); //TODO: Replace if there is an offical Goerli ERC20 MKR
+        const TokenInst = await Token.deployed();
+        TokenInst.mint(deployer.networks.goerli.from, 100000000000000000000000);
+        console.log("\nMKR DEPLOYED\n", TokenInst.address); 
+        currencies[4][1] = TokenInst.address;
     }
 
     let data = abi.encodeParameter(

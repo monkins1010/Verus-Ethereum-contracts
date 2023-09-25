@@ -10,6 +10,11 @@ import "@openzeppelin/contracts/token/ERC721/utils/ERC721Holder.sol";
 contract Delegator is VerusStorage, ERC1155Holder, ERC721Holder {
 
     address startOwner;
+
+    modifier onlyOwner() {
+        require(msg.sender == startOwner);
+        _;
+    }
     
     constructor(address[] memory _notaries, address[] memory _notariesEthAddress, address[] memory _notariesColdStoreEthAddress, address[] memory _newContractAddress) {
         remainingLaunchFeeReserves = VerusConstants.verusBridgeLaunchFeeShare;
@@ -17,8 +22,6 @@ contract Delegator is VerusStorage, ERC1155Holder, ERC721Holder {
         for(uint i =0; i < _notaries.length; i++) {
             notaryAddressMapping[_notaries[i]] = VerusObjects.notarizer(_notariesEthAddress[i], _notariesColdStoreEthAddress[i], VerusConstants.NOTARY_VALID);
             notaries.push(_notaries[i]);
-            //TODO: This is a mapping from ETH address to notary that enables a quick lookup (not present in testnet)
-            notaryAddressMapping[_notariesEthAddress[i]] = VerusObjects.notarizer(_notaries[i], address(uint160(i)), VerusConstants.NOTARY_VALID);
         }
         VerusNft t = new VerusNft(); 
 
@@ -95,9 +98,9 @@ contract Delegator is VerusStorage, ERC1155Holder, ERC721Holder {
 
     }
 
-    function launchContractTokens(bytes calldata data) external  {
+    function launchContractTokens(bytes calldata data) onlyOwner external  {
 
-        require(tokenList.length == 1 && startOwner == msg.sender);
+        require(tokenList.length == 1);
         address logic = contracts[uint(VerusConstants.ContractType.VerusNotaryTools)];
 
         (bool success,) = logic.delegatecall(abi.encodeWithSignature("launchContractTokens(bytes)", data));
@@ -173,8 +176,8 @@ contract Delegator is VerusStorage, ERC1155Holder, ERC721Holder {
         return abi.decode(returnedData, (uint8));
     }
 
-    function replacecontract(address newcontract, uint contractNo) external  {
-        require(startOwner == msg.sender);
+    function replacecontract(address newcontract, uint contractNo) onlyOwner external  {
+
         if(contractNo == 100) {
             startOwner = address(0);
             return;
@@ -230,6 +233,15 @@ contract Delegator is VerusStorage, ERC1155Holder, ERC721Holder {
     function getVoteState(uint item) public view returns (VerusObjects.voteState memory) {
 
         return pendingVoteState[item];
+
+    }
+
+    function burnFees(bytes calldata data) public {
+
+        address CreateExportsAddress = contracts[uint(VerusConstants.ContractType.CreateExport)];
+
+        (bool success,) = CreateExportsAddress.delegatecall(abi.encodeWithSignature("burnFees(bytes)", data));
+        require(success);
 
     }
 }

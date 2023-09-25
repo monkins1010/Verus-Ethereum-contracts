@@ -10,18 +10,35 @@ import "./Token.sol";
 import "../Storage/StorageMaster.sol";
 import "./ExportManager.sol";
 import '@openzeppelin/contracts/token/ERC1155/IERC1155.sol';
+import '@openzeppelin/contracts/token/ERC20/utils/SafeERC20.sol';
+import "./SubmitImports.sol";
+
+interface DsrManager {
+    function daiBalance(address usr) external returns (uint256 wad);
+    function join(address dst, uint256 wad) external;
+    function exit(address dst, uint256 wad) external;
+    function exitAll(address dst) external;
+}
 
 contract CreateExports is VerusStorage {
 
     address immutable VETH;
     address immutable BRIDGE;
     address immutable VERUS;
+    address immutable DAI;
+    address immutable DSRMANAGER;
+    address immutable DAIERC20ADDRESS;
 
-    constructor(address vETH, address Bridge, address Verus){
+    using SafeERC20 for Token;
+
+    constructor(address vETH, address Bridge, address Verus, address Dai, address dsrManager, address daiERC20Address){
 
         VETH = vETH;
         BRIDGE = Bridge;
         VERUS = Verus;
+        DAI = Dai;
+        DSRMANAGER = dsrManager;
+        DAIERC20ADDRESS = daiERC20Address;
     }
 
     function subtractPoolSize(uint64 _amount) private returns (bool) {
@@ -52,7 +69,7 @@ contract CreateExports is VerusStorage {
     function sendTransferMain(VerusObjects.CReserveTransfer memory transfer) private {
 
         uint256 fees;
-        VerusObjects.mappedToken memory mappedContract;
+        VerusObjects.mappedToken memory iaddressMapping;
         uint32 ethNftFlag;
         address verusExportManagerAddress = contracts[uint(VerusConstants.ContractType.ExportManager)];
 
@@ -68,66 +85,68 @@ contract CreateExports is VerusStorage {
         }
 
         if (transfer.currencyvalue.currency != VETH) {
-            mappedContract = verusToERC20mapping[transfer.currencyvalue.currency];
-            ethNftFlag = mappedContract.flags & (VerusConstants.MAPPING_ERC721_NFT_DEFINITION | VerusConstants.MAPPING_ERC1155_NFT_DEFINITION | VerusConstants.MAPPING_ERC1155_ERC_DEFINITION);
+            iaddressMapping = verusToERC20mapping[transfer.currencyvalue.currency];
+            ethNftFlag = iaddressMapping.flags & (VerusConstants.MAPPING_ERC721_NFT_DEFINITION | VerusConstants.MAPPING_ERC1155_NFT_DEFINITION | VerusConstants.MAPPING_ERC1155_ERC_DEFINITION);
         }
 
         if (ethNftFlag != 0) { //handle a NFT Import
 
             if (ethNftFlag == VerusConstants.MAPPING_ERC1155_NFT_DEFINITION || ethNftFlag == VerusConstants.MAPPING_ERC1155_ERC_DEFINITION) {
-                IERC1155 nft = IERC1155(mappedContract.erc20ContractAddress);
+                IERC1155 nft = IERC1155(iaddressMapping.erc20ContractAddress);
 
                 // TokenIndex is used for ERC1155's only for the amount of tokens held by the bridge
-                require((transfer.currencyvalue.amount + mappedContract.tokenIndex) < VerusConstants.MAX_VERUS_TRANSFER);
+                require((transfer.currencyvalue.amount + iaddressMapping.tokenIndex) < VerusConstants.MAX_VERUS_TRANSFER);
                 verusToERC20mapping[transfer.currencyvalue.currency].tokenIndex += transfer.currencyvalue.amount;
 
-                if (contracts.length == VerusConstants.NUMBER_OF_CONTRACTS) {
-                    require (nft.isApprovedForAll(msg.sender, address(this)), "NFT not approved");
-                     nft.safeTransferFrom(msg.sender, address(this), mappedContract.tokenID, transfer.currencyvalue.amount, ""); 
-                } else {
-                    require (nft.isApprovedForAll(msg.sender, contracts[uint160(VerusConstants.ContractType.NFTHolder)]), "NFT not approved");
-                    (bool Nftsuccess,) = contracts[uint160(VerusConstants.ContractType.NFTHolder)].call(abi.encodeWithSignature("getERC1155(address,address,uint256,uint256)", mappedContract.erc20ContractAddress, msg.sender, mappedContract.tokenID, uint256(transfer.currencyvalue.amount)));
-                    require (Nftsuccess);
-                }
+                require (nft.isApprovedForAll(msg.sender, address(this)), "NFT not approved");
+                nft.safeTransferFrom(msg.sender, address(this), iaddressMapping.tokenID, transfer.currencyvalue.amount, ""); 
+      
 
             } else if (ethNftFlag == VerusConstants.MAPPING_ERC721_NFT_DEFINITION){
-                VerusNft nft = VerusNft(mappedContract.erc20ContractAddress);
-                require (nft.getApproved(mappedContract.tokenID) == address(this), "NFT not approved");
-                nft.safeTransferFrom(msg.sender, address(this), mappedContract.tokenID, "");
+                VerusNft nft = VerusNft(iaddressMapping.erc20ContractAddress);
+                require (nft.getApproved(iaddressMapping.tokenID) == address(this), "NFT not approved");
+                nft.safeTransferFrom(msg.sender, address(this), iaddressMapping.tokenID, "");
 
-                if (transfer.currencyvalue.currency == verusToERC20mapping[tokenList[VerusConstants.NFT_POSITION]].erc20ContractAddress) {
-                    nft.burn(mappedContract.tokenID);
+                if (iaddressMapping.erc20ContractAddress == verusToERC20mapping[tokenList[VerusConstants.NFT_POSITION]].erc20ContractAddress) {
+                    nft.burn(iaddressMapping.tokenID);
                 }
             } else {
                 revert();
             }
          } else if (transfer.currencyvalue.currency != VETH) {
 
-            Token token = Token(mappedContract.erc20ContractAddress); 
+            Token token = Token(iaddressMapping.erc20ContractAddress); 
             //Check user has allowed the verusBridgeStorage contract to spend on their behalf
             uint256 allowedTokens = token.allowance(msg.sender, address(this));
             uint256 tokenAmount = convertFromVerusNumber(transfer.currencyvalue.amount, token.decimals()); //convert to wei from verus satoshis
-            if (mappedContract.flags & VerusConstants.MAPPING_ETHEREUM_OWNED == VerusConstants.MAPPING_ETHEREUM_OWNED) {
-                // TokenID is used for ERC20's only for the amount of tokens held by the bridge
-                require((transfer.currencyvalue.amount + mappedContract.tokenID) < VerusConstants.MAX_VERUS_TRANSFER);
-                verusToERC20mapping[transfer.currencyvalue.currency].tokenID += transfer.currencyvalue.amount;
-
-            }
             require( allowedTokens >= tokenAmount);
-            //transfer the tokens to the delegator contract
-            //total amount kept as uint256 until export to verus
-            exportERC20Tokens(tokenAmount, token, mappedContract.flags & VerusConstants.MAPPING_VERUS_OWNED == VerusConstants.MAPPING_VERUS_OWNED);
-            
-        } else if(transfer.currencyvalue.currency != VETH) {
-            revert ("unknown type");
-        }
+
+            if (iaddressMapping.flags & VerusConstants.MAPPING_ETHEREUM_OWNED == VerusConstants.MAPPING_ETHEREUM_OWNED) {
+                // TokenID is used for ERC20's only for the amount of tokens held by the bridge
+
+                require((transfer.currencyvalue.amount + iaddressMapping.tokenID) < VerusConstants.MAX_VERUS_TRANSFER);
+                    verusToERC20mapping[transfer.currencyvalue.currency].tokenID += transfer.currencyvalue.amount;
+                
+                if (address(token) == DAIERC20ADDRESS) {
+                    // NOTE: This is the total amount of DAI held by the bridge, not the amount of DAI held by the DAI currency only. kept at 18 deimals.
+                    verusToERC20mapping[VerusConstants.VDXF_SYSTEM_DAI_HOLDINGS].tokenID += tokenAmount;
+                }
+            }
+
+            exportERC20Tokens(tokenAmount, token, iaddressMapping.flags & VerusConstants.MAPPING_VERUS_OWNED == VerusConstants.MAPPING_VERUS_OWNED);
+        } 
+
         _createExports(transfer, false);
     }
 
     function exportERC20Tokens(uint256 _tokenAmount, Token token, bool burn) private {
         
-        (bool success, ) = address(token).call(abi.encodeWithSignature("transferFrom(address,address,uint256)", msg.sender, address(this), _tokenAmount));
-        require(success, "transferfrom of token failed");
+        token.safeTransferFrom(msg.sender, address(this), _tokenAmount);
+
+        // If the token is DAI, run join to have the DAI transferred to the DSR contract.
+        if (address(token) == DAIERC20ADDRESS) {
+            DsrManager(DSRMANAGER).join(address(this), _tokenAmount);
+        }
 
         if (burn) 
         {
@@ -138,7 +157,6 @@ contract CreateExports is VerusStorage {
     function externalCreateExportCall(bytes memory data) public {
 
         (VerusObjects.CReserveTransfer memory reserveTransfer, bool forceNewCCE) = abi.decode(data, (VerusObjects.CReserveTransfer, bool));
-
         _createExports(reserveTransfer, forceNewCCE);
     }
 
@@ -211,6 +229,38 @@ contract CreateExports is VerusStorage {
         _readyExports[_startHeight].transfers.push(reserveTransfer);
         require(_readyExports[_startHeight].transfers.length <= blockTxLimit);
       
+    }
+
+    function burnFees(bytes calldata) external {
+
+        require(bridgeConverterActive, "Bridge Converter not active");
+        
+        uint256 intrestAccrued;
+        uint64 truncatedVerus;
+        
+        // NOTE: Accrued intrest is truncated to 18 decimals.  Needs to be truncated to be sent to verus.
+        DsrManager  dsrManager= DsrManager(DSRMANAGER);
+        intrestAccrued = dsrManager.daiBalance(address(this)) - verusToERC20mapping[VerusConstants.VDXF_SYSTEM_DAI_HOLDINGS].tokenID;
+
+        // Caclulate how much the submitter of this transaction should be reimbursed for the gas used to burn the DAI.
+        uint64 DAIReinburseAmount = uint64(((tx.gasprice * VerusConstants.DAI_BURNBACK_TRANSACTION_GAS_AMOUNT)/ VerusConstants.SATS_TO_WEI_STD) 
+                                             * claimableFees[bytes32(uint256(uint160(VerusConstants.VDXF_ETH_TO_DAI_CONVERSION_RATIO)))]);
+
+        require (DAIReinburseAmount < VerusConstants.DAI_BURNBACK_MAX_FEE_THRESHOLD, "DAI Burnback Fee too high");
+
+        //truncate DAI to 8 DECIMALS of precision from 18
+        truncatedVerus = uint64(intrestAccrued / VerusConstants.SATS_TO_WEI_STD);
+        intrestAccrued = (truncatedVerus * VerusConstants.SATS_TO_WEI_STD) - DAIReinburseAmount;
+        
+        if (intrestAccrued > VerusConstants.DAI_BURNBACK_THRESHOLD) {
+            // Increase the supply of DAI by the amount of intrest accrued - minus the payback fee.
+            verusToERC20mapping[VerusConstants.VDXF_SYSTEM_DAI_HOLDINGS].tokenID += intrestAccrued;
+            address submitImportsAddress = contracts[uint(VerusConstants.ContractType.SubmitImports)];
+            (bool success,) = submitImportsAddress.delegatecall(abi.encodeWithSelector(SubmitImports.sendToVRSC.selector, truncatedVerus, address(0), VerusConstants.DEST_PKH, DAI));
+            require(success);
+            //transfer DAI to the msg.senders address.
+            dsrManager.exit(msg.sender, DAIReinburseAmount * VerusConstants.SATS_TO_WEI_STD);
+        }
     }
         
     function convertFromVerusNumber(uint256 a,uint8 decimals) public pure returns (uint256) {

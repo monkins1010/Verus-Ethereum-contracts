@@ -29,7 +29,7 @@ contract VerusStorage {
     mapping (bytes32 => bytes) public storageGlobal;    // Generic storage location NOTE: After security verified, add Oracle proofs.
     mapping (bytes32 => bytes) internal proofs;         // Stored Verus stateroot/blockhash proofs indexed by height.
     mapping (bytes32 => uint256) public claimableFees;  // CreserveTransfer destinations mapped to Fees they have accrued.
-    mapping (bytes32 => uint256) public refunds;        // Failed transaction refunds 
+    mapping (bytes32 => uint256) public refunds;        // Failed transaction refunds NOTE: Not used, see global storageGlobal, type 0x01
 
     uint64 remainingLaunchFeeReserves;   // Starts at 5000 VRSC
 

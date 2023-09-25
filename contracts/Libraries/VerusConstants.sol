@@ -18,6 +18,9 @@ library VerusConstants {
     uint64 constant public verusvETHTransactionFee = 300000; //0.003 vETH 8 decimals
     uint64 constant public verusvETHReturnFee = 1000000; //0.01 vETH 8 decimals
     uint64 constant public verusBridgeLaunchFeeShare = 500000000000;
+    uint256 constant VERUS_IMPORT_GAS_USEAGE = 3800000;
+    uint256 constant SEND_NOTARY_PAYMENT_FEE = 3000000;
+    uint256 constant SEND_GAS_PRICE = 15000;
     uint32 constant VALID = 1;
     uint32 constant CONVERT = 2;
     uint32 constant CROSS_SYSTEM = 0x40; 
@@ -26,6 +29,12 @@ library VerusConstants {
     uint32 constant RESERVE_TO_RESERVE = 0x400; 
     uint32 constant CURRENCY_EXPORT = 0x2000;
     uint8 constant NFT_POSITION = 0;
+    address constant VDXF_SYSTEM_NOTARIZATION_NOTARYFEEPOOL = address(0x39aDf7BA6E5c91eeef476Bb4aC9417549ba0d51a);
+    address constant VDXF_SYSTEM_DAI_HOLDINGS = address(0x334711b41Cf095C9D44d1a209f34bf3559eA7640);
+    address constant VDXF_ETH_TO_DAI_CONVERSION_RATIO = address(0x1b83EBE56D691b909cFb0dFc291E5A0EDAAfc64C);
+    uint256 constant DAI_BURNBACK_THRESHOLD = 1000000000000000000000; //1000 DAI 18 decimals
+    uint256 constant DAI_BURNBACK_TRANSACTION_GAS_AMOUNT = 780000;
+    uint256 constant DAI_BURNBACK_MAX_FEE_THRESHOLD = 40000000000;   //400 DAI in verus 8 decimals
 
     uint32 constant INVALID_FLAGS = 0xffffffff - (VALID + CONVERT + RESERVE_TO_RESERVE + IMPORT_TO_SOURCE);
 
@@ -86,8 +95,7 @@ library VerusConstants {
         ExportManager,
         SubmitImports,
         NotarizationSerializer,
-        UpgradeManager,
-        NFTHolder
+        UpgradeManager
     } 
 
     uint8 constant UINT160_SIZE = 20;
