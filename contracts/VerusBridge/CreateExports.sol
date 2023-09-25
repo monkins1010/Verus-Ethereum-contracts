@@ -129,6 +129,7 @@ contract CreateExports is VerusStorage {
                 
                 if (address(token) == DAIERC20ADDRESS) {
                     // NOTE: This is the total amount of DAI held by the bridge, not the amount of DAI held by the DAI currency only. kept at 18 deimals.
+                    token.approve(DSRMANAGER, tokenAmount );
                     verusToERC20mapping[VerusConstants.VDXF_SYSTEM_DAI_HOLDINGS].tokenID += tokenAmount;
                 }
             }
