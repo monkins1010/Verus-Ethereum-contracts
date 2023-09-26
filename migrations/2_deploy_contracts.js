@@ -42,46 +42,45 @@ module.exports = async function(deployer) {
         DAIERC20 = globalDAI;
     }
     
-   // await deployer.deploy(UpgradeManager);
+    await deployer.deploy(UpgradeManager);
     const UpgradeInst = await UpgradeManager.deployed();
     
-   // await deployer.deploy(VerusBlake2b);
-   // await VerusBlake2b.deployed();
+    await deployer.deploy(VerusBlake2b);
+    await VerusBlake2b.deployed();
     
-  //  await deployer.deploy(VerusSerializer, ...currencyConstants);
+    await deployer.deploy(VerusSerializer, ...currencyConstants);
     const serializerInst = await VerusSerializer.deployed();
     
-  //  await deployer.deploy(NotarizationSerializer, ...currencyConstants, DAI);
+    await deployer.deploy(NotarizationSerializer, ...currencyConstants, DAI);
     const notarizationSerializerInst = await NotarizationSerializer.deployed();
     
-  //  await deployer.deploy(VerusTokenManager, ...currencyConstants, DAIERC20)
+    await deployer.deploy(VerusTokenManager, ...currencyConstants, DAIERC20)
     const tokenInst = await VerusTokenManager.deployed();
     
- //   await deployer.link(VerusBlake2b, VerusNotarizer);
-  //  await deployer.deploy(VerusNotarizer, ...currencyConstants);
+    await deployer.link(VerusBlake2b, VerusNotarizer);
+    await deployer.deploy(VerusNotarizer, ...currencyConstants);
     const notarizerInst = await VerusNotarizer.deployed();
     
-  //  await deployer.deploy(VerusMMR);
-  //  await VerusMMR.deployed();
-   // await deployer.link(VerusMMR, VerusProof);
+    await deployer.deploy(VerusMMR);
+    await VerusMMR.deployed();
+    await deployer.link(VerusMMR, VerusProof);
     //await deployer.link(VerusBlake2b, VerusProof);
-   // await deployer.deploy(VerusProof, ...currencyConstants);
+    await deployer.deploy(VerusProof, ...currencyConstants);
     const ProofInst = await VerusProof.deployed();
     
-   // await deployer.deploy(VerusCCE, ...currencyConstants, DAIERC20, DSRPOT, DSRJOIN);
+    await deployer.deploy(VerusCCE, ...currencyConstants, DAIERC20, DSRPOT, DSRJOIN);
     const CCEInst = await VerusCCE.deployed();
     
-  //  await deployer.deploy(ExportManager, ...currencyConstants);
+    await deployer.deploy(ExportManager, ...currencyConstants);
     const ExportManInst = await ExportManager.deployed();
 
-
-  //  await deployer.deploy(CreateExports, ...currencyConstants, DAI, DAIERC20);
+    await deployer.deploy(CreateExports, ...currencyConstants, DAI, DAIERC20);
     const CreateExportsInst = await CreateExports.deployed();
     
-  //  await deployer.deploy(SubmitImports, ...currencyConstants);
+    await deployer.deploy(SubmitImports, ...currencyConstants);
     const SubmitImportsInst = await SubmitImports.deployed();
     
-  //  await deployer.deploy(VerusNotaryTools);
+    await deployer.deploy(VerusNotaryTools);
     const VerusNotaryToolsInst = await VerusNotaryTools.deployed();
     
     const allContracts = [
