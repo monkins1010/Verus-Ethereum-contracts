@@ -162,15 +162,12 @@ contract NotarizationSerializer is VerusStorage {
         readerLen = readCompactSizeLE(notarization, nextOffset);        // get the length currencies
 
         // reserves[2] contain the scaled reserve amounts for ETH and DAI
-        uint daiToEthRatio;
-        if (currencyid == BRIDGE) {
-            daiToEthRatio = storeDAIConversionrate(notarization, nextOffset, uint8(readerLen.value));
+        uint daiEthVRSCReserves;
+        if (currencyid == BRIDGE && bridgeConverterActive) {
+            daiEthVRSCReserves = storeDAIConversionrate(notarization, nextOffset, uint8(readerLen.value));
+            claimableFees[bytes32(uint256(uint160(VerusConstants.VDXF_ETH_DAI_VRSC_LAST_RESERVES)))] = daiEthVRSCReserves; //store the fees in the notaryFeePool
         }
 
-        if (bridgeConverterActive) {
-            //NOTE: to convert ETH to DAI ratio we do reserves[0]DAI / reserves[1]ETH
-            claimableFees[bytes32(uint256(uint160(VerusConstants.VDXF_ETH_TO_DAI_CONVERSION_RATIO)))] = daiToEthRatio; //store the fees in the notaryFeePool
-        }
         nextOffset = nextOffset + (uint32(readerLen.value) * BYTES32_LENGTH) + 2;  
 
         readerLen = readVarintStruct(notarization, nextOffset);        // get the length of the initialsupply
@@ -191,6 +188,7 @@ contract NotarizationSerializer is VerusStorage {
         
         uint8 ethIndex;
         uint8 daiIndex;
+        uint8 vrscIndex;
         for (uint8 i = 0; i < currenciesLen; i++)
         {
             address currency;
@@ -202,18 +200,22 @@ contract NotarizationSerializer is VerusStorage {
             {
                ethIndex = i;
             }
-            if (currency == DAI)
+            else if (currency == DAI)
             {
                daiIndex = i;
             }
+            else if (currency == VERUS)
+            {
+               vrscIndex = i;
+            }
+            
         }
 
         //Skip the weights
         nextOffset = nextOffset + 1 + (uint32(currenciesLen) * 4) + 1; //move to read len of reserves
 
-        //read the reserves, position [0] for DAI, [1] for ETH
-        uint[2] memory reserves;
-
+        //read the reserves, position [0..63] for DAI, [64..127] for ETH  [128..191] for VRSC pack into uint 64bit chunks
+        uint256 ethToDaiRatios;
         for (uint8 i = 0; i < currenciesLen; i++)
         {
             uint64 reserve;
@@ -223,11 +225,15 @@ contract NotarizationSerializer is VerusStorage {
                 }
             if (i == daiIndex)
             {
-               reserves[0] = serializeUint64(reserve);
+               ethToDaiRatios |= uint256(serializeUint64(reserve));
             }
             else if (i == ethIndex)
             {
-               reserves[1] = serializeUint64(reserve);
+               ethToDaiRatios |= uint256(serializeUint64(reserve)) << 64;
+            }
+            else if (i == daiIndex)
+            {
+               ethToDaiRatios |= uint256(serializeUint64(reserve)) << 128;
             }
         }
 
@@ -235,16 +241,7 @@ contract NotarizationSerializer is VerusStorage {
             nextOffset := add(nextOffset, 1) // move forward to read next varint.
         }
 
-        //NOTE: to convert ETH to DAI ratio we do reserves[0]DAI / reserves[1]ETH
-
-        uint256 ethToDaiRatio;
-        
-        if (reserves[0] > 0 && reserves[1] > 0)
-         { 
-            ethToDaiRatio = reserves[0] / reserves[1];
-         }
-
-        return ethToDaiRatio;  
+        return ethToDaiRatios;  
     }
 
     function deserializeProofRoots (bytes memory notarization, uint32 size, uint32 nextOffset) private view returns (bytes32 stateRoot, bytes32 blockHash, uint32 height)
