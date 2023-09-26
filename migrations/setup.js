@@ -61,7 +61,9 @@ const id = {
         DAIERC20: "0x6B175474E89094C44Da98b954EedeAC495271d0F",
         DsrManagerERC20: "0x373238337Bfe1146fb49989fc222523f83081dDb",
         MKR: "0x65b5aac6a4aa0eb656ab6b8812184e7545b6a221",
-        MKRERC20: "0x9f8f72aa9304c8b593d555f12ef6589cc3a579a2"
+        MKRERC20: "0x9f8f72aa9304c8b593d555f12ef6589cc3a579a2",
+        DAIPOT: "",
+        DAIJOIN: "",
     },
     testnet: {
         VETH: "0x67460C2f56774eD27EeB8685f29f6CEC0B090B00",
@@ -70,6 +72,8 @@ const id = {
         DAI: "0xcce5d18f305474f1e0e0ec1c507d8c85e7315fdf",
         DAIERC20: "0x11fE4B6AE13d2a6055C8D9cF65c55bac32B5d844", //NOTE: Testnet DAI on maintestnet is 0xB897f2448054bc5b133268A53090e110D101FFf0
         DsrManagerERC20: "0xF7F0de3744C82825D77EdA8ce78f07A916fB6bE7",
+        DAIPOT: "0x50672F0a14B40051B65958818a7AcA3D54Bd81Af",
+        DAIJOIN: "0x6a60b7070befb2bfc964F646efDF70388320f4E0",
         MKR: "0x005005b2b10a897fed36fbd71c878213a7a169bf" , 
         MKRERC20: "0x9f8f72aa9304c8b593d555f12ef6589cc3a579a2"  // TODO: Change this to testnet MKR
     },
@@ -91,7 +95,9 @@ const getDAI = (isTestnet = false) => {
 }
 
 const getDSRMANAGER = (isTestnet = false) => {
-    return isTestnet ? id.testnet.DsrManagerERC20 : id.mainnet.DsrManagerERC20;
+
+    const retval = {DSRJOIN: isTestnet ? id.testnet.DAIJOIN : id.mainnet.DAIJOIN, DSRPOT: isTestnet ? id.testnet.DAIPOT : id.mainnet.DAIPOT}
+    return retval;
 }
 
 const getDAIERC20Address = (isTestnet = false) => {
@@ -144,7 +150,7 @@ const returnSetupCurrencies = (isTestnet = false) => {
         isTestnet ? id.testnet.MKRERC20 : id.mainnet.MKRERC20,
         isTestnet ? id.testnet.VRSC : id.mainnet.VRSC, 
         MAPPING_ETHEREUM_OWNED + MAPPING_PARTOF_BRIDGEVETH + MAPPING_ERC20_DEFINITION, 
-        isTestnet ? "MKR (Testnet)" : "DAI", 
+        isTestnet ? "Maker (Testnet)" : "Maker", 
         "MKR",
         id.emptyuint256];
 

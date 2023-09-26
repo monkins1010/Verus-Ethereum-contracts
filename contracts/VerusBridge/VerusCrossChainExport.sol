@@ -7,22 +7,61 @@ pragma abicoder v2;
 import "../Libraries/VerusObjects.sol";
 import "../Libraries/VerusConstants.sol";
 import "../VerusBridge/VerusSerializer.sol";
+import "../Storage/StorageMaster.sol";
+import "./dsrinterface.sol";
 
-contract VerusCrossChainExport {
+contract VerusCrossChainExport is VerusStorage {
+    
+    VerusObjects.CCurrencyValueMap[] currencies;
+    VerusObjects.CCurrencyValueMap[] fees;
 
     address immutable VETH;
     address immutable BRIDGE;
     address immutable VERUS;
+    address immutable DAIERC20;
 
-    constructor(address vETH, address Bridge, address Verus){
+    address immutable pot;
+    address immutable daiJoin;
+
+    constructor(address vETH, address Bridge, address Verus, address daiERC20, address potAddress, address daiJoinAddress) {
 
         VETH = vETH;
         BRIDGE = Bridge;
         VERUS = Verus;
+        DAIERC20 = daiERC20;
+        pot = potAddress;
+        daiJoin = daiJoinAddress;
     }
 
-    VerusObjects.CCurrencyValueMap[] currencies;
-    VerusObjects.CCurrencyValueMap[] fees;
+    function initialize() external {
+        VatLike vat = VatLike(PotLike(pot).vat());
+        vat.hope(daiJoin);
+        vat.hope(pot);
+        IERC20(DAIERC20).approve(daiJoin, uint256(int(-1)));
+    }
+
+    uint256 constant RAY = 10 ** 27;
+    function add(uint256 x, uint256 y) internal pure returns (uint256 z) {
+        require((z = x + y) >= x);
+    }
+    function sub(uint256 x, uint256 y) internal pure returns (uint256 z) {
+        require((z = x - y) <= x);
+    }
+    function mul(uint256 x, uint256 y) internal pure returns (uint256 z) {
+        require(y == 0 || (z = x * y) / y == x);
+    }
+    function rmul(uint256 x, uint256 y) internal pure returns (uint256 z) {
+        // always rounds down
+        z = mul(x, y) / RAY;
+    }
+    function rdiv(uint256 x, uint256 y) internal pure returns (uint256 z) {
+        // always rounds down
+        z = mul(x, RAY) / y;
+    }
+    function rdivup(uint256 x, uint256 y) internal pure returns (uint256 z) {
+        // always rounds up
+        z = add(mul(x, RAY), sub(y, 1)) / y;
+    }
 
     function quickSort(VerusObjects.CCurrencyValueMap[] storage currencey, int left, int right) private {
         int i = left;
@@ -139,5 +178,31 @@ contract VerusCrossChainExport {
         return VerusSerializer(verusSerializer).serializeCCrossChainExport(workingCCE);
 
     }
-    
+
+    function daiBalance() external returns (uint256 wad) {
+        uint256 chi = (block.timestamp > PotLike(pot).rho()) ? PotLike(pot).drip() : PotLike(pot).chi();
+        wad = rmul(chi, claimableFees[VerusConstants.VDXFID_DAI_DSR_SUPPLY]);
+    }
+
+    // wad is denominated in dai
+    function join(uint256 wad) external payable {
+        uint256 chi = (block.timestamp > PotLike(pot).rho()) ? PotLike(pot).drip() : PotLike(pot).chi();
+        uint256 pie = rdiv(wad, chi);
+        claimableFees[VerusConstants.VDXFID_DAI_DSR_SUPPLY] = add(claimableFees[VerusConstants.VDXFID_DAI_DSR_SUPPLY], pie);
+        claimableFees[VerusConstants.VDXF_SYSTEM_DAI_HOLDINGS] = add(claimableFees[VerusConstants.VDXF_SYSTEM_DAI_HOLDINGS], wad);
+        JoinLike(daiJoin).join(address(this), wad);
+        PotLike(pot).join(pie);
+    }
+
+    // wad is denominated in dai
+    function exit(address dst, uint256 wad) external {
+        uint256 chi = (block.timestamp > PotLike(pot).rho()) ? PotLike(pot).drip() : PotLike(pot).chi();
+        uint256 pie = rdivup(wad, chi);
+
+        claimableFees[VerusConstants.VDXFID_DAI_DSR_SUPPLY] = sub(claimableFees[VerusConstants.VDXFID_DAI_DSR_SUPPLY], pie);
+        PotLike(pot).exit(pie);
+        uint256 amt = rmul(chi, pie);
+        claimableFees[VerusConstants.VDXF_SYSTEM_DAI_HOLDINGS] = sub(claimableFees[VerusConstants.VDXF_SYSTEM_DAI_HOLDINGS], amt) ;
+        JoinLike(daiJoin).exit(dst, amt);
+    }
 }

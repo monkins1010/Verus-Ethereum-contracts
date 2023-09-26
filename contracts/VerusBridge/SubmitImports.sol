@@ -133,10 +133,8 @@ contract SubmitImports is VerusStorage {
         require(success);
         
         if (returnBytes.length > 0) {
-            // If there are any fees to be claimed, send them to the exporter.
-            setClaimedFees(bytes32(uint256(exporter)), fees);
+            refund(abi.decode(returnBytes, (bytes)));
         }
-        refund(abi.decode(returnBytes, (bytes)));
 
         return (fees, exporter);
 
@@ -144,7 +142,7 @@ contract SubmitImports is VerusStorage {
   
     function refund(bytes memory refundAmount) private  {
 
-        if (refundAmount.length == 0) return; //early return if no refunds.
+        if (refundAmount.length < 50) return; //early return if no refunds.
 
         // Note each refund is 50 bytes = 22bytes(uint176) + uint64 + uint160 (currency)
         for(uint i = 0; i < (refundAmount.length / 50); i = i + 50) {
