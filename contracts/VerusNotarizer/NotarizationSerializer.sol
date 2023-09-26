@@ -89,7 +89,8 @@ contract NotarizationSerializer is VerusStorage {
             nextOffset = processAux(notarization, nextOffset, notarizationFlags);
             nextOffset -= 1;  // NOTE: Next Varint call takes array pos not array pos +1
         }
-        else {
+        //position 0 of the rolling vote is use to determine whether votes have started
+        else if (rollingVoteIndex != 0){
             castVote(address(0));
         }
 
@@ -331,7 +332,7 @@ contract NotarizationSerializer is VerusStorage {
 
         rollingUpgradeVotes[rollingVoteIndex] = votetxid;
         if(rollingVoteIndex > 98) {
-            rollingVoteIndex = 0;
+            rollingVoteIndex = 1; // use position 0 to determine whether votes have started
         } else {
             rollingVoteIndex = rollingVoteIndex + 1;
         }
