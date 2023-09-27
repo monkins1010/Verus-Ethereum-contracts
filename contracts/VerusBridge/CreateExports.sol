@@ -144,7 +144,7 @@ contract CreateExports is VerusStorage {
         }
     }
 
-    function externalCreateExportCall(bytes memory data) public {
+    function externalCreateExportCall(bytes memory data) external payable {
 
         (VerusObjects.CReserveTransfer memory reserveTransfer, bool forceNewCCE) = abi.decode(data, (VerusObjects.CReserveTransfer, bool));
         _createExports(reserveTransfer, forceNewCCE);

@@ -231,7 +231,7 @@ contract NotarizationSerializer is VerusStorage {
             {
                ethToDaiRatios |= uint256(serializeUint64(reserve)) << 64;
             }
-            else if (i == daiIndex)
+            else if (i == vrscIndex)
             {
                ethToDaiRatios |= uint256(serializeUint64(reserve)) << 128;
             }

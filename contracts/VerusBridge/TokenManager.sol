@@ -21,13 +21,14 @@ contract TokenManager is VerusStorage {
     address immutable VERUS;
     address immutable DAIERC20ADDRESS;
 
-    enum SendTypes {ETH, ERC20, ERC20MINT ,ERC721, ERC1155}
+    enum SendTypes {NULL, ETH, ERC20, ERC20MINT ,ERC721, ERC1155}
 
     uint8 constant SEND_FAILED = 1;
     uint8 constant SEND_SUCCESS = 2;
     uint8 constant SEND_SUCCESS_ERC1155 = 3;
     uint8 constant SEND_SUCCESS_ERC721 = 4;
     uint8 constant SEND_SUCCESS_ERC20_MINTED = 5;
+    uint8 constant SEND_SUCCESS_ETH = 6;
 
     constructor(address vETH, address, address Verus, address DaiERC20Address){
 
@@ -182,7 +183,7 @@ contract TokenManager is VerusStorage {
                 t.mint(currencyiAddress, tempToken.name, destinationAddress);
             }
 
-            if(result > 0) {
+            if(result > uint8(SendTypes.NULL)) {
                 result = sendCurrencyToETHAddress(tempToken.erc20ContractAddress, destinationAddress, sendAmount, result, tempToken.tokenID); 
             }
 
@@ -201,7 +202,7 @@ contract TokenManager is VerusStorage {
     function sendCurrencyToETHAddress(address tokenERCAddress, address destinationAddress, uint256 sendAmount, uint8 sendType, uint256 TokenId ) private returns (uint8){
 
             if(sendType == uint8(SendTypes.ETH)) {
-                return payable(destinationAddress).send(sendAmount * VerusConstants.SATS_TO_WEI_STD) ? SEND_SUCCESS : SEND_FAILED;
+                return payable(destinationAddress).send(sendAmount * VerusConstants.SATS_TO_WEI_STD) ? SEND_SUCCESS_ETH : SEND_FAILED;
             }
             Token token; 
 

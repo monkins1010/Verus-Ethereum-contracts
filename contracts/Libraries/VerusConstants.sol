@@ -84,7 +84,8 @@ library VerusConstants {
     uint8 constant NUMBER_OF_CONTRACTS = 11;
     uint64 constant MIN_VRSC_FEE = 4000000; //0.04 VRSC 8 decimals
     uint64 constant MAX_VERUS_TRANSFER = 1000000000000000000; //10,000,000,000.00000000
-
+    uint constant VERUS_IMPORT_FEE = 2000000; //This is 2 x the fee 0.04 VRSC 8 decimals
+    uint constant VERUS_IMPORT_FEE_X2 = 4000000; //This is 2 x the fee 0.04 VRSC 8 decimals
     enum ContractType {
         TokenManager,
         VerusSerializer,

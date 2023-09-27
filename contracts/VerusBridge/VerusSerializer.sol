@@ -426,7 +426,9 @@ contract VerusSerializer {
                 }
             }
 
-            nextOffset += temporaryRegister1;
+            assembly {
+                nextOffset := add(nextOffset, temporaryRegister1) //move to vector length 
+            }
 
             if (destinationType & VerusConstants.FLAG_DEST_AUX == VerusConstants.FLAG_DEST_AUX) {
 
@@ -443,21 +445,29 @@ contract VerusSerializer {
 
             counter++;
 
-            if(destinationType & VerusConstants.FLAG_DEST_GATEWAY == VerusConstants.FLAG_DEST_GATEWAY )
+            if(destinationType & VerusConstants.FLAG_DEST_GATEWAY == VerusConstants.FLAG_DEST_GATEWAY)
             {
-                 nextOffset += TRANSFER_GATEWAYSKIP; //skip gatewayid, gatewaycode + fees
+                assembly {
+                    nextOffset := add(nextOffset, TRANSFER_GATEWAYSKIP) //move to vector length 
+                }
             }
 
-            nextOffset += VERUS_ID_LENGTH; //skip destCurrencyID
+            assembly {
+                nextOffset := add(nextOffset, VERUS_ID_LENGTH) //move to vector length 
+            }
 
             if(destinationType & VerusConstants.RESERVE_TO_RESERVE == VerusConstants.RESERVE_TO_RESERVE)
             {
-                 nextOffset += VERUS_ID_LENGTH; 
+                assembly {
+                    nextOffset := add(nextOffset, VERUS_ID_LENGTH) //move to vector length 
+                }
             }
 
             if(flags & VerusConstants.CROSS_SYSTEM == VerusConstants.CROSS_SYSTEM )
             {
-                 nextOffset += VERUS_ID_LENGTH; 
+                assembly {
+                    nextOffset := add(nextOffset, VERUS_ID_LENGTH) //move to vector length 
+                }
             }
 
         }
@@ -467,18 +477,24 @@ contract VerusSerializer {
     }
         
     function readVarint(bytes memory buf, uint idx) public pure returns (uint64 v, uint retidx) {
-
-        uint8 b; // store current byte content
-
-        for (uint i = 0; i < 10; i++) {
-            b = uint8(buf[i+idx]);
-            v = (v << 7) | b & 0x7F;
-            if (b & 0x80 == 0x80)
-                v++;
-            else
-            return (v, idx + i + 1);
+        uint8 b;
+    
+        assembly {
+            let end := add(idx, 10)
+            let i := idx
+            retidx := add(idx, 1)
+            for {} lt(i, end) {} {
+                b := mload(add(buf, retidx))
+                i := add(i, 1)
+                v := or(shl(7, v), and(b, 0x7f))
+                if iszero(eq(and(b, 0x80), 0x80)) {
+                    break
+                }
+                v := add(v, 1)
+                retidx := add(retidx, 1)
+            }
         }
-        revert(); // i=9, invalid varint stream
+
     }
 
    function readCompactSizeLE2(bytes memory incoming, uint256 offset) public pure returns(uint64 v, uint retidx) {

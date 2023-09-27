@@ -64,7 +64,7 @@ module.exports = async function(deployer) {
     await deployer.deploy(VerusMMR);
     await VerusMMR.deployed();
     await deployer.link(VerusMMR, VerusProof);
-    //await deployer.link(VerusBlake2b, VerusProof);
+    await deployer.link(VerusBlake2b, VerusProof);
     await deployer.deploy(VerusProof, ...currencyConstants);
     const ProofInst = await VerusProof.deployed();
     
@@ -77,7 +77,7 @@ module.exports = async function(deployer) {
     await deployer.deploy(CreateExports, ...currencyConstants, DAI, DAIERC20);
     const CreateExportsInst = await CreateExports.deployed();
     
-    await deployer.deploy(SubmitImports, ...currencyConstants);
+    await deployer.deploy(SubmitImports, ...currencyConstants, DAI);
     const SubmitImportsInst = await SubmitImports.deployed();
     
     await deployer.deploy(VerusNotaryTools);
