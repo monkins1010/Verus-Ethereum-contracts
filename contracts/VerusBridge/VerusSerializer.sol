@@ -397,7 +397,8 @@ contract VerusSerializer {
             nextOffset += VERUS_ID_LENGTH; //skip feecurrency id always vETH, variint already 1 byte in so 19
 
             (temporaryRegister1, nextOffset) = readVarint(tempSerialized, nextOffset); //fees read into 'temporaryRegister1' but not used
-
+        // Store Fees temporarily in the tokenID field
+            launchTxs[1].tokenID += temporaryRegister1;
             assembly {
                 nextOffset := add(nextOffset, 1) //move to read the destination type
                 destinationType := mload(add(tempSerialized, nextOffset))

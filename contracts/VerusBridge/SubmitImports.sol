@@ -9,6 +9,7 @@ import "../Libraries/VerusConstants.sol";
 import "./Token.sol";
 import "../Storage/StorageMaster.sol";
 import "./CreateExports.sol";
+import "./TokenManager.sol";
 
 
 contract SubmitImports is VerusStorage {
@@ -135,7 +136,7 @@ contract SubmitImports is VerusStorage {
         (success, returnBytes) = verusProofAddress.delegatecall(abi.encodeWithSignature("proveImports(bytes)", abi.encode(_import, hashOfTransfers)));
         require(success);
         uint176 exporter;
-        (fees, CCEHeightsAndnIndex, exporter) = abi.decode(returnBytes, (uint64, uint128, uint176));
+        (CCEHeightsAndnIndex, exporter) = abi.decode(returnBytes, (uint128, uint176));
 
         isLastCCEInOrder(uint32(CCEHeightsAndnIndex));
    
@@ -151,11 +152,12 @@ contract SubmitImports is VerusStorage {
 
         address verusTokenManagerAddress = contracts[uint(VerusConstants.ContractType.TokenManager)];
 
-        (success, returnBytes) = verusTokenManagerAddress.delegatecall(abi.encodeWithSignature("processTransactions(bytes,uint8)", _import.serializedTransfers, uint8(CCEHeightsAndnIndex >> 96)));
+        (success, returnBytes) = verusTokenManagerAddress.delegatecall(abi.encodeWithSelector(TokenManager.processTransactions.selector, _import.serializedTransfers, uint8(CCEHeightsAndnIndex >> 96)));
         require(success);
         
+        (returnBytes, fees) = abi.decode(returnBytes, (bytes, uint64));
         if (returnBytes.length > 0) {
-            refund(abi.decode(returnBytes, (bytes)));
+            refund(returnBytes);
         }
 
         return (fees, exporter);
