@@ -129,8 +129,8 @@ contract TokenManager is VerusStorage {
         uint32 counter;
         (transfers, launchTxs, counter, refundAddresses) = VerusSerializer(contracts[uint(VerusConstants.ContractType.VerusSerializer)]).deserializeTransfers(serializedTransfers, numberOfTransfers);
         
-        // Only one currency launch is allowed per CCE, so use the second one to store fees, as function is to large.
-        fees = uint64(launchTxs[1].tokenID);
+        // Only two currency launches are allowed per CCE, so use a third one to store fees, as function is to large.
+        fees = uint64(launchTxs[2].tokenID);
         refundsData = importTransactions(transfers, refundAddresses);
 
         // 32bit counter is split into two 16bit values, the first 16bits is the number of transactions, the second 16bits is the number of currency launches

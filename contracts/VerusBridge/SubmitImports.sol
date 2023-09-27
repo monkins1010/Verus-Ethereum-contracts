@@ -290,20 +290,8 @@ contract SubmitImports is VerusStorage {
     function claimfees() public {
 
         uint256 claimAmount;
-        uint256 claimant;
-        claimant = uint256(uint160(msg.sender));
 
-        // Check claimant is type eth with length 20 and has fees to be got.
-        claimant |= (uint256(0x0c14) << VerusConstants.UINT160_BITS_SIZE);
-        claimAmount = claimableFees[bytes32(claimant)];
-
-        if(claimAmount > 0)
-        {
-            //stored as SATS convert to WEI
-            claimableFees[bytes32(claimant)] = 0;
-            payable(msg.sender).transfer(claimAmount * VerusConstants.SATS_TO_WEI_STD);
-        }
-        else if ((claimableFees[bytes32(uint256(uint160(VerusConstants.VDXF_SYSTEM_NOTARIZATION_NOTARYFEEPOOL)))] *  VerusConstants.SATS_TO_WEI_STD) 
+        if ((claimableFees[bytes32(uint256(uint160(VerusConstants.VDXF_SYSTEM_NOTARIZATION_NOTARYFEEPOOL)))] *  VerusConstants.SATS_TO_WEI_STD) 
                     > (tx.gasprice * VerusConstants.SEND_NOTARY_PAYMENT_FEE))
         {
             bool notaryFound = false;
