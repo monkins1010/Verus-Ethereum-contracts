@@ -61,20 +61,27 @@ contract SubmitImports is VerusStorage {
         } else {
 
             // If the sending currency is not DAI then the fee is 0.003 vETH
-            if (sendingCurrency != DAI) {
+            if (sendingCurrency == VETH) {
                 LPtransfer.fees = VerusConstants.verusvETHTransactionFee; 
                 LPtransfer.feecurrencyid = VETH;
                 LPtransfer.currencyvalue.amount = uint64(value - VerusConstants.verusvETHTransactionFee);  
-            } else {
+            } else if (sendingCurrency == VERUS) {
+                LPtransfer.fees = uint64(VerusConstants.VERUS_IMPORT_FEE); 
+                LPtransfer.feecurrencyid = VERUS;
+                require(value > VerusConstants.VERUS_IMPORT_FEE, "VRSC-Value-low");
+                LPtransfer.currencyvalue.amount = uint64(value - VerusConstants.verusvETHTransactionFee);  
+            } else if (sendingCurrency == VERUS) {
                 LPtransfer.feecurrencyid = DAI;
                 // Get the 3 reserve values of ETH, DAI and VRSC
                 uint reserves = claimableFees[bytes32(uint256(uint160(VerusConstants.VDXF_ETH_DAI_VRSC_LAST_RESERVES)))];
                 // get specifically the vrsc reserves and multiply up
-                uint vrscRatio = VerusConstants.VERUS_IMPORT_FEE * uint64(reserves >> 128);
+                uint vrscRatio = VerusConstants.VERUS_IMPORT_FEE_X2 * uint64(reserves >> 128);
                 LPtransfer.fees = uint64(vrscRatio / uint(uint64(reserves >> 128)));
 
-                require(value > LPtransfer.fees, "Value-low");
+                require(value > LPtransfer.fees, "DAI- Value-low");
                 LPtransfer.currencyvalue.amount = uint64(value - LPtransfer.fees);  
+            } else {
+                revert("Invalid currency");
             }
 
             LPtransfer.currencyvalue.currency = sendingCurrency; // was VETH;
@@ -370,7 +377,7 @@ contract SubmitImports is VerusStorage {
                 if (currency != VETH || currency != DAI || currency != VERUS) {
 
                     require (msg.value > VerusConstants.transactionFee, "ETH-Needed");
-                    
+
                 }
                 sendToVRSC(refundAmount, address(uint160(verusAddress)), uint8(verusAddress >> TYPE_BYTE_LOCATION_IN_UINT176), currency);
             }
