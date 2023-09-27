@@ -5,6 +5,7 @@ pragma abicoder v2;
 import "../Libraries/VerusObjects.sol";
 import "../Libraries/VerusObjectsNotarization.sol";
 import "../Storage/StorageMaster.sol";
+import "./dsrinterface.sol";
 
 contract UpgradeManager is VerusStorage {
 
@@ -21,12 +22,8 @@ contract UpgradeManager is VerusStorage {
     uint8 constant WINNINGAMOUNT = 51;
 
     event contractUpdated(bool);
-    address internal contractOwner;
-
 
     function upgradeContracts(bytes calldata data) external payable returns (uint8) {
-
-
 
         require(msg.value > VerusConstants.upgradeFee);
 
@@ -102,7 +99,7 @@ contract UpgradeManager is VerusStorage {
 
         uint8 countOfAgreedVotes;
         
-        for(uint i = 0; i < rollingUpgradeVotes.length; i++) 
+        for(uint i = 1; i < rollingUpgradeVotes.length; i++) 
         {
             if (contractsHash == rollingUpgradeVotes[i])
                 countOfAgreedVotes++;

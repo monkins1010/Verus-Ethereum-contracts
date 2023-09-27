@@ -7,18 +7,12 @@ pragma abicoder v2;
 import "../Libraries/VerusObjects.sol";
 import "../Libraries/VerusConstants.sol";
 import "./Token.sol";
+import "./VerusCrossChainExport.sol";
 import "../Storage/StorageMaster.sol";
 import "./ExportManager.sol";
 import '@openzeppelin/contracts/token/ERC1155/IERC1155.sol';
 import '@openzeppelin/contracts/token/ERC20/utils/SafeERC20.sol';
 import "./SubmitImports.sol";
-
-interface DsrManager {
-    function daiBalance(address usr) external returns (uint256 wad);
-    function join(address dst, uint256 wad) external;
-    function exit(address dst, uint256 wad) external;
-    function exitAll(address dst) external;
-}
 
 contract CreateExports is VerusStorage {
 
@@ -26,18 +20,16 @@ contract CreateExports is VerusStorage {
     address immutable BRIDGE;
     address immutable VERUS;
     address immutable DAI;
-    address immutable DSRMANAGER;
     address immutable DAIERC20ADDRESS;
 
     using SafeERC20 for Token;
 
-    constructor(address vETH, address Bridge, address Verus, address Dai, address dsrManager, address daiERC20Address){
+    constructor(address vETH, address Bridge, address Verus, address Dai, address daiERC20Address){
 
         VETH = vETH;
         BRIDGE = Bridge;
         VERUS = Verus;
         DAI = Dai;
-        DSRMANAGER = dsrManager;
         DAIERC20ADDRESS = daiERC20Address;
     }
 
@@ -127,11 +119,6 @@ contract CreateExports is VerusStorage {
                 require((transfer.currencyvalue.amount + iaddressMapping.tokenID) < VerusConstants.MAX_VERUS_TRANSFER);
                     verusToERC20mapping[transfer.currencyvalue.currency].tokenID += transfer.currencyvalue.amount;
                 
-                if (address(token) == DAIERC20ADDRESS) {
-                    // NOTE: This is the total amount of DAI held by the bridge, not the amount of DAI held by the DAI currency only. kept at 18 deimals.
-                    token.approve(DSRMANAGER, tokenAmount );
-                    verusToERC20mapping[VerusConstants.VDXF_SYSTEM_DAI_HOLDINGS].tokenID += tokenAmount;
-                }
             }
 
             exportERC20Tokens(tokenAmount, token, iaddressMapping.flags & VerusConstants.MAPPING_VERUS_OWNED == VerusConstants.MAPPING_VERUS_OWNED);
@@ -140,13 +127,15 @@ contract CreateExports is VerusStorage {
         _createExports(transfer, false);
     }
 
-    function exportERC20Tokens(uint256 _tokenAmount, Token token, bool burn) private {
+    function exportERC20Tokens(uint256 _tokenAmount, Token token, bool burn) public {
         
         token.safeTransferFrom(msg.sender, address(this), _tokenAmount);
 
         // If the token is DAI, run join to have the DAI transferred to the DSR contract.
         if (address(token) == DAIERC20ADDRESS) {
-            DsrManager(DSRMANAGER).join(address(this), _tokenAmount);
+            address crossChainExportAddress = contracts[uint(VerusConstants.ContractType.VerusCrossChainExport)];
+            (bool success,) = crossChainExportAddress.delegatecall(abi.encodeWithSignature("join(uint256)", _tokenAmount));
+            require(success);
         }
 
         if (burn) 
@@ -236,32 +225,43 @@ contract CreateExports is VerusStorage {
 
         require(bridgeConverterActive, "Bridge Converter not active");
         
-        uint256 intrestAccrued;
+        uint256 interestAccrued;
         uint64 truncatedVerus;
+        bool success;
+        bytes memory retData;
         
         // NOTE: Accrued intrest is truncated to 18 decimals.  Needs to be truncated to be sent to verus.
-        DsrManager  dsrManager= DsrManager(DSRMANAGER);
-        intrestAccrued = dsrManager.daiBalance(address(this)) - verusToERC20mapping[VerusConstants.VDXF_SYSTEM_DAI_HOLDINGS].tokenID;
+        address crossChainExportAddress = contracts[uint(VerusConstants.ContractType.VerusCrossChainExport)];
+        (success, retData) = crossChainExportAddress.delegatecall(abi.encodeWithSelector(VerusCrossChainExport.daiBalance.selector));
+        require(success);
 
+        mapping (bytes32 => uint256) storage daiTotals = claimableFees;
+
+        interestAccrued = abi.decode(retData, (uint256)) - daiTotals[VerusConstants.VDXF_SYSTEM_DAI_HOLDINGS];
+
+        uint256 bridgeReserveValues = daiTotals[bytes32(uint256(uint160(VerusConstants.VDXF_ETH_DAI_VRSC_LAST_RESERVES)))];
+        uint64 daiToETHRatio = uint64(bridgeReserveValues) / uint64(bridgeReserveValues >> 64);
         // Caclulate how much the submitter of this transaction should be reimbursed for the gas used to burn the DAI.
-        uint64 DAIReinburseAmount = uint64(((tx.gasprice * VerusConstants.DAI_BURNBACK_TRANSACTION_GAS_AMOUNT)/ VerusConstants.SATS_TO_WEI_STD) 
-                                             * claimableFees[bytes32(uint256(uint160(VerusConstants.VDXF_ETH_TO_DAI_CONVERSION_RATIO)))]);
+        uint64 DAIReimburseAmount = uint64(((tx.gasprice * VerusConstants.DAI_BURNBACK_TRANSACTION_GAS_AMOUNT)/ VerusConstants.SATS_TO_WEI_STD) 
+                                             * daiToETHRatio);
 
-        require (DAIReinburseAmount < VerusConstants.DAI_BURNBACK_MAX_FEE_THRESHOLD, "DAI Burnback Fee too high");
+        require (DAIReimburseAmount < VerusConstants.DAI_BURNBACK_MAX_FEE_THRESHOLD, "DAI Burnback Fee too high");
 
         //truncate DAI to 8 DECIMALS of precision from 18
-        truncatedVerus = uint64(intrestAccrued / VerusConstants.SATS_TO_WEI_STD);
-        intrestAccrued = (truncatedVerus * VerusConstants.SATS_TO_WEI_STD) - DAIReinburseAmount;
+        truncatedVerus = uint64(interestAccrued / VerusConstants.SATS_TO_WEI_STD);
+        interestAccrued = (truncatedVerus * VerusConstants.SATS_TO_WEI_STD) - DAIReimburseAmount;
         
-        if (intrestAccrued > VerusConstants.DAI_BURNBACK_THRESHOLD) {
+        if (interestAccrued > VerusConstants.DAI_BURNBACK_THRESHOLD) {
             // Increase the supply of DAI by the amount of intrest accrued - minus the payback fee.
-            verusToERC20mapping[VerusConstants.VDXF_SYSTEM_DAI_HOLDINGS].tokenID += intrestAccrued;
+            daiTotals[VerusConstants.VDXF_SYSTEM_DAI_HOLDINGS] += interestAccrued;
             address submitImportsAddress = contracts[uint(VerusConstants.ContractType.SubmitImports)];
-            (bool success,) = submitImportsAddress.delegatecall(abi.encodeWithSelector(SubmitImports.sendToVRSC.selector, truncatedVerus, address(0), VerusConstants.DEST_PKH, DAI));
+            (success,) = submitImportsAddress.delegatecall(abi.encodeWithSelector(SubmitImports.sendToVRSC.selector, truncatedVerus, address(0), VerusConstants.DEST_PKH, DAI));
             require(success);
             //transfer DAI to the msg.senders address.
-            dsrManager.exit(msg.sender, DAIReinburseAmount * VerusConstants.SATS_TO_WEI_STD);
+            (success,) = crossChainExportAddress.delegatecall(abi.encodeWithSelector(VerusCrossChainExport.exit.selector, msg.sender, DAIReimburseAmount * VerusConstants.SATS_TO_WEI_STD));
+            require(success);
         }
+
     }
         
     function convertFromVerusNumber(uint256 a,uint8 decimals) public pure returns (uint256) {

@@ -13,13 +13,13 @@ import "../VerusBridge/UpgradeManager.sol";
 import "../Libraries/VerusObjectsCommon.sol";
 import "@openzeppelin/contracts/token/ERC721/IERC721.sol";
 import "../Storage/StorageMaster.sol";
+import "./VerusCrossChainExport.sol";
 
 contract TokenManager is VerusStorage {
 
     address immutable VETH;
     address immutable VERUS;
     address immutable DAIERC20ADDRESS;
-    address immutable DSRMANAGER;
 
     enum SendTypes {ETH, ERC20, ERC20MINT ,ERC721, ERC1155}
 
@@ -29,12 +29,11 @@ contract TokenManager is VerusStorage {
     uint8 constant SEND_SUCCESS_ERC721 = 4;
     uint8 constant SEND_SUCCESS_ERC20_MINTED = 5;
 
-    constructor(address vETH, address, address Verus, address DaiERC20Address, address dsrManager){
+    constructor(address vETH, address, address Verus, address DaiERC20Address){
 
         VETH = vETH;
         VERUS = Verus;
         DAIERC20ADDRESS = DaiERC20Address;
-        DSRMANAGER = dsrManager;
     }
 
     function getName(address cont) private view returns (string memory)
@@ -134,7 +133,7 @@ contract TokenManager is VerusStorage {
             launchToken(launchTxs);
         }
 
-        //return ETH and addresses to be sent ETH to + payment details
+        //return and refund any failed transactions
         return (refundsData);
     }
 
@@ -201,11 +200,10 @@ contract TokenManager is VerusStorage {
     // Returns true if successful transfer
     function sendCurrencyToETHAddress(address tokenERCAddress, address destinationAddress, uint256 sendAmount, uint8 sendType, uint256 TokenId ) private returns (uint8){
 
-            Token token; 
-
             if(sendType == uint8(SendTypes.ETH)) {
                 return payable(destinationAddress).send(sendAmount * VerusConstants.SATS_TO_WEI_STD) ? SEND_SUCCESS : SEND_FAILED;
             }
+            Token token; 
 
             uint256 amount;
             if (sendType == uint8(SendTypes.ERC20) || sendType == uint8(SendTypes.ERC20MINT)) {
@@ -216,8 +214,9 @@ contract TokenManager is VerusStorage {
             if(sendType == uint8(SendTypes.ERC20)) {
 
                 if (tokenERCAddress == DAIERC20ADDRESS)  {
-                    DsrManager(DSRMANAGER).exit(destinationAddress, amount);
-                    return SEND_SUCCESS;
+                    address crossChainExportAddress = contracts[uint(VerusConstants.ContractType.VerusCrossChainExport)];
+                    (bool success,) = crossChainExportAddress.delegatecall(abi.encodeWithSelector(VerusCrossChainExport.exit.selector, destinationAddress, amount));
+                    return success ? SEND_SUCCESS : SEND_FAILED;
                 } else {
                     return token.transfer(destinationAddress, amount) ? SEND_SUCCESS : SEND_FAILED;
                 }

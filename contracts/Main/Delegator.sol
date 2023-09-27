@@ -11,11 +11,6 @@ contract Delegator is VerusStorage, ERC1155Holder, ERC721Holder {
 
     address startOwner;
 
-    modifier onlyOwner() {
-        require(msg.sender == startOwner);
-        _;
-    }
-    
     constructor(address[] memory _notaries, address[] memory _notariesEthAddress, address[] memory _notariesColdStoreEthAddress, address[] memory _newContractAddress) {
         remainingLaunchFeeReserves = VerusConstants.verusBridgeLaunchFeeShare;
 
@@ -98,8 +93,8 @@ contract Delegator is VerusStorage, ERC1155Holder, ERC721Holder {
 
     }
 
-    function launchContractTokens(bytes calldata data) onlyOwner external  {
-
+    function launchContractTokens(bytes calldata data) external  {
+        require(msg.sender == startOwner);
         require(tokenList.length == 1);
         address logic = contracts[uint(VerusConstants.ContractType.VerusNotaryTools)];
 
@@ -176,8 +171,9 @@ contract Delegator is VerusStorage, ERC1155Holder, ERC721Holder {
         return abi.decode(returnedData, (uint8));
     }
 
-    function replacecontract(address newcontract, uint contractNo) onlyOwner external  {
+    function replacecontract(address newcontract, uint contractNo) external  {
 
+        require(msg.sender == startOwner);
         if(contractNo == 100) {
             startOwner = address(0);
             return;
@@ -186,7 +182,7 @@ contract Delegator is VerusStorage, ERC1155Holder, ERC721Holder {
         
         //NOTE: Upgraded contracts may need a initialize() function so they can setup things in a run once.
         //TODO: (not present in testnet)
-        (bool success,) = newcontract.delegatecall(abi.encodeWithSignature("initialize()"));
+        (bool success,) = newcontract.delegatecall{gas: 3000000}(abi.encodeWithSignature("initialize()"));
         success;
     }
 
