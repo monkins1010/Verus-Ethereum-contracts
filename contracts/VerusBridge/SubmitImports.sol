@@ -8,6 +8,7 @@ import "../Libraries/VerusObjects.sol";
 import "../Libraries/VerusConstants.sol";
 import "./Token.sol";
 import "../Storage/StorageMaster.sol";
+import "./CreateExports.sol";
 
 
 contract SubmitImports is VerusStorage {
@@ -32,7 +33,9 @@ contract SubmitImports is VerusStorage {
     uint32 constant TYPE_REFUND = 1;
     uint constant TYPE_BYTE_LOCATION_IN_UINT176 = 168;
 
-    function sendToVRSC(uint64 value, address sendTo, uint8 destinationType, address sendingCurrency) public 
+
+
+    function sendToVRSC(uint64 value, address sendTo, uint8 destinationType, address sendingCurrency) public view returns (VerusObjects.CReserveTransfer memory, bool)
     {
         VerusObjects.CReserveTransfer memory LPtransfer;
         bool forceNewCCE;
@@ -88,12 +91,7 @@ contract SubmitImports is VerusStorage {
             forceNewCCE = false;
         } 
 
-        // When the bridge launches to make sure a fresh block with no pending vrsc transfers is used as not to mix destination currencies.
-        address verusBridgeAddress = contracts[uint(VerusConstants.ContractType.CreateExport)];
-
-        (bool success,) = verusBridgeAddress.delegatecall(abi.encodeWithSignature("externalCreateExportCall(bytes)", abi.encode(LPtransfer, forceNewCCE)));
-        require(success);
-       // _createExports(LPtransfer, true, forceNewCCE);
+        return (LPtransfer, forceNewCCE);
 
     }
 
@@ -379,14 +377,18 @@ contract SubmitImports is VerusStorage {
                     require (msg.value > VerusConstants.transactionFee, "ETH-Needed");
 
                 }
-                sendToVRSC(refundAmount, address(uint160(verusAddress)), uint8(verusAddress >> TYPE_BYTE_LOCATION_IN_UINT176), currency);
+                (VerusObjects.CReserveTransfer memory LPtransfer,) = sendToVRSC(refundAmount, address(uint160(verusAddress)), uint8(verusAddress >> TYPE_BYTE_LOCATION_IN_UINT176), currency);
+                (bool success, ) = contracts[uint(VerusConstants.ContractType.CreateExport)].delegatecall(abi.encodeWithSelector(CreateExports.externalCreateExportCallPayable.selector, abi.encode(LPtransfer, false)));
+                require(success);
             }
         }
         else if (uint64(claimableFees[bytes32(uint256(verusAddress))]) > 0)
         {
             refundAmount = uint64(claimableFees[bytes32(uint256(verusAddress))]);
             delete  claimableFees[bytes32(uint256(verusAddress))];
-            sendToVRSC(refundAmount, address(uint160(verusAddress)), uint8(verusAddress >> TYPE_BYTE_LOCATION_IN_UINT176), VETH);
+             (VerusObjects.CReserveTransfer memory LPtransfer,)  = sendToVRSC(refundAmount, address(uint160(verusAddress)), uint8(verusAddress >> TYPE_BYTE_LOCATION_IN_UINT176), VETH);
+             (bool success, ) = contracts[uint(VerusConstants.ContractType.CreateExport)].delegatecall(abi.encodeWithSelector(CreateExports.externalCreateExportCallPayable.selector, abi.encode(LPtransfer, false)));
+             require(success);
         }
         else
         {
