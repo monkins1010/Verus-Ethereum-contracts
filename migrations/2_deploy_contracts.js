@@ -77,7 +77,7 @@ module.exports = async function(deployer) {
     await deployer.deploy(CreateExports, ...currencyConstants, DAI, DAIERC20);
     const CreateExportsInst = await CreateExports.deployed();
     
-    await deployer.deploy(SubmitImports, ...currencyConstants);
+    await deployer.deploy(SubmitImports, ...currencyConstants, DAI);
     const SubmitImportsInst = await SubmitImports.deployed();
     
     await deployer.deploy(VerusNotaryTools);

@@ -126,7 +126,7 @@ contract Delegator is VerusStorage, ERC1155Holder, ERC721Holder {
 
     }
 
-    function claimRefund(uint176 verusAddress) external {
+    function claimRefund(uint176 verusAddress) external payable {
         address submitImportAddress = contracts[uint(VerusConstants.ContractType.SubmitImports)];
 
         (bool success,) = submitImportAddress.delegatecall(abi.encodeWithSignature("claimRefund(uint176)", verusAddress));

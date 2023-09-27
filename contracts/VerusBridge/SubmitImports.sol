@@ -15,12 +15,14 @@ contract SubmitImports is VerusStorage {
     address immutable VETH;
     address immutable BRIDGE;
     address immutable VERUS;
+    address immutable DAI;
 
-    constructor(address vETH, address Bridge, address Verus){
+    constructor(address vETH, address Bridge, address Verus, address Dai){
 
         VETH = vETH;
         BRIDGE = Bridge;
         VERUS = Verus;
+        DAI = Dai;
     }
 
     uint32 constant ELVCHOBJ_TXID_OFFSET = 32;
@@ -57,10 +59,25 @@ contract SubmitImports is VerusStorage {
             LPtransfer.currencyvalue.amount = uint64(remainingLaunchFeeReserves - VerusConstants.verusTransactionFee);
             forceNewCCE = true;
         } else {
+
+            // If the sending currency is not DAI then the fee is 0.003 vETH
+            if (sendingCurrency != DAI) {
+                LPtransfer.fees = VerusConstants.verusvETHTransactionFee; 
+                LPtransfer.feecurrencyid = VETH;
+                LPtransfer.currencyvalue.amount = uint64(value - VerusConstants.verusvETHTransactionFee);  
+            } else {
+                LPtransfer.feecurrencyid = DAI;
+                // Get the 3 reserve values of ETH, DAI and VRSC
+                uint reserves = claimableFees[bytes32(uint256(uint160(VerusConstants.VDXF_ETH_DAI_VRSC_LAST_RESERVES)))];
+                // get specifically the vrsc reserves and multiply up
+                uint vrscRatio = VerusConstants.VERUS_IMPORT_FEE * uint64(reserves >> 128);
+                LPtransfer.fees = uint64(vrscRatio / uint(uint64(reserves >> 128)));
+
+                require(value > LPtransfer.fees, "Value-low");
+                LPtransfer.currencyvalue.amount = uint64(value - LPtransfer.fees);  
+            }
+
             LPtransfer.currencyvalue.currency = sendingCurrency; // was VETH;
-            LPtransfer.fees = VerusConstants.verusvETHTransactionFee; 
-            LPtransfer.feecurrencyid = VETH;
-            LPtransfer.currencyvalue.amount = uint64(value - VerusConstants.verusvETHTransactionFee);  
             forceNewCCE = false;
         } 
 
@@ -326,7 +343,7 @@ contract SubmitImports is VerusStorage {
         }
     }
 
-    function claimRefund(uint176 verusAddress) public 
+    function claimRefund(uint176 verusAddress) external payable 
     {
         uint64 refundAmount;
         bytes memory refundData;
@@ -350,6 +367,11 @@ contract SubmitImports is VerusStorage {
                 }
 
                 delete storageGlobal[refundAddressFormatted];
+                if (currency != VETH || currency != DAI || currency != VERUS) {
+
+                    require (msg.value > VerusConstants.transactionFee, "ETH-Needed");
+                    
+                }
                 sendToVRSC(refundAmount, address(uint160(verusAddress)), uint8(verusAddress >> TYPE_BYTE_LOCATION_IN_UINT176), currency);
             }
         }
