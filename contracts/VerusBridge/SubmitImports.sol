@@ -69,7 +69,7 @@ contract SubmitImports is VerusStorage {
                 LPtransfer.fees = uint64(VerusConstants.VERUS_IMPORT_FEE); 
                 LPtransfer.feecurrencyid = VERUS;
                 require(value > VerusConstants.VERUS_IMPORT_FEE, "VRSC-Value-low");
-                LPtransfer.currencyvalue.amount = uint64(value - VerusConstants.verusvETHTransactionFee);  
+                LPtransfer.currencyvalue.amount = uint64(value - VerusConstants.VERUS_IMPORT_FEE);  
             } else if (sendingCurrency == VERUS) {
                 LPtransfer.feecurrencyid = DAI;
                 // Get the 3 reserve values of ETH, DAI and VRSC
