@@ -187,7 +187,9 @@ contract ExportManager is VerusStorage  {
 
         if (transfer.flags == VerusConstants.VALID && transfer.secondreserveid == address(0))
         {
-            require (transfer.destcurrencyid == (bridgeConverterActive ? BRIDGE : VERUS),  
+            require ((transfer.destcurrencyid == (bridgeConverterActive ? BRIDGE : VERUS) && 
+                     (transfer.destination.destinationtype == VerusConstants.DEST_ID ||
+                      transfer.destination.destinationtype == VerusConstants.DEST_PKH)),  
                         "Invalid desttype");
         }
         else if (transfer.flags == (VerusConstants.VALID + VerusConstants.CONVERT + VerusConstants.RESERVE_TO_RESERVE))

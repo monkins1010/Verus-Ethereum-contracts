@@ -61,35 +61,35 @@ contract SubmitImports is VerusStorage {
             LPtransfer.feecurrencyid = VERUS; 
             LPtransfer.currencyvalue.amount = uint64(remainingLaunchFeeReserves - VerusConstants.verusTransactionFee);
             forceNewCCE = true;
+            return (LPtransfer, forceNewCCE);
+        }             
+        // If the sending currency is not DAI then the fee is 0.003 vETH
+        if (sendingCurrency == VETH) {
+            LPtransfer.fees = VerusConstants.verusvETHTransactionFee; 
+            LPtransfer.feecurrencyid = VETH;
+            LPtransfer.currencyvalue.amount = uint64(value - VerusConstants.verusvETHTransactionFee);  
+        } else if (sendingCurrency == VERUS) {
+            LPtransfer.fees = uint64(VerusConstants.VERUS_IMPORT_FEE); 
+            LPtransfer.feecurrencyid = VERUS;
+            require(value > VerusConstants.VERUS_IMPORT_FEE, "VRSC-Value-low");
+            LPtransfer.currencyvalue.amount = uint64(value - VerusConstants.VERUS_IMPORT_FEE);  
+        } else if (sendingCurrency == VERUS) {
+            LPtransfer.feecurrencyid = DAI;
+            // Get the 3 reserve values of ETH, DAI and VRSC
+            uint reserves = claimableFees[bytes32(uint256(uint160(VerusConstants.VDXF_ETH_DAI_VRSC_LAST_RESERVES)))];
+            // get specifically the vrsc reserves and multiply up
+            uint vrscRatio = VerusConstants.VERUS_IMPORT_FEE_X2 * uint64(reserves >> 128);
+            LPtransfer.fees = uint64(vrscRatio / uint(uint64(reserves >> 128)));
+
+            require(value > LPtransfer.fees, "DAI- Value-low");
+            LPtransfer.currencyvalue.amount = uint64(value - LPtransfer.fees);  
         } else {
+            revert("Invalid currency");
+        }
 
-            // If the sending currency is not DAI then the fee is 0.003 vETH
-            if (sendingCurrency == VETH) {
-                LPtransfer.fees = VerusConstants.verusvETHTransactionFee; 
-                LPtransfer.feecurrencyid = VETH;
-                LPtransfer.currencyvalue.amount = uint64(value - VerusConstants.verusvETHTransactionFee);  
-            } else if (sendingCurrency == VERUS) {
-                LPtransfer.fees = uint64(VerusConstants.VERUS_IMPORT_FEE); 
-                LPtransfer.feecurrencyid = VERUS;
-                require(value > VerusConstants.VERUS_IMPORT_FEE, "VRSC-Value-low");
-                LPtransfer.currencyvalue.amount = uint64(value - VerusConstants.VERUS_IMPORT_FEE);  
-            } else if (sendingCurrency == VERUS) {
-                LPtransfer.feecurrencyid = DAI;
-                // Get the 3 reserve values of ETH, DAI and VRSC
-                uint reserves = claimableFees[bytes32(uint256(uint160(VerusConstants.VDXF_ETH_DAI_VRSC_LAST_RESERVES)))];
-                // get specifically the vrsc reserves and multiply up
-                uint vrscRatio = VerusConstants.VERUS_IMPORT_FEE_X2 * uint64(reserves >> 128);
-                LPtransfer.fees = uint64(vrscRatio / uint(uint64(reserves >> 128)));
-
-                require(value > LPtransfer.fees, "DAI- Value-low");
-                LPtransfer.currencyvalue.amount = uint64(value - LPtransfer.fees);  
-            } else {
-                revert("Invalid currency");
-            }
-
-            LPtransfer.currencyvalue.currency = sendingCurrency; // was VETH;
-            forceNewCCE = false;
-        } 
+        LPtransfer.currencyvalue.currency = sendingCurrency; // was VETH;
+        forceNewCCE = false;
+        
 
         return (LPtransfer, forceNewCCE);
 
