@@ -21,7 +21,7 @@ contract TokenManager is VerusStorage {
     address immutable VERUS;
     address immutable DAIERC20ADDRESS;
 
-    enum SendTypes {ETH, ERC20, ERC20MINT ,ERC721, ERC1155}
+    enum SendTypes {NULL, ETH, ERC20, ERC20MINT ,ERC721, ERC1155}
 
     uint8 constant SEND_FAILED = 1;
     uint8 constant SEND_SUCCESS = 2;
@@ -182,7 +182,7 @@ contract TokenManager is VerusStorage {
                 t.mint(currencyiAddress, tempToken.name, destinationAddress);
             }
 
-            if(result > 0) {
+            if(result > uint8(SendTypes.NULL)) {
                 result = sendCurrencyToETHAddress(tempToken.erc20ContractAddress, destinationAddress, sendAmount, result, tempToken.tokenID); 
             }
 
