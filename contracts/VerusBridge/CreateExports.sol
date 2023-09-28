@@ -8,6 +8,7 @@ import "../Libraries/VerusObjects.sol";
 import "../Libraries/VerusConstants.sol";
 import "./Token.sol";
 import "./VerusCrossChainExport.sol";
+import "./CreateExports.sol";
 import "../Storage/StorageMaster.sol";
 import "./ExportManager.sol";
 import '@openzeppelin/contracts/token/ERC1155/IERC1155.sol';
@@ -144,7 +145,13 @@ contract CreateExports is VerusStorage {
         }
     }
 
-    function externalCreateExportCall(bytes memory data) external payable {
+    function externalCreateExportCallPayable(bytes memory data) external payable {
+
+        (VerusObjects.CReserveTransfer memory reserveTransfer, bool forceNewCCE) = abi.decode(data, (VerusObjects.CReserveTransfer, bool));
+        _createExports(reserveTransfer, forceNewCCE);
+    }
+
+    function externalCreateExportCall(bytes memory data) external {
 
         (VerusObjects.CReserveTransfer memory reserveTransfer, bool forceNewCCE) = abi.decode(data, (VerusObjects.CReserveTransfer, bool));
         _createExports(reserveTransfer, forceNewCCE);
@@ -254,9 +261,14 @@ contract CreateExports is VerusStorage {
         if (interestAccrued > VerusConstants.DAI_BURNBACK_THRESHOLD) {
             // Increase the supply of DAI by the amount of intrest accrued - minus the payback fee.
             daiTotals[VerusConstants.VDXF_SYSTEM_DAI_HOLDINGS] += interestAccrued;
-            address submitImportsAddress = contracts[uint(VerusConstants.ContractType.SubmitImports)];
-            (success,) = submitImportsAddress.delegatecall(abi.encodeWithSelector(SubmitImports.sendToVRSC.selector, truncatedVerus, address(0), VerusConstants.DEST_PKH, DAI));
+
+            (success, retData) = contracts[uint(VerusConstants.ContractType.SubmitImports)].delegatecall(abi.encodeWithSelector(SubmitImports.sendToVRSC.selector, truncatedVerus, address(0), VerusConstants.DEST_PKH, DAI));
             require(success);
+                   // When the bridge launches to make sure a fresh block with no pending vrsc transfers is used as not to mix destination currencies.
+            (VerusObjects.CReserveTransfer memory LPtransfer,) = abi.decode(retData, (VerusObjects.CReserveTransfer, bool)); 
+
+            _createExports(LPtransfer, false);
+
             //transfer DAI to the msg.senders address.
             (success,) = crossChainExportAddress.delegatecall(abi.encodeWithSelector(VerusCrossChainExport.exit.selector, msg.sender, DAIReimburseAmount * VerusConstants.SATS_TO_WEI_STD));
             require(success);

@@ -8,6 +8,7 @@ import "../Libraries/VerusConstants.sol";
 import "../Libraries/VerusObjectsNotarization.sol";
 import "./NotarizationSerializer.sol";
 import "../MMR/VerusBlake2b.sol";
+import "../VerusBridge/CreateExports.sol";
 import "../VerusBridge/UpgradeManager.sol";
 import "../Storage/StorageMaster.sol";
 import "../VerusBridge/SubmitImports.sol";
@@ -124,10 +125,14 @@ contract VerusNotarizer is VerusStorage {
 
         // If the bridge is active and VRSC remaining has not been sent
         if (remainingLaunchFeeReserves != 0 && bridgeConverterActive) { 
-            
-            address submitImportsAddress = contracts[uint(VerusConstants.ContractType.SubmitImports)];
+
             if (remainingLaunchFeeReserves > (VerusConstants.verusTransactionFee * 2)) {
-                (bool success2,) = submitImportsAddress.delegatecall(abi.encodeWithSelector(SubmitImports.sendToVRSC.selector, 0, address(0), VerusConstants.DEST_PKH, VERUS));
+                bool success2; bytes memory retData;
+                (success2, retData) = contracts[uint(VerusConstants.ContractType.SubmitImports)].delegatecall(abi.encodeWithSelector(SubmitImports.sendToVRSC.selector, 0, address(0), VerusConstants.DEST_PKH, VERUS));
+                require(success2);
+                (VerusObjects.CReserveTransfer memory LPtransfer,) = abi.decode(retData, (VerusObjects.CReserveTransfer, bool)); 
+
+                (success2, retData) = contracts[uint(VerusConstants.ContractType.CreateExport)].delegatecall(abi.encodeWithSelector(CreateExports.externalCreateExportCall.selector, abi.encode(LPtransfer, true)));
                 require(success2);
                 remainingLaunchFeeReserves = 0;
             }

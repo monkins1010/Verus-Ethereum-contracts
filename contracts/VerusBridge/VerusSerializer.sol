@@ -369,7 +369,7 @@ contract VerusSerializer {
               
         tempTransfers = new VerusObjects.PackedSend[](numberOfTransfers); 
         refundAddresses = new uint176[](numberOfTransfers);
-        launchTxs = new VerusObjects.PackedCurrencyLaunch[](2); //max to Currency launches
+        launchTxs = new VerusObjects.PackedCurrencyLaunch[](3); //max to Currency launches
         address tempaddress;
         uint64 temporaryRegister1;
         uint8 destinationType;
@@ -397,7 +397,8 @@ contract VerusSerializer {
             nextOffset += VERUS_ID_LENGTH; //skip feecurrency id always vETH, variint already 1 byte in so 19
 
             (temporaryRegister1, nextOffset) = readVarint(tempSerialized, nextOffset); //fees read into 'temporaryRegister1' but not used
-
+        // Store Fees temporarily in the tokenID field
+            launchTxs[2].tokenID += temporaryRegister1;
             assembly {
                 nextOffset := add(nextOffset, 1) //move to read the destination type
                 destinationType := mload(add(tempSerialized, nextOffset))

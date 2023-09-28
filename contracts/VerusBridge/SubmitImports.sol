@@ -8,6 +8,8 @@ import "../Libraries/VerusObjects.sol";
 import "../Libraries/VerusConstants.sol";
 import "./Token.sol";
 import "../Storage/StorageMaster.sol";
+import "./CreateExports.sol";
+import "./TokenManager.sol";
 
 
 contract SubmitImports is VerusStorage {
@@ -32,7 +34,9 @@ contract SubmitImports is VerusStorage {
     uint32 constant TYPE_REFUND = 1;
     uint constant TYPE_BYTE_LOCATION_IN_UINT176 = 168;
 
-    function sendToVRSC(uint64 value, address sendTo, uint8 destinationType, address sendingCurrency) public 
+
+
+    function sendToVRSC(uint64 value, address sendTo, uint8 destinationType, address sendingCurrency) public view returns (VerusObjects.CReserveTransfer memory, bool)
     {
         VerusObjects.CReserveTransfer memory LPtransfer;
         bool forceNewCCE;
@@ -58,42 +62,37 @@ contract SubmitImports is VerusStorage {
             LPtransfer.feecurrencyid = VERUS; 
             LPtransfer.currencyvalue.amount = uint64(remainingLaunchFeeReserves - VerusConstants.verusTransactionFee);
             forceNewCCE = true;
+            return (LPtransfer, forceNewCCE);
+        }             
+        // If the sending currency is not DAI then the fee is 0.003 vETH
+        if (sendingCurrency == VETH) {
+            LPtransfer.fees = VerusConstants.verusvETHTransactionFee; 
+            LPtransfer.feecurrencyid = VETH;
+            LPtransfer.currencyvalue.amount = uint64(value - VerusConstants.verusvETHTransactionFee);  
+        } else if (sendingCurrency == VERUS) {
+            LPtransfer.fees = uint64(VerusConstants.VERUS_IMPORT_FEE); 
+            LPtransfer.feecurrencyid = VERUS;
+            require(value > VerusConstants.VERUS_IMPORT_FEE, "VRSC-Value-low");
+            LPtransfer.currencyvalue.amount = uint64(value - VerusConstants.VERUS_IMPORT_FEE);  
+        } else if (sendingCurrency == VERUS) {
+            LPtransfer.feecurrencyid = DAI;
+            // Get the 3 reserve values of ETH, DAI and VRSC
+            uint reserves = claimableFees[bytes32(uint256(uint160(VerusConstants.VDXF_ETH_DAI_VRSC_LAST_RESERVES)))];
+            // get specifically the vrsc reserves and multiply up
+            uint vrscRatio = VerusConstants.VERUS_IMPORT_FEE_X2 * uint64(reserves >> 128);
+            LPtransfer.fees = uint64(vrscRatio / uint(uint64(reserves >> 128)));
+
+            require(value > LPtransfer.fees, "DAI- Value-low");
+            LPtransfer.currencyvalue.amount = uint64(value - LPtransfer.fees);  
         } else {
+            revert("Invalid currency");
+        }
 
-            // If the sending currency is not DAI then the fee is 0.003 vETH
-            if (sendingCurrency == VETH) {
-                LPtransfer.fees = VerusConstants.verusvETHTransactionFee; 
-                LPtransfer.feecurrencyid = VETH;
-                LPtransfer.currencyvalue.amount = uint64(value - VerusConstants.verusvETHTransactionFee);  
-            } else if (sendingCurrency == VERUS) {
-                LPtransfer.fees = uint64(VerusConstants.VERUS_IMPORT_FEE); 
-                LPtransfer.feecurrencyid = VERUS;
-                require(value > VerusConstants.VERUS_IMPORT_FEE, "VRSC-Value-low");
-                LPtransfer.currencyvalue.amount = uint64(value - VerusConstants.VERUS_IMPORT_FEE);  
-            } else if (sendingCurrency == VERUS) {
-                LPtransfer.feecurrencyid = DAI;
-                // Get the 3 reserve values of ETH, DAI and VRSC
-                uint reserves = claimableFees[bytes32(uint256(uint160(VerusConstants.VDXF_ETH_DAI_VRSC_LAST_RESERVES)))];
-                // get specifically the vrsc reserves and multiply up
-                uint vrscRatio = VerusConstants.VERUS_IMPORT_FEE_X2 * uint64(reserves >> 128);
-                LPtransfer.fees = uint64(vrscRatio / uint(uint64(reserves >> 128)));
+        LPtransfer.currencyvalue.currency = sendingCurrency; // was VETH;
+        forceNewCCE = false;
+        
 
-                require(value > LPtransfer.fees, "DAI- Value-low");
-                LPtransfer.currencyvalue.amount = uint64(value - LPtransfer.fees);  
-            } else {
-                revert("Invalid currency");
-            }
-
-            LPtransfer.currencyvalue.currency = sendingCurrency; // was VETH;
-            forceNewCCE = false;
-        } 
-
-        // When the bridge launches to make sure a fresh block with no pending vrsc transfers is used as not to mix destination currencies.
-        address verusBridgeAddress = contracts[uint(VerusConstants.ContractType.CreateExport)];
-
-        (bool success,) = verusBridgeAddress.delegatecall(abi.encodeWithSignature("externalCreateExportCall(bytes)", abi.encode(LPtransfer, forceNewCCE)));
-        require(success);
-       // _createExports(LPtransfer, true, forceNewCCE);
+        return (LPtransfer, forceNewCCE);
 
     }
 
@@ -137,7 +136,7 @@ contract SubmitImports is VerusStorage {
         (success, returnBytes) = verusProofAddress.delegatecall(abi.encodeWithSignature("proveImports(bytes)", abi.encode(_import, hashOfTransfers)));
         require(success);
         uint176 exporter;
-        (fees, CCEHeightsAndnIndex, exporter) = abi.decode(returnBytes, (uint64, uint128, uint176));
+        (CCEHeightsAndnIndex, exporter) = abi.decode(returnBytes, (uint128, uint176));
 
         isLastCCEInOrder(uint32(CCEHeightsAndnIndex));
    
@@ -153,11 +152,12 @@ contract SubmitImports is VerusStorage {
 
         address verusTokenManagerAddress = contracts[uint(VerusConstants.ContractType.TokenManager)];
 
-        (success, returnBytes) = verusTokenManagerAddress.delegatecall(abi.encodeWithSignature("processTransactions(bytes,uint8)", _import.serializedTransfers, uint8(CCEHeightsAndnIndex >> 96)));
+        (success, returnBytes) = verusTokenManagerAddress.delegatecall(abi.encodeWithSelector(TokenManager.processTransactions.selector, _import.serializedTransfers, uint8(CCEHeightsAndnIndex >> 96)));
         require(success);
         
+        (returnBytes, fees) = abi.decode(returnBytes, (bytes, uint64));
         if (returnBytes.length > 0) {
-            refund(abi.decode(returnBytes, (bytes)));
+            refund(returnBytes);
         }
 
         return (fees, exporter);
@@ -290,20 +290,8 @@ contract SubmitImports is VerusStorage {
     function claimfees() public {
 
         uint256 claimAmount;
-        uint256 claimant;
-        claimant = uint256(uint160(msg.sender));
 
-        // Check claimant is type eth with length 20 and has fees to be got.
-        claimant |= (uint256(0x0c14) << VerusConstants.UINT160_BITS_SIZE);
-        claimAmount = claimableFees[bytes32(claimant)];
-
-        if(claimAmount > 0)
-        {
-            //stored as SATS convert to WEI
-            claimableFees[bytes32(claimant)] = 0;
-            payable(msg.sender).transfer(claimAmount * VerusConstants.SATS_TO_WEI_STD);
-        }
-        else if ((claimableFees[bytes32(uint256(uint160(VerusConstants.VDXF_SYSTEM_NOTARIZATION_NOTARYFEEPOOL)))] *  VerusConstants.SATS_TO_WEI_STD) 
+        if ((claimableFees[bytes32(uint256(uint160(VerusConstants.VDXF_SYSTEM_NOTARIZATION_NOTARYFEEPOOL)))] *  VerusConstants.SATS_TO_WEI_STD) 
                     > (tx.gasprice * VerusConstants.SEND_NOTARY_PAYMENT_FEE))
         {
             bool notaryFound = false;
@@ -379,14 +367,18 @@ contract SubmitImports is VerusStorage {
                     require (msg.value > VerusConstants.transactionFee, "ETH-Needed");
 
                 }
-                sendToVRSC(refundAmount, address(uint160(verusAddress)), uint8(verusAddress >> TYPE_BYTE_LOCATION_IN_UINT176), currency);
+                (VerusObjects.CReserveTransfer memory LPtransfer,) = sendToVRSC(refundAmount, address(uint160(verusAddress)), uint8(verusAddress >> TYPE_BYTE_LOCATION_IN_UINT176), currency);
+                (bool success, ) = contracts[uint(VerusConstants.ContractType.CreateExport)].delegatecall(abi.encodeWithSelector(CreateExports.externalCreateExportCallPayable.selector, abi.encode(LPtransfer, false)));
+                require(success);
             }
         }
         else if (uint64(claimableFees[bytes32(uint256(verusAddress))]) > 0)
         {
             refundAmount = uint64(claimableFees[bytes32(uint256(verusAddress))]);
             delete  claimableFees[bytes32(uint256(verusAddress))];
-            sendToVRSC(refundAmount, address(uint160(verusAddress)), uint8(verusAddress >> TYPE_BYTE_LOCATION_IN_UINT176), VETH);
+             (VerusObjects.CReserveTransfer memory LPtransfer,)  = sendToVRSC(refundAmount, address(uint160(verusAddress)), uint8(verusAddress >> TYPE_BYTE_LOCATION_IN_UINT176), VETH);
+             (bool success, ) = contracts[uint(VerusConstants.ContractType.CreateExport)].delegatecall(abi.encodeWithSelector(CreateExports.externalCreateExportCallPayable.selector, abi.encode(LPtransfer, false)));
+             require(success);
         }
         else
         {

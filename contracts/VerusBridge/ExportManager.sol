@@ -35,7 +35,7 @@ contract ExportManager is VerusStorage  {
 
     function checkExport(VerusObjects.CReserveTransfer memory transfer) external payable returns (uint256 fees){
        
-        uint256 requiredFees = VerusConstants.transactionFee;  //0.003 eth in WEI (To vrsc)
+        uint256 requiredFees = VerusConstants.transactionFee;  //0.003 eth in WEI (To vrsc) NOTE: convert to VRSC from ETH.
         int64 bounceBackFee;
         int64 transferFee;
         bytes memory serializedDest;
@@ -51,7 +51,8 @@ contract ExportManager is VerusStorage  {
             destAddressID := mload(add(serializedDest, UINT160_SIZE))
         }
 
-        if (verusToERC20mapping[transfer.currencyvalue.currency].flags & (VerusConstants.MAPPING_ERC721_NFT_DEFINITION | VerusConstants.MAPPING_ERC1155_NFT_DEFINITION | VerusConstants.MAPPING_ERC1155_ERC_DEFINITION) != 0) 
+        if (verusToERC20mapping[transfer.currencyvalue.currency].flags & (VerusConstants.MAPPING_ERC721_NFT_DEFINITION 
+            | VerusConstants.MAPPING_ERC1155_NFT_DEFINITION | VerusConstants.MAPPING_ERC1155_ERC_DEFINITION) != 0) 
         {
             require (transfer.flags == VerusConstants.VALID, "Invalid flags for NFT transfer");
             require (transfer.currencyvalue.amount == 1 
@@ -108,6 +109,7 @@ contract ExportManager is VerusStorage  {
                 require (gatewayCode == address(0), "GatewayCODE must be empty");
 
                 bounceBackFee = reverse(uint64(bounceBackFee));
+                //TODO: Change bounce back fee to be the calculated fee.
                 require (bounceBackFee >= int64(VerusConstants.verusvETHReturnFee), "Return fee not >= 0.01ETH");
 
                 transferFee += bounceBackFee;
@@ -187,7 +189,9 @@ contract ExportManager is VerusStorage  {
 
         if (transfer.flags == VerusConstants.VALID && transfer.secondreserveid == address(0))
         {
-            require (transfer.destcurrencyid == (bridgeConverterActive ? BRIDGE : VERUS),  
+            require ((transfer.destcurrencyid == (bridgeConverterActive ? BRIDGE : VERUS) && 
+                     (transfer.destination.destinationtype == VerusConstants.DEST_ID ||
+                      transfer.destination.destinationtype == VerusConstants.DEST_PKH)),  
                         "Invalid desttype");
         }
         else if (transfer.flags == (VerusConstants.VALID + VerusConstants.CONVERT + VerusConstants.RESERVE_TO_RESERVE))

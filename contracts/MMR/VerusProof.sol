@@ -196,7 +196,6 @@ contract VerusProof is VerusStorage  {
         bytes32 hashReserveTransfers;
         address systemSourceID;
         address destSystemID;
-        uint64 rewardFees;
         uint32 tempRegister;
         uint8 tmpuint8;
         uint128 packedRegister;
@@ -246,9 +245,8 @@ contract VerusProof is VerusStorage  {
         {
             assembly {
                 nextOffset := add(add(nextOffset, CCE_DEST_CURRENCY_DELTA), 8)  // move 20 + 8 bytes for (address + 64bit)
-                rewardFees := mload(add(firstObj, nextOffset))    
             }
-                rewardFees = VerusSerializer(contracts[uint(VerusConstants.ContractType.VerusSerializer)]).serializeUint64(rewardFees);
+
         }
 
         if (!(hashedTransfers == hashReserveTransfers &&
@@ -258,7 +256,7 @@ contract VerusProof is VerusStorage  {
             revert("CCE information does not checkout");
         }
 
-        tmpPacked = uint256(packedRegister) | uint256(rewardFees) << 128;
+        tmpPacked = uint256(packedRegister);
         return (tmpPacked, exporter); 
 
     }
@@ -313,19 +311,18 @@ contract VerusProof is VerusStorage  {
         return txRoot;
     }
     
-    function proveImports(bytes calldata dataIn ) external view returns(uint64, uint128, uint176){
+    function proveImports(bytes calldata dataIn ) external view returns(uint128, uint176){
         
         (VerusObjects.CReserveTransferImport memory _import, bytes32 hashOfTransfers) = abi.decode(dataIn, (VerusObjects.CReserveTransferImport, bytes32));
         bytes32 confirmedStateRoot;
         bytes32 retStateRoot;
         uint256 tmp;
         uint176 exporter;
-        uint64 fees;
         uint128 heightsAndTXNum;
 
         (tmp, exporter) = checkExportAndTransfers(_import, hashOfTransfers);
 
-        fees = uint64(tmp >> 128);
+
         heightsAndTXNum = uint128(tmp);
         
         bytes32 txRoot = proveComponents(_import);
@@ -345,7 +342,7 @@ contract VerusProof is VerusStorage  {
             revert("Stateroot does not match");
         }
         //truncate to only return heights as, contract will revert if issue with proofs.
-        return (fees, heightsAndTXNum, exporter);
+        return (heightsAndTXNum, exporter);
  
     }
 

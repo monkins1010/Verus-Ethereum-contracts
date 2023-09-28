@@ -12,6 +12,7 @@ import "../VerusBridge/CreateExports.sol";
 import "../VerusBridge/UpgradeManager.sol";
 import "../Libraries/VerusObjectsCommon.sol";
 import "@openzeppelin/contracts/token/ERC721/IERC721.sol";
+import "@openzeppelin/contracts/token/ERC1155/IERC1155.sol";
 import "../Storage/StorageMaster.sol";
 import "./VerusCrossChainExport.sol";
 
@@ -119,7 +120,7 @@ contract TokenManager is VerusStorage {
     }
 
     function processTransactions(bytes calldata serializedTransfers, uint8 numberOfTransfers) 
-                external returns (bytes memory refundsData)
+                external returns (bytes memory refundsData, uint64 fees)
     {
 
         VerusObjects.PackedSend[] memory transfers;
@@ -127,15 +128,18 @@ contract TokenManager is VerusStorage {
         uint176[] memory refundAddresses;
         uint32 counter;
         (transfers, launchTxs, counter, refundAddresses) = VerusSerializer(contracts[uint(VerusConstants.ContractType.VerusSerializer)]).deserializeTransfers(serializedTransfers, numberOfTransfers);
-
+        
+        // Only two currency launches are allowed per CCE, so use a third one to store fees, as function is to large.
+        fees = uint64(launchTxs[2].tokenID);
         refundsData = importTransactions(transfers, refundAddresses);
 
+        // 32bit counter is split into two 16bit values, the first 16bits is the number of transactions, the second 16bits is the number of currency launches
         if (uint8(counter >> 24) > 0) {
             launchToken(launchTxs);
         }
 
         //return and refund any failed transactions
-        return (refundsData);
+        return (refundsData, fees);
     }
 
     function importTransactions(VerusObjects.PackedSend[] memory trans, uint176[] memory refundAddresses) private returns (bytes memory refundsData){
