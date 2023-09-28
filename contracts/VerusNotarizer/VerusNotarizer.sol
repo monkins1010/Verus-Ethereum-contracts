@@ -123,6 +123,11 @@ contract VerusNotarizer is VerusStorage {
         (bytes32 launchedAndProposer, bytes32 prevnotarizationtxid, bytes32 hashprevnotarization, bytes32 stateRoot, bytes32 blockHash, 
                 uint32 verusProofheight) = abi.decode(returnBytes, (bytes32, bytes32, bytes32, bytes32, bytes32, uint32));
 
+        voutAndHeight |= uint64(verusProofheight) << 32; // pack two 32bit numbers into one uint64
+        launchedAndProposer |= bytes32(uint256(voutAndHeight) << VerusConstants.NOTARIZATION_VOUT_NUM_INDEX); // Also pack in the voutnum at the end of the uint256
+
+        setNotarizationProofRoot(blakeNotarizationHash, hashprevnotarization, txid, prevnotarizationtxid, launchedAndProposer, stateRoot, blockHash);
+
         // If the bridge is active and VRSC remaining has not been sent
         if (remainingLaunchFeeReserves != 0 && bridgeConverterActive) { 
 
@@ -137,12 +142,6 @@ contract VerusNotarizer is VerusStorage {
                 remainingLaunchFeeReserves = 0;
             }
         }
-
-        voutAndHeight |= uint64(verusProofheight) << 32; // pack two 32bit numbers into one uint64
-        launchedAndProposer |= bytes32(uint256(voutAndHeight) << VerusConstants.NOTARIZATION_VOUT_NUM_INDEX); // Also pack in the voutnum at the end of the uint256
-
-        setNotarizationProofRoot(blakeNotarizationHash, hashprevnotarization, txid, prevnotarizationtxid, launchedAndProposer, stateRoot, blockHash);
-
         emit NewNotarization(blakeNotarizationHash);
     }
 
@@ -211,7 +210,6 @@ contract VerusNotarizer is VerusStorage {
     function setNotarizationProofRoot(bytes32 hashedNotarization, 
             bytes32 hashprevnotarization, bytes32 txidHash, bytes32 hashprevtxid, bytes32 proposer, bytes32 stateRoot, bytes32 blockHash) private 
     {
-        
         int forkIdx = -1;
         int forkPos;
         
