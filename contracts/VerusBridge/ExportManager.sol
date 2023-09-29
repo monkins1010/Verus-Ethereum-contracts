@@ -161,7 +161,7 @@ contract ExportManager is VerusStorage  {
             {
                 revert ("ETH Fee to low (token)");
             }
-            claimableFees[bytes32(uint256(uint160(VerusConstants.VDXF_SYSTEM_NOTARIZATION_NOTARYFEEPOOL)))]  += VerusConstants.verusvETHTransactionFee;
+            claimableFees[VerusConstants.VDXF_SYSTEM_NOTARIZATION_NOTARYFEEPOOL]  += VerusConstants.verusvETHTransactionFee;
         } 
         return requiredFees;
     }

@@ -37,6 +37,7 @@ contract NotarizationSerializer is VerusStorage {
     uint8 constant REQUIREDAMOUNTOFVOTES = 100;
     uint8 constant WINNINGAMOUNT = 51;
     uint8 constant UINT64_BYTES_SIZE = 8;
+    uint8 constant PROOF_TYPE_ETH = 2;
 
     function readVarint(bytes memory buf, uint32 idx) public pure returns (uint32 v, uint32 retidx) {
 
@@ -57,7 +58,6 @@ contract NotarizationSerializer is VerusStorage {
                                                                                     bytes32 prevnotarizationtxid, 
                                                                                     bytes32 hashprevcrossnotarization, 
                                                                                     bytes32 stateRoot, 
-                                                                                    bytes32 blockHash, 
                                                                                     uint32 height) {
         
         uint32 nextOffset;
@@ -131,7 +131,7 @@ contract NotarizationSerializer is VerusStorage {
         nextOffset++; //move forwards to read le
         readerLen = readCompactSizeLE(notarization, nextOffset);    // get the length of proofroot array
 
-        (stateRoot, blockHash, height) = deserializeProofRoots(notarization, uint32(readerLen.value), nextOffset);
+        (stateRoot, height) = deserializeProofRoots(notarization, uint32(readerLen.value), nextOffset);
     }
 
     function deserializeCoinbaseCurrencyState(bytes memory notarization, uint32 nextOffset) private returns (uint16, uint32)
@@ -244,14 +244,13 @@ contract NotarizationSerializer is VerusStorage {
         return ethToDaiRatios;  
     }
 
-    function deserializeProofRoots (bytes memory notarization, uint32 size, uint32 nextOffset) private view returns (bytes32 stateRoot, bytes32 blockHash, uint32 height)
+    function deserializeProofRoots (bytes memory notarization, uint32 size, uint32 nextOffset) private view returns (bytes32 stateRoot, uint32 height)
     {
         for (uint i = 0; i < size; i++)
         {
             uint16 proofType;
             address systemID;
             bytes32 tempStateRoot;
-            bytes32 tempBlockHash;
             uint32 tempHeight;
 
             assembly {
@@ -265,19 +264,17 @@ contract NotarizationSerializer is VerusStorage {
                 nextOffset := add(nextOffset, BYTES32_LENGTH) // move to read stateroot
                 tempStateRoot := mload(add(notarization, nextOffset))  
                 nextOffset := add(nextOffset, BYTES32_LENGTH) // move to read blockhash
-                tempBlockHash := mload(add(notarization, nextOffset))  
                 nextOffset := add(nextOffset, BYTES32_LENGTH) // move to power
             }
             
             if(systemID == VERUS)
             {
                 stateRoot = tempStateRoot;
-                blockHash = tempBlockHash;
                 height = serializeUint32(tempHeight); //swapendian
             }
 
             //swap 16bit endian
-            if(((proofType >> 8) | (proofType << 8)) == 2){ //IF TYPE ETHEREUM TODO: add constant
+            if(((proofType >> 8) | (proofType << 8)) == PROOF_TYPE_ETH){
                 assembly {
                     nextOffset := add(nextOffset, 8) // move to gasprice
                 }
@@ -285,21 +282,27 @@ contract NotarizationSerializer is VerusStorage {
         }
  
     }
-
     function readVarintStruct(bytes memory buf, uint idx) public pure returns (VerusObjectsCommon.UintReader memory) {
-
-        uint8 b; // store current byte content
-        uint64 v; 
-
-        for (uint i = 0; i < 10; i++) {
-            b = uint8(buf[i+idx]);
-            v = (v << 7) | b & 0x7F;
-            if (b & 0x80 == 0x80)
-                v++;
-            else
-            return VerusObjectsCommon.UintReader(uint32(idx + i + 1), v);
+        uint8 b;
+        uint64 v;
+        uint retidx;
+    
+        assembly {  ///assemmbly  2267 GAS
+            let end := add(idx, 10)
+            let i := idx
+            retidx := add(idx, 1)
+            for {} lt(i, end) {} {
+                b := mload(add(buf, retidx))
+                i := add(i, 1)
+                v := or(shl(7, v), and(b, 0x7f))
+                if iszero(eq(and(b, 0x80), 0x80)) {
+                    break
+                }
+                v := add(v, 1)
+                retidx := add(retidx, 1)
+            }
         }
-        revert(); // i=9, invalid varint stream
+        return VerusObjectsCommon.UintReader(uint32(retidx), v);
     }
     
     function processAux (bytes memory firstObj, uint32 nextOffset, uint32 NotarizationFlags) private returns (uint32)

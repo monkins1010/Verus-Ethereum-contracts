@@ -16,6 +16,8 @@ contract VerusProof is VerusStorage  {
     address immutable VETH;
     address immutable BRIDGE;
     address immutable VERUS;
+    uint constant FORKS_DATA_OFFSET_FOR_HEIGHT = 224;
+    uint constant FORKS_PROPOSER_SLOT = 2;
 
     constructor(address vETH, address Bridge, address Verus){
 
@@ -348,39 +350,48 @@ contract VerusProof is VerusStorage  {
 
     function getLastConfirmedVRSCStateRoot() public view returns (bytes32) {
 
-        bytes32 stateRoot;
-        bytes32 slotHash;
         bytes storage tempArray = bestForks[0];
-        uint32 nextOffset;
-
-        if (tempArray.length > 0)
+        if (tempArray.length == 0)
         {
-            bytes32 slot;
-            assembly {
-                        mstore(add(slot, 32),tempArray.slot)
-                        slotHash := keccak256(add(slot, 32), 32)
-                        nextOffset := add(nextOffset, 1)  
-                        nextOffset := add(nextOffset, 1)  
-                        stateRoot := sload(add(slotHash, nextOffset))
-            }
+            return bytes32(0);
+        }
+
+        bytes32 stateRoot;
+        uint32 height;
+        bytes32 slot;
+
+        assembly {
+                    mstore(add(slot, 32),tempArray.slot)
+                    height := shr(FORKS_DATA_OFFSET_FOR_HEIGHT, sload(add(keccak256(add(slot, 32), 32), FORKS_PROPOSER_SLOT)))
+        }
+        tempArray = proofs[bytes32(uint256(height))];
+
+        assembly {
+                mstore(add(slot, 32),tempArray.slot)
+                stateRoot := sload(add(keccak256(add(slot, 32), 32), 0))
         }
 
         return stateRoot;
     }
 
-    function readVarint(bytes memory buf, uint32 idx) public pure returns (uint32 v, uint32 retidx) {
-
-        uint8 b; // store current byte content
-
-        for (uint32 i=0; i<10; i++) {
-            b = uint8(buf[i+idx]);
-            v = (v << 7) | b & 0x7F;
-            if (b & 0x80 == 0x80)
-                v++;
-            else
-            return (v, idx + i + 1);
+    function readVarint(bytes memory buf, uint idx) public pure returns (uint32 v, uint32 retidx) {
+        uint8 b;
+    
+        assembly {  ///assemmbly  2267 GAS
+            let end := add(idx, 10)
+            let i := idx
+            retidx := add(idx, 1)
+            for {} lt(i, end) {} {
+                b := mload(add(buf, retidx))
+                i := add(i, 1)
+                v := or(shl(7, v), and(b, 0x7f))
+                if iszero(eq(and(b, 0x80), 0x80)) {
+                    break
+                }
+                v := add(v, 1)
+                retidx := add(retidx, 1)
+            }
         }
-        revert(); // i=10, invalid varint stream
     }
 
     function getTokenList(uint256 start, uint256 end) external view returns(VerusObjects.setupToken[] memory ) {
