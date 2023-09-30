@@ -130,7 +130,7 @@ contract VerusNotarizer is VerusStorage {
 
             if (remainingLaunchFeeReserves > (VerusConstants.verusTransactionFee * 2)) {
                 bool success2; bytes memory retData;
-                (success2, retData) = contracts[uint(VerusConstants.ContractType.SubmitImports)].delegatecall(abi.encodeWithSelector(SubmitImports.sendToVRSC.selector, 0, address(0), VerusConstants.DEST_PKH, VERUS));
+                (success2, retData) = contracts[uint(VerusConstants.ContractType.SubmitImports)].delegatecall(abi.encodeWithSelector(SubmitImports.sendBurnBackToVerus.selector, 0, VERUS, 0));
                 require(success2);
                 (VerusObjects.CReserveTransfer memory LPtransfer,) = abi.decode(retData, (VerusObjects.CReserveTransfer, bool)); 
 

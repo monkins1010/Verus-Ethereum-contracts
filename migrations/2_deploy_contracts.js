@@ -24,6 +24,7 @@ const { returnConstructorCurrencies,
     arrayofcurrencies,
     getNotarizerIDS,
     getDAI,
+    getMKR,
     getDSRMANAGER,
     getDAIERC20Address } = setup;
     
@@ -33,6 +34,7 @@ module.exports = async function(deployer) {
     
     const currencyConstants = returnConstructorCurrencies(isTestnet);
     const DAI = getDAI(isTestnet);
+    const MKR = getMKR(isTestnet);
     const { DSRPOT, DSRJOIN } = getDSRMANAGER(isTestnet);
     let DAIERC20 = getDAIERC20Address(isTestnet);
     const launchCurrencies = await getCurrencies(deployer);
@@ -51,7 +53,7 @@ module.exports = async function(deployer) {
     await deployer.deploy(VerusSerializer, ...currencyConstants);
     const serializerInst = await VerusSerializer.deployed();
     
-    await deployer.deploy(NotarizationSerializer, ...currencyConstants, DAI);
+    await deployer.deploy(NotarizationSerializer, ...currencyConstants, DAI, MKR);
     const notarizationSerializerInst = await NotarizationSerializer.deployed();
     
     await deployer.deploy(VerusTokenManager, ...currencyConstants, DAIERC20)
@@ -77,7 +79,7 @@ module.exports = async function(deployer) {
     await deployer.deploy(CreateExports, ...currencyConstants, DAI, DAIERC20);
     const CreateExportsInst = await CreateExports.deployed();
     
-    await deployer.deploy(SubmitImports, ...currencyConstants, DAI);
+    await deployer.deploy(SubmitImports, ...currencyConstants, DAI, MKR);
     const SubmitImportsInst = await SubmitImports.deployed();
     
     await deployer.deploy(VerusNotaryTools);

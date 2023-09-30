@@ -51,7 +51,7 @@ const getNotarizerIDS = (network) => {
     }
 }
 
-// Verus ID's in uint160 format
+// Verus ID's in uint160 format and ERC20s.
 const id = {  
     mainnet: {
         VETH: "0x454CB83913D688795E237837d30258d11ea7c752",
@@ -90,6 +90,10 @@ const returnConstructorCurrencies = (isTestnet = false) => {
 
 const getDAI = (isTestnet = false) => {
     return isTestnet ? id.testnet.DAI : id.mainnet.DAI;
+}
+
+const getMKR = (isTestnet = false) => {
+    return isTestnet ? id.testnet.MKR : id.mainnet.MKR;
 }
 
 const getDSRMANAGER = (isTestnet = false) => {
@@ -162,5 +166,6 @@ exports.getNotarizerIDS = getNotarizerIDS;
 exports.arrayofcurrencies = returnSetupCurrencies;
 exports.returnConstructorCurrencies = returnConstructorCurrencies;
 exports.getDAI = getDAI;
+exports.getMKR = getMKR;
 exports.getDSRMANAGER = getDSRMANAGER;  
 exports.getDAIERC20Address = getDAIERC20Address;

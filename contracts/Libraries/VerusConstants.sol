@@ -34,9 +34,11 @@ library VerusConstants {
     address constant VDXF_ETH_DAI_VRSC_LAST_RESERVES = address(0x1b83EBE56D691b909cFb0dFc291E5A0EDAAfc64C);
     bytes32 constant VDXFID_DAI_DSR_SUPPLY =    0x00000000000000000000000084206E821f7bB4c6F390299c1367600F608c28C8;
     bytes32 constant SUBMIT_IMPORTS_LAST_TXID = 0x00000000000000000000000037256eef64a0bf17344bcb0cbfcde4bea6746347;
+    bytes32 constant VDXFID_DAI_BURNBACK_TIME_THRESHOLD = 0x0000000000000000000000007d6505549c434ef651d799ede5f0d3f698464fcf;
     uint256 constant DAI_BURNBACK_THRESHOLD = 1000000000000000000000; //1000 DAI 18 decimals
     uint256 constant DAI_BURNBACK_TRANSACTION_GAS_AMOUNT = 780000;
     uint256 constant DAI_BURNBACK_MAX_FEE_THRESHOLD = 40000000000;   //400 DAI in verus 8 decimals
+    uint256 constant SECONDS_IN_DAY = 86400;
 
     uint32 constant INVALID_FLAGS = 0xffffffff - (VALID + CONVERT + RESERVE_TO_RESERVE + IMPORT_TO_SOURCE);
 
@@ -85,8 +87,8 @@ library VerusConstants {
     uint8 constant NUMBER_OF_CONTRACTS = 11;
     uint64 constant MIN_VRSC_FEE = 4000000; //0.04 VRSC 8 decimals
     uint64 constant MAX_VERUS_TRANSFER = 1000000000000000000; //10,000,000,000.00000000
-    uint constant VERUS_IMPORT_FEE = 2000000; //This is 2 x the fee 0.04 VRSC 8 decimals
-    uint constant VERUS_IMPORT_FEE_X2 = 4000000; //This is 2 x the fee 0.04 VRSC 8 decimals
+    uint constant VERUS_IMPORT_FEE = 2000000; //This is 0.02 VRSC 8 decimals
+    uint constant VERUS_IMPORT_FEE_X2 = 4000000; //This is 2 x the fee 0.02 VRSC 8 decimals
     enum ContractType {
         TokenManager,
         VerusSerializer,

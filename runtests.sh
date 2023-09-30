@@ -1,8 +1,7 @@
 #!/bin/bash
-source .env
 
 # Start ganache-cli in the background 
-ganache-cli -l 1500000000 ---account "$PRIVATE_KEY, 100000000000000000000" -p 8545 > "ganache.log" 2>&1 &
+ganache-cli -l 1500000000 -p 8545 > "ganache.log" 2>&1 &
 
 # Capture the process ID of ganache-cli
 ganache_pid=$!
