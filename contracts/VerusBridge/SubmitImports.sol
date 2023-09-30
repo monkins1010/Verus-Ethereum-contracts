@@ -347,6 +347,8 @@ contract SubmitImports is VerusStorage {
                     if (msg.value < (fees * VerusConstants.SATS_TO_WEI_STD)) {
                         return fees;
                     }
+                    //may have put too much in, so update fees for correct accounting.
+                    fees = uint64(msg.value / VerusConstants.SATS_TO_WEI_STD);
                     feeCurrency = VETH;
                 } else {
                    fees = getImportFeeForReserveTransfer(currency);
@@ -378,6 +380,7 @@ contract SubmitImports is VerusStorage {
 
                     for (uint i = 0; i < notaries.length; i++)
                     {
+                        // TODO: Possible to upgrade to send ERC1155 and ERC721 NFTs out too.
                         if (notaryAddressMapping[notaries[i]].state == VerusConstants.NOTARY_VALID)
                         {
                             refundAmount -= claimShare;

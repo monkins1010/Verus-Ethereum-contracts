@@ -236,7 +236,7 @@ contract CreateExports is VerusStorage {
         bool success;
         bytes memory retData;
         
-        // NOTE: Accrued intrest is truncated from 18 decimals to 8, to be compatible with verus SATS.
+        // NOTE: Accrued interest is truncated from 18 decimals to 8, to be compatible with verus SATS.
         address crossChainExportAddress = contracts[uint(VerusConstants.ContractType.VerusCrossChainExport)];
         (success, retData) = crossChainExportAddress.delegatecall(abi.encodeWithSelector(VerusCrossChainExport.daiBalance.selector));
         require(success);
@@ -247,10 +247,10 @@ contract CreateExports is VerusStorage {
 
         uint256 bridgeReserveValues = daiTotals[bytes32(uint256(uint160(VerusConstants.VDXF_ETH_DAI_VRSC_LAST_RESERVES)))];
 
-        // Multiply the cost of the Transaction to send DAI to Verus in vETH (8 decimals) by the amount of resevers in DAI.
+        // Multiply the cost of the Transaction to send DAI to Verus in vETH (8 decimals) by the amount of reservers in DAI.
         uint daiCalculation = (tx.gasprice * VerusConstants.DAI_BURNBACK_TRANSACTION_GAS_AMOUNT)/ VerusConstants.SATS_TO_WEI_STD * (uint64(bridgeReserveValues >> (uint(Currency.DAI) << 6)));
 
-        // Divide the previous value by the amount of reserves in vETH (8 decimals) to get the price of the ETH trasnaction in DAI.
+        // Divide the previous value by the amount of reserves in vETH (8 decimals) to get the price of the ETH transaction in DAI.
         uint64 DAIReimburseAmount = uint64(daiCalculation / uint64(bridgeReserveValues >> (uint(Currency.VETH) << 6)));
 
         require (DAIReimburseAmount < VerusConstants.DAI_BURNBACK_MAX_FEE_THRESHOLD &&
@@ -261,12 +261,12 @@ contract CreateExports is VerusStorage {
         //truncate DAI to 8 DECIMALS of precision from 18
         truncatedInterest = uint64(interestAccrued / VerusConstants.SATS_TO_WEI_STD);
 
-        // Recalculate the intrest accrued by subtracting the amount of DAI to be reimbursed.
+        // Recalculate the interest accrued by subtracting the amount of DAI to be reimbursed.
         interestAccrued = (truncatedInterest * VerusConstants.SATS_TO_WEI_STD) - DAIReimburseAmount;
         
         // The interest accrued must be a significant amount to be worth sending back to Verus.
         if (interestAccrued > VerusConstants.DAI_BURNBACK_THRESHOLD) {
-            // Increase the supply of DAI by the amount of intrest accrued - minus the payback fee.
+            // Increase the supply of DAI by the amount of interest accrued - minus the payback fee.
             daiTotals[VerusConstants.VDXF_SYSTEM_DAI_HOLDINGS] += interestAccrued;
 
             uint64 fees; 
