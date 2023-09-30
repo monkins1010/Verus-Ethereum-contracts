@@ -26,22 +26,14 @@ contract VerusNotarizer is VerusStorage {
         VERUS = Verus;
     }
         
-    uint8 constant FLAG_FRACTIONAL = 1;
-    uint8 constant FLAG_REFUNDING = 4;
-    uint8 constant FLAG_LAUNCHCONFIRMED = 0x10;
-    uint8 constant FLAG_LAUNCHCOMPLETEMARKER = 0x20;
-    uint8 constant OFFSET_FOR_HEIGHT = 224;
-    uint8 constant TYPE_REVOKE = 2;
-    uint8 constant TYPE_RECOVER = 3;
-    uint8 constant NUM_ADDRESSES_FOR_REVOKE = 2;
-    uint8 constant COMPLETE = 2;
-    uint8 constant ERROR = 4;
-    uint32 constant CONFIRMED_PROPOSER = 128;
-    uint32 constant PROOF_HEIGHT_LOCATION = 68;
+    uint8 constant FORKS_DATA_OFFSET_FOR_HEIGHT = 224;
 
+    uint32 constant FORKS_DATA_CONFIRMED_PROPOSER = 96;
+    uint32 constant PROOF_HEIGHT_LOCATION = 68 - 32;  //NOTE: removed blockhash from proofroot, so this is now 68 bytes minus 32 bytes for the blockhash
+    uint32 constant LENGTH_OF_FORK_DATA = 96;
 
     // notarization vdxf key
-    bytes20 constant vdxfcode = bytes20(0x367Eaadd291E1976ABc446A143f83c2D4D2C5a84);
+    bytes22 constant vdxfcodePlusVersion = bytes22(0x01367Eaadd291E1976ABc446A143f83c2D4D2C5a8401);
     event NewNotarization (bytes32);
     using VerusBlake2b for bytes;
     
@@ -71,6 +63,15 @@ contract VerusNotarizer is VerusStorage {
         keccakNotarizationHash = keccak256(serializedNotarization);
 
         uint i;
+        bytes memory tempBytes;
+
+        tempBytes =  abi.encodePacked(
+                    vdxfcodePlusVersion,
+                    txidHash,
+                    VERUS,
+                    serializeUint32(blockheights[i]),
+                    notaryAddresses[i], 
+                    keccakNotarizationHash);
 
         for(; i < notaryAddresses.length; i++)
         {
@@ -79,17 +80,13 @@ contract VerusNotarizer is VerusStorage {
             }
             
             bytes32 hashedNotarizationByID;
-            // hash the notarizations with the vdxf key, system, height & NotaryID
-            hashedNotarizationByID = keccak256(
-                abi.encodePacked(
-                    uint8(1),
-                    vdxfcode,
-                    uint8(1),
-                    txidHash,
-                    VERUS,
-                    serializeUint32(blockheights[i]),
-                    notaryAddresses[i], 
-                    keccakNotarizationHash));
+            // hash the notarizations with the vdxf key, system, height & NotaryID. the address is masked in 98 bytes in .
+            assembly {
+                mstore(add(tempBytes, 98), or(and(mload(add(tempBytes, 98)), shl(160, 0xffffffffffffffffffffffff)), mload(add(notaryAddresses, mul(add(i,1), 32)))))
+                hashedNotarizationByID := keccak256(add(tempBytes, 0x20), mload(tempBytes))
+            }
+
+           // hashedNotarizationByID = keccak256(tempBytes);
 
             if (ecrecover(hashedNotarizationByID, _vs[i]-4, _rs[i], _ss[i]) != notaryAddressMapping[notaryAddresses[i]].main)
             {
@@ -120,13 +117,13 @@ contract VerusNotarizer is VerusStorage {
         (bool success, bytes memory returnBytes) = notarizationSerializerAddress.delegatecall(abi.encodeWithSignature("deserializeNotarization(bytes)", serializedNotarization));
         require(success);
 
-        (bytes32 launchedAndProposer, bytes32 prevnotarizationtxid, bytes32 hashprevnotarization, bytes32 stateRoot, bytes32 blockHash, 
-                uint32 verusProofheight) = abi.decode(returnBytes, (bytes32, bytes32, bytes32, bytes32, bytes32, uint32));
+        (bytes32 launchedAndProposer, bytes32 prevnotarizationtxid, bytes32 hashprevnotarization, bytes32 stateRoot, 
+                uint32 verusProofheight) = abi.decode(returnBytes, (bytes32, bytes32, bytes32, bytes32, uint32));
 
         voutAndHeight |= uint64(verusProofheight) << 32; // pack two 32bit numbers into one uint64
         launchedAndProposer |= bytes32(uint256(voutAndHeight) << VerusConstants.NOTARIZATION_VOUT_NUM_INDEX); // Also pack in the voutnum at the end of the uint256
 
-        setNotarizationProofRoot(blakeNotarizationHash, hashprevnotarization, txid, prevnotarizationtxid, launchedAndProposer, stateRoot, blockHash);
+        setNotarizationProofRoot(blakeNotarizationHash, hashprevnotarization, txid, prevnotarizationtxid, launchedAndProposer, stateRoot);
 
         // If the bridge is active and VRSC remaining has not been sent
         if (remainingLaunchFeeReserves != 0 && bridgeConverterActive) { 
@@ -153,10 +150,9 @@ contract VerusNotarizer is VerusStorage {
 
             bytes32 hashOfNotarization;
             bytes32 txid;
-            bytes32 stateRoot;
             bytes32 packedPositions;
             bytes32 slotHash;
-            VerusObjectsNotarization.NotarizationForks[] memory retval = new VerusObjectsNotarization.NotarizationForks[]((tempArray.length / 128) + 1);
+            VerusObjectsNotarization.NotarizationForks[] memory retval = new VerusObjectsNotarization.NotarizationForks[]((tempArray.length / LENGTH_OF_FORK_DATA) + 1);
             if (tempArray.length > 1)
             {
                 bytes32 slot;
@@ -165,20 +161,19 @@ contract VerusNotarizer is VerusStorage {
                             slotHash := keccak256(add(slot, 32), 32)
                          }
 
-                for (int i = 0; i < int(tempArray.length / 128); i++) 
+                for (int i = 0; i < int(tempArray.length / LENGTH_OF_FORK_DATA); i++) 
                 {
                     assembly {
                         hashOfNotarization := sload(add(slotHash,nextOffset))
                         nextOffset := add(nextOffset, 1)  
                         txid := sload(add(slotHash,nextOffset))
-                        nextOffset := add(nextOffset, 1) 
-                        stateRoot := sload(add(slotHash,nextOffset))
+
                         nextOffset := add(nextOffset, 1) 
                         packedPositions :=sload(add(slotHash,nextOffset))
                         nextOffset := add(nextOffset, 1)
                     }
 
-                    retval[uint(i)] =  VerusObjectsNotarization.NotarizationForks(hashOfNotarization, txid, stateRoot, packedPositions);
+                    retval[uint(i)] =  VerusObjectsNotarization.NotarizationForks(hashOfNotarization, txid, packedPositions);
                 }
             }
             return retval;
@@ -193,7 +188,6 @@ contract VerusNotarizer is VerusStorage {
 
         bestForks[index] = abi.encodePacked(bestForks[index], notarizations.hashOfNotarization, 
                                             notarizations.txid,
-                                            notarizations.stateroot,
                                             notarizations.proposerPacked);
     }
 
@@ -201,14 +195,13 @@ contract VerusNotarizer is VerusStorage {
         
         bestForks[0] = abi.encodePacked(firstNotarization.hashOfNotarization, 
                                             firstNotarization.txid,
-                                            firstNotarization.stateroot,
                                             firstNotarization.proposerPacked,
                                             secondNotarization);
 
     }
 
     function setNotarizationProofRoot(bytes32 hashedNotarization, 
-            bytes32 hashprevnotarization, bytes32 txidHash, bytes32 hashprevtxid, bytes32 proposer, bytes32 stateRoot, bytes32 blockHash) private 
+            bytes32 hashprevnotarization, bytes32 txidHash, bytes32 hashprevtxid, bytes32 proposer, bytes32 stateRoot) private 
     {
         int forkIdx = -1;
         int forkPos;
@@ -260,9 +253,11 @@ contract VerusNotarizer is VerusStorage {
             
             //pack vout in at the end of the proposer 22 bytes ctransferdest
             encodeStandardNotarization(notarizations[1], abi.encode(hashedNotarization, 
-                txidHash, stateRoot, proposer));
+                txidHash, proposer));
 
-            proofs[bytes32(uint256(uint32(uint256(proposer >> OFFSET_FOR_HEIGHT))))] = abi.encodePacked(stateRoot, blockHash, uint32(uint256(notarizations[1].proposerPacked) >> OFFSET_FOR_HEIGHT));
+            // The proofs are indexed by height, the height is stored in the proposers last 32 bits. Stored ine the proof is stateroot and the previous proof height.
+
+            proofs[bytes32(uint256(uint32(uint256(proposer >> FORKS_DATA_OFFSET_FOR_HEIGHT))))] = abi.encodePacked(stateRoot, uint32(uint256(notarizations[1].proposerPacked) >> FORKS_DATA_OFFSET_FOR_HEIGHT));
 
             // Set bridge launched if confirmed notarization contains Bridge Launched bit packed on the end of proposer
 
@@ -273,7 +268,7 @@ contract VerusNotarizer is VerusStorage {
         else
         {
             encodeNotarization(uint(forkIdx), VerusObjectsNotarization.NotarizationForks(hashedNotarization,
-                txidHash, stateRoot, proposer));
+                txidHash, proposer));
         }
     }
 
@@ -307,7 +302,7 @@ contract VerusNotarizer is VerusStorage {
         bytes memory tempBytes = bestForks[0];
 
         assembly {
-            proposerAndHeight := mload(add(tempBytes, CONFIRMED_PROPOSER))
+            proposerAndHeight := mload(add(tempBytes, FORKS_DATA_CONFIRMED_PROPOSER))
         } 
         
         if (proofHeightOptions < 3) {
@@ -319,19 +314,19 @@ contract VerusNotarizer is VerusStorage {
 
             // Proposer and notaries get share of fees
             // any remainder from divide by 2 or equal share to the notaries gets added to proposers share.
-            claimableFees[bytes32(uint256(uint160(VerusConstants.VDXF_SYSTEM_NOTARIZATION_NOTARYFEEPOOL)))] += feeShare;
+            claimableFees[VerusConstants.VDXF_SYSTEM_NOTARIZATION_NOTARYFEEPOOL] += feeShare;
             setClaimedFees(bytes32(uint256(uint176(proposerAndHeight))), (feeShare + remainder));
         }
 
         if (proofHeightOptions == 0) {
             // if the most recent confirmed is requested just get the height from the bestforks
-            return abi.encodePacked(uint32(proposerAndHeight >> OFFSET_FOR_HEIGHT), proofs[(bytes32(proposerAndHeight >> OFFSET_FOR_HEIGHT))]);
+            return abi.encodePacked(uint32(proposerAndHeight >> FORKS_DATA_OFFSET_FOR_HEIGHT), proofs[(bytes32(proposerAndHeight >> FORKS_DATA_OFFSET_FOR_HEIGHT))]);
 
         } else if(proofHeightOptions == 1 || proofHeightOptions == 2) {
 
             // if the prior confirmed or second prior confirmed notarization is required extract the height from the newest confirmed.
 
-            tempBytes = proofs[(bytes32(proposerAndHeight >> OFFSET_FOR_HEIGHT))];
+            tempBytes = proofs[(bytes32(proposerAndHeight >> FORKS_DATA_OFFSET_FOR_HEIGHT))];
             uint32 previousConfirmedHeight;
 
             assembly {

@@ -61,14 +61,7 @@ library VerusObjectsNotarization {
     struct NotarizationForks {
         bytes32 hashOfNotarization;
         bytes32 txid;
-        bytes32 stateroot;
         bytes32 proposerPacked;  
-    }
-
-    struct storedCProofRoot{
-        bytes32 stateroot;            
-        bytes32 blockhash;              
-        bytes32 compactpower;
     }
 
     struct CNodeData {

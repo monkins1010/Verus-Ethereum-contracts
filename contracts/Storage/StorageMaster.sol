@@ -18,7 +18,7 @@ contract VerusStorage {
     mapping (bytes32 => VerusObjects.lastImportInfo) public lastImportInfo;
 
     address[] public tokenList;
-    bytes32 public lastTxIdImport;
+    bytes32 public lastTxIdImport;  //NOTE: not used and changed to a VDXFID
 
     uint64 public cceLastStartHeight;
     uint64 public cceLastEndHeight;

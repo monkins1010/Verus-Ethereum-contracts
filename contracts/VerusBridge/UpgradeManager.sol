@@ -25,10 +25,6 @@ contract UpgradeManager is VerusStorage {
 
     function upgradeContracts(bytes calldata data) external payable returns (uint8) {
 
-        require(msg.value > VerusConstants.upgradeFee);
-
-        claimableFees[bytes32(uint256(uint160(VerusConstants.VDXF_SYSTEM_NOTARIZATION_NOTARYFEEPOOL)))] += (msg.value / VerusConstants.SATS_TO_WEI_STD);
-
         VerusObjects.upgradeInfo memory _newContractPackage;
 
         (_newContractPackage) = abi.decode(data, (VerusObjects.upgradeInfo));

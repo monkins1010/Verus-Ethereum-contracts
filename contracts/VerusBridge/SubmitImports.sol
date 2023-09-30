@@ -29,12 +29,9 @@ contract SubmitImports is VerusStorage {
 
     uint32 constant ELVCHOBJ_TXID_OFFSET = 32;
     uint32 constant ELVCHOBJ_NVINS_OFFSET = 45;
-    uint32 constant FORKS_NOTARY_INDEX = 106;  // this is txid + stateroot + blockhash + NOTARIZER_INDEX_AND_FLAGS_OFFSET 
     uint32 constant FORKS_NOTARY_PROPOSER_POSITION = 128;
     uint32 constant TYPE_REFUND = 1;
     uint constant TYPE_BYTE_LOCATION_IN_UINT176 = 168;
-
-
 
     function sendToVRSC(uint64 value, address sendTo, uint8 destinationType, address sendingCurrency) public view returns (VerusObjects.CReserveTransfer memory, bool)
     {
@@ -199,17 +196,17 @@ contract SubmitImports is VerusStorage {
     function setLastImport(bytes32 processedTXID, bytes32 hashofTXs, uint128 CCEheightsandTXNum ) private {
 
         processedTxids[processedTXID] = true;
-        lastTxIdImport = processedTXID;
-        lastImportInfo[processedTXID] = VerusObjects.lastImportInfo(hashofTXs, processedTXID, uint32(CCEheightsandTXNum >> 64), uint32(CCEheightsandTXNum >> 32));
+       // lastTxIdImport = processedTXID;
+        lastImportInfo[VerusConstants.SUBMIT_IMPORTS_LAST_TXID] = VerusObjects.lastImportInfo(hashofTXs, processedTXID, uint32(CCEheightsandTXNum >> 64), uint32(CCEheightsandTXNum >> 32));
     } 
 
     function isLastCCEInOrder(uint32 height) private view {
       
-        if ((lastImportInfo[lastTxIdImport].height + 1) == height)
+        if ((lastImportInfo[VerusConstants.SUBMIT_IMPORTS_LAST_TXID].height + 1) == height)
         {
             return;
         } 
-        else if (lastTxIdImport == bytes32(0))
+        else if (lastImportInfo[VerusConstants.SUBMIT_IMPORTS_LAST_TXID].hashOfTransfers == bytes32(0))
         {
             return;
         } 
@@ -256,7 +253,7 @@ contract SubmitImports is VerusStorage {
 
         if (fees <= transactionBaseCost) {
 
-            claimableFees[bytes32(uint256(uint160(VerusConstants.VDXF_SYSTEM_NOTARIZATION_NOTARYFEEPOOL)))] += fees;
+            claimableFees[VerusConstants.VDXF_SYSTEM_NOTARIZATION_NOTARYFEEPOOL] += fees;
            
         } else {
 
@@ -270,7 +267,7 @@ contract SubmitImports is VerusStorage {
             uint64 feeShare;
 
             feeShare = (fees - transactionBaseCost) / 3;
-            claimableFees[bytes32(uint256(uint160(VerusConstants.VDXF_SYSTEM_NOTARIZATION_NOTARYFEEPOOL)))] += feeShare;
+            claimableFees[VerusConstants.VDXF_SYSTEM_NOTARIZATION_NOTARYFEEPOOL] += feeShare;
             setClaimedFees(bytes32(uint256(proposer)), feeShare); // 1/3 to proposer
             setClaimedFees(bytes32(uint256(exporter)), feeShare + ((fees - transactionBaseCost) % 3)); // any remainder from main division goes to exporter
         }
@@ -291,7 +288,7 @@ contract SubmitImports is VerusStorage {
 
         uint256 claimAmount;
 
-        if ((claimableFees[bytes32(uint256(uint160(VerusConstants.VDXF_SYSTEM_NOTARIZATION_NOTARYFEEPOOL)))] *  VerusConstants.SATS_TO_WEI_STD) 
+        if ((claimableFees[VerusConstants.VDXF_SYSTEM_NOTARIZATION_NOTARYFEEPOOL] *  VerusConstants.SATS_TO_WEI_STD) 
                     > (tx.gasprice * VerusConstants.SEND_NOTARY_PAYMENT_FEE))
         {
             bool notaryFound = false;
@@ -311,13 +308,13 @@ contract SubmitImports is VerusStorage {
 
                 if (claimableFees[bytes32(0)] > 0) {
                     // When there is no proposer fees are sent to bytes(0)
-                    claimableFees[bytes32(uint256(uint160(VerusConstants.VDXF_SYSTEM_NOTARIZATION_NOTARYFEEPOOL)))] += claimableFees[bytes32(0)];
+                    claimableFees[VerusConstants.VDXF_SYSTEM_NOTARIZATION_NOTARYFEEPOOL] += claimableFees[bytes32(0)];
                     claimableFees[bytes32(0)] = 0;
                 }
 
-                claimAmount = claimableFees[bytes32(uint256(uint160(VerusConstants.VDXF_SYSTEM_NOTARIZATION_NOTARYFEEPOOL)))] - txReimburse;
+                claimAmount = claimableFees[VerusConstants.VDXF_SYSTEM_NOTARIZATION_NOTARYFEEPOOL] - txReimburse;
 
-                claimableFees[bytes32(uint256(uint160(VerusConstants.VDXF_SYSTEM_NOTARIZATION_NOTARYFEEPOOL)))] = 0;
+                claimableFees[VerusConstants.VDXF_SYSTEM_NOTARIZATION_NOTARYFEEPOOL] = 0;
 
                 uint256 claimShare;
                 
@@ -331,7 +328,7 @@ contract SubmitImports is VerusStorage {
                         payable(notaryAddressMapping[notaries[i]].main).transfer(claimShare * VerusConstants.SATS_TO_WEI_STD);
                     }
                 }
-                claimableFees[bytes32(uint256(uint160(VerusConstants.VDXF_SYSTEM_NOTARIZATION_NOTARYFEEPOOL)))] = claimAmount;
+                claimableFees[VerusConstants.VDXF_SYSTEM_NOTARIZATION_NOTARYFEEPOOL] = claimAmount;
                 payable(msg.sender).transfer(txReimburse);
 
             }

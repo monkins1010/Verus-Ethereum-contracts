@@ -16,11 +16,7 @@ import "../VerusBridge/TokenManager.sol";
 
 contract NotaryTools is VerusStorage {
         
-    uint8 constant FLAG_FRACTIONAL = 1;
-    uint8 constant FLAG_REFUNDING = 4;
-    uint8 constant FLAG_LAUNCHCONFIRMED = 0x10;
-    uint8 constant FLAG_LAUNCHCOMPLETEMARKER = 0x20;
-    uint8 constant OFFSET_FOR_HEIGHT = 224;
+
     uint8 constant TYPE_REVOKE = 2;
     uint8 constant TYPE_RECOVER = 3;
     uint8 constant TYPE_AUTO_REVOKE = 4;
