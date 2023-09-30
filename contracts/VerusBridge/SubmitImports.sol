@@ -18,13 +18,15 @@ contract SubmitImports is VerusStorage {
     address immutable BRIDGE;
     address immutable VERUS;
     address immutable DAI;
+    address immutable MKR;
 
-    constructor(address vETH, address Bridge, address Verus, address Dai){
+    constructor(address vETH, address Bridge, address Verus, address Dai, address Mkr){
 
         VETH = vETH;
         BRIDGE = Bridge;
         VERUS = Verus;
         DAI = Dai;
+        MKR = Mkr;
     }
 
     uint32 constant ELVCHOBJ_TXID_OFFSET = 32;
@@ -32,65 +34,77 @@ contract SubmitImports is VerusStorage {
     uint32 constant FORKS_NOTARY_PROPOSER_POSITION = 128;
     uint32 constant TYPE_REFUND = 1;
     uint constant TYPE_BYTE_LOCATION_IN_UINT176 = 168;
+    enum Currency {VETH, DAI, VERUS, MKR}
 
-    function sendToVRSC(uint64 value, address sendTo, uint8 destinationType, address sendingCurrency) public view returns (VerusObjects.CReserveTransfer memory, bool)
-    {
+    function buildReserveTransfer (uint64 value, uint176 sendTo, address sendingCurrency, uint64 fees, address feecurrencyid) private view returns (VerusObjects.CReserveTransfer memory) {
+        
         VerusObjects.CReserveTransfer memory LPtransfer;
-        bool forceNewCCE;
       
         LPtransfer.version = 1;
-        LPtransfer.destination.destinationtype = destinationType;
+        LPtransfer.destination.destinationtype = uint8(sendTo >> TYPE_BYTE_LOCATION_IN_UINT176);
         LPtransfer.destcurrencyid = BRIDGE;
         LPtransfer.destsystemid = address(0);
         LPtransfer.secondreserveid = address(0);
-
         LPtransfer.flags = VerusConstants.VALID;
-
-        if (sendTo == address(0)) {
-            LPtransfer.flags += VerusConstants.BURN_CHANGE_PRICE ;
-            LPtransfer.destination.destinationaddress = bytes(hex'B26820ee0C9b1276Aac834Cf457026a575dfCe84');
-        } else {
-            LPtransfer.destination.destinationaddress = abi.encodePacked(sendTo);
-        }
+        LPtransfer.destination.destinationaddress = abi.encodePacked(sendTo);
+        LPtransfer.currencyvalue.currency = sendingCurrency;
+        LPtransfer.feecurrencyid = feecurrencyid;
+        LPtransfer.fees = fees;
+        LPtransfer.currencyvalue.amount = value;          
         
-        if (value == 0) {
-            LPtransfer.currencyvalue.currency = VERUS;
-            LPtransfer.fees = VerusConstants.verusTransactionFee; 
-            LPtransfer.feecurrencyid = VERUS; 
-            LPtransfer.currencyvalue.amount = uint64(remainingLaunchFeeReserves - VerusConstants.verusTransactionFee);
-            forceNewCCE = true;
-            return (LPtransfer, forceNewCCE);
-        }             
-        // If the sending currency is not DAI then the fee is 0.003 vETH
-        if (sendingCurrency == VETH) {
-            LPtransfer.fees = VerusConstants.verusvETHTransactionFee; 
-            LPtransfer.feecurrencyid = VETH;
-            LPtransfer.currencyvalue.amount = uint64(value - VerusConstants.verusvETHTransactionFee);  
-        } else if (sendingCurrency == VERUS) {
-            LPtransfer.fees = uint64(VerusConstants.VERUS_IMPORT_FEE); 
-            LPtransfer.feecurrencyid = VERUS;
-            require(value > VerusConstants.VERUS_IMPORT_FEE, "VRSC-Value-low");
-            LPtransfer.currencyvalue.amount = uint64(value - VerusConstants.VERUS_IMPORT_FEE);  
-        } else if (sendingCurrency == VERUS) {
-            LPtransfer.feecurrencyid = DAI;
-            // Get the 3 reserve values of ETH, DAI and VRSC
-            uint reserves = claimableFees[bytes32(uint256(uint160(VerusConstants.VDXF_ETH_DAI_VRSC_LAST_RESERVES)))];
-            // get specifically the vrsc reserves and multiply up
-            uint vrscRatio = VerusConstants.VERUS_IMPORT_FEE_X2 * uint64(reserves >> 128);
-            LPtransfer.fees = uint64(vrscRatio / uint(uint64(reserves >> 128)));
+        return LPtransfer;
+    }
 
-            require(value > LPtransfer.fees, "DAI- Value-low");
-            LPtransfer.currencyvalue.amount = uint64(value - LPtransfer.fees);  
-        } else {
-            revert("Invalid currency");
-        }
-
-        LPtransfer.currencyvalue.currency = sendingCurrency; // was VETH;
-        forceNewCCE = false;
+    function sendBurnBackToVerus (uint64 sendAmount, address currency, uint64 fees) public view returns (VerusObjects.CReserveTransfer memory) {
         
+        VerusObjects.CReserveTransfer memory LPtransfer;
 
-        return (LPtransfer, forceNewCCE);
+        if (currency == VERUS) {
+            LPtransfer =  buildReserveTransfer(uint64(remainingLaunchFeeReserves - VerusConstants.verusTransactionFee),
+                                               uint176(0x0214B26820ee0C9b1276Aac834Cf457026a575dfCe84),
+                                               VERUS,
+                                               VerusConstants.verusTransactionFee,
+                                               VERUS );
+        } else if (currency == DAI) {
+            LPtransfer =  buildReserveTransfer(sendAmount,
+                                               uint176(0x0214B26820ee0C9b1276Aac834Cf457026a575dfCe84),
+                                               DAI,
+                                               fees,
+                                               DAI );
+        } 
 
+        LPtransfer.flags += VerusConstants.BURN_CHANGE_PRICE ;
+
+        return LPtransfer;
+    }
+
+    function getImportFeeForReserveTransfer(address currency) public view returns (uint64) {
+        
+        uint64 feeShare;
+        uint feeCalculation;
+        uint reserves = claimableFees[bytes32(uint256(uint160(VerusConstants.VDXF_ETH_DAI_VRSC_LAST_RESERVES)))];
+
+        // Get the uint64 location in the uin256 word to calculate fees
+        if (currency == DAI){
+            feeCalculation = uint(Currency.DAI) << 6;
+        } else if (currency == MKR){
+            feeCalculation = uint(Currency.MKR) << 6;
+        } else if(currency == VETH) {
+            feeCalculation = uint(Currency.VETH) << 6;
+        }        
+
+        if (currency != BRIDGE) {
+            feeCalculation = VerusConstants.VERUS_IMPORT_FEE_X2 * uint64(reserves >> feeCalculation);
+            feeShare = uint64(feeCalculation / uint(uint64(reserves >> (uint(Currency.VERUS) << 6))));
+        }
+        else {
+            revert();
+            // Paying fees in bridge not possible.
+            // feeCalculation = VerusConstants.VERUS_IMPORT_FEE_X2 * uint64(reserves >> (uint(Currency.VERUS) << 6));
+            // feeShare = uint64(feeCalculation * 4);
+        } 
+
+        return feeShare;
     }
 
     function _createImports(bytes calldata data) external returns(uint64, uint176) {
@@ -170,7 +184,7 @@ contract SubmitImports is VerusStorage {
 
             uint176 verusAddress;
             uint64 amount;
-            uint160 currency;
+            address currency;
             assembly 
             {
                 verusAddress := mload(add(add(refundAmount, 22), i))
@@ -180,15 +194,10 @@ contract SubmitImports is VerusStorage {
 
             bytes32 refundAddress;
 
-            // As we are using global storage for refunds, the leftmost byte is the TYPE_REFUND;
+            // The leftmost byte is the TYPE_REFUND;
             refundAddress = bytes32(uint256(verusAddress) | uint256(TYPE_REFUND) << 244);
 
-            if (storageGlobal[refundAddress].length == 0) {
-                storageGlobal[refundAddress] = abi.encodePacked(currency, amount);
-            } else {
-                //if the user already has refunds concat the new refund to the end of the existing refunds.
-                storageGlobal[refundAddress] = abi.encodePacked(storageGlobal[refundAddress], currency, amount);
-            }   
+            refunds[refundAddress][currency] += amount;
 
         }
      }
@@ -278,12 +287,6 @@ contract SubmitImports is VerusStorage {
         claimableFees[_address] += fees;
     }
 
-    function setNotaryClaimedFees(uint176 notary, uint256 fees) private  {
-
-        notary |= (uint176(0x0c14) << VerusConstants.UINT160_BITS_SIZE); //set at type eth
-        claimableFees[bytes32(uint256(notary))] += fees;
-    }
-
     function claimfees() public {
 
         uint256 claimAmount;
@@ -291,96 +294,103 @@ contract SubmitImports is VerusStorage {
         if ((claimableFees[VerusConstants.VDXF_SYSTEM_NOTARIZATION_NOTARYFEEPOOL] *  VerusConstants.SATS_TO_WEI_STD) 
                     > (tx.gasprice * VerusConstants.SEND_NOTARY_PAYMENT_FEE))
         {
-            bool notaryFound = false;
+            uint256 txReimburse;
+
+            txReimburse = (tx.gasprice * notaries.length * VerusConstants.SEND_GAS_PRICE);
+
+            if (claimableFees[bytes32(0)] > 0) {
+                // When there is no proposer fees are sent to bytes(0)
+                claimableFees[VerusConstants.VDXF_SYSTEM_NOTARIZATION_NOTARYFEEPOOL] += claimableFees[bytes32(0)];
+                claimableFees[bytes32(0)] = 0;
+            }
+
+            claimAmount = claimableFees[VerusConstants.VDXF_SYSTEM_NOTARIZATION_NOTARYFEEPOOL] - txReimburse;
+
+            claimableFees[VerusConstants.VDXF_SYSTEM_NOTARIZATION_NOTARYFEEPOOL] = 0;
+
+            uint256 claimShare;
+            
+            claimShare = claimAmount / notaries.length;
+
             for (uint i = 0; i < notaries.length; i++)
             {
-                if (notaryAddressMapping[notaries[i]].main == msg.sender)
+                if (notaryAddressMapping[notaries[i]].state == VerusConstants.NOTARY_VALID)
                 {
-                    notaryFound = true;
+                    claimAmount -= claimShare;
+                    payable(notaryAddressMapping[notaries[i]].main).transfer(claimShare * VerusConstants.SATS_TO_WEI_STD);
                 }
             }
-
-            if(notaryFound) {
-
-                uint256 txReimburse;
-
-                txReimburse = (tx.gasprice * notaries.length * VerusConstants.SEND_GAS_PRICE);
-
-                if (claimableFees[bytes32(0)] > 0) {
-                    // When there is no proposer fees are sent to bytes(0)
-                    claimableFees[VerusConstants.VDXF_SYSTEM_NOTARIZATION_NOTARYFEEPOOL] += claimableFees[bytes32(0)];
-                    claimableFees[bytes32(0)] = 0;
-                }
-
-                claimAmount = claimableFees[VerusConstants.VDXF_SYSTEM_NOTARIZATION_NOTARYFEEPOOL] - txReimburse;
-
-                claimableFees[VerusConstants.VDXF_SYSTEM_NOTARIZATION_NOTARYFEEPOOL] = 0;
-
-                uint256 claimShare;
-                
-                claimShare = claimAmount / notaries.length;
-
-                for (uint i = 0; i < notaries.length; i++)
-                {
-                    if (notaryAddressMapping[notaries[i]].state == VerusConstants.NOTARY_VALID)
-                    {
-                        claimAmount -= claimShare;
-                        payable(notaryAddressMapping[notaries[i]].main).transfer(claimShare * VerusConstants.SATS_TO_WEI_STD);
-                    }
-                }
-                claimableFees[VerusConstants.VDXF_SYSTEM_NOTARIZATION_NOTARYFEEPOOL] = claimAmount;
-                payable(msg.sender).transfer(txReimburse);
-
-            }
+            claimableFees[VerusConstants.VDXF_SYSTEM_NOTARIZATION_NOTARYFEEPOOL] = claimAmount;
+            payable(msg.sender).transfer(txReimburse);
         }
     }
 
-    function claimRefund(uint176 verusAddress) external payable 
+    function claimRefund(uint176 verusAddress, address currency) external payable returns (uint)
     {
-        uint64 refundAmount;
-        bytes memory refundData;
+        uint256 refundAmount;
         bytes32 refundAddressFormatted;
-
+        VerusObjects.CReserveTransfer memory LPtransfer;
+        bool success;
         refundAddressFormatted = bytes32(uint256(verusAddress) | uint256(TYPE_REFUND) << 244);
 
-        refundData = storageGlobal[refundAddressFormatted];
+        refundAmount = refunds[refundAddressFormatted][currency];
         require(bridgeConverterActive, "Bridge converter not active");
 
-        if (refundData.length > 0)
-        {
-            for(uint i = 0; i < (refundData.length / 48); i = i + 48) {
+        if (refundAmount > 0 ) {
+        
+                delete refunds[refundAddressFormatted][currency];
+                uint64 fees;
+                address feeCurrency;
 
-                uint64 amount;
-                address currency;
-                assembly 
-                {
-                    currency := mload(add(add(refundData, 20), i))
-                    amount := mload(add(add(refundData, 28), i))
+                if (currency != VETH && currency != DAI && currency != VERUS && currency != MKR && currency != BRIDGE) {
+                    fees = getImportFeeForReserveTransfer(VETH);
+                    if (msg.value < (fees * VerusConstants.SATS_TO_WEI_STD)) {
+                        return fees;
+                    }
+                    //may have put too much in, so update fees for correct accounting.
+                    fees = uint64(msg.value / VerusConstants.SATS_TO_WEI_STD);
+                    feeCurrency = VETH;
+                } else {
+                   fees = getImportFeeForReserveTransfer(currency);
+                   require (refundAmount > fees, "Refund amount less than fees");
+                   feeCurrency = currency;
                 }
 
-                delete storageGlobal[refundAddressFormatted];
-                if (currency != VETH || currency != DAI || currency != VERUS) {
+                LPtransfer  = buildReserveTransfer(uint64(refundAmount), verusAddress, currency, fees, feeCurrency);
 
-                    require (msg.value > VerusConstants.transactionFee, "ETH-Needed");
+                if(verusAddress != uint176(0))  {
 
+                    (success, ) = contracts[uint(VerusConstants.ContractType.CreateExport)]
+                                        .delegatecall(abi.encodeWithSelector(CreateExports.externalCreateExportCallPayable.selector, abi.encode(LPtransfer, false)));
+                    require(success);
+                    return 0;
+                } 
+
+                if (currency == VETH ) {
+                    claimableFees[VerusConstants.VDXF_SYSTEM_NOTARIZATION_NOTARYFEEPOOL] += refundAmount;
+                    return 0;
+
+                } else {
+                    
+                    VerusObjects.mappedToken memory mappedCurrency = verusToERC20mapping[currency];
+
+                    uint256 claimShare;
+                
+                    claimShare = refundAmount / notaries.length;
+
+                    for (uint i = 0; i < notaries.length; i++)
+                    {
+                        // TODO: Possible to upgrade to send ERC1155 and ERC721 NFTs out too.
+                        if (notaryAddressMapping[notaries[i]].state == VerusConstants.NOTARY_VALID)
+                        {
+                            refundAmount -= claimShare;
+                            IERC20(mappedCurrency.erc20ContractAddress).transfer(notaryAddressMapping[notaries[i]].main, claimShare);
+                        }
+                    }
                 }
-                (VerusObjects.CReserveTransfer memory LPtransfer,) = sendToVRSC(refundAmount, address(uint160(verusAddress)), uint8(verusAddress >> TYPE_BYTE_LOCATION_IN_UINT176), currency);
-                (bool success, ) = contracts[uint(VerusConstants.ContractType.CreateExport)].delegatecall(abi.encodeWithSelector(CreateExports.externalCreateExportCallPayable.selector, abi.encode(LPtransfer, false)));
-                require(success);
-            }
+                return 0;
         }
-        else if (uint64(claimableFees[bytes32(uint256(verusAddress))]) > 0)
-        {
-            refundAmount = uint64(claimableFees[bytes32(uint256(verusAddress))]);
-            delete  claimableFees[bytes32(uint256(verusAddress))];
-             (VerusObjects.CReserveTransfer memory LPtransfer,)  = sendToVRSC(refundAmount, address(uint160(verusAddress)), uint8(verusAddress >> TYPE_BYTE_LOCATION_IN_UINT176), VETH);
-             (bool success, ) = contracts[uint(VerusConstants.ContractType.CreateExport)].delegatecall(abi.encodeWithSelector(CreateExports.externalCreateExportCallPayable.selector, abi.encode(LPtransfer, false)));
-             require(success);
-        }
-        else
-        {
-            revert("No refunds avaiable");
-        }
+        revert();
     }
 
     function sendfees(bytes32 publicKeyX, bytes32 publicKeyY) public 
