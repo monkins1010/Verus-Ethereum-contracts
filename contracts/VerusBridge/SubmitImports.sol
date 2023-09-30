@@ -46,7 +46,7 @@ contract SubmitImports is VerusStorage {
         LPtransfer.destsystemid = address(0);
         LPtransfer.secondreserveid = address(0);
         LPtransfer.flags = VerusConstants.VALID;
-        LPtransfer.destination.destinationaddress = abi.encodePacked(sendTo);
+        LPtransfer.destination.destinationaddress = abi.encodePacked(uint160(sendTo));
         LPtransfer.currencyvalue.currency = sendingCurrency;
         LPtransfer.feecurrencyid = feecurrencyid;
         LPtransfer.fees = fees;
