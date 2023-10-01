@@ -39,6 +39,7 @@ library VerusConstants {
     uint256 constant DAI_BURNBACK_TRANSACTION_GAS_AMOUNT = 780000;
     uint256 constant DAI_BURNBACK_MAX_FEE_THRESHOLD = 40000000000;   //400 DAI in verus 8 decimals
     uint256 constant SECONDS_IN_DAY = 86400;
+    uint256 constant REFUND_FEE_REIMBURSE_GAS_AMOUNT = 200000;
 
     uint32 constant INVALID_FLAGS = 0xffffffff - (VALID + CONVERT + RESERVE_TO_RESERVE + IMPORT_TO_SOURCE);
 
