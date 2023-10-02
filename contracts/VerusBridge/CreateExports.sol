@@ -83,7 +83,7 @@ contract CreateExports is VerusStorage {
         }
 
         if (ethNftFlag != 0) { //handle a NFT Import
-
+            uint balance;
             if (ethNftFlag == VerusConstants.MAPPING_ERC1155_NFT_DEFINITION || ethNftFlag == VerusConstants.MAPPING_ERC1155_ERC_DEFINITION) {
                 IERC1155 nft = IERC1155(iaddressMapping.erc20ContractAddress);
 
@@ -92,13 +92,17 @@ contract CreateExports is VerusStorage {
                 verusToERC20mapping[transfer.currencyvalue.currency].tokenIndex += transfer.currencyvalue.amount;
 
                 require (nft.isApprovedForAll(msg.sender, address(this)), "NFT not approved");
+                balance = nft.balanceOf(address(this), iaddressMapping.tokenID);
                 nft.safeTransferFrom(msg.sender, address(this), iaddressMapping.tokenID, transfer.currencyvalue.amount, ""); 
-      
+                require(nft.balanceOf(address(this), iaddressMapping.tokenID) == balance + transfer.currencyvalue.amount, "1155NFTfail");
 
             } else if (ethNftFlag == VerusConstants.MAPPING_ERC721_NFT_DEFINITION){
                 VerusNft nft = VerusNft(iaddressMapping.erc20ContractAddress);
                 require (nft.getApproved(iaddressMapping.tokenID) == address(this), "NFT not approved");
+                
+                balance = nft.balanceOf(address(this));
                 nft.safeTransferFrom(msg.sender, address(this), iaddressMapping.tokenID, "");
+                require(nft.balanceOf(address(this)) == balance + 1, "721NFTfail");
 
                 if (iaddressMapping.erc20ContractAddress == verusToERC20mapping[tokenList[VerusConstants.NFT_POSITION]].erc20ContractAddress) {
                     nft.burn(iaddressMapping.tokenID);
@@ -130,7 +134,10 @@ contract CreateExports is VerusStorage {
 
     function exportERC20Tokens(uint256 _tokenAmount, Token token, bool burn) public {
         
+        uint256 balance;
+        balance = token.balanceOf(address(this));
         token.safeTransferFrom(msg.sender, address(this), _tokenAmount);
+        require(token.balanceOf(address(this)) == balance + _tokenAmount, "ERC20 transfer failed");
 
         // If the token is DAI, run join to have the DAI transferred to the DSR contract.
         if (address(token) == DAIERC20ADDRESS) {
