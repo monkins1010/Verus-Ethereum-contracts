@@ -114,7 +114,7 @@ contract Delegator is VerusStorage, ERC1155Holder, ERC721Holder {
 
     }
 
-    function checkImport(bytes32 _imports) public view returns(bool){
+    function checkImport(bytes32 _imports) external view returns(bool){
         return processedTxids[_imports];
     }
 
@@ -143,7 +143,7 @@ contract Delegator is VerusStorage, ERC1155Holder, ERC721Holder {
 
     } 
 
-    function getProof(uint256 proofHeightOptions) public payable returns (bytes memory) {
+    function getProof(uint256 proofHeightOptions) external payable returns (bytes memory) {
                 
         address VerusNotaryToolsAddress = contracts[uint(VerusConstants.ContractType.VerusNotarizer)];
         (bool success, bytes memory returnedData) = VerusNotaryToolsAddress.delegatecall(abi.encodeWithSignature("getProof(uint256)", proofHeightOptions));
@@ -182,7 +182,6 @@ contract Delegator is VerusStorage, ERC1155Holder, ERC721Holder {
         contracts[contractNo] = newcontract;
         
         //NOTE: Upgraded contracts may need a initialize() function so they can setup things in a run once.
-        //TODO: (not present in testnet)
         (bool success,) = newcontract.delegatecall{gas: 3000000}(abi.encodeWithSignature("initialize()"));
         success;
     }
@@ -227,13 +226,17 @@ contract Delegator is VerusStorage, ERC1155Holder, ERC721Holder {
         return abi.decode(returnedData, (uint8));
     }
 
-    function getVoteState(uint item) public view returns (VerusObjects.voteState memory) {
+    function getVoteCount(address contractsHash) external returns (uint) {
 
-        return pendingVoteState[item];
+        address upgradeManagerAddress = contracts[uint(VerusConstants.ContractType.UpgradeManager)];
 
+        (bool success, bytes memory returnedData) = upgradeManagerAddress.delegatecall(abi.encodeWithSignature("getVoteCount(address)", contractsHash));
+        require(success);
+
+        return abi.decode(returnedData, (uint));
     }
 
-    function burnFees(bytes calldata data) public {
+    function burnFees(bytes calldata data) external {
 
         address CreateExportsAddress = contracts[uint(VerusConstants.ContractType.CreateExport)];
 

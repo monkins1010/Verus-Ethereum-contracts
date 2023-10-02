@@ -126,7 +126,7 @@ const returnSetupCurrencies = (isTestnet = false) => {
         isTestnet ? id.testnet.VRSC : id.mainnet.VRSC,
         MAPPING_VERUS_OWNED + MAPPING_ISBRIDGE_CURRENCY + MAPPING_ERC20_DEFINITION, 
         "Bridge.vETH", 
-        "BETH",
+        "VBRID",
         id.emptyuint256];
         
     const veth = [
@@ -134,8 +134,8 @@ const returnSetupCurrencies = (isTestnet = false) => {
         id.emptyuint160,
         isTestnet ? id.testnet.VRSC : id.mainnet.VRSC,
         MAPPING_ETHEREUM_OWNED + MAPPING_PARTOF_BRIDGEVETH + MAPPING_ERC20_DEFINITION, 
-        isTestnet ? "ETH (Testnet)" : "ETH", 
-        "ETH",
+        isTestnet ? "ETH (Testnet)" : "vETH", 
+        "vETH",
         id.emptyuint256];
 
     const dai = [
@@ -143,7 +143,7 @@ const returnSetupCurrencies = (isTestnet = false) => {
         isTestnet ? id.testnet.DAIERC20 : id.mainnet.DAIERC20,
         isTestnet ? id.testnet.VRSC : id.mainnet.VRSC, 
         MAPPING_ETHEREUM_OWNED + MAPPING_PARTOF_BRIDGEVETH + MAPPING_ERC20_DEFINITION, 
-        isTestnet ? "DAI (Testnet)" : "DAI", 
+        isTestnet ? "DAI (Testnet)" : "DAI.vETH", 
         "DAI",
         id.emptyuint256];
 
@@ -152,7 +152,7 @@ const returnSetupCurrencies = (isTestnet = false) => {
         isTestnet ? id.testnet.MKRERC20 : id.mainnet.MKRERC20,
         isTestnet ? id.testnet.VRSC : id.mainnet.VRSC, 
         MAPPING_ETHEREUM_OWNED + MAPPING_PARTOF_BRIDGEVETH + MAPPING_ERC20_DEFINITION, 
-        isTestnet ? "Maker (Testnet)" : "Maker", 
+        isTestnet ? "Maker (Testnet)" : "MKR.vETH", 
         "MKR",
         id.emptyuint256];
 

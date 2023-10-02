@@ -64,7 +64,14 @@ contract UpgradeManager is VerusStorage {
 
         contractsHash = address(uint160(uint256(keccak256(be))));
 
-        if (checkContractsCanUpgrade(contractsHash)) {
+        require(contractsHash != address(0), "Invalid contract hash");
+
+        // If the vote on the hash has already been used, then we can't use it again.
+        if (getVoteCount(contractsHash) > 50 && successfulVoteHashes[contractsHash] == 0) {
+            // Set the upgrade hash address as used
+            successfulVoteHashes[contractsHash] = 1;
+            // reset the rolling vote [0] index to 0
+            rollingUpgradeVotes[0] = address(0);
 
             for (uint j = 0; j < uint(VerusConstants.NUMBER_OF_CONTRACTS); j++)
             {       
@@ -91,9 +98,10 @@ contract UpgradeManager is VerusStorage {
         return _string;
     }
 
-    function checkContractsCanUpgrade(address contractsHash) private view  returns (bool) {
 
-        uint8 countOfAgreedVotes;
+    function getVoteCount(address contractsHash) public view returns (uint) {
+
+        uint countOfAgreedVotes;
         
         for(uint i = 1; i < rollingUpgradeVotes.length; i++) 
         {
@@ -101,8 +109,7 @@ contract UpgradeManager is VerusStorage {
                 countOfAgreedVotes++;
         }
 
-        return countOfAgreedVotes > 50;
-   
+        return countOfAgreedVotes;
     }
 
     function recoverSigner(bytes32 _h, uint8 _v, bytes32 _r, bytes32 _s) private pure returns (address) {

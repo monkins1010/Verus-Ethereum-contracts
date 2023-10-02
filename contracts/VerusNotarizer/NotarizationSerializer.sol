@@ -318,7 +318,7 @@ contract NotarizationSerializer is VerusStorage {
                         tempAddress := mload(add(add(firstObj, nextOffset),AUX_DEST_ETH_VEC_LENGTH))
                     }
 
-                    castVote((NotarizationFlags & VerusConstants.FLAG_CONTRACT_UPGRADE > 0) ? tempAddress : address(0));
+                    castVote(tempAddress);
                     
                     nextOffset = (readerLen.offset + uint32(readerLen.value));
             }
@@ -327,9 +327,19 @@ contract NotarizationSerializer is VerusStorage {
 
     function castVote(address votetxid) private {
 
-        rollingUpgradeVotes[rollingVoteIndex] = votetxid;
+        // If the vote is address(0) and the vote has not started, or the cote hash has already been used, return
+        if (votetxid == address(0) && rollingUpgradeVotes[0] == address(0)
+                || successfulVoteHashes[votetxid]  != 0) {
+            return;
+        }
+
+        // save an empty global write if the value to be written is the same as the current value
+        if (votetxid != rollingUpgradeVotes[rollingVoteIndex]) {
+            rollingUpgradeVotes[rollingVoteIndex] = votetxid;
+        }
+        
         if(rollingVoteIndex > 98) {
-            rollingVoteIndex = 1; // use position 0 to determine whether votes have started
+            rollingVoteIndex = 1; // use position 0 to determine whether votes have started, so start at 1
         } else {
             rollingVoteIndex = rollingVoteIndex + 1;
         }
