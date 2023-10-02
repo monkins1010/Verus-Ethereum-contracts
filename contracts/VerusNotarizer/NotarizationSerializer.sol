@@ -89,7 +89,7 @@ contract NotarizationSerializer is VerusStorage {
         if (proposerType & VerusConstants.FLAG_DEST_AUX == VerusConstants.FLAG_DEST_AUX)
         {
             nextOffset += 1;  // goto auxdest parent vec length position
-            nextOffset = processAux(notarization, nextOffset, notarizationFlags);
+            nextOffset = processAux(notarization, nextOffset);
             nextOffset -= 1;  // NOTE: Next Varint call takes array pos not array pos +1
         }
         //position 0 of the rolling vote is use to determine whether votes have started
@@ -302,7 +302,7 @@ contract NotarizationSerializer is VerusStorage {
         return VerusObjectsCommon.UintReader(uint32(retidx), v);
     }
     
-    function processAux (bytes memory firstObj, uint32 nextOffset, uint32 NotarizationFlags) private returns (uint32)
+    function processAux (bytes memory firstObj, uint32 nextOffset) private returns (uint32)
     {
                                                   
             VerusObjectsCommon.UintReader memory readerLen;
