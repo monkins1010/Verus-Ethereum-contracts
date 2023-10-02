@@ -61,13 +61,13 @@ contract SubmitImports is VerusStorage {
 
         if (currency == VERUS) {
             LPtransfer =  buildReserveTransfer(uint64(remainingLaunchFeeReserves - VerusConstants.verusTransactionFee),
-                                               uint176(0x0214B26820ee0C9b1276Aac834Cf457026a575dfCe84),
+                                               uint176(VerusConstants.VDXFID_VETH_BURN_ADDRESS),
                                                VERUS,
                                                VerusConstants.verusTransactionFee,
                                                VERUS );
         } else if (currency == DAI) {
             LPtransfer =  buildReserveTransfer(sendAmount,
-                                               uint176(0x0214B26820ee0C9b1276Aac834Cf457026a575dfCe84),
+                                               uint176(VerusConstants.VDXFID_VETH_BURN_ADDRESS),
                                                DAI,
                                                fees,
                                                DAI );
@@ -92,7 +92,7 @@ contract SubmitImports is VerusStorage {
         } else if (currency == VETH) {
             feeCalculation = uint(Currency.VETH) << 6;
         } else if (currency == VERUS) {
-            return VerusConstants.verusTransactionFee;
+            return uint64(VerusConstants.VERUS_IMPORT_FEE);
         } else {
             // NOTE: Bridge.vETH currency is not supported.
             revert();
@@ -339,19 +339,24 @@ contract SubmitImports is VerusStorage {
                 uint64 fees;
                 address feeCurrency;
 
-                if(verusAddress == uint176(0) ) {
-                    if(verusToERC20mapping[currency].flags & (VerusConstants.MAPPING_PARTOF_BRIDGEVETH) != 0) {
+                if(verusAddress == uint176(0)) {
+                    if(verusToERC20mapping[currency].flags & (VerusConstants.MAPPING_PARTOF_BRIDGEVETH ) != 0) {
 
-                        verusAddress = uint176(0x0214B26820ee0C9b1276Aac834Cf457026a575dfCe84);
+                        verusAddress = uint176(VerusConstants.VDXFID_VETH_BURN_ADDRESS);
+                        // Get the GAS cost of a ReserveTransfer in the currency of the refund. e.g. 1,000,000 GAS * GASPRICE
                         uint64 reimburseAmount = getTxFeeReimbursement(currency);
                         require(refundAmount > reimburseAmount, "Refund amount less than reimburse amount");
                         
-                        IERC20(verusToERC20mapping[currency].erc20ContractAddress)
-                            .transfer(msg.sender, convertFromVerusNumber(reimburseAmount, ERC20(verusToERC20mapping[currency].erc20ContractAddress).decimals()));
-
+                        if(verusToERC20mapping[currency].flags & VerusConstants.MAPPING_ERC20_DEFINITION != 0){
+                            IERC20(verusToERC20mapping[currency].erc20ContractAddress)
+                                .transfer(msg.sender, convertFromVerusNumber(reimburseAmount, ERC20(verusToERC20mapping[currency].erc20ContractAddress).decimals()));
+                        } else {
+                            payable(msg.sender).transfer(reimburseAmount * VerusConstants.SATS_TO_WEI_STD);
+                        }
+                     
                         refundAmount = refundAmount - reimburseAmount;
                     } else {
-
+                        // If the token is a non bridge currency
                         for(uint i = 0; i < notaries.length; i++) {
                             if (notaryAddressMapping[notaries[i]].main == msg.sender) {
                                 IERC20(verusToERC20mapping[currency].erc20ContractAddress)
@@ -362,7 +367,7 @@ contract SubmitImports is VerusStorage {
 
                         return 0;
                     }
-                } 
+                }
 
                 if (currency != VETH && currency != DAI && currency != VERUS && currency != MKR) {
                     fees = getImportFeeForReserveTransfer(VETH);
@@ -380,7 +385,7 @@ contract SubmitImports is VerusStorage {
 
                 LPtransfer = buildReserveTransfer(uint64(refundAmount), verusAddress, currency, fees, feeCurrency);
 
-                if (verusAddress == uint176(0x0214B26820ee0C9b1276Aac834Cf457026a575dfCe84)) {
+                if (verusAddress == uint176(VerusConstants.VDXFID_VETH_BURN_ADDRESS)) {
                     LPtransfer.flags += VerusConstants.BURN_CHANGE_PRICE;
                 }
 
@@ -397,7 +402,7 @@ contract SubmitImports is VerusStorage {
     function getTxFeeReimbursement (address currency) private view returns (uint64) {
 
         uint256 txReimburse;
-
+        // keep the Reimburse value in wei until end for accuracy
         txReimburse = (tx.gasprice * VerusConstants.REFUND_FEE_REIMBURSE_GAS_AMOUNT);
 
         uint reserves = claimableFees[bytes32(uint256(uint160(VerusConstants.VDXF_ETH_DAI_VRSC_LAST_RESERVES)))];
@@ -409,7 +414,7 @@ contract SubmitImports is VerusStorage {
         } else if (currency == MKR){
             feeCalculation = uint(Currency.MKR) << 6;
         } else if (currency == VERUS) {
-            return VerusConstants.verusTransactionFee;
+            feeCalculation = uint(Currency.VERUS) << 6;
         } else {
             // NOTE: Bridge.vETH currency is not supported.
             revert();
@@ -450,7 +455,6 @@ contract SubmitImports is VerusStorage {
         {
             revert("No fees avaiable");
         }
-
     }
     
     function convertFromVerusNumber(uint256 a,uint8 decimals) private pure returns (uint256) {

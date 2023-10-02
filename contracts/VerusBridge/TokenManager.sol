@@ -191,7 +191,7 @@ contract TokenManager is VerusStorage {
                 result = sendCurrencyToETHAddress(tempToken.erc20ContractAddress, destinationAddress, sendAmount, result, tempToken.tokenID); 
             }
 
-            if (result == SEND_FAILED) {
+            if (result == SEND_FAILED && sendAmount > 0) {
                 refundsData = abi.encodePacked(refundsData, refundAddresses[i], sendAmount, currencyiAddress);
             } else if (result == SEND_SUCCESS) {
                 verusToERC20mapping[currencyiAddress].tokenID -= sendAmount;
