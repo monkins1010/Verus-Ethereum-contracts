@@ -105,7 +105,7 @@ module.exports = async function(deployer) {
 
     const VerusDelegatorInst = await VerusDelegator.deployed();
     await VerusDelegatorInst.launchContractTokens(launchCurrencies);
-    if (deployer.network == "goerli" || deployer.network == "mainnet") { 
+    if (deployer.network == "goerli" || deployer.network == "mainnet" || deployer.network == "mainnet-fork") { 
         await VerusDelegatorInst.replacecontract(CCEInst.address, 3, {gas: 4700000}); // CCE is position 3 in list of contracts
     }
 
