@@ -226,14 +226,14 @@ contract Delegator is VerusStorage, ERC1155Holder, ERC721Holder {
         return abi.decode(returnedData, (uint8));
     }
 
-    function getVoteCount(address contractsHash) external returns (uint8) {
+    function getVoteCount(address contractsHash) external returns (uint) {
 
         address upgradeManagerAddress = contracts[uint(VerusConstants.ContractType.UpgradeManager)];
 
         (bool success, bytes memory returnedData) = upgradeManagerAddress.delegatecall(abi.encodeWithSignature("getVoteCount(address)", contractsHash));
         require(success);
 
-        return abi.decode(returnedData, (uint8));
+        return abi.decode(returnedData, (uint));
     }
 
     function burnFees(bytes calldata data) external {
