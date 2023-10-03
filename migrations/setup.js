@@ -46,7 +46,7 @@ const getNotarizerIDS = (network) => {
         return [TestVerusNotariserIDS, TestVerusNotariserSigner, TestVerusNotariserRecovery];
     } else if (network == "goerli" || network == "goerli-fork"){
         return [verusGoerliNotariserIDS, verusGoerliNotariserSigner, verusGoerliNotariserRecovery];
-    } else if (network == "mainnet" || deployer.network == "mainnet-fork"){
+    } else if (network == "mainnet" || network == "mainnet-fork"){
         return [verusMainnetNotariserIDS, verusMainnetNotariserSigner, verusMainnetNotariserRecovery];
     }
 }
