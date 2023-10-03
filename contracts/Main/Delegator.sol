@@ -244,4 +244,18 @@ contract Delegator is VerusStorage, ERC1155Holder, ERC721Holder {
         require(success);
 
     }
+
+    function setVerusData(bytes calldata data, string calldata vdxfid) external {
+
+        address VerusCrossChainExportAddress = contracts[uint(VerusConstants.ContractType.VerusCrossChainExport)];
+        bool success;
+        (success,) = VerusCrossChainExportAddress.delegatecall(abi.encodeWithSignature("checkVdxfid(string)", vdxfid));
+        require(success);
+
+        string memory func = string(abi.encode(vdxfid,"(bytes)"));
+
+        (success,) = VerusCrossChainExportAddress.delegatecall(abi.encodeWithSignature(func, data));
+        require(success);
+
+    }
 }

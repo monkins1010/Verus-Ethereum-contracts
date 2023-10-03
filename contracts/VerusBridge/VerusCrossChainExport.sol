@@ -37,7 +37,7 @@ contract VerusCrossChainExport is VerusStorage {
         VatLike vat = VatLike(PotLike(pot).vat());
         vat.hope(daiJoin);
         vat.hope(pot);
-        IERC20(DAIERC20).approve(daiJoin, uint256(int(-1)));
+        IERC20(DAIERC20).approve(daiJoin, uint256(int256(-1)));
     }
 
     uint256 constant RAY = 10 ** 27;
