@@ -399,12 +399,11 @@ contract VerusProof is VerusStorage  {
 
         uint tokenListLength;
         tokenListLength = tokenList.length;
-        VerusObjects.setupToken[] memory temp = new VerusObjects.setupToken[](tokenListLength);
         VerusObjects.mappedToken memory recordedToken;
         uint i;
         uint endPoint;
 
-        endPoint = tokenListLength;
+        endPoint = tokenListLength - 1;
         if (start >= 0 && start < tokenListLength)
         {
             i = start;
@@ -414,52 +413,54 @@ contract VerusProof is VerusStorage  {
         {
             endPoint = end;
         }
+        VerusObjects.setupToken[] memory temp = new VerusObjects.setupToken[]((endPoint - i) + 1);
 
-        for(; i < endPoint; i++) {
+        uint j;
+        for(; i <= endPoint; i++) {
 
             address iAddress;
             iAddress = tokenList[i];
             recordedToken = verusToERC20mapping[iAddress];
-            temp[i].iaddress = iAddress;
-            temp[i].flags = recordedToken.flags;
+            temp[j].iaddress = iAddress;
+            temp[j].flags = recordedToken.flags;
 
             if (iAddress == VETH)
             {
-                temp[i].erc20ContractAddress = address(0);
-                temp[i].name = recordedToken.name;
-                temp[i].ticker = "ETH";
+                temp[j].erc20ContractAddress = address(0);
+                temp[j].name = recordedToken.name;
+                temp[j].ticker = "ETH";
             }
             else if(recordedToken.flags & VerusConstants.MAPPING_ERC20_DEFINITION == VerusConstants.MAPPING_ERC20_DEFINITION )
             {
-                temp[i].erc20ContractAddress = recordedToken.erc20ContractAddress;
+                temp[j].erc20ContractAddress = recordedToken.erc20ContractAddress;
                 bytes memory tempName;
                 tempName = bytes(recordedToken.name);
                 if (tempName[1] == "." && tempName[2] == "." && tempName[3] == ".") {
 
-                    temp[i].name = string(abi.encodePacked("[", toHexString(uint160(recordedToken.erc20ContractAddress), 20), "]", slice(tempName, 5, tempName.length - 5)));
+                    temp[j].name = string(abi.encodePacked("[", toHexString(uint160(recordedToken.erc20ContractAddress), 20), "]", slice(tempName, 5, tempName.length - 5)));
 
                 } else {
-                    temp[i].name = recordedToken.name;
+                    temp[j].name = recordedToken.name;
                 }
                 (bool success, bytes memory retval) = recordedToken.erc20ContractAddress.call(abi.encodeWithSignature("symbol()"));
 
                 if (success && retval.length > 0x40) {
-                    temp[i].ticker = abi.decode(retval, (string));
+                    temp[j].ticker = abi.decode(retval, (string));
                 } else if (retval.length == 0x20) {
-                    temp[i].ticker = string(slice(retval, 0, (retval[3] == 0 ? 3 : 4)));
+                    temp[j].ticker = string(slice(retval, 0, (retval[3] == 0 ? 3 : 4)));
                 } else {
-                    temp[i].ticker = string(slice(bytes(temp[i].name), 3, 4));
+                    temp[j].ticker = string(slice(bytes(temp[j].name), 3, 4));
                 }
             }
             else if(recordedToken.flags & VerusConstants.MAPPING_ERC721_NFT_DEFINITION == VerusConstants.MAPPING_ERC721_NFT_DEFINITION
                         || recordedToken.flags & VerusConstants.MAPPING_ERC1155_NFT_DEFINITION == VerusConstants.MAPPING_ERC1155_NFT_DEFINITION
                         || recordedToken.flags & VerusConstants.MAPPING_ERC1155_ERC_DEFINITION == VerusConstants.MAPPING_ERC1155_ERC_DEFINITION)
             {
-                temp[i].erc20ContractAddress = recordedToken.erc20ContractAddress;
-                temp[i].name = recordedToken.name;
-                temp[i].tokenID = recordedToken.tokenID;
+                temp[j].erc20ContractAddress = recordedToken.erc20ContractAddress;
+                temp[j].name = recordedToken.name;
+                temp[j].tokenID = recordedToken.tokenID;
             }
-            
+            j++;
         }
 
         return temp;

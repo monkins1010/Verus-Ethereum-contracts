@@ -1351,11 +1351,11 @@
 			]
 		},
 		"contracts/MMR/VerusProof.sol": {
-			"keccak256": "0x49db0ca5c3438e523d1906315718c62c46db83c31e439a9b1252e24afe353a5b",
+			"keccak256": "0x8b898d487a99a7ac58ac25b809b0c2f57c9d3f685a91bae4f4fcb1e74a7c92a5",
 			"license": "MIT",
 			"urls": [
-				"bzz-raw://0729fa431af5af2619bcb26e6f75e7840a4199992e452ce20147589e13469e39",
-				"dweb:/ipfs/QmSKzowC74BQtouzcmmRYideUYHkStPiSduxBhnEVjbir3"
+				"bzz-raw://4c18c78b1a2b7ce1c5b5aefab49cda45bb68d610ee37729e8b5a4c0df96489a6",
+				"dweb:/ipfs/QmfRa2vBa6hucTgnXt9esyUq96cbP2NYitEbPiKNhQn1Ki"
 			]
 		},
 		"contracts/Storage/StorageMaster.sol": {
