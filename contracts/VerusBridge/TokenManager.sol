@@ -16,6 +16,10 @@ import "@openzeppelin/contracts/token/ERC1155/IERC1155.sol";
 import "../Storage/StorageMaster.sol";
 import "./VerusCrossChainExport.sol";
 
+interface callGetName {
+    function getName(address cont) external view returns(string memory);
+}
+
 contract TokenManager is VerusStorage {
 
     address immutable VETH;
@@ -38,15 +42,58 @@ contract TokenManager is VerusStorage {
         DAIERC20ADDRESS = DaiERC20Address;
     }
 
-    function getName(address cont) private view returns (string memory)
+    function getName(address cont) external returns (string memory ret)
     {
         // Wrapper functions to enable try catch to work
-        (bool success, bytes memory result) = address(cont).staticcall(abi.encodeWithSignature("name()"));
-        if (success) {
-            return abi.decode(result, (string));
-        } else {
-            return "";
+        bytes4 sig = 0x06FDDE03; //signature of function to call `name()`
+        bytes32 c;
+        uint8 tmp;
+        ret = new string(32);
+        assembly {
+            let x := mload(0x40)   //Find empty storage location using "free memory pointer"
+            let i := 0
+            mstore(x,sig) //Place signature at begining of empty storage 
+
+            if iszero(call(     
+                            5000, //5k gas
+                            cont, //To addr
+                            0,    //No value
+                            x,    //Inputs are stored at location x
+                            0x20, //Inputs are 68 bytes long
+                            x,    //Store output over input (saves space)
+                            0x60)) {  //Outputs are 32 bytes long   
+                revert(0, 0)
+            }
+
+            c := mload(x) //Assign output value to c
+            switch c //0x06FDDE03
+            case 0x06FDDE0300000000000000000000000000000000000000000000000000000000 {  
+              revert(0, 0)
+            }
+            case 0 {  
+              revert(0, 0)
+            }
+            case 0x20 { 
+              // Store the string in the return variable 
+              mstore(ret, mload(add(x,0x20)))
+              mstore(add(ret,32), mload(add(x,0x40)))
+            }
+            default {
+                // string stored in bytes32 so process one byte at a time until null terminator
+                for {} iszero(0) {} {
+                tmp := and(shr(sub(248,mul(i,8)),c), 0xff) 
+                if iszero(tmp) {
+                    break
+                }
+                mstore8(add(ret,add(i,32)), tmp)
+                i := add(i, 1)
+            }
+            mstore(ret, i)
+
+            }
+
         }
+        return ret;
     }
 
     function launchToken(VerusObjects.PackedCurrencyLaunch[] memory _tx) private {
@@ -66,7 +113,12 @@ contract TokenManager is VerusStorage {
                 (VerusConstants.MAPPING_ETHEREUM_OWNED | VerusConstants.MAPPING_ERC1155_ERC_DEFINITION | VerusConstants.MAPPING_ERC1155_NFT_DEFINITION) 
                     == VerusConstants.MAPPING_ETHEREUM_OWNED)
             {
-                outputName = getName(_tx[j].ERCContract);
+                try callGetName(contracts[uint(VerusConstants.ContractType.TokenManager)]).getName(_tx[j].ERCContract) returns (string memory name) {
+                    outputName = name;
+                } catch {
+                    // ... is illegal for a VerusID so we can use it to indicate that the name is not available
+                    outputName = "...";
+                }
 
                 if (bytes(outputName).length == 0) {
                     continue;
