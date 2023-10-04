@@ -54,6 +54,7 @@ contract VerusProof is VerusStorage  {
     uint8 constant TX_HEADER = 1;
     uint8 constant NUM_TX_PROOFS = 3;
 
+    bytes16 constant _SYMBOLS = "0123456789abcdef";
 
     function checkProof(bytes32 hashToProve, VerusObjects.CTXProof[] memory _branches) public view returns(bytes32){
         //loop through the branches from bottom to top
@@ -394,7 +395,7 @@ contract VerusProof is VerusStorage  {
         }
     }
 
-    function getTokenList(uint256 start, uint256 end) external view returns(VerusObjects.setupToken[] memory ) {
+    function getTokenList(uint256 start, uint256 end) external returns(VerusObjects.setupToken[] memory ) {
 
         uint tokenListLength;
         tokenListLength = tokenList.length;
@@ -430,10 +431,25 @@ contract VerusProof is VerusStorage  {
             }
             else if(recordedToken.flags & VerusConstants.MAPPING_ERC20_DEFINITION == VerusConstants.MAPPING_ERC20_DEFINITION )
             {
-                Token token = Token(recordedToken.erc20ContractAddress);
-                temp[i].erc20ContractAddress = address(token);
-                temp[i].name = recordedToken.name;
-                temp[i].ticker = token.symbol();
+                temp[i].erc20ContractAddress = recordedToken.erc20ContractAddress;
+                bytes memory tempName;
+                tempName = bytes(recordedToken.name);
+                if (tempName[1] == "." && tempName[2] == "." && tempName[3] == ".") {
+
+                    temp[i].name = string(abi.encodePacked("[", toHexString(uint160(recordedToken.erc20ContractAddress), 20), "]", slice(tempName, 5, tempName.length - 5)));
+
+                } else {
+                    temp[i].name = recordedToken.name;
+                }
+                (bool success, bytes memory retval) = recordedToken.erc20ContractAddress.call(abi.encodeWithSignature("symbol()"));
+
+                if (success && retval.length > 0x40) {
+                    temp[i].ticker = abi.decode(retval, (string));
+                } else if (retval.length == 0x20) {
+                    temp[i].ticker = string(slice(retval, 0, (retval[3] == 0 ? 3 : 4)));
+                } else {
+                    temp[i].ticker = string(slice(bytes(temp[i].name), 3, 4));
+                }
             }
             else if(recordedToken.flags & VerusConstants.MAPPING_ERC721_NFT_DEFINITION == VerusConstants.MAPPING_ERC721_NFT_DEFINITION
                         || recordedToken.flags & VerusConstants.MAPPING_ERC1155_NFT_DEFINITION == VerusConstants.MAPPING_ERC1155_NFT_DEFINITION
@@ -454,6 +470,59 @@ contract VerusProof is VerusStorage  {
         number = ((number & 0xFF00FF00) >> 8) | ((number & 0x00FF00FF) << 8);
         number = (number >> 16) | (number << 16);
         return number;
+    }
+
+    function toHexString(uint160 value, uint256 length) internal pure returns (string memory) {
+        bytes memory buffer = new bytes(2 * length + 2);
+        buffer[0] = "0";
+        buffer[1] = "x";
+        for (uint256 i = 2 * length + 1; i > 1; --i) {
+            buffer[i] = _SYMBOLS[value & 0xf];
+            value >>= 4;
+        }
+        require(value == 0, "Strings: hex length insufficient");
+        return string(buffer);
+    }
+
+function slice(
+        bytes memory _bytes,
+        uint256 _start,
+        uint256 _length
+    )
+        internal
+        pure
+        returns (bytes memory)
+    {
+        require(_length + 31 >= _length, "slice_overflow");
+        require(_bytes.length >= _start + _length, "slice_outOfBounds");
+
+        bytes memory tempBytes;
+        assembly {
+            switch iszero(_length)
+            case 0 {
+                tempBytes := mload(0x40)
+                let lengthmod := and(_length, 31)
+                let mc := add(add(tempBytes, lengthmod), mul(0x20, iszero(lengthmod)))
+                let end := add(mc, _length)
+
+                for {
+                    let cc := add(add(add(_bytes, lengthmod), mul(0x20, iszero(lengthmod))), _start)
+                } lt(mc, end) {
+                    mc := add(mc, 0x20)
+                    cc := add(cc, 0x20)
+                } {
+                    mstore(mc, mload(cc))
+                }
+                mstore(tempBytes, _length)
+                mstore(0x40, and(add(mc, 31), not(31)))
+            }
+            default {
+                tempBytes := mload(0x40)
+                mstore(tempBytes, 0)
+                mstore(0x40, add(tempBytes, 0x20))
+            }
+        }
+        return tempBytes;
     }
     
 }

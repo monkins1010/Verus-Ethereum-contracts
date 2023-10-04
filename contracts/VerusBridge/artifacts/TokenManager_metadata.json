@@ -1,6 +1,6 @@
 {
 	"compiler": {
-		"version": "0.7.6+commit.7338295f"
+		"version": "0.8.9+commit.e5eed63a"
 	},
 	"language": "Solidity",
 	"output": {
@@ -9,7 +9,22 @@
 				"inputs": [
 					{
 						"internalType": "address",
-						"name": "verusSerializerAddress",
+						"name": "vETH",
+						"type": "address"
+					},
+					{
+						"internalType": "address",
+						"name": "",
+						"type": "address"
+					},
+					{
+						"internalType": "address",
+						"name": "Verus",
+						"type": "address"
+					},
+					{
+						"internalType": "address",
+						"name": "DaiERC20Address",
 						"type": "address"
 					}
 				],
@@ -17,37 +32,163 @@
 				"type": "constructor"
 			},
 			{
-				"anonymous": false,
 				"inputs": [
 					{
-						"indexed": false,
-						"internalType": "address",
-						"name": "tokenAddress",
-						"type": "address"
+						"internalType": "uint256",
+						"name": "",
+						"type": "uint256"
 					}
 				],
-				"name": "TokenCreated",
-				"type": "event"
+				"name": "_readyExports",
+				"outputs": [
+					{
+						"internalType": "bytes32",
+						"name": "exportHash",
+						"type": "bytes32"
+					},
+					{
+						"internalType": "bytes32",
+						"name": "prevExportHash",
+						"type": "bytes32"
+					},
+					{
+						"internalType": "uint64",
+						"name": "endHeight",
+						"type": "uint64"
+					}
+				],
+				"stateMutability": "view",
+				"type": "function"
 			},
 			{
 				"inputs": [
 					{
-						"internalType": "address",
-						"name": "_ERC20contractAddress",
-						"type": "address"
-					},
-					{
-						"internalType": "address",
-						"name": "_verusAddress",
-						"type": "address"
+						"internalType": "uint256",
+						"name": "",
+						"type": "uint256"
 					}
 				],
-				"name": "addExistingToken",
+				"name": "bestForks",
+				"outputs": [
+					{
+						"internalType": "bytes",
+						"name": "",
+						"type": "bytes"
+					}
+				],
+				"stateMutability": "view",
+				"type": "function"
+			},
+			{
+				"inputs": [],
+				"name": "bridgeConverterActive",
+				"outputs": [
+					{
+						"internalType": "bool",
+						"name": "",
+						"type": "bool"
+					}
+				],
+				"stateMutability": "view",
+				"type": "function"
+			},
+			{
+				"inputs": [],
+				"name": "cceLastEndHeight",
+				"outputs": [
+					{
+						"internalType": "uint64",
+						"name": "",
+						"type": "uint64"
+					}
+				],
+				"stateMutability": "view",
+				"type": "function"
+			},
+			{
+				"inputs": [],
+				"name": "cceLastStartHeight",
+				"outputs": [
+					{
+						"internalType": "uint64",
+						"name": "",
+						"type": "uint64"
+					}
+				],
+				"stateMutability": "view",
+				"type": "function"
+			},
+			{
+				"inputs": [
+					{
+						"internalType": "bytes32",
+						"name": "",
+						"type": "bytes32"
+					}
+				],
+				"name": "claimableFees",
+				"outputs": [
+					{
+						"internalType": "uint256",
+						"name": "",
+						"type": "uint256"
+					}
+				],
+				"stateMutability": "view",
+				"type": "function"
+			},
+			{
+				"inputs": [
+					{
+						"internalType": "uint256",
+						"name": "",
+						"type": "uint256"
+					}
+				],
+				"name": "contracts",
 				"outputs": [
 					{
 						"internalType": "address",
 						"name": "",
 						"type": "address"
+					}
+				],
+				"stateMutability": "view",
+				"type": "function"
+			},
+			{
+				"inputs": [
+					{
+						"internalType": "uint256",
+						"name": "",
+						"type": "uint256"
+					}
+				],
+				"name": "exportHeights",
+				"outputs": [
+					{
+						"internalType": "uint256",
+						"name": "",
+						"type": "uint256"
+					}
+				],
+				"stateMutability": "view",
+				"type": "function"
+			},
+			{
+				"inputs": [
+					{
+						"internalType": "address",
+						"name": "cont",
+						"type": "address"
+					}
+				],
+				"name": "getName",
+				"outputs": [
+					{
+						"internalType": "string",
+						"name": "ret",
+						"type": "string"
 					}
 				],
 				"stateMutability": "nonpayable",
@@ -56,27 +197,64 @@
 			{
 				"inputs": [
 					{
-						"internalType": "address",
-						"name": "_contractAddress",
-						"type": "address"
-					},
-					{
-						"internalType": "address",
-						"name": "_owner",
-						"type": "address"
-					},
-					{
-						"internalType": "address",
-						"name": "_spender",
-						"type": "address"
+						"internalType": "bytes32",
+						"name": "",
+						"type": "bytes32"
 					}
 				],
-				"name": "allowance",
+				"name": "lastImportInfo",
 				"outputs": [
+					{
+						"internalType": "bytes32",
+						"name": "hashOfTransfers",
+						"type": "bytes32"
+					},
+					{
+						"internalType": "bytes32",
+						"name": "exporttxid",
+						"type": "bytes32"
+					},
+					{
+						"internalType": "uint32",
+						"name": "exporttxoutnum",
+						"type": "uint32"
+					},
+					{
+						"internalType": "uint32",
+						"name": "height",
+						"type": "uint32"
+					}
+				],
+				"stateMutability": "view",
+				"type": "function"
+			},
+			{
+				"inputs": [],
+				"name": "lastTxIdImport",
+				"outputs": [
+					{
+						"internalType": "bytes32",
+						"name": "",
+						"type": "bytes32"
+					}
+				],
+				"stateMutability": "view",
+				"type": "function"
+			},
+			{
+				"inputs": [
 					{
 						"internalType": "uint256",
 						"name": "",
 						"type": "uint256"
+					}
+				],
+				"name": "notaries",
+				"outputs": [
+					{
+						"internalType": "address",
+						"name": "",
+						"type": "address"
 					}
 				],
 				"stateMutability": "view",
@@ -86,236 +264,82 @@
 				"inputs": [
 					{
 						"internalType": "address",
-						"name": "_contractAddress",
+						"name": "",
+						"type": "address"
+					}
+				],
+				"name": "notaryAddressMapping",
+				"outputs": [
+					{
+						"internalType": "address",
+						"name": "main",
 						"type": "address"
 					},
 					{
 						"internalType": "address",
-						"name": "_account",
+						"name": "recovery",
 						"type": "address"
-					}
-				],
-				"name": "balanceOf",
-				"outputs": [
-					{
-						"internalType": "uint256",
-						"name": "",
-						"type": "uint256"
-					}
-				],
-				"stateMutability": "view",
-				"type": "function"
-			},
-			{
-				"inputs": [
-					{
-						"internalType": "string",
-						"name": "a",
-						"type": "string"
-					},
-					{
-						"internalType": "string",
-						"name": "b",
-						"type": "string"
-					}
-				],
-				"name": "compareStrings",
-				"outputs": [
-					{
-						"internalType": "bool",
-						"name": "",
-						"type": "bool"
-					}
-				],
-				"stateMutability": "pure",
-				"type": "function"
-			},
-			{
-				"inputs": [
-					{
-						"internalType": "uint256",
-						"name": "a",
-						"type": "uint256"
 					},
 					{
 						"internalType": "uint8",
-						"name": "decimals",
+						"name": "state",
 						"type": "uint8"
 					}
 				],
-				"name": "convertFromVerusNumber",
+				"stateMutability": "view",
+				"type": "function"
+			},
+			{
+				"inputs": [],
+				"name": "owner",
 				"outputs": [
 					{
-						"internalType": "uint256",
+						"internalType": "address",
 						"name": "",
-						"type": "uint256"
+						"type": "address"
 					}
 				],
-				"stateMutability": "pure",
+				"stateMutability": "view",
 				"type": "function"
 			},
 			{
 				"inputs": [
 					{
 						"internalType": "bytes",
-						"name": "_serializedCcd",
+						"name": "serializedTransfers",
 						"type": "bytes"
-					}
-				],
-				"name": "deployNewToken",
-				"outputs": [
-					{
-						"internalType": "address",
-						"name": "",
-						"type": "address"
-					}
-				],
-				"stateMutability": "nonpayable",
-				"type": "function"
-			},
-			{
-				"inputs": [
-					{
-						"internalType": "address",
-						"name": "",
-						"type": "address"
-					}
-				],
-				"name": "destinationToAddress",
-				"outputs": [
-					{
-						"internalType": "address",
-						"name": "",
-						"type": "address"
-					}
-				],
-				"stateMutability": "view",
-				"type": "function"
-			},
-			{
-				"inputs": [
-					{
-						"internalType": "address",
-						"name": "_contractAddress",
-						"type": "address"
 					},
 					{
-						"internalType": "uint256",
-						"name": "_tokenAmount",
-						"type": "uint256"
+						"internalType": "uint8",
+						"name": "numberOfTransfers",
+						"type": "uint8"
 					}
 				],
-				"name": "exportERC20Tokens",
-				"outputs": [],
-				"stateMutability": "nonpayable",
-				"type": "function"
-			},
-			{
-				"inputs": [
-					{
-						"components": [
-							{
-								"internalType": "address",
-								"name": "parent",
-								"type": "address"
-							},
-							{
-								"internalType": "string",
-								"name": "name",
-								"type": "string"
-							},
-							{
-								"internalType": "address",
-								"name": "launchSystemID",
-								"type": "address"
-							}
-						],
-						"internalType": "struct VerusObjects.CcurrencyDefinition",
-						"name": "_ccd",
-						"type": "tuple"
-					}
-				],
-				"name": "getIAddress",
+				"name": "processTransactions",
 				"outputs": [
 					{
-						"internalType": "address",
-						"name": "",
-						"type": "address"
-					}
-				],
-				"stateMutability": "pure",
-				"type": "function"
-			},
-			{
-				"inputs": [
-					{
-						"internalType": "string",
-						"name": "_text",
-						"type": "string"
-					}
-				],
-				"name": "getSymbol",
-				"outputs": [
-					{
-						"internalType": "string",
-						"name": "",
-						"type": "string"
-					}
-				],
-				"stateMutability": "pure",
-				"type": "function"
-			},
-			{
-				"inputs": [
-					{
-						"internalType": "address",
-						"name": "VRSCAddress",
-						"type": "address"
-					}
-				],
-				"name": "getTokenERC20",
-				"outputs": [
-					{
-						"internalType": "contract Token",
-						"name": "",
-						"type": "address"
-					}
-				],
-				"stateMutability": "view",
-				"type": "function"
-			},
-			{
-				"inputs": [
-					{
-						"internalType": "address",
-						"name": "_destCurrencyID",
-						"type": "address"
+						"internalType": "bytes",
+						"name": "refundsData",
+						"type": "bytes"
 					},
 					{
 						"internalType": "uint64",
-						"name": "_tokenAmount",
+						"name": "fees",
 						"type": "uint64"
-					},
-					{
-						"internalType": "address",
-						"name": "_destination",
-						"type": "address"
 					}
 				],
-				"name": "importERC20Tokens",
-				"outputs": [],
 				"stateMutability": "nonpayable",
 				"type": "function"
 			},
 			{
 				"inputs": [
 					{
-						"internalType": "address",
-						"name": "_contractAddress",
-						"type": "address"
+						"internalType": "bytes32",
+						"name": "",
+						"type": "bytes32"
 					}
 				],
-				"name": "isToken",
+				"name": "processedTxids",
 				"outputs": [
 					{
 						"internalType": "bool",
@@ -330,11 +354,105 @@
 				"inputs": [
 					{
 						"internalType": "address",
-						"name": "_contractAddress",
+						"name": "_iaddress",
+						"type": "address"
+					},
+					{
+						"internalType": "address",
+						"name": "ethContractAddress",
+						"type": "address"
+					},
+					{
+						"internalType": "string",
+						"name": "name",
+						"type": "string"
+					},
+					{
+						"internalType": "string",
+						"name": "ticker",
+						"type": "string"
+					},
+					{
+						"internalType": "uint8",
+						"name": "flags",
+						"type": "uint8"
+					},
+					{
+						"internalType": "uint256",
+						"name": "tokenID",
+						"type": "uint256"
+					}
+				],
+				"name": "recordToken",
+				"outputs": [],
+				"stateMutability": "nonpayable",
+				"type": "function"
+			},
+			{
+				"inputs": [
+					{
+						"internalType": "bytes32",
+						"name": "",
+						"type": "bytes32"
+					},
+					{
+						"internalType": "address",
+						"name": "",
 						"type": "address"
 					}
 				],
-				"name": "isVerusOwned",
+				"name": "refunds",
+				"outputs": [
+					{
+						"internalType": "uint256",
+						"name": "",
+						"type": "uint256"
+					}
+				],
+				"stateMutability": "view",
+				"type": "function"
+			},
+			{
+				"inputs": [
+					{
+						"internalType": "uint256",
+						"name": "",
+						"type": "uint256"
+					}
+				],
+				"name": "rollingUpgradeVotes",
+				"outputs": [
+					{
+						"internalType": "address",
+						"name": "",
+						"type": "address"
+					}
+				],
+				"stateMutability": "view",
+				"type": "function"
+			},
+			{
+				"inputs": [],
+				"name": "rollingVoteIndex",
+				"outputs": [
+					{
+						"internalType": "uint8",
+						"name": "",
+						"type": "uint8"
+					}
+				],
+				"stateMutability": "view",
+				"type": "function"
+			},
+			{
+				"inputs": [
+					{
+						"internalType": "bytes32",
+						"name": "",
+						"type": "bytes32"
+					}
+				],
+				"name": "saltsUsed",
 				"outputs": [
 					{
 						"internalType": "bool",
@@ -348,40 +466,36 @@
 			{
 				"inputs": [
 					{
-						"internalType": "address",
-						"name": "_verusBridgeContract",
-						"type": "address"
+						"internalType": "bytes32",
+						"name": "",
+						"type": "bytes32"
 					}
 				],
-				"name": "setVerusBridgeContract",
-				"outputs": [],
-				"stateMutability": "nonpayable",
+				"name": "storageGlobal",
+				"outputs": [
+					{
+						"internalType": "bytes",
+						"name": "",
+						"type": "bytes"
+					}
+				],
+				"stateMutability": "view",
 				"type": "function"
 			},
 			{
 				"inputs": [
 					{
-						"internalType": "address",
+						"internalType": "uint256",
 						"name": "",
-						"type": "address"
+						"type": "uint256"
 					}
 				],
-				"name": "vERC20Tokens",
+				"name": "tokenList",
 				"outputs": [
 					{
 						"internalType": "address",
-						"name": "destinationCurrencyID",
+						"name": "",
 						"type": "address"
-					},
-					{
-						"internalType": "bool",
-						"name": "VerusOwned",
-						"type": "bool"
-					},
-					{
-						"internalType": "bool",
-						"name": "isRegistered",
-						"type": "bool"
 					}
 				],
 				"stateMutability": "view",
@@ -399,18 +513,28 @@
 				"outputs": [
 					{
 						"internalType": "address",
-						"name": "destinationCurrencyID",
+						"name": "erc20ContractAddress",
 						"type": "address"
 					},
 					{
-						"internalType": "bool",
-						"name": "VerusOwned",
-						"type": "bool"
+						"internalType": "uint8",
+						"name": "flags",
+						"type": "uint8"
 					},
 					{
-						"internalType": "bool",
-						"name": "isRegistered",
-						"type": "bool"
+						"internalType": "uint256",
+						"name": "tokenIndex",
+						"type": "uint256"
+					},
+					{
+						"internalType": "string",
+						"name": "name",
+						"type": "string"
+					},
+					{
+						"internalType": "uint256",
+						"name": "tokenID",
+						"type": "uint256"
 					}
 				],
 				"stateMutability": "view",
@@ -432,7 +556,7 @@
 		"compilationTarget": {
 			"contracts/VerusBridge/TokenManager.sol": "TokenManager"
 		},
-		"evmVersion": "istanbul",
+		"evmVersion": "london",
 		"libraries": {},
 		"metadata": {
 			"bytecodeHash": "ipfs"
@@ -444,92 +568,284 @@
 		"remappings": []
 	},
 	"sources": {
-		"contracts/Libraries/VerusConstants.sol": {
-			"keccak256": "0x055a7e428f7422072e7ae5237b967e149fae2c1ca68590087d1ba9129bc4aaab",
+		"@openzeppelin/contracts/interfaces/IERC165.sol": {
+			"keccak256": "0xd04b0f06e0666f29cf7cccc82894de541e19bb30a765b107b1e40bb7fe5f7d7a",
 			"license": "MIT",
 			"urls": [
-				"bzz-raw://beade677dd0dd12081ad11fad16902c112435608798e13f1fda63dca320b8a2c",
-				"dweb:/ipfs/QmZ6upQmQDwY4NiJuPUvsZcgssbp9m4DEd199pJDwEMy5u"
+				"bzz-raw://7b652499d098e88d8d878374616bb58434301061cae2253298b3f374044e0ddb",
+				"dweb:/ipfs/QmbhAzctqo5jrSKU6idHdVyqfmzCcDbNUPvmx4GiXxfA6q"
+			]
+		},
+		"@openzeppelin/contracts/interfaces/IERC4906.sol": {
+			"keccak256": "0x2a9dadb806be80dd451821f1f1190eb9aa6f6edae85b185db29d60767cc0c5f4",
+			"license": "MIT",
+			"urls": [
+				"bzz-raw://5c25cac8dbe5bd96320053d23c3dacdb875e629d7c53ac00892eb7aa8500bde6",
+				"dweb:/ipfs/Qmaf2oqbxxdJA9DphAoH4UCb8aXEAVM8fnu6qMxHJ5ta4A"
+			]
+		},
+		"@openzeppelin/contracts/interfaces/IERC721.sol": {
+			"keccak256": "0xaf297d12d8d4a57fe01a70f0ef38908f208e3faedc577056d0b728fa2f3ccf0c",
+			"license": "MIT",
+			"urls": [
+				"bzz-raw://fbfaf37123958822a2720a4ea29651be00edab787540b770f73d3e025d286ff8",
+				"dweb:/ipfs/QmbzgWeTm8hJVUqWrNAwFjshqbYVyeGpQA8D1huzxQdmw6"
+			]
+		},
+		"@openzeppelin/contracts/token/ERC1155/IERC1155.sol": {
+			"keccak256": "0xcab667ddad478ff0d39c2053ca77fac778af8483c18ab07d810277b4216fd582",
+			"license": "MIT",
+			"urls": [
+				"bzz-raw://919c7ea27c77275c3c341da0c4a26a66a20ed27605fbe8becf11f58ec3bc65bf",
+				"dweb:/ipfs/QmRLKyVE2n7e2Jo4bLNn8eLgqqhNGYnVQyjJPWdr8poskf"
+			]
+		},
+		"@openzeppelin/contracts/token/ERC20/ERC20.sol": {
+			"keccak256": "0xa56ca923f70c1748830700250b19c61b70db9a683516dc5e216694a50445d99c",
+			"license": "MIT",
+			"urls": [
+				"bzz-raw://cac938788bc4be12101e59d45588b4e059579f4e61062e1cda8d6b06c0191b15",
+				"dweb:/ipfs/QmV2JKCyjTVH3rkWNrfdJRhAT7tZ3usAN2XcnD4h53Mvih"
+			]
+		},
+		"@openzeppelin/contracts/token/ERC20/IERC20.sol": {
+			"keccak256": "0x287b55befed2961a7eabd7d7b1b2839cbca8a5b80ef8dcbb25ed3d4c2002c305",
+			"license": "MIT",
+			"urls": [
+				"bzz-raw://bd39944e8fc06be6dbe2dd1d8449b5336e23c6a7ba3e8e9ae5ae0f37f35283f5",
+				"dweb:/ipfs/QmPV3FGYjVwvKSgAXKUN3r9T9GwniZz83CxBpM7vyj2G53"
+			]
+		},
+		"@openzeppelin/contracts/token/ERC20/extensions/IERC20Metadata.sol": {
+			"keccak256": "0x8de418a5503946cabe331f35fe242d3201a73f67f77aaeb7110acb1f30423aca",
+			"license": "MIT",
+			"urls": [
+				"bzz-raw://5a376d3dda2cb70536c0a45c208b29b34ac560c4cb4f513a42079f96ba47d2dd",
+				"dweb:/ipfs/QmZQg6gn1sUpM8wHzwNvSnihumUCAhxD119MpXeKp8B9s8"
+			]
+		},
+		"@openzeppelin/contracts/token/ERC20/extensions/IERC20Permit.sol": {
+			"keccak256": "0xec63854014a5b4f2b3290ab9103a21bdf902a508d0f41a8573fea49e98bf571a",
+			"license": "MIT",
+			"urls": [
+				"bzz-raw://bc5b5dc12fbc4002f282eaa7a5f06d8310ed62c1c77c5770f6283e058454c39a",
+				"dweb:/ipfs/Qme9rE2wS3yBuyJq9GgbmzbsBQsW2M2sVFqYYLw7bosGrv"
+			]
+		},
+		"@openzeppelin/contracts/token/ERC20/utils/SafeERC20.sol": {
+			"keccak256": "0xabefac93435967b4d36a4fabcbdbb918d1f0b7ae3c3d85bc30923b326c927ed1",
+			"license": "MIT",
+			"urls": [
+				"bzz-raw://9d213d3befca47da33f6db0310826bcdb148299805c10d77175ecfe1d06a9a68",
+				"dweb:/ipfs/QmRgCn6SP1hbBkExUADFuDo8xkT4UU47yjNF5FhCeRbQmS"
+			]
+		},
+		"@openzeppelin/contracts/token/ERC721/ERC721.sol": {
+			"keccak256": "0x2c309e7df9e05e6ce15bedfe74f3c61b467fc37e0fae9eab496acf5ea0bbd7ff",
+			"license": "MIT",
+			"urls": [
+				"bzz-raw://7063b5c98711a98018ba4635ac74cee1c1cfa2ea01099498e062699ed9530005",
+				"dweb:/ipfs/QmeJ8rGXkcv7RrqLdAW8PCXPAykxVsddfYY6g5NaTwmRFE"
+			]
+		},
+		"@openzeppelin/contracts/token/ERC721/IERC721.sol": {
+			"keccak256": "0x5bce51e11f7d194b79ea59fe00c9e8de9fa2c5530124960f29a24d4c740a3266",
+			"license": "MIT",
+			"urls": [
+				"bzz-raw://7e66dfde185df46104c11bc89d08fa0760737aa59a2b8546a656473d810a8ea4",
+				"dweb:/ipfs/QmXvyqtXPaPss2PD7eqPoSao5Szm2n6UMoiG8TZZDjmChR"
+			]
+		},
+		"@openzeppelin/contracts/token/ERC721/IERC721Receiver.sol": {
+			"keccak256": "0xa82b58eca1ee256be466e536706850163d2ec7821945abd6b4778cfb3bee37da",
+			"license": "MIT",
+			"urls": [
+				"bzz-raw://6e75cf83beb757b8855791088546b8337e9d4684e169400c20d44a515353b708",
+				"dweb:/ipfs/QmYvPafLfoquiDMEj7CKHtvbgHu7TJNPSVPSCjrtjV8HjV"
+			]
+		},
+		"@openzeppelin/contracts/token/ERC721/extensions/ERC721URIStorage.sol": {
+			"keccak256": "0x7942989e3525aec1672469e4c65fb33fbd19c785c9cadbcb70fcbe1fe8bfdd37",
+			"license": "MIT",
+			"urls": [
+				"bzz-raw://6c9f260258c2be0e3b75f8ca285872c4bfa3a8fc97fdc2e62366c78abf22b54f",
+				"dweb:/ipfs/QmTg1DMNwCDj8NVi6i1noqx7cxuRdPP4VyW4fzDkKAKmH2"
+			]
+		},
+		"@openzeppelin/contracts/token/ERC721/extensions/IERC721Metadata.sol": {
+			"keccak256": "0x75b829ff2f26c14355d1cba20e16fe7b29ca58eb5fef665ede48bc0f9c6c74b9",
+			"license": "MIT",
+			"urls": [
+				"bzz-raw://a0a107160525724f9e1bbbab031defc2f298296dd9e331f16a6f7130cec32146",
+				"dweb:/ipfs/QmemujxSd7gX8A9M8UwmNbz4Ms3U9FG9QfudUgxwvTmPWf"
+			]
+		},
+		"@openzeppelin/contracts/utils/Address.sol": {
+			"keccak256": "0x006dd67219697fe68d7fbfdea512e7c4cb64a43565ed86171d67e844982da6fa",
+			"license": "MIT",
+			"urls": [
+				"bzz-raw://2455248c8ddd9cc6a7af76a13973cddf222072427e7b0e2a7d1aff345145e931",
+				"dweb:/ipfs/QmfYjnjRbWqYpuxurqveE6HtzsY1Xx323J428AKQgtBJZm"
+			]
+		},
+		"@openzeppelin/contracts/utils/Context.sol": {
+			"keccak256": "0xe2e337e6dde9ef6b680e07338c493ebea1b5fd09b43424112868e9cc1706bca7",
+			"license": "MIT",
+			"urls": [
+				"bzz-raw://6df0ddf21ce9f58271bdfaa85cde98b200ef242a05a3f85c2bc10a8294800a92",
+				"dweb:/ipfs/QmRK2Y5Yc6BK7tGKkgsgn3aJEQGi5aakeSPZvS65PV8Xp3"
+			]
+		},
+		"@openzeppelin/contracts/utils/Strings.sol": {
+			"keccak256": "0x3088eb2868e8d13d89d16670b5f8612c4ab9ff8956272837d8e90106c59c14a0",
+			"license": "MIT",
+			"urls": [
+				"bzz-raw://b81d9ff6559ea5c47fc573e17ece6d9ba5d6839e213e6ebc3b4c5c8fe4199d7f",
+				"dweb:/ipfs/QmPCW1bFisUzJkyjroY3yipwfism9RRCigCcK1hbXtVM8n"
+			]
+		},
+		"@openzeppelin/contracts/utils/introspection/ERC165.sol": {
+			"keccak256": "0xd10975de010d89fd1c78dc5e8a9a7e7f496198085c151648f20cba166b32582b",
+			"license": "MIT",
+			"urls": [
+				"bzz-raw://fb0048dee081f6fffa5f74afc3fb328483c2a30504e94a0ddd2a5114d731ec4d",
+				"dweb:/ipfs/QmZptt1nmYoA5SgjwnSgWqgUSDgm4q52Yos3xhnMv3MV43"
+			]
+		},
+		"@openzeppelin/contracts/utils/introspection/IERC165.sol": {
+			"keccak256": "0x447a5f3ddc18419d41ff92b3773fb86471b1db25773e07f877f548918a185bf1",
+			"license": "MIT",
+			"urls": [
+				"bzz-raw://be161e54f24e5c6fae81a12db1a8ae87bc5ae1b0ddc805d82a1440a68455088f",
+				"dweb:/ipfs/QmP7C3CHdY9urF4dEMb9wmsp1wMxHF6nhA2yQE5SKiPAdy"
+			]
+		},
+		"@openzeppelin/contracts/utils/math/Math.sol": {
+			"keccak256": "0xe4455ac1eb7fc497bb7402579e7b4d64d928b846fce7d2b6fde06d366f21c2b3",
+			"license": "MIT",
+			"urls": [
+				"bzz-raw://cc8841b3cd48ad125e2f46323c8bad3aa0e88e399ec62acb9e57efa7e7c8058c",
+				"dweb:/ipfs/QmSqE4mXHA2BXW58deDbXE8MTcsL5JSKNDbm23sVQxRLPS"
+			]
+		},
+		"@openzeppelin/contracts/utils/math/SignedMath.sol": {
+			"keccak256": "0xf92515413956f529d95977adc9b0567d583c6203fc31ab1c23824c35187e3ddc",
+			"license": "MIT",
+			"urls": [
+				"bzz-raw://c50fcc459e49a9858b6d8ad5f911295cb7c9ab57567845a250bf0153f84a95c7",
+				"dweb:/ipfs/QmcEW85JRzvDkQggxiBBLVAasXWdkhEysqypj9EaB6H2g6"
+			]
+		},
+		"contracts/Libraries/VerusConstants.sol": {
+			"keccak256": "0x40856626309785dd5bb31cd0f6c2b36ebdb6ccc05a6d286d20226c44dd93577e",
+			"license": "MIT",
+			"urls": [
+				"bzz-raw://d0fd81f7eebe1e4c4b2843f3c7b10218d765c255675cf8c915ce7027500f1958",
+				"dweb:/ipfs/QmUo4UuQYXueJxf8rs1T2a9meCyHdPQWoCbBC9y7zHwsJr"
 			]
 		},
 		"contracts/Libraries/VerusObjects.sol": {
-			"keccak256": "0xe3257ce28b4e1a844ba7292f4118025698c4294835d2138104f7c4dae688b2b4",
+			"keccak256": "0xf4f5e64ee162ecb18ed77530d0fe0e83f1f324899ddb3153f44f4b3e1288dfa6",
 			"license": "MIT",
 			"urls": [
-				"bzz-raw://ef0a018e5a4656e64b0012ddcb8fef1d1a0401f1d49aad229cc78097caa13129",
-				"dweb:/ipfs/QmUrJXFF3G7UNv6PmiURWGxWn46QZ8xFk4SVK9HL5NAik8"
+				"bzz-raw://f955389d98711bbbe4f0a4f15aba2a8103f3448eb9a429a5db15a55f6703c11d",
+				"dweb:/ipfs/QmU69E4wg14p3hbqn1rsdm7YEFJp5riCtSF9QZi9wnmc7w"
 			]
 		},
 		"contracts/Libraries/VerusObjectsCommon.sol": {
-			"keccak256": "0x482958747526d1aaeecd34ba29310c6f5327d547a85402cb60574972d2e03548",
+			"keccak256": "0x055db224a0fd96a8279675c769652c355c1cf5a88ccb10fe0a5aab9288abf265",
 			"license": "MIT",
 			"urls": [
-				"bzz-raw://0cb25159e249e74b7b6a3c7a36f8f30096cd08ede31b3d1e942d1193655b7a45",
-				"dweb:/ipfs/QmYGbUuFHWcXNZEnb9Vsxo5GqmJxLvmSS8cHQwrtFzcHVB"
+				"bzz-raw://a70c54e78a0477828489bffd12943be1a70671665cfcdb4b2a413b4b234da071",
+				"dweb:/ipfs/QmVp4R24kLV4bHFiaUJcQKJ6aRGuaxFfNDi3YijxDbMHFn"
 			]
 		},
 		"contracts/Libraries/VerusObjectsNotarization.sol": {
-			"keccak256": "0xdffb141ca8e542554532a5bbec4428bb31766260eccd354cc7b271e6c9cb6cd7",
+			"keccak256": "0x4a1553316b1303545d950b86d449bcb0737b5adafb6675402b1de1bfec7a1980",
 			"license": "MIT",
 			"urls": [
-				"bzz-raw://b07f9be5d84abd64e699b85dbbb1e4b1ac3759ad3316cd5a20ec7337a25318df",
-				"dweb:/ipfs/QmWPVUA6W3DSw5afrR3M645AWCARdqhGuUVNjXYnVmisVJ"
+				"bzz-raw://6d4813d2a4ee3e6e31bb34886eb080cf5733615fe75a69491d0b17c4b9bfee86",
+				"dweb:/ipfs/QmQUpEnnppuVp3NxjxjoQaYFcr4W1sfWFbrbrhRUXF21d6"
+			]
+		},
+		"contracts/Storage/StorageMaster.sol": {
+			"keccak256": "0x073e0499d1b8f30119731313d3276d25088171fa5713cd90e0baec7f8f376e7a",
+			"license": "MIT",
+			"urls": [
+				"bzz-raw://e997ca214645a410c5ed9e0521f29b62e0f51156642f2c2ddbaeb5d16096e308",
+				"dweb:/ipfs/QmRstKHZecnVAo4eF4CShCb8GGKcmdzfhkv9EpoPY5jKs5"
+			]
+		},
+		"contracts/VerusBridge/CreateExports.sol": {
+			"keccak256": "0x7d0c4dcf5249a45a6a9e4f7ae501996c0e0aa5be42f1bc9794de6b6f03f865f3",
+			"license": "MIT",
+			"urls": [
+				"bzz-raw://993544d14763091f5e305695a7eab8ebd857c2367542bb8147b1afe17db46c90",
+				"dweb:/ipfs/QmZf2kHTGEB2ZSuPdciswyGd95wzPYRApsREJA2oD3K2ob"
+			]
+		},
+		"contracts/VerusBridge/ExportManager.sol": {
+			"keccak256": "0x458535693cf9ba7101105b6fb076e6bec08a5420a1620e3ae373796013bfd5b3",
+			"license": "MIT",
+			"urls": [
+				"bzz-raw://6e4802dd3ade3995bf8ec98c4cf379838749024bb8b5e3350ff4598808645529",
+				"dweb:/ipfs/QmfCFn5TDRSM32mPgotZwNFQsZNV8qSDv1w4uDLQ4iUdni"
+			]
+		},
+		"contracts/VerusBridge/SubmitImports.sol": {
+			"keccak256": "0xe12b5206e476f82da18b54a6034fb9b3111a357ebd04791d6bef54418aed61d5",
+			"license": "MIT",
+			"urls": [
+				"bzz-raw://b8abd60f570c1595f8b709e8cc65357335939d8ded20c2ada6f23273996fa33a",
+				"dweb:/ipfs/Qmded2p3HpLZn2wdnpeAD1GdnHZerw6X4vcXw1LkTsTt4Y"
 			]
 		},
 		"contracts/VerusBridge/Token.sol": {
-			"keccak256": "0xc9d054b4ad1642089cf76fd4c524de6c3ba2334390ebc7caa0a90e3af858b932",
+			"keccak256": "0x90a64e67af229e825a3efe666ac8ab67d54fa549f06bc3e092c7b695f5b72f8d",
 			"license": "MIT",
 			"urls": [
-				"bzz-raw://e0e61b05a6b6d62a6771835e815c73c7053b044662eaed6b6077714b2aefd5d5",
-				"dweb:/ipfs/QmXstFC8QtNSWnRix5SFmFDa9XiKH66o9T7o7YwRdKwadU"
+				"bzz-raw://33ff45da161d930839126ae923fd60fcc9821c6a3217cacc935f14a651f9ccf7",
+				"dweb:/ipfs/QmQCkC69sLBR3bzqPteS6u7iwtXu22jhsXkkz2k9EoL7X1"
 			]
 		},
 		"contracts/VerusBridge/TokenManager.sol": {
-			"keccak256": "0xbe45ba75f0a0c32ef513c253faf05ff602342bfa743e1457904a218ac20a0dc4",
+			"keccak256": "0x5d54e8c4f4fcad427cb33242d17135eae1aafe3e220fb3cbd8fb958f9b6d8254",
 			"license": "MIT",
 			"urls": [
-				"bzz-raw://86ed692b0da153c410100941978a4417fcd2af4a9268c747bc4c7aa04a39656a",
-				"dweb:/ipfs/QmZ4CQEAXgMpPydnQhgqkqnCpZFbPzudraWk86GtkcRceJ"
+				"bzz-raw://126d0a244de1bdb73553a96018e196f12f4b83bc4bddef23c9e2902e80cf942f",
+				"dweb:/ipfs/QmNrV4qq7GQaAPtH93tVbrxo7L2WsHLzKkUTHLHzScWKCL"
+			]
+		},
+		"contracts/VerusBridge/UpgradeManager.sol": {
+			"keccak256": "0x76010113f03a5ade27103d57d6f4171fa0c4e8d874997ae2d08c9fa6237de0d0",
+			"license": "MIT",
+			"urls": [
+				"bzz-raw://b0eee6834a9469e940860a234ee9b068e5954a307d9522fd1ed61f0acbf70697",
+				"dweb:/ipfs/QmNTSfEjyUWBoVwqUh5fPojqMvMrzBAP9YTWa78GcUNdeF"
+			]
+		},
+		"contracts/VerusBridge/VerusCrossChainExport.sol": {
+			"keccak256": "0x5cc0c59640d413e8a3e5e89be2d366bf3a41ff28e9788bd325ab99237f4dc8b2",
+			"license": "MIT",
+			"urls": [
+				"bzz-raw://bc700f5925e867bfb935ec6a1cf800b5fa6d8dcc7711f2277050e5eb10ae5cce",
+				"dweb:/ipfs/QmYavNQB1dwdRErGYYQ7djmXbL5tKUMpg57y87qod1rowP"
 			]
 		},
 		"contracts/VerusBridge/VerusSerializer.sol": {
-			"keccak256": "0xaff56aaa989bb9e914066edd96f5eb82d0897520ba72e4742aec7d6ecb2b8a54",
+			"keccak256": "0x3f45050a88c104c7107242f038969c43e14a8de6d27873351bd8b2bfc8840bb3",
 			"license": "MIT",
 			"urls": [
-				"bzz-raw://63bb6b0c7659349e09937c48b7e2c65dc2e2a366ca173f8a522b9e8856d836e4",
-				"dweb:/ipfs/QmY51DeyamV8Grq2X4TAn7YjFw9eM7CHcDU8dpejFjnsbb"
+				"bzz-raw://a4619eb8d4d07a27b2558e2ad4be671bb51f3d0b211db7810e0c69c94932bd0e",
+				"dweb:/ipfs/QmSVixw96P6e1KSoV2hYDkP37TEgksibxJbWNGZ2qFcgfV"
 			]
 		},
-		"node_modules/openzeppelin-solidity/contracts/math/SafeMath.sol": {
-			"keccak256": "0x468716ac4c519ab1c09935ed460de6499a6ef349c4a7bb85e0983a7576921d78",
+		"contracts/VerusBridge/dsrinterface.sol": {
+			"keccak256": "0x4f2d49dbc3773b82a8d4a1b2bd0f174867012f26b7934eff463b31322707c7fc",
 			"license": "MIT",
 			"urls": [
-				"bzz-raw://b199b097dfb301f5f02dba2c9b7730a5687ceec4335fbe9c926f9a0b4aec25d5",
-				"dweb:/ipfs/QmdNUs8X34QDdRmgD4s6s6CFALCoKnwLJ1QM2NWKLPHd6z"
-			]
-		},
-		"node_modules/openzeppelin-solidity/contracts/token/ERC20/ERC20.sol": {
-			"keccak256": "0x2979090dd44b0aed461dfe178c68b820aa09749d625567a187111f92f165006e",
-			"license": "MIT",
-			"urls": [
-				"bzz-raw://17e7a1a9737d36f7109e259c59018d5001d724dbafcafbd3a36ddf636518539e",
-				"dweb:/ipfs/QmXzsUhAddozPGqzFcAuA2JSUMu9THPSpeyFu5bXkL8igf"
-			]
-		},
-		"node_modules/openzeppelin-solidity/contracts/token/ERC20/IERC20.sol": {
-			"keccak256": "0x77de3e982a8eee67684abca2c9499f836cb12d5113f943a5d2f2f69cbc80d00d",
-			"license": "MIT",
-			"urls": [
-				"bzz-raw://782465d985243c25f1989697331e38f856ecaffeb0ec0038edac2a8bf7ad98b7",
-				"dweb:/ipfs/QmXmV45PiVoDyywWVmCQ4Cf8KnphjhccZLAy2X21YXcU3J"
-			]
-		},
-		"node_modules/openzeppelin-solidity/contracts/utils/Context.sol": {
-			"keccak256": "0xb936169a9b13d13224f49b0558583538c54c081b21f60e47c75ea6babbcd47cd",
-			"license": "MIT",
-			"urls": [
-				"bzz-raw://1b88f74b91c13fd2cc539e0281d530a8fe0ddf60c534d47fb4c14782781eaa0a",
-				"dweb:/ipfs/QmWS4az1tTAPgWexsyU3PiroFEDr11EZUCFX8taGgprevs"
+				"bzz-raw://4530b00af624a6575d082d23a7a1b3ba031a5e9910c8d5277a8e6954a6cdc69c",
+				"dweb:/ipfs/Qmd9QbTRiPdW89D4f2EXzQ1g4BAmv6A1RD6C2bFfVZ5Fia"
 			]
 		}
 	},
