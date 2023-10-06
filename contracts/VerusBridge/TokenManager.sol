@@ -166,7 +166,7 @@ contract TokenManager is VerusStorage {
         }
 
         tokenList.push(_iaddress);
-        // TokenIndex is not used so always set to 0, as this is the starting amount of currency the bridge owns for that currency.
+        // TokenIndex is used for accounting of ERC20, ERC721, ERC1155 so allways start at 0.
         verusToERC20mapping[_iaddress] = VerusObjects.mappedToken(ERCContract, flags, 0, name, tokenID);
  
     }
@@ -245,10 +245,9 @@ contract TokenManager is VerusStorage {
 
             if (result == SEND_FAILED && sendAmount > 0) {
                 refundsData = abi.encodePacked(refundsData, refundAddresses[i], sendAmount, currencyiAddress);
-            } else if (result == SEND_SUCCESS) {
-                verusToERC20mapping[currencyiAddress].tokenID -= sendAmount;
-            } else if (result == SEND_SUCCESS_ERC1155 || result == SEND_SUCCESS_ERC721) {
-                // TokenIndex used for ERC1155 Acounting so decrement holdings if successful
+            } 
+            else if (result == SEND_SUCCESS_ERC1155 || result == SEND_SUCCESS_ERC721 || result == SEND_SUCCESS) {
+                // TokenIndex used for ERC29, ERC721 & ERC1155 Acounting so decrement holdings if successful
                 verusToERC20mapping[currencyiAddress].tokenIndex -= sendAmount;
             }
 
