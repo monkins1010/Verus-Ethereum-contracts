@@ -248,7 +248,8 @@ contract TokenManager is VerusStorage {
             } else if (result == SEND_SUCCESS) {
                 verusToERC20mapping[currencyiAddress].tokenID -= sendAmount;
             } else if (result == SEND_SUCCESS_ERC1155) {
-                verusToERC20mapping[currencyiAddress].tokenIndex += sendAmount;
+                // TokenIndex used for ERC1155 Acounting so decrement holdings if successful
+                verusToERC20mapping[currencyiAddress].tokenIndex -= sendAmount;
             }
 
         } 
