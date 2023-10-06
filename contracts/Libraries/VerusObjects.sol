@@ -146,9 +146,9 @@ library VerusObjects {
     struct mappedToken {
         address erc20ContractAddress;
         uint8 flags;
-        uint tokenIndex;  //Used for ERC721 and ERC1155, total amount of tokens transfered to the bridge
+        uint tokenIndex;  //Used for ERC20, ERC721 and ERC1155, total amount of tokens transfered to the bridge
         string name;
-        uint256 tokenID; //Used for ERC721 and ERC1155, tokenID of the token. But for ERC20 amount of tokens transfered to the bridge
+        uint256 tokenID; 
     }
 
     struct setupToken {

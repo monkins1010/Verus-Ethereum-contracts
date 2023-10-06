@@ -331,48 +331,11 @@ contract SubmitImports is VerusStorage {
         refundAddressFormatted = bytes32(uint256(verusAddress) | uint256(TYPE_REFUND) << 244);
 
         refundAmount = refunds[refundAddressFormatted][currency];
-        require (bridgeConverterActive && refundAmount > 0);
+        require (bridgeConverterActive && refundAmount > 0 && verusAddress != uint176(0));
         
         delete refunds[refundAddressFormatted][currency];
         uint64 fees;
         address feeCurrency;
-
-        // If the address is empty then the currency will be burnt back if it is a bridge currency.
-        if(verusAddress == uint176(0)) {
-            if(verusToERC20mapping[currency].flags & (VerusConstants.MAPPING_PARTOF_BRIDGEVETH ) != 0) {
-
-                verusAddress = uint176(VerusConstants.VDXFID_VETH_BURN_ADDRESS);
-                // Get the GAS cost of a ReserveTransfer in the currency of the refund. e.g. 1,000,000 GAS * GASPRICE
-                uint64 reimburseAmount = getTxFeeReimbursement(currency);
-                require(refundAmount > reimburseAmount);
-                
-                if(verusToERC20mapping[currency].flags & VerusConstants.MAPPING_ERC20_DEFINITION != 0){
-                    // Decrement the holdings of the token
-                    if (verusToERC20mapping[currency].flags & VerusConstants.MAPPING_ETHEREUM_OWNED != 0) {
-                        verusToERC20mapping[currency].tokenID -= reimburseAmount;
-                    }    
-                    IERC20(verusToERC20mapping[currency].erc20ContractAddress)
-                        .transfer(msg.sender, convertFromVerusNumber(reimburseAmount, ERC20(verusToERC20mapping[currency].erc20ContractAddress).decimals()));
-                } else {
-                    payable(msg.sender).transfer(reimburseAmount * VerusConstants.SATS_TO_WEI_STD);
-                }
-                
-                refundAmount = refundAmount - reimburseAmount;
-            } else {
-                // If the token is a non bridge currency
-                for(uint i = 0; i < notaries.length; i++) {
-                    if (notaryAddressMapping[notaries[i]].main == msg.sender) {
-                        if (verusToERC20mapping[currency].flags & VerusConstants.MAPPING_ETHEREUM_OWNED != 0) {
-                            verusToERC20mapping[currency].tokenID -= refundAmount;
-                        }  
-                        IERC20(verusToERC20mapping[currency].erc20ContractAddress)
-                            .transfer(msg.sender, convertFromVerusNumber(refundAmount, ERC20(verusToERC20mapping[currency].erc20ContractAddress).decimals()));
-                        return 0;
-                    }
-                }
-                return 0;
-            }
-        }
 
         if (currency != VETH && currency != DAI && currency != VERUS && currency != MKR) {
             fees = getImportFeeForReserveTransfer(VETH);
@@ -389,10 +352,6 @@ contract SubmitImports is VerusStorage {
         }
 
         LPtransfer = buildReserveTransfer(uint64(refundAmount), verusAddress, currency, fees, feeCurrency);
-
-        if (verusAddress == uint176(VerusConstants.VDXFID_VETH_BURN_ADDRESS)) {
-            LPtransfer.flags += VerusConstants.BURN_CHANGE_PRICE;
-        }
 
         (success, ) = contracts[uint(VerusConstants.ContractType.CreateExport)]
                             .delegatecall(abi.encodeWithSelector(CreateExports.externalCreateExportCallPayable.selector, abi.encode(LPtransfer, false)));
@@ -452,8 +411,8 @@ contract SubmitImports is VerusStorage {
             return;
         }
 
-        if ((claimableFees[publicKeyX] > VerusConstants.verusvETHTransactionFee)) {
-
+        if ((claimableFees[publicKeyX] > (VerusConstants.verusvETHTransactionFee << 1))) {
+            require(publicKeyX[10]  == 0x04);
             require(claimableFees[publicKeyX] > VerusConstants.verusvETHTransactionFee);
             feeShare = uint64(claimableFees[publicKeyX]) - VerusConstants.verusvETHTransactionFee;
             claimableFees[publicKeyX] = 0;

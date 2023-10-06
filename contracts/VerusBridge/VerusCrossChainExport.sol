@@ -63,27 +63,27 @@ contract VerusCrossChainExport is VerusStorage {
         z = add(mul(x, RAY), sub(y, 1)) / y;
     }
 
-    function quickSort(VerusObjects.CCurrencyValueMap[] storage currencey, int left, int right) private {
+    function quickSort(VerusObjects.CCurrencyValueMap[] storage currency, int left, int right) private {
         int i = left;
         int j = right;
         if (i == j) return;
-        uint160 pivot = uint160(currencey[uint256(left + (right - left) / 2)].currency);
+        uint160 pivot = uint160(currency[uint256(left + (right - left) / 2)].currency);
         while (i <= j) {
-            while (uint160(currencey[uint256(i)].currency) < pivot) i++;
-            while (pivot < uint160(currencey[uint256(j)].currency)) j--;
+            while (uint160(currency[uint256(i)].currency) < pivot) i++;
+            while (pivot < uint160(currency[uint256(j)].currency)) j--;
             if (i <= j) {
-                VerusObjects.CCurrencyValueMap memory temp = currencey[uint256(i)];
+                VerusObjects.CCurrencyValueMap memory temp = currency[uint256(i)];
 
-                currencey[uint256(i)] = currencey[uint256(j)];
-                currencey[uint256(j)] = temp;
+                currency[uint256(i)] = currency[uint256(j)];
+                currency[uint256(j)] = temp;
                 i++;
                 j--;
             }
         }
         if (left < j)
-            quickSort(currencey, left, j);
+            quickSort(currency, left, j);
         if (i < right)
-            quickSort(currencey, i, right);
+            quickSort(currency, i, right);
     }
 
     function inCurrencies(address checkCurrency) private view returns(uint256){

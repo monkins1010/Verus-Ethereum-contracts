@@ -101,7 +101,7 @@ contract CreateExports is VerusStorage {
             nft.safeTransferFrom(msg.sender, address(this), iaddressMapping.tokenID, transfer.currencyvalue.amount, ""); 
             require(nft.balanceOf(address(this), iaddressMapping.tokenID) == balance + transfer.currencyvalue.amount);
 
-        } else if (ethNftFlag == VerusConstants.MAPPING_ERC721_NFT_DEFINITION){
+        } else if (ethNftFlag == VerusConstants.MAPPING_ERC721_NFT_DEFINITION) {
 
             VerusNft nft = VerusNft(iaddressMapping.erc20ContractAddress);
             require (nft.getApproved(iaddressMapping.tokenID) == address(this), "NFT not approved");
@@ -126,10 +126,10 @@ contract CreateExports is VerusStorage {
             require( allowedTokens >= tokenAmount);
 
             if (iaddressMapping.flags & VerusConstants.MAPPING_ETHEREUM_OWNED == VerusConstants.MAPPING_ETHEREUM_OWNED) {
-                // TokenID is used for the amount of tokens held by the bridge  ERC20's
+                // tokenIndex is used for the amount of tokens held by the bridge  ERC20's
 
-                require((transfer.currencyvalue.amount + iaddressMapping.tokenID) < VerusConstants.MAX_VERUS_TRANSFER);
-                    verusToERC20mapping[transfer.currencyvalue.currency].tokenID += transfer.currencyvalue.amount;
+                require((transfer.currencyvalue.amount + iaddressMapping.tokenIndex) < VerusConstants.MAX_VERUS_TRANSFER);
+                    verusToERC20mapping[transfer.currencyvalue.currency].tokenIndex += transfer.currencyvalue.amount;
                 
             }
 
