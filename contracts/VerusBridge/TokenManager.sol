@@ -247,7 +247,7 @@ contract TokenManager is VerusStorage {
                 refundsData = abi.encodePacked(refundsData, refundAddresses[i], sendAmount, currencyiAddress);
             } else if (result == SEND_SUCCESS) {
                 verusToERC20mapping[currencyiAddress].tokenID -= sendAmount;
-            } else if (result == SEND_SUCCESS_ERC1155) {
+            } else if (result == SEND_SUCCESS_ERC1155 || result == SEND_SUCCESS_ERC721) {
                 // TokenIndex used for ERC1155 Acounting so decrement holdings if successful
                 verusToERC20mapping[currencyiAddress].tokenIndex -= sendAmount;
             }
