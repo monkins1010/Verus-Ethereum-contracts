@@ -83,6 +83,8 @@ contract NotarizationSerializer is VerusStorage {
                     if gt(and(proposerType, 0xff), 0) {
                         nextOffset := add(nextOffset, 21) // move to proposer, type and vector length
                         proposerMain := mload(add(nextOffset, notarization))
+                        //remove type flags of proposer.
+                        proposerMain := and(proposerMain, 0x0fffffffffffffffffffffffffffffffffffffffffff)
                     }
                  }
 
