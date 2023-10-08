@@ -41,33 +41,16 @@ contract NotaryTools is VerusStorage {
         return ecrecover(hashValue, vs - 4, rs, ss);
     }
 
-    function revokeWithMainAddress(bytes calldata dataIn) public returns (bool) {
-
-        if (dataIn.length == 1 && uint8(dataIn[0]) == TYPE_AUTO_REVOKE) {
-            notaryAddressMapping[msg.sender].state = VerusConstants.NOTARY_REVOKED;
-
-            return true;
+    function revokeWithMainAddress(bytes calldata) public returns (bool) {
+          
+        for (uint i; i<notaries.length; i++) {
+            if(msg.sender == notaryAddressMapping[notaries[i]].main) {
+                require(notaryAddressMapping[notaries[i]].state == VerusConstants.NOTARY_VALID, "Notary not Valid");
+                notaryAddressMapping[notaries[i]].state = VerusConstants.NOTARY_REVOKED;
+                return true;
+            }
         }
-        
-        VerusObjects.revokeInfo memory _revokePacket = abi.decode(dataIn, (VerusObjects.revokeInfo));
-        
-        bytes memory be; 
-
-        require(saltsUsed[_revokePacket.salt] == false, "salt Already used");
-        saltsUsed[_revokePacket.salt] = true;
-
-        be = bytesToString(abi.encodePacked(uint8(TYPE_REVOKE), _revokePacket.salt));
-
-        address signer = recoverString(be, _revokePacket._vs, _revokePacket._rs, _revokePacket._ss);
-
-        if (notaryAddressMapping[_revokePacket.notaryID].main != signer || notaryAddressMapping[_revokePacket.notaryID].state == VerusConstants.NOTARY_REVOKED)
-        {
-            return false;  
-        }
-        
-        notaryAddressMapping[_revokePacket.notaryID].state = VerusConstants.NOTARY_REVOKED;
-
-        return true;
+        revert("Notary not found");
     }
 
     function revokeWithMultiSig(bytes calldata dataIn) public returns (bool) {
