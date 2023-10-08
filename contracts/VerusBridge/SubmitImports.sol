@@ -31,7 +31,7 @@ contract SubmitImports is VerusStorage {
 
     uint32 constant ELVCHOBJ_TXID_OFFSET = 32;
     uint32 constant ELVCHOBJ_NVINS_OFFSET = 45;
-    uint32 constant FORKS_NOTARY_PROPOSER_POSITION = 92;
+    uint32 constant FORKS_NOTARY_PROPOSER_POSITION = 96;
     uint32 constant TYPE_REFUND = 1;
     uint constant TYPE_BYTE_LOCATION_IN_UINT176 = 168;
     enum Currency {VETH, DAI, VERUS, MKR}
