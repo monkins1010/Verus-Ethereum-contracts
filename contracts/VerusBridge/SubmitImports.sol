@@ -31,7 +31,7 @@ contract SubmitImports is VerusStorage {
 
     uint32 constant ELVCHOBJ_TXID_OFFSET = 32;
     uint32 constant ELVCHOBJ_NVINS_OFFSET = 45;
-    uint32 constant FORKS_NOTARY_PROPOSER_POSITION = 128;
+    uint32 constant FORKS_NOTARY_PROPOSER_POSITION = 96;
     uint32 constant TYPE_REFUND = 1;
     uint constant TYPE_BYTE_LOCATION_IN_UINT176 = 168;
     enum Currency {VETH, DAI, VERUS, MKR}
@@ -145,6 +145,9 @@ contract SubmitImports is VerusStorage {
         require(success);
         uint176 exporter;
         (CCEHeightsAndnIndex, exporter) = abi.decode(returnBytes, (uint128, uint176));
+
+        //remove flags off exporter type.
+        exporter = exporter & 0x0fffffffffffffffffffffffffffffffffffffffffff;
 
         isLastCCEInOrder(uint32(CCEHeightsAndnIndex));
    
@@ -293,7 +296,8 @@ contract SubmitImports is VerusStorage {
         {
             uint256 txReimburse;
 
-            txReimburse = (tx.gasprice * notaries.length * VerusConstants.SEND_GAS_PRICE);
+            // truncate reimburse amount
+            txReimburse = ((tx.gasprice * notaries.length * VerusConstants.SEND_GAS_PRICE) / VerusConstants.SATS_TO_WEI_STD) * VerusConstants.SATS_TO_WEI_STD;
 
             if (claimableFees[bytes32(0)] > 0) {
                 // When there is no proposer fees are sent to bytes(0)
@@ -301,7 +305,7 @@ contract SubmitImports is VerusStorage {
                 claimableFees[bytes32(0)] = 0;
             }
 
-            claimAmount = claimableFees[VerusConstants.VDXF_SYSTEM_NOTARIZATION_NOTARYFEEPOOL] - txReimburse;
+            claimAmount = claimableFees[VerusConstants.VDXF_SYSTEM_NOTARIZATION_NOTARYFEEPOOL] - (txReimburse / VerusConstants.SATS_TO_WEI_STD);
 
             claimableFees[VerusConstants.VDXF_SYSTEM_NOTARIZATION_NOTARYFEEPOOL] = 0;
 
