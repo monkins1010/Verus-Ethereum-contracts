@@ -59,8 +59,7 @@ contract NotaryTools is VerusStorage {
         (VerusObjects.revokeRecoverInfo[] memory _revokePacket, address notarizerBeingRevoked) = abi.decode(dataIn, (VerusObjects.revokeRecoverInfo[], address));
         bytes memory be; 
 
-        require(_revokePacket.length >= ((notaries.length >> 1) + 1), "not enough sigs");
-
+        uint counter;
         for (uint i = 0; i < _revokePacket.length; i++) {
 
             for (uint j = i + 1; j < _revokePacket.length; j++) { 
@@ -69,16 +68,18 @@ contract NotaryTools is VerusStorage {
                 }
             }
 
-            require(saltsUsed[_revokePacket[i].salt] == false, "salt Already used");
+            require(saltsUsed[_revokePacket[i].salt] == false, "salt already used");
             saltsUsed[_revokePacket[i].salt] = true;
 
             be = bytesToString(abi.encodePacked(uint8(TYPE_REVOKE),notarizerBeingRevoked, _revokePacket[i].salt));
             address signer = recoverString(be, _revokePacket[i]._vs, _revokePacket[i]._rs, _revokePacket[i]._ss);
 
-            if (signer != notaryAddressMapping[_revokePacket[i].notarizerID].main || notaryAddressMapping[_revokePacket[i].notarizerID].state != VerusConstants.NOTARY_VALID) {
-                    revert("Notary not Valid");
+            if (signer == notaryAddressMapping[_revokePacket[i].notarizerID].main && 
+                notaryAddressMapping[_revokePacket[i].notarizerID].state == VerusConstants.NOTARY_VALID) {
+                    counter++;
             }
         }
+        require(counter >= ((notaries.length >> 1) + 1), "not enough signatures");
 
         notaryAddressMapping[notarizerBeingRevoked].state = VerusConstants.NOTARY_REVOKED;
 
@@ -118,9 +119,9 @@ contract NotaryTools is VerusStorage {
         (VerusObjects.revokeRecoverInfo[] memory _recoverPacket, address notarizerBeingRecovered, address newMainAddr, address newRevokeAddr) = abi.decode(dataIn, (VerusObjects.revokeRecoverInfo[], address, address, address));
         bytes memory be; 
 
-        require(_recoverPacket.length >= ((notaries.length >> 1) + 1), "not enough sigs");
         require(notaryAddressMapping[notarizerBeingRecovered].state == VerusConstants.NOTARY_REVOKED, "Notary not revoked");
-
+        
+        uint counter;
         for (uint i = 0; i < _recoverPacket.length; i++) {
 
             for (uint j = i + 1; j < _recoverPacket.length; j++) { 
@@ -135,10 +136,12 @@ contract NotaryTools is VerusStorage {
             be = bytesToString(abi.encodePacked(uint8(TYPE_RECOVER),notarizerBeingRecovered, newMainAddr, newRevokeAddr, _recoverPacket[i].salt));
             address signer = recoverString(be, _recoverPacket[i]._vs, _recoverPacket[i]._rs, _recoverPacket[i]._ss);
 
-            if (signer != notaryAddressMapping[_recoverPacket[i].notarizerID].recovery || notaryAddressMapping[_recoverPacket[i].notarizerID].state != VerusConstants.NOTARY_VALID) {
-                    revert("Notary not Valid");
+            if (signer == notaryAddressMapping[_recoverPacket[i].notarizerID].recovery &&
+                notaryAddressMapping[_recoverPacket[i].notarizerID].state == VerusConstants.NOTARY_VALID) {
+                counter++;
             }
         }
+        require(counter >= ((notaries.length >> 1) + 1), "not enough sigs");
 
         updateNotarizer(notarizerBeingRecovered, newMainAddr, newRevokeAddr, VerusConstants.NOTARY_VALID);
 
