@@ -75,7 +75,7 @@ contract NotaryTools is VerusStorage {
             be = bytesToString(abi.encodePacked(uint8(TYPE_REVOKE),notarizerBeingRevoked, _revokePacket[i].salt));
             address signer = recoverString(be, _revokePacket[i]._vs, _revokePacket[i]._rs, _revokePacket[i]._ss);
 
-            if (signer != _revokePacket[i].notarizerID || notaryAddressMapping[_revokePacket[i].notarizerID].state != VerusConstants.NOTARY_VALID) {
+            if (signer != notaryAddressMapping[_revokePacket[i].notarizerID].main || notaryAddressMapping[_revokePacket[i].notarizerID].state != VerusConstants.NOTARY_VALID) {
                     revert("Notary not Valid");
             }
         }
@@ -96,6 +96,7 @@ contract NotaryTools is VerusStorage {
         
         require(_newRecoveryInfo.contracts.length == NUM_ADDRESSES_FOR_REVOKE, "Input Identities wrong length");
         require(_newRecoveryInfo.upgradeType == TYPE_RECOVER, "Wrong type of package");
+        require(notaryAddressMapping[_newRecoveryInfo.notarizerID].state == VerusConstants.NOTARY_REVOKED, "Notary not revoked");
         
         be = bytesToString(abi.encodePacked(_newRecoveryInfo.contracts[0],_newRecoveryInfo.contracts[1], uint8(_newRecoveryInfo.upgradeType), _newRecoveryInfo.salt));
 
@@ -118,7 +119,7 @@ contract NotaryTools is VerusStorage {
         bytes memory be; 
 
         require(_recoverPacket.length >= ((notaries.length >> 1) + 1), "not enough sigs");
-        require(notaryAddressMapping[notarizerBeingRecovered].state == VerusConstants.NOTARY_VALID, "Notary not revoked");
+        require(notaryAddressMapping[notarizerBeingRecovered].state == VerusConstants.NOTARY_REVOKED, "Notary not revoked");
 
         for (uint i = 0; i < _recoverPacket.length; i++) {
 
@@ -134,7 +135,7 @@ contract NotaryTools is VerusStorage {
             be = bytesToString(abi.encodePacked(uint8(TYPE_RECOVER),notarizerBeingRecovered, newMainAddr, newRevokeAddr, _recoverPacket[i].salt));
             address signer = recoverString(be, _recoverPacket[i]._vs, _recoverPacket[i]._rs, _recoverPacket[i]._ss);
 
-            if (signer != _recoverPacket[i].notarizerID || notaryAddressMapping[_recoverPacket[i].notarizerID].state != VerusConstants.NOTARY_VALID) {
+            if (signer != notaryAddressMapping[_recoverPacket[i].notarizerID].recovery || notaryAddressMapping[_recoverPacket[i].notarizerID].state != VerusConstants.NOTARY_VALID) {
                     revert("Notary not Valid");
             }
         }
