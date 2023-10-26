@@ -35,6 +35,16 @@ contract SubmitImports is VerusStorage {
     uint32 constant TYPE_REFUND = 1;
     uint constant TYPE_BYTE_LOCATION_IN_UINT176 = 168;
     enum Currency {VETH, DAI, VERUS, MKR}
+    bool runonce;
+
+    function initialize() external {
+
+        // Correct lost notary feepool funds by 0.6 ETH
+        require(!runonce);
+        claimableFees[VerusConstants.VDXF_SYSTEM_NOTARIZATION_NOTARYFEEPOOL] += 60000000; // 0.6 ETH in verussats
+        runonce = true;
+
+    }
 
     function buildReserveTransfer (uint64 value, uint176 sendTo, address sendingCurrency, uint64 fees, address feecurrencyid) private view returns (VerusObjects.CReserveTransfer memory) {
         
@@ -276,7 +286,7 @@ contract SubmitImports is VerusStorage {
             uint64 feeShare;
 
             feeShare = (fees - transactionBaseCost) / 3;
-            claimableFees[VerusConstants.VDXF_SYSTEM_NOTARIZATION_NOTARYFEEPOOL] += feeShare;
+            claimableFees[VerusConstants.VDXF_SYSTEM_NOTARIZATION_NOTARYFEEPOOL] += (feeShare + transactionBaseCost);
             setClaimedFees(bytes32(uint256(proposer)), feeShare); // 1/3 to proposer
             setClaimedFees(bytes32(uint256(exporter)), feeShare + ((fees - transactionBaseCost) % 3)); // any remainder from main division goes to exporter
         }
