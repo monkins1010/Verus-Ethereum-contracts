@@ -276,7 +276,7 @@ contract SubmitImports is VerusStorage {
             uint64 feeShare;
 
             feeShare = (fees - transactionBaseCost) / 3;
-            claimableFees[VerusConstants.VDXF_SYSTEM_NOTARIZATION_NOTARYFEEPOOL] += feeShare;
+            claimableFees[VerusConstants.VDXF_SYSTEM_NOTARIZATION_NOTARYFEEPOOL] += (feeShare + transactionBaseCost);
             setClaimedFees(bytes32(uint256(proposer)), feeShare); // 1/3 to proposer
             setClaimedFees(bytes32(uint256(exporter)), feeShare + ((fees - transactionBaseCost) % 3)); // any remainder from main division goes to exporter
         }
