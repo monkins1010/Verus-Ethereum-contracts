@@ -36,6 +36,13 @@ contract SubmitImports is VerusStorage {
     uint constant TYPE_BYTE_LOCATION_IN_UINT176 = 168;
     enum Currency {VETH, DAI, VERUS, MKR}
 
+    function initialize() external {
+
+        // Correct lost notary feepool funds by 0.6 ETH
+        claimableFees[VerusConstants.VDXF_SYSTEM_NOTARIZATION_NOTARYFEEPOOL] += 60000000; // 0.6 ETH in verussats
+
+    }
+
     function buildReserveTransfer (uint64 value, uint176 sendTo, address sendingCurrency, uint64 fees, address feecurrencyid) private view returns (VerusObjects.CReserveTransfer memory) {
         
         VerusObjects.CReserveTransfer memory LPtransfer;
