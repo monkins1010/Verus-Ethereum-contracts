@@ -73,9 +73,8 @@ contract CreateExports is VerusStorage {
 
         require(fees != 0, "CheckExport Failed Checks"); 
 
-        if(!bridgeConverterActive) {
-            require (subtractPoolSize(uint64(transfer.fees)));
-        }
+        // Replace the fees in the transfer with the fees returned from the checkExport call.
+        transfer.fees = uint64(fees);
 
         if (transfer.currencyvalue.currency != VETH) {
             iaddressMapping = verusToERC20mapping[transfer.currencyvalue.currency];
