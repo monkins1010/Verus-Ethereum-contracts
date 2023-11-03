@@ -7,8 +7,6 @@ import "../Libraries/VerusObjects.sol";
 import "../Libraries/VerusObjectsCommon.sol";
 import "../Libraries/VerusConstants.sol";
 import "../Storage/StorageMaster.sol";
-import "./VerusCrossChainExport.sol";
-
 
 contract ExportManager is VerusStorage  {
 
@@ -26,21 +24,10 @@ contract ExportManager is VerusStorage  {
 
     function initialize() external {
 
-        require(!runonce, "Already initialized");
-        runonce = true;
-        cceLastStartHeight = 18480653;
-        cceLastEndHeight = 18484200;
-        delete _readyExports[18484201];
+        _readyExports[18484201].exportHash = 0x2732a5d07110f2d899a8eb2e36f17755cd3ed6ac86ce4c94798454c9078a0b89;
+        _readyExports[18484201].transfers[0].secondreserveid = 0x0000000000000000000000000000000000000000;
+        _readyExports[18484201].transfers[0].flags = 1;
 
-        //reduce contract holdings of DAI
-        verusToERC20mapping[0x8b72F1c2D326d376aDd46698E385Cf624f0CA1dA].tokenIndex -= 74200000000; // 742.00000000 DAI
-        //refund the dai
-        address crossChainExportAddress = contracts[uint(VerusConstants.ContractType.VerusCrossChainExport)];
-        uint DAINativeAmount = 74200000000 * 10000000000;  // convert from 8 decimal places to 18.
-        (bool success,) = crossChainExportAddress.delegatecall
-                            (abi.encodeWithSelector(VerusCrossChainExport.exit.selector, 0xCBE66E76Dd23e1CC6ff3A96eA104684E4aF709eD, DAINativeAmount));
-
-        require (success, "DAI Transfer failed");
     }
 
     uint8 constant UINT160_SIZE = 20; 
@@ -84,7 +71,7 @@ contract ExportManager is VerusStorage  {
 
         // Check destination address is not zero
         require (destAddressID != address(0), "Destination Address null");
-        require (transfer.currencyvalue.currency != transfer.secondreserveid, "Bounce back type not allowed");
+        require (transfer.currencyvalue.currency != transfer.secondreserveid, "Cannot convert like for like");
 
         if (!bridgeConverterActive) {
 
