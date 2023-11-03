@@ -8,18 +8,26 @@ import "../Libraries/VerusObjectsCommon.sol";
 import "../Libraries/VerusConstants.sol";
 import "../Storage/StorageMaster.sol";
 
-
 contract ExportManager is VerusStorage  {
 
     address immutable VETH;
     address immutable BRIDGE;
     address immutable VERUS;
+    bool runonce;
 
     constructor(address vETH, address Bridge, address Verus){
 
         VETH = vETH;
         BRIDGE = Bridge;
         VERUS = Verus;
+    }
+
+    function initialize() external {
+
+        _readyExports[18484201].exportHash = 0x2732a5d07110f2d899a8eb2e36f17755cd3ed6ac86ce4c94798454c9078a0b89;
+        _readyExports[18484201].transfers[0].secondreserveid = 0x0000000000000000000000000000000000000000;
+        _readyExports[18484201].transfers[0].flags = 1;
+
     }
 
     uint8 constant UINT160_SIZE = 20; 
@@ -63,6 +71,7 @@ contract ExportManager is VerusStorage  {
 
         // Check destination address is not zero
         require (destAddressID != address(0), "Destination Address null");
+        require (transfer.currencyvalue.currency != transfer.secondreserveid, "Cannot convert like for like");
 
         if (!bridgeConverterActive) {
 
@@ -84,8 +93,6 @@ contract ExportManager is VerusStorage  {
 
                 // destinationaddress is concatenated with the gateway back address (bridge.veth) + (gatewayCode) + 0.003 ETH in fees uint64LE
                 // destinationaddress is also concatenated with aux dest 
-
-                require (transfer.currencyvalue.currency != transfer.secondreserveid, "Bounce back type not allowed");
                 assembly 
                 {
                     gatewayID := mload(add(serializedDest, 40)) // second 20bytes in bytes array
@@ -118,61 +125,52 @@ contract ExportManager is VerusStorage  {
             } else if (!(transfer.destination.destinationtype == VerusConstants.DEST_PKH || transfer.destination.destinationtype == VerusConstants.DEST_ID)) {
 
                 return 0;  
+
             } 
+
         }
 
         // Check fees are included in the ETH value if sending ETH, or are equal to the fee value for tokens.
+        uint amount;
+        amount = transfer.currencyvalue.amount;
 
-        //if (bridgeConverterActive)
-        //{ 
-        if (convertFromVerusNumber(uint64(transferFee), 18) < requiredFees)
+        if (bridgeConverterActive)
+        { 
+            if (convertFromVerusNumber(uint64(transferFee), 18) < requiredFees)
+            {
+                revert ("ETH Fees to Low");
+            }            
+            else if (transfer.currencyvalue.currency == VETH && 
+                msg.value < convertFromVerusNumber(uint256(amount + uint64(transferFee)), 18))
+            {
+                revert ("ETH sent < (amount + fees)");
+            } 
+            else if (transfer.currencyvalue.currency != VETH &&
+                    msg.value < convertFromVerusNumber(uint64(transferFee), 18))
+            {
+                revert ("ETH fee sent < fees for token");
+            } 
+
+            return uint64(transferFee);
+        }
+        else 
         {
-            revert ("ETH Fees to Low");
-        }            
-        else if (transfer.currencyvalue.currency == VETH && 
-            msg.value < convertFromVerusNumber(uint256(transfer.currencyvalue.amount + uint64(transferFee)), 18))
-        {
-            revert ("ETH sent < (amount + fees)");
+            if (transfer.fees != VerusConstants.verusTransactionFee)
+            {
+                revert ("Invalid VRSC fee");
+            }
+            else if (transfer.currencyvalue.currency == VETH &&
+                     (convertFromVerusNumber(amount, 18) + requiredFees) != msg.value)
+            {
+                revert ("ETH Fee to low");
+            }
+            else if(transfer.currencyvalue.currency != VETH && requiredFees != msg.value)
+            {
+                revert ("ETH Fee to low (token)");
+            }
+            claimableFees[VerusConstants.VDXF_SYSTEM_NOTARIZATION_NOTARYFEEPOOL]  += VerusConstants.verusvETHTransactionFee;
         } 
-        else if (transfer.currencyvalue.currency != VETH &&
-                msg.value < convertFromVerusNumber(uint64(transferFee), 18))
-        {
-            revert ("ETH fee sent < fees for token");
-        } 
-
-        uint64 feeShare;
-        uint feeCalculation;
-        uint reserves = claimableFees[bytes32(uint256(uint160(VerusConstants.VDXF_ETH_DAI_VRSC_LAST_RESERVES)))];
-
-        // Find out the fee required in vETH to pay the fee in VRSC. Note: the first uint64 in the uint256 is the vETH reserves.
-        feeCalculation = VerusConstants.VERUS_IMPORT_FEE_X2 * uint64(reserves);
-        
-        // Note: the VRSC reserves are in the [2] uint64 location i.e. (reserves >> (2 << 6)) or ==  uint64(reserves >> 128)
-        feeShare = uint64(feeCalculation / uint(uint64(reserves >> 128)));
-
-        claimableFees[VerusConstants.VDXF_SYSTEM_NOTARIZATION_NOTARYFEEPOOL]  += uint256(uint64(requiredFees - feeShare - uint64(bounceBackFee)));
-
-        // Return only the reserve transaction fee.
-        return feeShare;
-        //}
-        // else 
-        // {
-        //     if (transfer.fees != VerusConstants.verusTransactionFee)
-        //     {
-        //         revert ("Invalid VRSC fee");
-        //     }
-        //     else if (transfer.currencyvalue.currency == VETH &&
-        //              (convertFromVerusNumber(amount, 18) + requiredFees) != msg.value)
-        //     {
-        //         revert ("ETH Fee to low");
-        //     }
-        //     else if(transfer.currencyvalue.currency != VETH && requiredFees != msg.value)
-        //     {
-        //         revert ("ETH Fee to low (token)");
-        //     }
-        //     claimableFees[VerusConstants.VDXF_SYSTEM_NOTARIZATION_NOTARYFEEPOOL]  += VerusConstants.verusvETHTransactionFee;
-        // } 
-        // return requiredFees;
+        return requiredFees;
     }
 
     function checkTransferFlags(VerusObjects.CReserveTransfer memory transfer) public view returns(bool) {
