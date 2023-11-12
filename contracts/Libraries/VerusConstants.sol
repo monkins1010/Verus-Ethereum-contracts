@@ -20,7 +20,7 @@ library VerusConstants {
     uint64 constant public verusBridgeLaunchFeeShare = 500000000000;
     uint256 constant VERUS_IMPORT_GAS_USEAGE = 2800000;
     uint256 constant SEND_NOTARY_PAYMENT_FEE = 3000000;
-    uint256 constant SEND_GAS_PRICE = 300000;
+    uint256 constant NOTARY_CLAIM_TX_GAS_COST = 300000;
     uint32 constant VALID = 1;
     uint32 constant CONVERT = 2;
     uint32 constant CROSS_SYSTEM = 0x40; 
@@ -41,6 +41,7 @@ library VerusConstants {
     uint256 constant DAI_BURNBACK_MAX_FEE_THRESHOLD = 40000000000;   //400 DAI in verus 8 decimals
     uint256 constant SECONDS_IN_DAY = 86400;
     uint256 constant REFUND_FEE_REIMBURSE_GAS_AMOUNT = 1000000;  //1,000,000 GAS
+    uint256 constant CLAIM_NOTARY_FEE_THRESHOLD = 0.75 ether;
 
     uint32 constant INVALID_FLAGS = 0xffffffff - (VALID + CONVERT + RESERVE_TO_RESERVE + IMPORT_TO_SOURCE);
 
