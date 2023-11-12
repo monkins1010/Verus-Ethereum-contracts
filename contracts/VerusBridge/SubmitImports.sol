@@ -291,13 +291,12 @@ contract SubmitImports is VerusStorage {
 
         uint256 claimAmount;
 
-        if ((claimableFees[VerusConstants.VDXF_SYSTEM_NOTARIZATION_NOTARYFEEPOOL] *  VerusConstants.SATS_TO_WEI_STD) 
-                    > (tx.gasprice * VerusConstants.SEND_NOTARY_PAYMENT_FEE))
+        if ((claimableFees[VerusConstants.VDXF_SYSTEM_NOTARIZATION_NOTARYFEEPOOL] * VerusConstants.SATS_TO_WEI_STD) > VerusConstants.CLAIM_NOTARY_FEE_THRESHOLD)
         {
             uint256 txReimburse;
 
             // truncate reimburse amount
-            txReimburse = ((tx.gasprice * notaries.length * VerusConstants.SEND_GAS_PRICE) / VerusConstants.SATS_TO_WEI_STD) * VerusConstants.SATS_TO_WEI_STD;
+            txReimburse = ((tx.gasprice * VerusConstants.NOTARY_CLAIM_TX_GAS_COST) / VerusConstants.SATS_TO_WEI_STD) * VerusConstants.SATS_TO_WEI_STD;
 
             if (claimableFees[bytes32(0)] > 0) {
                 // When there is no proposer fees are sent to bytes(0)
