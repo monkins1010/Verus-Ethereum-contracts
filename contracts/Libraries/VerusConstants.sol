@@ -20,7 +20,7 @@ library VerusConstants {
     uint64 constant public verusBridgeLaunchFeeShare = 500000000000;
     uint256 constant VERUS_IMPORT_GAS_USEAGE = 2800000;
     uint256 constant SEND_NOTARY_PAYMENT_FEE = 3000000;
-    uint256 constant SEND_GAS_PRICE = 46000;
+    uint256 constant SEND_GAS_PRICE = 300000;
     uint32 constant VALID = 1;
     uint32 constant CONVERT = 2;
     uint32 constant CROSS_SYSTEM = 0x40; 
