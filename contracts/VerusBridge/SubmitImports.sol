@@ -106,6 +106,7 @@ contract SubmitImports is VerusStorage {
 
     function _createImports(bytes calldata data) external returns(uint64, uint176) {
               
+        uint256 gasleftStart = gasleft();
         VerusObjects.CReserveTransferImport memory _import = abi.decode(data, (VerusObjects.CReserveTransferImport));
         bytes32 txidfound;
         bytes memory elVchObj = _import.partialtransactionproof.components[0].elVchObj;
@@ -159,20 +160,86 @@ contract SubmitImports is VerusStorage {
         CCEHeightsAndnIndex  = (CCEHeightsAndnIndex & 0xffffffff00000000ffffffffffffffff) | (uint128(uint32(uint32(CCEHeightsAndnIndex >> 64) - (1 + (2 * nVins)))) << 64);  
         setLastImport(txidfound, hashOfTransfers, CCEHeightsAndnIndex);
         
-        // Deserialize transfers and pack into send arrays, also pass in no. of transfers to calculate array size
+        // get the gasleft before calling the tokenmanager
 
-        address verusTokenManagerAddress = contracts[uint(VerusConstants.ContractType.TokenManager)];
-
-        (success, returnBytes) = verusTokenManagerAddress.delegatecall(abi.encodeWithSelector(TokenManager.processTransactions.selector, _import.serializedTransfers, uint8(CCEHeightsAndnIndex >> 96)));
+        //returns success, refund addresses bytes & refund address array which is abi.encoded-ed, these are any refunds that didnt pay out.
+        (success, returnBytes) = contracts[uint(VerusConstants.ContractType.TokenManager)].delegatecall(abi.encodeWithSelector(TokenManager.processTransactions.selector, _import.serializedTransfers, uint256(uint8(CCEHeightsAndnIndex >> 96))));
         require(success);
-        
-        (returnBytes, fees) = abi.decode(returnBytes, (bytes, uint64));
+
+        uint176[] memory refundAddresses;
+
+        // returns refundaddresses bytes, fees and refundaddresses
+        (returnBytes, fees, refundAddresses) = abi.decode(returnBytes, (bytes, uint64, uint176[]));
+
+        // get the cceblockwidth of the cce from endheight - startheight and copy back into CCEHeightsAndnIndex
+        CCEHeightsAndnIndex = (uint32(CCEHeightsAndnIndex >> 32) - uint32(CCEHeightsAndnIndex));
+
+        // calculate the fee to pay any refunds, and then pay to the refund addresses.
+        calulateGasFees(gasleftStart, fees, refundAddresses, CCEHeightsAndnIndex, exporter);
+
         if (returnBytes.length > 0) {
             refund(returnBytes);
         }
+        return (0,0);
+    }
 
-        return (fees, exporter);
+    function calulateGasFees(uint256 gasStart, uint64 fees, uint176[] memory refundAddresses, uint256 blockWidth, uint176 exporter) private {
 
+        uint256 priceOfImports; // ETH price of the imports calculated from gas used.
+        uint64 notaryFees;   // fees to pay to notaries
+        uint64 blockDivisor; // ratio adjustment when traffic is high
+        uint64 minTxesForRefund; // minimum number of transactions for a refund
+        uint64 feeRefunds;
+        uint64 processorsFees; // fees shared out between notaries / exporters / proposers.
+
+        // Using the gas used gives us an indication of how much the transaction will cost.
+        // i.e. the gas used to do 2 * notaryimports + fixedcost for submitimport + (gas to process the tx payements)
+        priceOfImports = uint256((gasStart - gasleft()) + VerusConstants.GAS_BASE_COST_FOR_NOTARYS + 
+            (refundAddresses.length * VerusConstants.GAS_BASE_COST_FOR_REFUND_PAYOUTS)) 
+            * tx.gasprice;
+
+        notaryFees = uint64(((priceOfImports * 14) / 10) / VerusConstants.SATS_TO_WEI_STD); // Use a Buffer of 40% for notary fees.
+
+        if (fees > (notaryFees + (notaryFees >> 4))){
+
+            blockDivisor = 20;
+            minTxesForRefund = VerusConstants.MINIMUM_TRANSACTIONS_FOR_REFUNDS;
+
+            if (blockWidth > 1)
+            {
+                blockDivisor = 10;
+                minTxesForRefund = VerusConstants.MINIMUM_TRANSACTIONS_FOR_REFUNDS_HALF;
+            }
+
+            if (refundAddresses.length > minTxesForRefund)
+            {
+                processorsFees = fees - notaryFees;
+                fees = notaryFees;
+
+                feeRefunds = uint64((processorsFees / refundAddresses.length) * (refundAddresses.length - minTxesForRefund));
+                feeRefunds = feeRefunds - (feeRefunds / blockDivisor);
+                processorsFees = processorsFees - feeRefunds;
+
+                feeRefunds = feeRefunds / uint64(refundAddresses.length);    // Divide by number of transactions to get refund share per number of transfers.
+
+                for(uint i = 0; i < refundAddresses.length; i++) {
+                    bytes32 feeRefundAddress;
+                    feeRefundAddress = bytes32(uint256(refundAddresses[i]));
+
+                    if (feeRefundAddress == bytes32(0)) {
+                        feeRefundAddress |= bytes32(uint256(TYPE_REFUND) << 244);
+                        refunds[feeRefundAddress][VETH] += feeRefunds;
+                    } else {
+                        processorsFees += feeRefunds;                    
+                    }
+                }
+            } else {
+                processorsFees = fees - notaryFees;
+                fees = notaryFees;
+            }
+        } 
+
+        setClaimableFees(fees, exporter, processorsFees);
     }
   
     function refund(bytes memory refundAmount) private  {
@@ -254,17 +321,14 @@ contract SubmitImports is VerusStorage {
         return returnedExports;      
     }
 
-    function setClaimableFees(uint64 fees, uint176 exporter) external
+    function setClaimableFees(uint64 notaryFees, uint176 exporter, uint64 processorsFees) private 
     {
-        uint64 transactionBaseCost;
+        uint64 feeShare;
+        feeShare = processorsFees / 3;
 
-        transactionBaseCost = uint64((tx.gasprice * VerusConstants.VERUS_IMPORT_GAS_USEAGE) / VerusConstants.SATS_TO_WEI_STD);
-
-        if (fees <= transactionBaseCost) {
-
-            claimableFees[VerusConstants.VDXF_SYSTEM_NOTARIZATION_NOTARYFEEPOOL] += fees;
+        claimableFees[VerusConstants.VDXF_SYSTEM_NOTARIZATION_NOTARYFEEPOOL] += (notaryFees + feeShare);
            
-        } else {
+        if (processorsFees > 0) {
 
             bytes memory proposerBytes = bestForks[0];
             uint176 proposer;
@@ -273,12 +337,8 @@ contract SubmitImports is VerusStorage {
                     proposer := mload(add(proposerBytes, FORKS_NOTARY_PROPOSER_POSITION))
             } 
 
-            uint64 feeShare;
-
-            feeShare = (fees - transactionBaseCost) / 3;
-            claimableFees[VerusConstants.VDXF_SYSTEM_NOTARIZATION_NOTARYFEEPOOL] += (feeShare + transactionBaseCost);
             setClaimedFees(bytes32(uint256(proposer)), feeShare); // 1/3 to proposer
-            setClaimedFees(bytes32(uint256(exporter)), feeShare + ((fees - transactionBaseCost) % 3)); // any remainder from main division goes to exporter
+            setClaimedFees(bytes32(uint256(exporter)), feeShare + (feeShare % 3)); // any remainder from main division goes to exporter
         }
     }
 

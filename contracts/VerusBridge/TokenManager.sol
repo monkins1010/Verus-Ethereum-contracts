@@ -10,23 +10,19 @@ import "../Libraries/VerusObjects.sol";
 import {VerusSerializer} from "../VerusBridge/VerusSerializer.sol";
 import "../VerusBridge/CreateExports.sol";
 import "../VerusBridge/UpgradeManager.sol";
+import "../VerusBridge/SubmitImports.sol";
 import "../Libraries/VerusObjectsCommon.sol";
 import "@openzeppelin/contracts/token/ERC721/IERC721.sol";
 import "@openzeppelin/contracts/token/ERC1155/IERC1155.sol";
 import "../Storage/StorageMaster.sol";
 import "./VerusCrossChainExport.sol";
 
-interface callGetName {
-    function getName(address cont) external view returns(string memory);
-}
 
 contract TokenManager is VerusStorage {
 
     address immutable VETH;
     address immutable VERUS;
     address immutable DAIERC20ADDRESS;
-
-    enum SendTypes {NULL, ETH, ERC20, ERC20MINT ,ERC721, ERC1155}
 
     uint8 constant SEND_FAILED = 1;
     uint8 constant SEND_SUCCESS = 2;
@@ -35,65 +31,16 @@ contract TokenManager is VerusStorage {
     uint8 constant SEND_SUCCESS_ERC20_MINTED = 5;
     uint8 constant SEND_SUCCESS_ETH = 6;
 
+    bytes4 constant ERC20_SEND_SELECTOR = ERC20.transfer.selector ;
+    bytes4 constant ERC20_MINT_SELECTOR = Token.mint.selector ;
+    bytes4 constant ERC721_SEND_SELECTOR = IERC721.transferFrom.selector;
+    bytes4 constant ERC1155_SEND_SELECTOR = IERC1155.safeTransferFrom.selector;
+
     constructor(address vETH, address, address Verus, address DaiERC20Address){
 
         VETH = vETH;
         VERUS = Verus;
         DAIERC20ADDRESS = DaiERC20Address;
-    }
-
-    function getName(address cont) external returns (string memory ret)
-    {
-        // Wrapper functions to enable try catch to work
-        bytes4 sig = 0x06FDDE03; //signature of function to call `name()`
-        bytes32 c;
-        uint8 tmp;
-        ret = new string(32);
-        assembly {
-            let x := mload(0x40)   //Find empty storage location using "free memory pointer"
-            let i := 0
-            mstore(x,sig) //Place signature at begining of empty storage 
-
-            if iszero(call(     
-                            5000, //5k gas
-                            cont, //To addr
-                            0,    //No value
-                            x,    //Inputs are stored at location x
-                            0x20, //Inputs are 68 bytes long
-                            x,    //Store output over input (saves space)
-                            0x60)) {  //Outputs are 32 bytes long   
-                revert(0, 0)
-            }
-
-            c := mload(x) //Assign output value to c
-            switch c //0x06FDDE03
-            case 0x06FDDE0300000000000000000000000000000000000000000000000000000000 {  
-              revert(0, 0)
-            }
-            case 0 {  
-              revert(0, 0)
-            }
-            case 0x20 { 
-              // Store the string in the return variable 
-              mstore(ret, mload(add(x,0x20)))
-              mstore(add(ret,32), mload(add(x,0x40)))
-            }
-            default {
-                // string stored in bytes32 so process one byte at a time until null terminator
-                for {} iszero(0) {} {
-                tmp := and(shr(sub(248,mul(i,8)),c), 0xff) 
-                if iszero(tmp) {
-                    break
-                }
-                mstore8(add(ret,add(i,32)), tmp)
-                i := add(i, 1)
-            }
-            mstore(ret, i)
-
-            }
-
-        }
-        return ret;
     }
 
     function launchToken(VerusObjects.PackedCurrencyLaunch[] memory _tx) private {
@@ -113,16 +60,13 @@ contract TokenManager is VerusStorage {
                 (VerusConstants.MAPPING_ETHEREUM_OWNED | VerusConstants.MAPPING_ERC1155_ERC_DEFINITION | VerusConstants.MAPPING_ERC1155_NFT_DEFINITION) 
                     == VerusConstants.MAPPING_ETHEREUM_OWNED)
             {
-                try callGetName(contracts[uint(VerusConstants.ContractType.TokenManager)]).getName(_tx[j].ERCContract) returns (string memory name) {
-                    outputName = name;
-                } catch {
-                    // ... is illegal for a VerusID so we can use it to indicate that the name is not available
+               (bool success, bytes memory result) = _tx[j].ERCContract.call{gas:30000}(abi.encodeWithSignature("name()"));
+                if (success) {
+                    outputName = abi.decode(result, (string));
+                } else {
                     outputName = "...";
                 }
 
-                if (bytes(outputName).length == 0) {
-                    continue;
-                }
                 outputName = string(abi.encodePacked("[", outputName, "] as "));
             }
 
@@ -171,18 +115,18 @@ contract TokenManager is VerusStorage {
  
     }
 
-    function processTransactions(bytes calldata serializedTransfers, uint8 numberOfTransfers) 
-                external returns (bytes memory refundsData, uint64 fees)
+    function processTransactions(bytes calldata serializedTransfers, uint256 numberOfTransfers) 
+                external returns (bytes memory refundsData, uint256 fees, uint176[] memory refundAddresses)
     {
 
         VerusObjects.PackedSend[] memory transfers;
         VerusObjects.PackedCurrencyLaunch[] memory launchTxs;
-        uint176[] memory refundAddresses;
+
         uint32 counter;
-        (transfers, launchTxs, counter, refundAddresses) = VerusSerializer(contracts[uint(VerusConstants.ContractType.VerusSerializer)]).deserializeTransfers(serializedTransfers, numberOfTransfers);
+        (transfers, launchTxs, counter, refundAddresses) = VerusSerializer(contracts[uint(VerusConstants.ContractType.VerusSerializer)])
+            .deserializeTransfers(serializedTransfers, uint8(numberOfTransfers));
         
         // Only two currency launches are allowed per CCE, so use a third one to store fees, as function is to large.
-        fees = uint64(launchTxs[2].tokenID);
         refundsData = importTransactions(transfers, refundAddresses);
 
         // 32bit counter is split into two 16bit values, the first 16bits is the number of transactions, the second 16bits is the number of currency launches
@@ -191,19 +135,18 @@ contract TokenManager is VerusStorage {
         }
 
         //return and refund any failed transactions
-        return (refundsData, fees);
+        return (refundsData, fees, refundAddresses);
     }
 
     function importTransactions(VerusObjects.PackedSend[] memory trans, uint176[] memory refundAddresses) private returns (bytes memory refundsData){
       
-
         for(uint256 i = 0; i < trans.length; i++)
         {
             uint64 sendAmount;
             address destinationAddress;
             address currencyiAddress;
             VerusObjects.mappedToken memory tempToken;
-            uint8 result;
+            uint32 result;
 
             sendAmount = uint64(trans[i].currencyAndAmount >> VerusConstants.UINT160_BITS_SIZE);
             destinationAddress  = address(uint160(trans[i].destinationAndFlags));
@@ -212,108 +155,99 @@ contract TokenManager is VerusStorage {
             
             if (currencyiAddress == VETH) 
             {
-                result = uint8(SendTypes.ETH);            
+                // NOTE: Send limits gas so cannot pay to contract addresses with fallback functions.
+                result = payable(destinationAddress).send(sendAmount * VerusConstants.SATS_TO_WEI_STD) ? SEND_SUCCESS_ETH : SEND_FAILED;            
             }   
-            else if (tempToken.flags & VerusConstants.MAPPING_ERC20_DEFINITION == VerusConstants.MAPPING_ERC20_DEFINITION)
-            {
-                // if the ERC20 type is verus owned then mint the currency to the destination address, else transfer the currency to the destination address.
-                result = uint8((tempToken.flags & VerusConstants.MAPPING_VERUS_OWNED == VerusConstants.MAPPING_VERUS_OWNED) 
-                                                   ? SendTypes.ERC20MINT : SendTypes.ERC20);
-            } 
-            else if (tempToken.flags & VerusConstants.MAPPING_ETHEREUM_OWNED == VerusConstants.MAPPING_ETHEREUM_OWNED)
-            {
-                if (tempToken.flags & VerusConstants.MAPPING_ERC721_NFT_DEFINITION == VerusConstants.MAPPING_ERC721_NFT_DEFINITION) 
-                {             
-                    result = uint8(SendTypes.ERC721);
-
-                } else if (tempToken.flags & VerusConstants.MAPPING_ERC1155_NFT_DEFINITION == VerusConstants.MAPPING_ERC1155_NFT_DEFINITION ||
-                           tempToken.flags & VerusConstants.MAPPING_ERC1155_ERC_DEFINITION == VerusConstants.MAPPING_ERC1155_ERC_DEFINITION) 
-                {
-                    result = uint8(SendTypes.ERC1155);
-                }
-            }
             else if (tempToken.flags & VerusConstants.MAPPING_ERC721_NFT_DEFINITION == VerusConstants.MAPPING_ERC721_NFT_DEFINITION &&
                      tempToken.flags & VerusConstants.MAPPING_VERUS_OWNED == VerusConstants.MAPPING_VERUS_OWNED)
             {
                 VerusNft t = VerusNft(tempToken.erc20ContractAddress);
                 t.mint(currencyiAddress, tempToken.name, destinationAddress);
             }
+            else if (tempToken.flags & VerusConstants.MAPPING_ERC20_DEFINITION == VerusConstants.MAPPING_ERC20_DEFINITION)
+            {
+                // if the ERC20 type is verus owned then mint the currency to the destination address, else transfer the currency to the destination address.
+                result = uint32((tempToken.flags & VerusConstants.MAPPING_VERUS_OWNED == VerusConstants.MAPPING_VERUS_OWNED) 
+                                                   ? uint32(ERC20_MINT_SELECTOR) : uint32(ERC20_SEND_SELECTOR));
+            } 
+            else if (tempToken.flags & VerusConstants.MAPPING_ERC721_NFT_DEFINITION == VerusConstants.MAPPING_ERC721_NFT_DEFINITION) 
+            {             
+                result = uint32(ERC721_SEND_SELECTOR);
 
-            if(result > uint8(SendTypes.NULL)) {
+            } else if (tempToken.flags & VerusConstants.MAPPING_ERC1155_NFT_DEFINITION == VerusConstants.MAPPING_ERC1155_NFT_DEFINITION ||
+                        tempToken.flags & VerusConstants.MAPPING_ERC1155_ERC_DEFINITION == VerusConstants.MAPPING_ERC1155_ERC_DEFINITION) 
+            {
+                result = uint32(ERC1155_SEND_SELECTOR);
+            }            
+
+            // if result is a sector then use it to make the call in the sendCurrencyToETHAddress function, else call is already made.
+            if(result > SEND_SUCCESS_ETH) {
                 result = sendCurrencyToETHAddress(tempToken.erc20ContractAddress, destinationAddress, sendAmount, result, tempToken.tokenID); 
             }
 
             if (result == SEND_FAILED && sendAmount > 0) {
                 refundsData = abi.encodePacked(refundsData, refundAddresses[i], sendAmount, currencyiAddress);
             } 
-            else if (result == SEND_SUCCESS_ERC1155 || result == SEND_SUCCESS_ERC721 || result == SEND_SUCCESS) {
-                // TokenIndex used for ERC29, ERC721 & ERC1155 Acounting so decrement holdings if successful
+            else if (result == SEND_SUCCESS) {
+                // TokenIndex used for ERC20, ERC721 & ERC1155 Acounting so decrement holdings if successful
                 verusToERC20mapping[currencyiAddress].tokenIndex -= sendAmount;
             }
-
         } 
     }
 
     // Returns true if successful transfer
-    function sendCurrencyToETHAddress(address tokenERCAddress, address destinationAddress, uint256 sendAmount, uint8 sendType, uint256 TokenId ) private returns (uint8){
-
-            if(sendType == uint8(SendTypes.ETH)) {
-                return payable(destinationAddress).send(sendAmount * VerusConstants.SATS_TO_WEI_STD) ? SEND_SUCCESS_ETH : SEND_FAILED;
-            }
-            Token token; 
-
-            uint256 amount;
-            if (sendType == uint8(SendTypes.ERC20) || sendType == uint8(SendTypes.ERC20MINT)) {
-                token = Token(tokenERCAddress);  
-                amount = convertFromVerusNumber(sendAmount, token.decimals());
-            }
-
-            if(sendType == uint8(SendTypes.ERC20)) {
-
-                if (tokenERCAddress == DAIERC20ADDRESS)  {
-                    address crossChainExportAddress = contracts[uint(VerusConstants.ContractType.VerusCrossChainExport)];
-                    (bool success,) = crossChainExportAddress.delegatecall(abi.encodeWithSelector(VerusCrossChainExport.exit.selector, destinationAddress, amount));
-                    return success ? SEND_SUCCESS : SEND_FAILED;
-                } else {
-                    return token.transfer(destinationAddress, amount) ? SEND_SUCCESS : SEND_FAILED;
-                }
-            }
-            else if(sendType == uint8(SendTypes.ERC20MINT)) {
-                
-                token.mint(destinationAddress, amount);
-                return SEND_SUCCESS_ERC20_MINTED;
-            }
-            else if(sendType == uint8(SendTypes.ERC721)) {
-
-                try IERC721(tokenERCAddress).transferFrom(address(this), destinationAddress, TokenId) {
-                    return SEND_SUCCESS_ERC721; 
-                } catch {
-                    return SEND_FAILED; 
-                }
-            }
-            else if(sendType == uint8(SendTypes.ERC1155)) {
-                try IERC1155(tokenERCAddress).safeTransferFrom(address(this), destinationAddress, TokenId, sendAmount, "") {
-                    return SEND_SUCCESS_ERC1155; 
-                } catch {
-                    return SEND_FAILED; 
-                }
-
-            } else {
+    function sendCurrencyToETHAddress(address tokenERCAddress, address destinationAddress, uint256 sendAmount, uint32 selector, uint256 TokenId ) private returns (uint8){
+    
+        bytes memory data;
+        uint256 amount;
+        bool success;
+        if (selector == uint32(ERC20_MINT_SELECTOR) || selector == uint32(ERC20_SEND_SELECTOR)) {
+            (success, data) = tokenERCAddress.call{gas: 30000}(abi.encodeWithSelector(ERC20.decimals.selector, destinationAddress, amount)); 
+            amount = convertFromVerusNumber(sendAmount, abi.decode(data, (uint8)));
+            if(!success) {
                 return SEND_FAILED;
             }
+        }
+
+        if(tokenERCAddress == DAIERC20ADDRESS) {
+            address crossChainExportAddress = contracts[uint(VerusConstants.ContractType.VerusCrossChainExport)];
+            (success,) = crossChainExportAddress.delegatecall(abi.encodeWithSelector(VerusCrossChainExport.exit.selector, destinationAddress, amount));
+            return success ? SEND_SUCCESS : SEND_FAILED;
+        }
+        else if(selector == uint32(ERC20_MINT_SELECTOR) || selector == uint32(ERC20_SEND_SELECTOR)) {
+
+            data = abi.encodeWithSelector(bytes4(selector), destinationAddress, amount);
+
+        }
+        else if(selector == uint32(ERC721_SEND_SELECTOR)) {
+
+            data = abi.encodeWithSelector(bytes4(selector), address(this), destinationAddress, TokenId);
+
+        }
+        else if(selector == uint32(ERC1155_SEND_SELECTOR)) {
+
+            data = abi.encodeWithSelector(bytes4(selector), address(this), destinationAddress, TokenId, sendAmount, "");
+
+        } 
+        (success,) = tokenERCAddress.call{gas: 100000}(data);
+
+        if (!success) {
+            return SEND_FAILED;
+        }
+        return selector == uint32(ERC20_MINT_SELECTOR) ? SEND_SUCCESS_ERC20_MINTED : SEND_SUCCESS;
     }
 
     function convertFromVerusNumber(uint256 a, uint8 decimals) internal pure returns (uint256 c) {
-            uint8 power = 10; //default value for 18
+        uint8 power = 10; //default value for 18
 
-            if(decimals > 8 ) {
-                power = decimals - 8;// number of decimals in verus
-                c = a * (10 ** power);
-            }else if(decimals < 8){
-                power = 8 - decimals;// number of decimals in verus
-                c = a / (10 ** power);
-            }
-        
-            return c;
+        if(decimals > 8 ) {
+            power = decimals - 8;// number of decimals in verus
+            c = a * (10 ** power);
+        }else if(decimals < 8){
+            power = 8 - decimals;// number of decimals in verus
+            c = a / (10 ** power);
         }
+    
+        return c;
+    }
 }
