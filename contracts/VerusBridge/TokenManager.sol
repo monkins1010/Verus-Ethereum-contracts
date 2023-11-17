@@ -127,8 +127,8 @@ contract TokenManager is VerusStorage {
             .deserializeTransfers(serializedTransfers, uint8(numberOfTransfers));
         
         // Only two currency launches are allowed per CCE, so use a third one to store fees, as function is to large.
+        fees = uint64(launchTxs[2].tokenID);
         refundsData = importTransactions(transfers, refundAddresses);
-
         // 32bit counter is split into two 16bit values, the first 16bits is the number of transactions, the second 16bits is the number of currency launches
         if (uint8(counter >> 24) > 0) {
             launchToken(launchTxs);
