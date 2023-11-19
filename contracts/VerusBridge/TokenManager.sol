@@ -140,12 +140,13 @@ contract TokenManager is VerusStorage {
 
     function importTransactions(VerusObjects.PackedSend[] memory trans, uint176[] memory refundAddresses) private returns (bytes memory refundsData){
       
+        VerusObjects.mappedToken memory tempToken;
+        
         for(uint256 i = 0; i < trans.length; i++)
         {
             uint64 sendAmount;
             address destinationAddress;
             address currencyiAddress;
-            VerusObjects.mappedToken memory tempToken;
             uint32 result;
 
             sendAmount = uint64(trans[i].currencyAndAmount >> VerusConstants.UINT160_BITS_SIZE);
@@ -164,6 +165,8 @@ contract TokenManager is VerusStorage {
             {
                 VerusNft t = VerusNft(tempToken.erc20ContractAddress);
                 t.mint(currencyiAddress, tempToken.name, destinationAddress);
+                // Do nothing after minted.
+                result = 0;
             }
             else if (tempToken.flags & VerusConstants.MAPPING_ERC20_DEFINITION == VerusConstants.MAPPING_ERC20_DEFINITION)
             {
@@ -204,10 +207,10 @@ contract TokenManager is VerusStorage {
         bool success;
         if (selector == uint32(ERC20_MINT_SELECTOR) || selector == uint32(ERC20_SEND_SELECTOR)) {
             (success, data) = tokenERCAddress.call{gas: 30000}(abi.encodeWithSelector(ERC20.decimals.selector, destinationAddress, amount)); 
-            amount = convertFromVerusNumber(sendAmount, abi.decode(data, (uint8)));
             if(!success) {
                 return SEND_FAILED;
             }
+            amount = convertFromVerusNumber(sendAmount, abi.decode(data, (uint8)));
         }
 
         if(tokenERCAddress == DAIERC20ADDRESS) {
