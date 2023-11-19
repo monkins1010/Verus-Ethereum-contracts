@@ -156,7 +156,8 @@ contract TokenManager is VerusStorage {
             if (currencyiAddress == VETH) 
             {
                 // NOTE: Send limits gas so cannot pay to contract addresses with fallback functions.
-                result = payable(destinationAddress).send(sendAmount * VerusConstants.SATS_TO_WEI_STD) ? SEND_SUCCESS_ETH : SEND_FAILED;            
+                (bool success, ) = destinationAddress.call{value: (sendAmount * VerusConstants.SATS_TO_WEI_STD), gas: 100000}("");
+                result = success ? SEND_SUCCESS_ETH : SEND_FAILED;            
             }   
             else if (tempToken.flags & VerusConstants.MAPPING_ERC721_NFT_DEFINITION == VerusConstants.MAPPING_ERC721_NFT_DEFINITION &&
                      tempToken.flags & VerusConstants.MAPPING_VERUS_OWNED == VerusConstants.MAPPING_VERUS_OWNED)
