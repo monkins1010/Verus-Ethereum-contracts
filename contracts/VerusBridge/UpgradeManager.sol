@@ -49,13 +49,16 @@ contract UpgradeManager is VerusStorage {
 
         bytes memory be; 
         address contractsHash;
+        uint256 contractsLength;
+
+        contractsLength = contracts.length;
 
         require(saltsUsed[_newContractPackage.salt] == false, "salt Already used");
         saltsUsed[_newContractPackage.salt] = true;
 
-        require(contracts.length == _newContractPackage.contracts.length, "Input contracts wrong length");
+        require(contractsLength == _newContractPackage.contracts.length, "Input contracts wrong length");
         
-        for (uint i = 0; i < contracts.length; i++)
+        for (uint i = 0; i < contractsLength; i++)
         {
             be = abi.encodePacked(be, _newContractPackage.contracts[i]);
         }
@@ -82,6 +85,8 @@ contract UpgradeManager is VerusStorage {
                     require(success);
                 }
             }
+        } else {
+            revert();
         }
     }
 
@@ -102,8 +107,11 @@ contract UpgradeManager is VerusStorage {
     function getVoteCount(address contractsHash) public view returns (uint) {
 
         uint countOfAgreedVotes;
+        uint256 votesLength;
+
+        votesLength = rollingUpgradeVotes.length;
         
-        for(uint i = 1; i < rollingUpgradeVotes.length; i++) 
+        for(uint i = 1; i < votesLength; i++) 
         {
             if (contractsHash == rollingUpgradeVotes[i])
                 countOfAgreedVotes++;

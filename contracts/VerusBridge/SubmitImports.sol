@@ -34,6 +34,7 @@ contract SubmitImports is VerusStorage {
     uint32 constant FORKS_NOTARY_PROPOSER_POSITION = 96;
     uint32 constant TYPE_REFUND = 1;
     uint constant TYPE_BYTE_LOCATION_IN_UINT176 = 168;
+    uint8 constant TYPE_REFUND_BYTES32_LOCATION = 244;
     enum Currency {VETH, DAI, VERUS, MKR}
 
     function buildReserveTransfer (uint64 value, uint176 sendTo, address sendingCurrency, uint64 fees, address feecurrencyid) private view returns (VerusObjects.CReserveTransfer memory) {
@@ -226,8 +227,8 @@ contract SubmitImports is VerusStorage {
                     bytes32 feeRefundAddress;
                     feeRefundAddress = bytes32(uint256(refundAddresses[i]));
 
-                    if (feeRefundAddress == bytes32(0)) {
-                        feeRefundAddress |= bytes32(uint256(TYPE_REFUND) << 244);
+                    if (feeRefundAddress != bytes32(0)) {
+                        feeRefundAddress |= bytes32(uint256(TYPE_REFUND) << TYPE_REFUND_BYTES32_LOCATION);
                         refunds[feeRefundAddress][VETH] += feeRefunds;
                     } else {
                         processorsFees += feeRefunds;                    
@@ -262,7 +263,7 @@ contract SubmitImports is VerusStorage {
             bytes32 refundAddress;
 
             // The leftmost byte is the TYPE_REFUND;
-            refundAddress = bytes32(uint256(verusAddress) | uint256(TYPE_REFUND) << 244);
+            refundAddress = bytes32(uint256(verusAddress) | uint256(TYPE_REFUND) << TYPE_REFUND_BYTES32_LOCATION);
 
             refunds[refundAddress][currency] += amount;
 
@@ -391,7 +392,7 @@ contract SubmitImports is VerusStorage {
         bytes32 refundAddressFormatted;
         VerusObjects.CReserveTransfer memory LPtransfer;
         bool success;
-        refundAddressFormatted = bytes32(uint256(verusAddress) | uint256(TYPE_REFUND) << 244);
+        refundAddressFormatted = bytes32(uint256(verusAddress) | uint256(TYPE_REFUND) << TYPE_REFUND_BYTES32_LOCATION);
 
         refundAmount = refunds[refundAddressFormatted][currency];
         require (bridgeConverterActive && refundAmount > 0 && verusAddress != uint176(0));

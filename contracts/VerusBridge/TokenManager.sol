@@ -127,8 +127,8 @@ contract TokenManager is VerusStorage {
             .deserializeTransfers(serializedTransfers, uint8(numberOfTransfers));
         
         // Only two currency launches are allowed per CCE, so use a third one to store fees, as function is to large.
+        fees = uint64(launchTxs[2].tokenID);
         refundsData = importTransactions(transfers, refundAddresses);
-
         // 32bit counter is split into two 16bit values, the first 16bits is the number of transactions, the second 16bits is the number of currency launches
         if (uint8(counter >> 24) > 0) {
             launchToken(launchTxs);
@@ -140,12 +140,13 @@ contract TokenManager is VerusStorage {
 
     function importTransactions(VerusObjects.PackedSend[] memory trans, uint176[] memory refundAddresses) private returns (bytes memory refundsData){
       
+        VerusObjects.mappedToken memory tempToken;
+        
         for(uint256 i = 0; i < trans.length; i++)
         {
             uint64 sendAmount;
             address destinationAddress;
             address currencyiAddress;
-            VerusObjects.mappedToken memory tempToken;
             uint32 result;
 
             sendAmount = uint64(trans[i].currencyAndAmount >> VerusConstants.UINT160_BITS_SIZE);
@@ -156,13 +157,16 @@ contract TokenManager is VerusStorage {
             if (currencyiAddress == VETH) 
             {
                 // NOTE: Send limits gas so cannot pay to contract addresses with fallback functions.
-                result = payable(destinationAddress).send(sendAmount * VerusConstants.SATS_TO_WEI_STD) ? SEND_SUCCESS_ETH : SEND_FAILED;            
+                (bool success, ) = destinationAddress.call{value: (sendAmount * VerusConstants.SATS_TO_WEI_STD), gas: 100000}("");
+                result = success ? SEND_SUCCESS_ETH : SEND_FAILED;            
             }   
             else if (tempToken.flags & VerusConstants.MAPPING_ERC721_NFT_DEFINITION == VerusConstants.MAPPING_ERC721_NFT_DEFINITION &&
                      tempToken.flags & VerusConstants.MAPPING_VERUS_OWNED == VerusConstants.MAPPING_VERUS_OWNED)
             {
                 VerusNft t = VerusNft(tempToken.erc20ContractAddress);
                 t.mint(currencyiAddress, tempToken.name, destinationAddress);
+                // Do nothing after minted.
+                result = 0;
             }
             else if (tempToken.flags & VerusConstants.MAPPING_ERC20_DEFINITION == VerusConstants.MAPPING_ERC20_DEFINITION)
             {
@@ -203,10 +207,10 @@ contract TokenManager is VerusStorage {
         bool success;
         if (selector == uint32(ERC20_MINT_SELECTOR) || selector == uint32(ERC20_SEND_SELECTOR)) {
             (success, data) = tokenERCAddress.call{gas: 30000}(abi.encodeWithSelector(ERC20.decimals.selector, destinationAddress, amount)); 
-            amount = convertFromVerusNumber(sendAmount, abi.decode(data, (uint8)));
             if(!success) {
                 return SEND_FAILED;
             }
+            amount = convertFromVerusNumber(sendAmount, abi.decode(data, (uint8)));
         }
 
         if(tokenERCAddress == DAIERC20ADDRESS) {
