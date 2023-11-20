@@ -22,14 +22,6 @@ contract ExportManager is VerusStorage  {
         VERUS = Verus;
     }
 
-    function initialize() external {
-
-        _readyExports[18484201].exportHash = 0x2732a5d07110f2d899a8eb2e36f17755cd3ed6ac86ce4c94798454c9078a0b89;
-        _readyExports[18484201].transfers[0].secondreserveid = 0x0000000000000000000000000000000000000000;
-        _readyExports[18484201].transfers[0].flags = 1;
-
-    }
-
     uint8 constant UINT160_SIZE = 20; 
     uint8 constant FEE_OFFSET = 20 + 20 + 20 + 8; // 3 x 20bytes address + 64bit uint // 3 x 20bytes address + 64bit uint
     // Aux dest can only be one vector, of one vector which is a CTransferDestiantion of an R address.
