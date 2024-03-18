@@ -279,35 +279,35 @@ contract CreateExports is VerusStorage {
         interestAccrued = (truncatedInterest * VerusConstants.SATS_TO_WEI_STD) - DAIReimburseAmount;
         
         // The interest accrued must be a significant amount to be worth sending back to Verus.
-        if (interestAccrued > VerusConstants.DAI_BURNBACK_THRESHOLD) {
+        require (interestAccrued > VerusConstants.DAI_BURNBACK_THRESHOLD);
             // Increase the supply of DAI by the amount of interest accrued - minus the payback fee.
-            daiTotals[VerusConstants.VDXF_SYSTEM_DAI_HOLDINGS] += interestAccrued;
+        daiTotals[VerusConstants.VDXF_SYSTEM_DAI_HOLDINGS] += interestAccrued;
 
-            uint64 fees; 
-            
-            (success, retData) = contracts[uint(VerusConstants.ContractType.SubmitImports)]
-                                    .delegatecall(abi.encodeWithSelector(SubmitImports.getImportFeeForReserveTransfer.selector, DAI));
-            require(success);
+        uint64 fees; 
+        
+        (success, retData) = contracts[uint(VerusConstants.ContractType.SubmitImports)]
+                                .delegatecall(abi.encodeWithSelector(SubmitImports.getImportFeeForReserveTransfer.selector, DAI));
+        require(success);
 
-            fees = abi.decode(retData, (uint64));
-            require (truncatedInterest > fees, "Not enough DAI to pay fees");
+        fees = abi.decode(retData, (uint64));
+        require (truncatedInterest > fees, "Not enough DAI to pay fees");
 
-            (success, retData) = contracts[uint(VerusConstants.ContractType.SubmitImports)]
-                                    .delegatecall(abi.encodeWithSelector(SubmitImports.sendBurnBackToVerus.selector, truncatedInterest, DAI, fees));
-            require(success);
-                   // When the bridge launches to make sure a fresh block with no pending vrsc transfers is used as not to mix destination currencies.
-            (VerusObjects.CReserveTransfer memory LPtransfer,) = abi.decode(retData, (VerusObjects.CReserveTransfer, bool)); 
+        (success, retData) = contracts[uint(VerusConstants.ContractType.SubmitImports)]
+                                .delegatecall(abi.encodeWithSelector(SubmitImports.sendBurnBackToVerus.selector, truncatedInterest, DAI, fees));
+        require(success);
+                // When the bridge launches to make sure a fresh block with no pending vrsc transfers is used as not to mix destination currencies.
+        (VerusObjects.CReserveTransfer memory LPtransfer,) = abi.decode(retData, (VerusObjects.CReserveTransfer, bool)); 
 
-            _createExports(LPtransfer, false);
+        _createExports(LPtransfer, false);
 
-            //transfer DAI to the msg.senders address.
-            (success,) = crossChainExportAddress.delegatecall(
-                                                            abi.encodeWithSelector(
-                                                                VerusCrossChainExport.exit.selector, 
-                                                                msg.sender, 
-                                                                DAIReimburseAmount * VerusConstants.SATS_TO_WEI_STD));
-            require(success);
-        }
+        //transfer DAI to the msg.senders address.
+        (success,) = crossChainExportAddress.delegatecall(
+                                                        abi.encodeWithSelector(
+                                                            VerusCrossChainExport.exit.selector, 
+                                                            msg.sender, 
+                                                            DAIReimburseAmount * VerusConstants.SATS_TO_WEI_STD));
+        require(success);
+
 
     }
         
