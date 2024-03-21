@@ -1,12 +1,16 @@
 const VerusDelegator = artifacts.require("../contracts/Main/Delegator.sol");
 const VerusSerializer = artifacts.require("../contracts/VerusBridge/VerusSerializer.sol");
+const VerusProof = artifacts.require("../contracts/MMR/VerusProof.sol");
 const { getNotarizerIDS } = require('../migrations/setup.js')
 const verusDelegatorAbi = require('../build/contracts/Delegator.json');
 const verusSerializerAbi = require('../build/contracts/VerusSerializer.json');
+const verusProofAbi = require('../build/contracts/VerusProof.json');
 const testNotarization = require('./submitnotarization.js')
 const reservetransfer = require('./reservetransfer.ts')
 const { toBase58Check } = require("verus-typescript-primitives");
 const ERC721 = require("../build/contracts/ERC721.json");
+const { proofinput, invalidComponents } = reservetransfer;
+
 
 contract("Verus Contracts deployed tests", async(accounts)  => {
     
@@ -324,6 +328,31 @@ contract("Verus Contracts deployed tests", async(accounts)  => {
         }
 
         assert.equal(reply, "VerusNFT" , "Verus ERC721 name does not equal transaction");
+      });
+      it("Prove components", async () => {
+        const VerusProofInst = await VerusProof.deployed();
+        const contractAddress = VerusProofInst.address;
+        const contractInstance = new web3.eth.Contract(verusProofAbi.abi, contractAddress);
+
+        let reply;  invalidComponents
+        try {
+
+            reply = await contractInstance.methods.checkProof("0x0000000000000000000000000000000000000000000000000000000000000000",proofinput[0].partialtransactionproof.components[0].elProof).call();  
+
+        } catch(e) {
+            console.log(e.message)
+            assert.isTrue(false);
+        }
+        assert.equal(reply, "0x29b5437905fbf6cd87bb5964bff0306b1e5870ef375e4622b438012177dc7261");
+      try {
+
+          reply = await contractInstance.methods.checkProof("0x0000000000000000000000000000000000000000000000000000000000000000", invalidComponents).call();  
+      } catch(e) {
+          assert.equal(e.message, "VM Exception while processing transaction: revert")
+          return;
+      }
+      assert.isTrue(false);
+      
       });
 
 });
