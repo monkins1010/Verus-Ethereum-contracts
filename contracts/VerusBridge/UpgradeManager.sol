@@ -75,6 +75,8 @@ contract UpgradeManager is VerusStorage {
             successfulVoteHashes[contractsHash] = 1;
             // reset the rolling vote [0] index to 0
             rollingUpgradeVotes[0] = address(0);
+            // reset the rolling vote index to 0.
+            rollingVoteIndex = 0;
 
             for (uint j = 0; j < uint(VerusConstants.NUMBER_OF_CONTRACTS); j++)
             {       
