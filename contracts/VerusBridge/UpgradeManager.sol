@@ -109,9 +109,9 @@ contract UpgradeManager is VerusStorage {
         uint countOfAgreedVotes;
         uint256 votesLength;
 
-        votesLength = rollingUpgradeVotes.length;
+        votesLength = 50;
         
-        for(uint i = 1; i < votesLength; i++) 
+        for(uint i = 0; i < votesLength; i++) 
         {
             if (contractsHash == rollingUpgradeVotes[i])
                 countOfAgreedVotes++;

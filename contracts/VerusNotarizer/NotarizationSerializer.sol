@@ -340,7 +340,7 @@ contract NotarizationSerializer is VerusStorage {
             rollingUpgradeVotes[rollingVoteIndex] = votetxid;
         }
         
-        if(rollingVoteIndex > 98) {
+        if(rollingVoteIndex > 48) {
             rollingVoteIndex = 1; // use position 0 to determine whether votes have started, so start at 1
         } else {
             rollingVoteIndex = rollingVoteIndex + 1;
