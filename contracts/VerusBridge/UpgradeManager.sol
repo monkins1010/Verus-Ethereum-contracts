@@ -70,7 +70,7 @@ contract UpgradeManager is VerusStorage {
         require(contractsHash != address(0), "Invalid contract hash");
 
         // If the vote on the hash has already been used, then we can't use it again.
-        if (getVoteCount(contractsHash) > 50 && successfulVoteHashes[contractsHash] == 0) {
+        if (getVoteCount(contractsHash) > 25 && successfulVoteHashes[contractsHash] == 0) {
             // Set the upgrade hash address as used
             successfulVoteHashes[contractsHash] = 1;
             // reset the rolling vote [0] index to 0
@@ -82,7 +82,7 @@ contract UpgradeManager is VerusStorage {
                     contracts[j] = _newContractPackage.contracts[j];
                     //NOTE: Upgraded contracts need a initialize() function to be present, so they can initialize
                     (bool success,) = _newContractPackage.contracts[j].delegatecall{gas: 3000000}(abi.encodeWithSignature("initialize()"));
-                    require(success);
+                    success;
                 }
             }
         } else {

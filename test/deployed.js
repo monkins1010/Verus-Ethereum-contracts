@@ -10,6 +10,20 @@ const reservetransfer = require('./reservetransfer.ts')
 const { toBase58Check } = require("verus-typescript-primitives");
 const ERC721 = require("../build/contracts/ERC721.json");
 const { proofinput, invalidComponents } = reservetransfer;
+const abi = web3.eth.abi
+const { randomBytes } = require('crypto');
+
+const createUpgradeTuple = (addresses, salt, upgradetype) => {
+
+  let package = [0, "0x00", "0x00",
+                  addresses, upgradetype, salt, "0x0000000000000000000000000000000000000000", 0];
+  
+  let data = abi.encodeParameter(
+      'tuple(uint8,bytes32,bytes32,address[],uint8,bytes32,address,uint32)',
+      package);
+  
+  return data;
+}
 
 
 contract("Verus Contracts deployed tests", async(accounts)  => {
@@ -116,21 +130,126 @@ contract("Verus Contracts deployed tests", async(accounts)  => {
         const contractInstance = new web3.eth.Contract(verusDelegatorAbi.abi, contractAddress);
 
         let reply;
+
+        const votehash= "0x9304c78dd2c478a5cd5841dd751dc16baa320603";
         try {
-            reply = await contractInstance.methods.setLatestData(testNotarization.serializednotarization, testNotarization.txid, testNotarization.voutnum,  testNotarization.abiencodedSigData).send({ from: accounts[0], gas: 6000000 });  
+            reply = await contractInstance.methods.setLatestData(testNotarization.firstNotarization, testNotarization.firsttxid, testNotarization.firstvout,  testNotarization.abiencodedSigData).send({ from: accounts[0], gas: 6000000 });  
+            
+            reply = await contractInstance.methods.setLatestData(testNotarization.secondNotarization, testNotarization.secondtxid, testNotarization.secondvout,  testNotarization.abiencodedSigData).send({ from: accounts[0], gas: 6000000 }); 
+            let test = await contractInstance.methods.rollingUpgradeVotes(0).call();
+            test = await contractInstance.methods.rollingUpgradeVotes(1).call();
+            test = await contractInstance.methods.rollingUpgradeVotes(2).call();
+
+            let innerreply2 = await contractInstance.methods.getVoteCount(votehash).call();
+            assert.equal(innerreply2, "1", "Vote count should be 1");
         } catch(e) {
             console.log(e)
             assert.isTrue(false);
         }
         // Get the contract balance after sending ETH exportHeights
         const notarization = await contractInstance.methods.bestForks(0).call();
+        const vote = await contractInstance.methods.rollingUpgradeVotes(0).call();
 
          const NotarizationResult = {
            txid: notarization.substring(66, 130),
            n: parseInt(notarization.slice(202, 210), 16),
            hash: notarization.substring(2, 66),
         };
-        assert.equal(`0x${NotarizationResult.txid}`, testNotarization.txid, "Txid in best forks does not equal notarization");
+        assert.equal(`0x${NotarizationResult.txid}`, testNotarization.firsttxid, "Txid in best forks does not equal notarization");
+      });
+
+      it("Test Votes", async () => {
+        const DelegatorInst = await VerusDelegator.deployed();
+        const contractAddress = DelegatorInst.address;
+        const contractInstance = new web3.eth.Contract(verusDelegatorAbi.abi, contractAddress);
+
+        let randomBuf = randomBytes(32);
+
+        let outBuffer = Buffer.alloc(1);
+        const TYPE_CONTRACT = 1;
+        outBuffer.writeUInt8(TYPE_CONTRACT);
+
+        let contractsHex = Buffer.from('');
+
+        let contracts = [];
+        // Get the list of current active contracts
+        for (let i = 0; i < 11; i++) 
+        {
+            contracts.push(await contractInstance.methods.contracts(i).call());
+        }
+        const newContract = "0x089D2f1Bdb9DA0eD7350e6224eE40C22cCc20D02";
+        const newContractType = 2;
+        
+         //replace existing contract with new contract address
+        contracts[newContractType] = newContract; 
+
+        for (let i = 0; i < 11; i++) 
+        {
+            contractsHex = Buffer.concat([contractsHex, Buffer.from(contracts[i].slice(2), 'hex')]);
+        }
+
+        let serialized = Buffer.concat([contractsHex, outBuffer, randomBuf]);
+
+        let hashedContractPackage =  web3.utils.keccak256(serialized).toString('hex').slice(26,66);
+      
+        let reply;
+        // Get the contract balance after sending ETH exportHeights
+        const vote = await contractInstance.methods.rollingUpgradeVotes(0).call();
+
+        // NOTE: This test requires a modified delegator to be able to set the votes
+        /*************************************************** */
+        await contractInstance.methods.modifyvote(hashedContractPackage, 24).send({ from: accounts[0], gas: 6000000 });
+
+        /**** Insert this into the delegator ******************************************* */
+       // function modifyvote(address hashValue, uint numOfvotes) external  {
+
+        //  for (uint i = 1; i < numOfvotes+1; i++)
+        //  {
+        //     rollingUpgradeVotes[i] = hashValue;              
+        //  }
+        
+        /******************************************************** */
+        let count = 0;
+  
+        let innerreply = await contractInstance.methods.getVoteCount(hashedContractPackage).call();
+     
+        count = parseInt(innerreply);       
+        assert.equal(count, 24, "error in vote amount");
+        let upgradetup
+        try {
+            upgradetup = createUpgradeTuple(contracts, "0x"+randomBuf.toString('hex'), 1)
+            reply = await contractInstance.methods.upgradeContracts(upgradetup).send({ from: accounts[0], gas: 6000000 });  
+            assert.isTrue(false, "Should not have been able to upgrade");
+        } catch(e) {
+                     
+        }
+
+        await contractInstance.methods.modifyvote(hashedContractPackage, 26).send({ from: accounts[0], gas: 6000000 });
+        count = 0;
+
+        let innerreply2 = await contractInstance.methods.getVoteCount(hashedContractPackage).call();
+     
+        count = parseInt(innerreply2);
+        assert.equal(count, 26, "error in vote amount");
+
+        try {
+            reply = await contractInstance.methods.upgradeContracts(upgradetup).send({ from: accounts[0], gas: 6000000 });  
+     
+        } catch(e) {
+            console.log(e)
+            assert.isTrue(false, "Should have been able to upgrade");
+        }
+        
+        for (let i = 0; i < 11; i++) 
+        {
+          const replaced = await contractInstance.methods.contracts(i).call();
+          if (i == 2) {
+            assert.equal(replaced, newContract, "Contract was not replaced");
+          } else {
+            assert.equal(replaced, contracts[i], "Contract was not replaced");
+          }
+        }
+
       });
 
       it("Test Serializer with bounceback sendTransfer", async () => {
@@ -314,9 +433,12 @@ contract("Verus Contracts deployed tests", async(accounts)  => {
 
       it("Check Verus ERC721 has launched", async () => {
         const DelegatorInst = await VerusDelegator.deployed();
-        let tokensList = await DelegatorInst.getTokenList.call(0,0);
+        const contractAddress = DelegatorInst.address;
+        const contractInstance = new web3.eth.Contract(verusDelegatorAbi.abi, contractAddress);
 
-        const NFTContract = new web3.eth.Contract(ERC721.abi, tokensList[0].erc20ContractAddress);
+        let tokensList = await contractInstance.methods.tokenList(0).call();
+
+        const NFTContract = new web3.eth.Contract(ERC721.abi, tokensList);
        
         let reply;  
         try {
