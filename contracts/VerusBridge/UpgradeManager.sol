@@ -70,13 +70,13 @@ contract UpgradeManager is VerusStorage {
         require(contractsHash != address(0), "Invalid contract hash");
 
         // If the vote on the hash has already been used, then we can't use it again.
-        if (getVoteCount(contractsHash) > 25 && successfulVoteHashes[contractsHash] == 0) {
+        if (getVoteCount(contractsHash) > 25 && successfulVoteHashes[contractsHash] != VerusConstants.MAX_UINT256) {
+            
             // Set the upgrade hash address as used
-            successfulVoteHashes[contractsHash] = 1;
-            // reset the rolling vote [0] index to 0
-            rollingUpgradeVotes[0] = address(0);
+            successfulVoteHashes[contractsHash] = VerusConstants.MAX_UINT256;
+
             // reset the rolling vote index to 0.
-            rollingVoteIndex = 0;
+            rollingVoteIndex = VerusConstants.DEFAULT_INDEX_VALUE;
 
             for (uint j = 0; j < uint(VerusConstants.NUMBER_OF_CONTRACTS); j++)
             {       

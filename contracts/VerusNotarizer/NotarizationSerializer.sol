@@ -95,7 +95,7 @@ contract NotarizationSerializer is VerusStorage {
             nextOffset -= 1;  // NOTE: Next Varint call takes array pos not array pos +1
         }
         //position 0 of the rolling vote is use to determine whether votes have started
-        else if (rollingVoteIndex != 0){
+        else if (rollingVoteIndex != VerusConstants.DEFAULT_INDEX_VALUE){
             castVote(address(0));
         }
 
@@ -329,21 +329,33 @@ contract NotarizationSerializer is VerusStorage {
 
     function castVote(address votetxid) private {
 
-        // If the vote is address(0) and the vote has not started, or the cote hash has already been used, return
-        if (votetxid == address(0) && rollingUpgradeVotes[0] == address(0)
-                || successfulVoteHashes[votetxid]  != 0) {
+        // If the vote is address(0) and the vote has not started, or the vote hash has already been used, return
+        if (votetxid == address(0) && rollingVoteIndex == VerusConstants.DEFAULT_INDEX_VALUE
+                || successfulVoteHashes[votetxid] == VerusConstants.MAX_UINT256) {
             return;
+        }
+
+        // if the vote hash has not been used, save the vote start timestamp
+        if(votetxid != address(0) && successfulVoteHashes[votetxid] == 0) {
+            successfulVoteHashes[votetxid] = block.timestamp;
+        } else if (votetxid != address(0) && (block.timestamp - successfulVoteHashes[votetxid]) > (VerusConstants.SECONDS_IN_DAY * 20)) {
+            // if 20 days have passed since the vote started, set the vote hash as used
+            successfulVoteHashes[votetxid] = VerusConstants.MAX_UINT256;
+
+            // reset the rolling vote index to DEFAULT, if there are other hashes they will continue, otherwise voting will go idle.
+            rollingVoteIndex = VerusConstants.DEFAULT_INDEX_VALUE;
+            return;
+        }
+        
+        if(rollingVoteIndex > (VerusConstants.VOTE_LENGTH - 1)) {
+            rollingVoteIndex = 0;
+        } else {
+            rollingVoteIndex = rollingVoteIndex + 1;
         }
 
         // save an empty global write if the value to be written is the same as the current value
         if (votetxid != rollingUpgradeVotes[rollingVoteIndex]) {
             rollingUpgradeVotes[rollingVoteIndex] = votetxid;
-        }
-        
-        if(rollingVoteIndex > (VerusConstants.VOTE_LENGTH - 2)) {
-            rollingVoteIndex = 1; // use position 0 to determine whether votes have started, so start at 1
-        } else {
-            rollingVoteIndex = rollingVoteIndex + 1;
         }
 
     }

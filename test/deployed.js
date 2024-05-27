@@ -137,11 +137,11 @@ contract("Verus Contracts deployed tests", async(accounts)  => {
             
             reply = await contractInstance.methods.setLatestData(testNotarization.secondNotarization, testNotarization.secondtxid, testNotarization.secondvout,  testNotarization.abiencodedSigData).send({ from: accounts[0], gas: 6000000 }); 
             let test = await contractInstance.methods.rollingUpgradeVotes(0).call();
-            assert.equal(test == votehash, "Vote hash should be equal to the votehash");
+            assert.equal(test.toLowerCase(), votehash, "Vote hash should be equal to the votehash");
             test = await contractInstance.methods.rollingUpgradeVotes(1).call();
-            assert.equal(test == votehash, "Vote hash should be equal to the votehash");
+            assert.equal(test.toLowerCase(), votehash, "Vote hash should be equal to the votehash");
             test = await contractInstance.methods.rollingUpgradeVotes(2).call();
-            assert.equal(test == "0x0000000000000000000000000000000000000000", "Vote hash should be equal to the null");
+            assert.equal(test.toLowerCase(), "0x0000000000000000000000000000000000000000", "Vote hash should be equal to the null");
 
             let innerreply2 = await contractInstance.methods.getVoteCount(votehash).call();
             assert.equal(innerreply2, "2", "Vote count should be 2");
