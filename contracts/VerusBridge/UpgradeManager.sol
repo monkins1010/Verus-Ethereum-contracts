@@ -83,8 +83,7 @@ contract UpgradeManager is VerusStorage {
                 if (contracts[j] != _newContractPackage.contracts[j]) {
                     contracts[j] = _newContractPackage.contracts[j];
                     //NOTE: Upgraded contracts need a initialize() function to be present, so they can initialize
-                    (bool success,) = _newContractPackage.contracts[j].delegatecall{gas: 3000000}(abi.encodeWithSignature("initialize()"));
-                    success;
+                    _newContractPackage.contracts[j].delegatecall{gas: 3000000}(abi.encodeWithSignature("initialize()"));
                 }
             }
         } else {
@@ -111,7 +110,7 @@ contract UpgradeManager is VerusStorage {
         uint countOfAgreedVotes;
         uint256 votesLength;
 
-        votesLength = 50;
+        votesLength = VerusConstants.VOTE_LENGTH;
         
         for(uint i = 0; i < votesLength; i++) 
         {

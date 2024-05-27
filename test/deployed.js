@@ -137,11 +137,14 @@ contract("Verus Contracts deployed tests", async(accounts)  => {
             
             reply = await contractInstance.methods.setLatestData(testNotarization.secondNotarization, testNotarization.secondtxid, testNotarization.secondvout,  testNotarization.abiencodedSigData).send({ from: accounts[0], gas: 6000000 }); 
             let test = await contractInstance.methods.rollingUpgradeVotes(0).call();
+            assert.equal(test == votehash, "Vote hash should be equal to the votehash");
             test = await contractInstance.methods.rollingUpgradeVotes(1).call();
+            assert.equal(test == votehash, "Vote hash should be equal to the votehash");
             test = await contractInstance.methods.rollingUpgradeVotes(2).call();
+            assert.equal(test == "0x0000000000000000000000000000000000000000", "Vote hash should be equal to the null");
 
             let innerreply2 = await contractInstance.methods.getVoteCount(votehash).call();
-            assert.equal(innerreply2, "1", "Vote count should be 1");
+            assert.equal(innerreply2, "2", "Vote count should be 2");
         } catch(e) {
             console.log(e)
             assert.isTrue(false);
@@ -233,7 +236,11 @@ contract("Verus Contracts deployed tests", async(accounts)  => {
         assert.equal(count, 26, "error in vote amount");
 
         try {
-            reply = await contractInstance.methods.upgradeContracts(upgradetup).send({ from: accounts[0], gas: 6000000 });  
+            reply = await contractInstance.methods.upgradeContracts(upgradetup).send({ from: accounts[0], gas: 6000000 });
+            const vote = await contractInstance.methods.rollingUpgradeVotes(0).call();
+            const rollingIndex = await contractInstance.methods.rollingVoteIndex().call();
+            assert.equal(rollingIndex, 0, "Rolling index should be 0");
+            assert.equal(vote, "0x0000000000000000000000000000000000000000", "Vote should be reset");
      
         } catch(e) {
             console.log(e)
