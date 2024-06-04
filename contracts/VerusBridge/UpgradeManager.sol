@@ -23,6 +23,10 @@ contract UpgradeManager is VerusStorage {
 
     event contractUpdated(bool);
 
+    function initialize() external {
+        rollingVoteIndex = VerusConstants.DEFAULT_INDEX_VALUE;
+    }
+
     function upgradeContracts(bytes calldata data) external payable returns (uint8) {
 
         VerusObjects.upgradeInfo memory _newContractPackage;
@@ -32,17 +36,6 @@ contract UpgradeManager is VerusStorage {
         checkValidContractUpgrade(_newContractPackage);
             
         return PENDING; 
-    }
-
-    function recoverString(bytes memory be, uint8 vs, bytes32 rs, bytes32 ss) private pure returns (address)
-    {
-        bytes32 hashValue;
-
-        hashValue = sha256(abi.encodePacked(writeCompactSize(be.length),be));
-        hashValue = sha256(abi.encodePacked(uint8(19),hex"5665727573207369676e656420646174613a0a", hashValue)); // prefix = 19(len) + "Verus signed data:\n"
-
-        return recoverSigner(hashValue, vs - 4, rs, ss);
-
     }
 
     function checkValidContractUpgrade(VerusObjects.upgradeInfo memory _newContractPackage) private {
@@ -75,7 +68,7 @@ contract UpgradeManager is VerusStorage {
             // Set the upgrade hash address as used
             successfulVoteHashes[contractsHash] = VerusConstants.MAX_UINT256;
 
-            // reset the rolling vote index to 0.
+            // reset the rolling vote index to default viewer.
             rollingVoteIndex = VerusConstants.DEFAULT_INDEX_VALUE;
 
             for (uint j = 0; j < uint(VerusConstants.NUMBER_OF_CONTRACTS); j++)
@@ -103,7 +96,6 @@ contract UpgradeManager is VerusStorage {
         }
         return _string;
     }
-
 
     function getVoteCount(address contractsHash) public view returns (uint) {
 
