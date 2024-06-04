@@ -330,7 +330,7 @@ contract NotarizationSerializer is VerusStorage {
     function castVote(address votetxid) private {
 
         // If the vote is address(0) and the vote has not started, or the vote hash has already been used, return
-        if (votetxid == address(0) && rollingVoteIndex == VerusConstants.DEFAULT_INDEX_VALUE
+        if ((votetxid == address(0) && rollingVoteIndex == VerusConstants.DEFAULT_INDEX_VALUE)
                 || successfulVoteHashes[votetxid] == VerusConstants.MAX_UINT256) {
             return;
         }
