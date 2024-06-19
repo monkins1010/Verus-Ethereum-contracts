@@ -13,14 +13,14 @@ const verusMainnetNotariserSigner = [];
 // These are the equivelent ETH mainnet addresses of the notaries Recovery R addresses
 const verusMainnetNotariserRecovery = [];
 
-// These are the notaries goerli iaddresses in hex form.
-const verusGoerliNotariserIDS = [];
+// These are the notaries Sepolia iaddresses in hex form.
+const verusSepoliaNotariserIDS = [];
 
-// These are the equivelent ETH goerli addresses of the notaries Spending R addresses
-const verusGoerliNotariserSigner = [];
+// These are the equivelent ETH Sepolia addresses of the notaries Spending R addresses
+const verusSepoliaNotariserSigner = [];
 
-// These are the equivelent ETH goerli addresses of the notaries Recovery R addresses
-const verusGoerliNotariserRecovery = [];
+// These are the equivelent ETH Sepolia addresses of the notaries Recovery R addresses
+const verusSepoliaNotariserRecovery = [];
 
 // These are the development notaries iaddresses in hex form.
 const TestVerusNotariserIDS = [
@@ -44,8 +44,8 @@ const getNotarizerIDS = (network) => {
 
     if (network == "development"){
         return [TestVerusNotariserIDS, TestVerusNotariserSigner, TestVerusNotariserRecovery];
-    } else if (network == "goerli" || network == "goerli-fork"){
-        return [verusGoerliNotariserIDS, verusGoerliNotariserSigner, verusGoerliNotariserRecovery];
+    } else if (network == "sepolia" || network == "sepolia-fork"){
+        return [verusSepoliaNotariserIDS, verusSepoliaNotariserSigner, verusSepoliaNotariserRecovery];
     } else if (network == "mainnet" || network == "mainnet-fork"){
         return [verusMainnetNotariserIDS, verusMainnetNotariserSigner, verusMainnetNotariserRecovery];
     }

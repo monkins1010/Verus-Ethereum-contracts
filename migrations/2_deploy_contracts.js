@@ -30,7 +30,7 @@ const { returnConstructorCurrencies,
     
 module.exports = async function(deployer) {
         
-    const isTestnet = deployer.network == "development" || deployer.network == "goerli" || deployer.network == "goerli-fork";
+    const isTestnet = deployer.network == "development" || deployer.network == "sepolia" || deployer.network == "sepolia-fork";
     
     const currencyConstants = returnConstructorCurrencies(isTestnet);
     const DAI = getDAI(isTestnet);
@@ -105,7 +105,7 @@ module.exports = async function(deployer) {
 
     const VerusDelegatorInst = await VerusDelegator.deployed();
     await VerusDelegatorInst.launchContractTokens(launchCurrencies);
-    if (deployer.network == "goerli" || deployer.network == "mainnet" || deployer.network == "mainnet-fork") { 
+    if (deployer.network == "sepolia" || deployer.network == "mainnet" || deployer.network == "mainnet-fork") { 
         await VerusDelegatorInst.replacecontract(CCEInst.address, 3, {gas: 4700000}); // CCE is position 3 in list of contracts
     }
 
@@ -118,7 +118,7 @@ module.exports = async function(deployer) {
 const getCurrencies = async (deployer) => {
     
     // if testnetERC is not null then we are running ganache test and need to replace the DAI address with the testnetERC address.
-    let isTestnet = deployer.network == "development" || deployer.network == "goerli" || deployer.network == "goerli-fork"
+    let isTestnet = deployer.network == "development" || deployer.network == "sepolia" || deployer.network == "sepolia-fork"
     let currencies = arrayofcurrencies(isTestnet);
 
     if (deployer.network == "development"){
@@ -131,9 +131,9 @@ const getCurrencies = async (deployer) => {
         globalDAI = TokenInst.address;
     } 
 
-    if (deployer.network == "development" || deployer.network == "goerli" || deployer.network == "goerli-fork") {
+    if (deployer.network == "development" || deployer.network == "sepolia" || deployer.network == "sepolia-fork") {
 
-        await deployer.deploy(Token, "MKR (Testnet)", "MKR"); //TODO: Replace if there is an offical Goerli ERC20 MKR
+        await deployer.deploy(Token, "MKR (Testnet)", "MKR"); //TODO: Replace if there is an offical sepolia ERC20 MKR
         const TokenInst = await Token.deployed();
         TokenInst.mint(deployer.networks[deployer.network].from, "100000000000000000000000");
         console.log("\nMKR DEPLOYED\n", TokenInst.address); 
