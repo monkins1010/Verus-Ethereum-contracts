@@ -190,6 +190,8 @@ contract VerusCrossChainExport is VerusStorage {
         uint256 pie = rdiv(wad, chi);
         claimableFees[VerusConstants.VDXFID_DAI_DSR_SUPPLY] = add(claimableFees[VerusConstants.VDXFID_DAI_DSR_SUPPLY], pie);
         claimableFees[VerusConstants.VDXF_SYSTEM_DAI_HOLDINGS] = add(claimableFees[VerusConstants.VDXF_SYSTEM_DAI_HOLDINGS], wad);
+        //NOTE: Testnet only transfer the dai to the contract so it can be burnt.
+        IERC20(DAIERC20).transfer(daiJoin, wad);
         JoinLike(daiJoin).join(address(this), wad);
         PotLike(pot).join(pie);
     }
