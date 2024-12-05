@@ -42,6 +42,10 @@ contract NotarizationSerializer is VerusStorage {
     uint8 constant PROOF_TYPE_ETH = 2;
     enum Currency {VETH, DAI, VERUS, MKR}
 
+    function initialize() external {
+        rollingVoteIndex = VerusConstants.DEFAULT_INDEX_VALUE;
+    }
+    
     function readVarint(bytes memory buf, uint32 idx) public pure returns (uint32 v, uint32 retidx) {
 
         uint8 b; // store current byte content
