@@ -120,6 +120,9 @@ library VerusConstants {
 
     uint8 constant GLOBAL_TYPE_NOTARY_VALID_HIGH_BIT = 0x80;
     uint8 constant GLOBAL_TYPE_NOTARY_MASK = 0x7f;
+    uint8 constant VOTE_LENGTH = 50;
+    uint8 constant DEFAULT_INDEX_VALUE = 200;
+    uint256 constant MAX_UINT256 = 0xffffffffffffffffffffffffffffffffffffffffffffffffffffffffffffffff;
 }
 
 //TODO: extra constants to add 176, 92 etc..

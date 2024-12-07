@@ -23,6 +23,10 @@ contract UpgradeManager is VerusStorage {
 
     event contractUpdated(bool);
 
+    function initialize() external {
+        rollingVoteIndex = VerusConstants.DEFAULT_INDEX_VALUE;
+    }
+
     function upgradeContracts(bytes calldata data) external payable returns (uint8) {
 
         VerusObjects.upgradeInfo memory _newContractPackage;
@@ -32,17 +36,6 @@ contract UpgradeManager is VerusStorage {
         checkValidContractUpgrade(_newContractPackage);
             
         return PENDING; 
-    }
-
-    function recoverString(bytes memory be, uint8 vs, bytes32 rs, bytes32 ss) private pure returns (address)
-    {
-        bytes32 hashValue;
-
-        hashValue = sha256(abi.encodePacked(writeCompactSize(be.length),be));
-        hashValue = sha256(abi.encodePacked(uint8(19),hex"5665727573207369676e656420646174613a0a", hashValue)); // prefix = 19(len) + "Verus signed data:\n"
-
-        return recoverSigner(hashValue, vs - 4, rs, ss);
-
     }
 
     function checkValidContractUpgrade(VerusObjects.upgradeInfo memory _newContractPackage) private {
@@ -70,17 +63,19 @@ contract UpgradeManager is VerusStorage {
         require(contractsHash != address(0), "Invalid contract hash");
 
         // If the vote on the hash has already been used, then we can't use it again.
-        if (getVoteCount(contractsHash) > 50 && successfulVoteHashes[contractsHash] == 0) {
+        if (getVoteCount(contractsHash) > 25 && successfulVoteHashes[contractsHash] != VerusConstants.MAX_UINT256) {
+            
             // Set the upgrade hash address as used
-            successfulVoteHashes[contractsHash] = 1;
-            // reset the rolling vote [0] index to 0
-            rollingUpgradeVotes[0] = address(0);
+            successfulVoteHashes[contractsHash] = VerusConstants.MAX_UINT256;
+
+            // reset the rolling vote index to default viewer.
+            rollingVoteIndex = VerusConstants.DEFAULT_INDEX_VALUE;
 
             for (uint j = 0; j < uint(VerusConstants.NUMBER_OF_CONTRACTS); j++)
             {       
                 if (contracts[j] != _newContractPackage.contracts[j]) {
                     contracts[j] = _newContractPackage.contracts[j];
-                    //NOTE: Upgraded contracts need a initialize() function to be present, so they can initialize
+                    //NOTE: Upgraded contracts must have a initialize() function to be present!
                     (bool success,) = _newContractPackage.contracts[j].delegatecall{gas: 3000000}(abi.encodeWithSignature("initialize()"));
                     require(success);
                 }
@@ -103,15 +98,14 @@ contract UpgradeManager is VerusStorage {
         return _string;
     }
 
-
     function getVoteCount(address contractsHash) public view returns (uint) {
 
         uint countOfAgreedVotes;
         uint256 votesLength;
 
-        votesLength = rollingUpgradeVotes.length;
+        votesLength = VerusConstants.VOTE_LENGTH;
         
-        for(uint i = 1; i < votesLength; i++) 
+        for(uint i = 0; i < votesLength; i++) 
         {
             if (contractsHash == rollingUpgradeVotes[i])
                 countOfAgreedVotes++;

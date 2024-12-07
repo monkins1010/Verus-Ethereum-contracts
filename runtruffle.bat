@@ -1,1 +1,1 @@
-truffle deploy --network goerli --reset
+truffle deploy --network sepolia --reset
