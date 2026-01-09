@@ -34,12 +34,20 @@ contract CreateExports is VerusStorage {
         DAIERC20ADDRESS = daiERC20Address;
     }
 
-    function subtractPoolSize(uint64 _amount) private returns (bool) {
+    function initialize() external {
+         // Correct the DAI holdings to account for any DAI already in DSR at deployment time.
+        verusToERC20mapping[DAI].tokenIndex = (claimableFees[VerusConstants.VDXF_SYSTEM_DAI_HOLDINGS] / VerusConstants.SATS_TO_WEI_STD) - verusToERC20mapping[DAI].tokenIndex;
+    }    
 
-        if((_amount + VerusConstants.MIN_VRSC_FEE) > remainingLaunchFeeReserves) return false;
-        remainingLaunchFeeReserves -= _amount;
-        return true;
-    }
+    // ******* 2026-01-05 NOTE *******
+    // contract now launched so fees must always be paid by user. (contract size reduction)
+    // function subtractPoolSize(uint64 _amount) private returns (bool) {
+
+    //     if((_amount + VerusConstants.MIN_VRSC_FEE) > remainingLaunchFeeReserves) return false;
+    //     remainingLaunchFeeReserves -= _amount;
+    //     return true;
+    // }
+    // *******************************
 
     function sendTransfer(bytes calldata datain) payable external {
 
@@ -73,9 +81,12 @@ contract CreateExports is VerusStorage {
 
         require(fees != 0, "CheckExport Failed Checks"); 
 
-        if(!bridgeConverterActive) {
-            require (subtractPoolSize(uint64(transfer.fees)));
-        }
+        // ******* 2026-01-05 NOTE *******
+        // bridgeConverterActive == true, so fees must always be paid by user.
+        // if(!bridgeConverterActive) {
+        //     require (subtractPoolSize(uint64(transfer.fees)));
+        // }
+        // *******************************
 
         if (transfer.currencyvalue.currency != VETH) {
             iaddressMapping = verusToERC20mapping[transfer.currencyvalue.currency];
@@ -149,7 +160,7 @@ contract CreateExports is VerusStorage {
         // If the token is DAI, run join to have the DAI transferred to the DSR contract.
         if (address(token) == DAIERC20ADDRESS) {
             address crossChainExportAddress = contracts[uint(VerusConstants.ContractType.VerusCrossChainExport)];
-            (bool success,) = crossChainExportAddress.delegatecall(abi.encodeWithSignature("join(uint256)", _tokenAmount));
+            (bool success,) = crossChainExportAddress.delegatecall(abi.encodeWithSelector(VerusCrossChainExport.join.selector, _tokenAmount));
             require(success);
         }
 
@@ -280,7 +291,7 @@ contract CreateExports is VerusStorage {
         
         // The interest accrued must be a significant amount to be worth sending back to Verus.
         require (interestAccrued > VerusConstants.DAI_BURNBACK_THRESHOLD);
-            // Increase the supply of DAI by the amount of interest accrued - minus the payback fee.
+        // Increase the supply of DAI by the amount of interest accrued - minus the payback fee.
         daiTotals[VerusConstants.VDXF_SYSTEM_DAI_HOLDINGS] += interestAccrued;
 
         uint64 fees; 
@@ -295,7 +306,7 @@ contract CreateExports is VerusStorage {
         (success, retData) = contracts[uint(VerusConstants.ContractType.SubmitImports)]
                                 .delegatecall(abi.encodeWithSelector(SubmitImports.sendBurnBackToVerus.selector, truncatedInterest, DAI, fees));
         require(success);
-                // When the bridge launches to make sure a fresh block with no pending vrsc transfers is used as not to mix destination currencies.
+        // When the bridge launches to make sure a fresh block with no pending vrsc transfers is used as not to mix destination currencies.
         (VerusObjects.CReserveTransfer memory LPtransfer,) = abi.decode(retData, (VerusObjects.CReserveTransfer, bool)); 
 
         _createExports(LPtransfer, false);
@@ -308,6 +319,8 @@ contract CreateExports is VerusStorage {
                                                             DAIReimburseAmount * VerusConstants.SATS_TO_WEI_STD));
         require(success);
 
+        // Add the amount sent to Verus to the DAI holdings.
+        verusToERC20mapping[DAI].tokenIndex += truncatedInterest;
 
     }
         
