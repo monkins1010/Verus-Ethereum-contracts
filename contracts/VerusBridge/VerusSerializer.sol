@@ -457,7 +457,7 @@ contract VerusSerializer {
                 nextOffset := add(nextOffset, VERUS_ID_LENGTH) //move to vector length 
             }
 
-            if(destinationType & VerusConstants.RESERVE_TO_RESERVE == VerusConstants.RESERVE_TO_RESERVE)
+            if(flags & VerusConstants.RESERVE_TO_RESERVE == VerusConstants.RESERVE_TO_RESERVE)
             {
                 assembly {
                     nextOffset := add(nextOffset, VERUS_ID_LENGTH) //move to vector length 

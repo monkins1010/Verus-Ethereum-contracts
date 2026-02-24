@@ -105,7 +105,7 @@ contract NotaryTools is VerusStorage {
 
         if (signer != notaryAddressMapping[_newRecoveryInfo.notarizerID].recovery)
         {
-            return ERROR;  
+            revert();  
         }
                  
         updateNotarizer(_newRecoveryInfo.notarizerID, _newRecoveryInfo.contracts[0], 

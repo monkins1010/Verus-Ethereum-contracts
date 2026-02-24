@@ -404,7 +404,7 @@ contract SubmitImports is VerusStorage {
         if (currency != VETH && currency != DAI && currency != VERUS && currency != MKR) {
             fees = getImportFeeForReserveTransfer(VETH);
             if (msg.value < (fees * VerusConstants.SATS_TO_WEI_STD)) {
-                return fees;
+                revert();
             }
             //The user may have put too much in, so update fees for correct accounting.
             fees = uint64(msg.value / VerusConstants.SATS_TO_WEI_STD);
