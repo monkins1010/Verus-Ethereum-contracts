@@ -206,7 +206,7 @@ contract TokenManager is VerusStorage {
         uint256 amount;
         bool success;
         if (selector == uint32(ERC20_MINT_SELECTOR) || selector == uint32(ERC20_SEND_SELECTOR)) {
-            (success, data) = tokenERCAddress.call{gas: 30000}(abi.encodeWithSelector(ERC20.decimals.selector, destinationAddress, amount)); 
+            (success, data) = tokenERCAddress.call{gas: 30000}(abi.encodeWithSelector(ERC20.decimals.selector)); 
             if(!success) {
                 return SEND_FAILED;
             }
@@ -242,14 +242,15 @@ contract TokenManager is VerusStorage {
     }
 
     function convertFromVerusNumber(uint256 a, uint8 decimals) internal pure returns (uint256 c) {
-        uint8 power = 10; //default value for 18
 
         if(decimals > 8 ) {
-            power = decimals - 8;// number of decimals in verus
+            uint8 power = decimals - 8;// number of decimals in verus
             c = a * (10 ** power);
         }else if(decimals < 8){
-            power = 8 - decimals;// number of decimals in verus
+            uint8 power = 8 - decimals;// number of decimals in verus
             c = a / (10 ** power);
+        } else {
+            c = a;
         }
     
         return c;

@@ -248,7 +248,7 @@ contract SubmitImports is VerusStorage {
         if (refundAmount.length < 50) return; //early return if no refunds.
 
         // Note each refund is 50 bytes = 22bytes(uint176) + uint64 + uint160 (currency)
-        for(uint i = 0; i < (refundAmount.length / 50); i = i + 50) {
+        for(uint i = 0; i < refundAmount.length; i = i + 50) {
 
             uint176 verusAddress;
             uint64 amount;
