@@ -233,9 +233,9 @@ contract TokenManager is VerusStorage {
             data = abi.encodeWithSelector(bytes4(selector), address(this), destinationAddress, TokenId, sendAmount, "");
 
         } 
-        (success,) = tokenERCAddress.call{gas: 100000}(data);
+        (success, data) = tokenERCAddress.call{gas: 100000}(data);
 
-        if (!success) {
+        if (!success || (data.length >= 32 && abi.decode(data, (uint256)) == 0)) {
             return SEND_FAILED;
         }
         return selector == uint32(ERC20_MINT_SELECTOR) ? SEND_SUCCESS_ERC20_MINTED : SEND_SUCCESS;
