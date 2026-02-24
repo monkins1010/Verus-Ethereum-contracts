@@ -37,6 +37,10 @@ contract SubmitImports is VerusStorage {
     uint8 constant TYPE_REFUND_BYTES32_LOCATION = 244;
     enum Currency {VETH, DAI, VERUS, MKR}
 
+    function initialize() external {
+        
+    }
+
     function buildReserveTransfer (uint64 value, uint176 sendTo, address sendingCurrency, uint64 fees, address feecurrencyid) private view returns (VerusObjects.CReserveTransfer memory) {
         
         VerusObjects.CReserveTransfer memory LPtransfer;

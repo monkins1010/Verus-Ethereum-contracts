@@ -25,6 +25,10 @@ contract NotaryTools is VerusStorage {
     uint8 constant ERROR = 4;
 
     using VerusBlake2b for bytes;
+
+    function initialize() external {
+        
+    }
     
     function updateNotarizer(address notarizer, address mainAddress, address revokeAddress, uint8 state) private
     {
