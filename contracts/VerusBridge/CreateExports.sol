@@ -35,8 +35,9 @@ contract CreateExports is VerusStorage {
     }
 
     function initialize() external {
-         // Correct the DAI holdings to account for any DAI already in DSR at deployment time.
-        verusToERC20mapping[DAI].tokenIndex = (claimableFees[VerusConstants.VDXF_SYSTEM_DAI_HOLDINGS] / VerusConstants.SATS_TO_WEI_STD) - verusToERC20mapping[DAI].tokenIndex;
+       // NOTE: the following code was deployed and is running. Be sure to include an initialization function in the constructor for any future changes to the contract that would require initialization logic, as the constructor will not be run on an upgrade.
+       // Correct the DAI holdings to account for any DAI already in DSR at deployment time.
+       // verusToERC20mapping[DAI].tokenIndex = (claimableFees[VerusConstants.VDXF_SYSTEM_DAI_HOLDINGS] / VerusConstants.SATS_TO_WEI_STD) - verusToERC20mapping[DAI].tokenIndex;
     }    
 
     // ******* 2026-01-05 NOTE *******
