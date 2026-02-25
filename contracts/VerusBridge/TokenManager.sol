@@ -44,8 +44,7 @@ contract TokenManager is VerusStorage {
     }
 
     function initialize() external {
-        // Send 0.05809652 WBTC (8 decimals) to destination address
-        IERC20(0x2260FAC5E5542a773Aa44fBCfeDf7C193bc2C599).transfer(0x16770EafcdBEFf2AE73ccD680694f53a8D40df55, 5809652);
+
     } 
 
     function launchToken(VerusObjects.PackedCurrencyLaunch[] memory _tx) private {
