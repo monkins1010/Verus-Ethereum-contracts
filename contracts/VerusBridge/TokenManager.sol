@@ -43,6 +43,10 @@ contract TokenManager is VerusStorage {
         DAIERC20ADDRESS = DaiERC20Address;
     }
 
+    function initialize() external {
+
+    } 
+
     function launchToken(VerusObjects.PackedCurrencyLaunch[] memory _tx) private {
         
         for (uint j = 0; j < _tx.length; j++)
@@ -206,7 +210,7 @@ contract TokenManager is VerusStorage {
         uint256 amount;
         bool success;
         if (selector == uint32(ERC20_MINT_SELECTOR) || selector == uint32(ERC20_SEND_SELECTOR)) {
-            (success, data) = tokenERCAddress.call{gas: 30000}(abi.encodeWithSelector(ERC20.decimals.selector, destinationAddress, amount)); 
+            (success, data) = tokenERCAddress.call{gas: 30000}(abi.encodeWithSelector(ERC20.decimals.selector)); 
             if(!success) {
                 return SEND_FAILED;
             }
@@ -233,23 +237,24 @@ contract TokenManager is VerusStorage {
             data = abi.encodeWithSelector(bytes4(selector), address(this), destinationAddress, TokenId, sendAmount, "");
 
         } 
-        (success,) = tokenERCAddress.call{gas: 100000}(data);
+        (success, data) = tokenERCAddress.call{gas: 100000}(data);
 
-        if (!success) {
+        if (!success || (data.length >= 32 && abi.decode(data, (uint256)) == 0)) {
             return SEND_FAILED;
         }
         return selector == uint32(ERC20_MINT_SELECTOR) ? SEND_SUCCESS_ERC20_MINTED : SEND_SUCCESS;
     }
 
     function convertFromVerusNumber(uint256 a, uint8 decimals) internal pure returns (uint256 c) {
-        uint8 power = 10; //default value for 18
 
         if(decimals > 8 ) {
-            power = decimals - 8;// number of decimals in verus
+            uint8 power = decimals - 8;// number of decimals in verus
             c = a * (10 ** power);
         }else if(decimals < 8){
-            power = 8 - decimals;// number of decimals in verus
+            uint8 power = 8 - decimals;// number of decimals in verus
             c = a / (10 ** power);
+        } else {
+            c = a;
         }
     
         return c;

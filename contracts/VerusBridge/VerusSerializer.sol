@@ -18,6 +18,10 @@ contract VerusSerializer {
     uint32 constant TRANSFER_GATEWAYSKIP = 56; //skip gatewayid, gatewaycode + fees
     uint8 constant FLAG_MASK = 192; // 11000000
 
+    function initialize() external {
+        
+    }
+
     function readCompactSizeLE(bytes memory incoming, uint32 offset) public pure returns(VerusObjectsCommon.UintReader memory) {
 
         uint8 oneByte;
@@ -457,7 +461,7 @@ contract VerusSerializer {
                 nextOffset := add(nextOffset, VERUS_ID_LENGTH) //move to vector length 
             }
 
-            if(destinationType & VerusConstants.RESERVE_TO_RESERVE == VerusConstants.RESERVE_TO_RESERVE)
+            if(flags & VerusConstants.RESERVE_TO_RESERVE == VerusConstants.RESERVE_TO_RESERVE)
             {
                 assembly {
                     nextOffset := add(nextOffset, VERUS_ID_LENGTH) //move to vector length 

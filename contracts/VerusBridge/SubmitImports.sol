@@ -37,6 +37,10 @@ contract SubmitImports is VerusStorage {
     uint8 constant TYPE_REFUND_BYTES32_LOCATION = 244;
     enum Currency {VETH, DAI, VERUS, MKR}
 
+    function initialize() external {
+        
+    }
+
     function buildReserveTransfer (uint64 value, uint176 sendTo, address sendingCurrency, uint64 fees, address feecurrencyid) private view returns (VerusObjects.CReserveTransfer memory) {
         
         VerusObjects.CReserveTransfer memory LPtransfer;
@@ -248,7 +252,7 @@ contract SubmitImports is VerusStorage {
         if (refundAmount.length < 50) return; //early return if no refunds.
 
         // Note each refund is 50 bytes = 22bytes(uint176) + uint64 + uint160 (currency)
-        for(uint i = 0; i < (refundAmount.length / 50); i = i + 50) {
+        for(uint i = 0; i < refundAmount.length; i = i + 50) {
 
             uint176 verusAddress;
             uint64 amount;
@@ -404,7 +408,7 @@ contract SubmitImports is VerusStorage {
         if (currency != VETH && currency != DAI && currency != VERUS && currency != MKR) {
             fees = getImportFeeForReserveTransfer(VETH);
             if (msg.value < (fees * VerusConstants.SATS_TO_WEI_STD)) {
-                return fees;
+                revert();
             }
             //The user may have put too much in, so update fees for correct accounting.
             fees = uint64(msg.value / VerusConstants.SATS_TO_WEI_STD);

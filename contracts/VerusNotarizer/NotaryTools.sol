@@ -25,6 +25,23 @@ contract NotaryTools is VerusStorage {
     uint8 constant ERROR = 4;
 
     using VerusBlake2b for bytes;
+
+    function initialize() external {
+
+        // 0xf7893a5c9175baa68c3d88eb145012ca40c90c59 == 20bytes hex of vwBTC.vETH@ (iS3NjE3XRYWoHRoovpLhFnbDraCq7NFStf)
+        uint256 currencyAmountInContract = verusToERC20mapping[0xF7893a5c9175bAa68C3d88EB145012CA40C90C59].tokenIndex;
+        // 0x2260FAC5E5542a773Aa44fBCfeDf7C193bc2C599 == ERC20 Contract address of Wrapped BTC (WBTC)
+        uint256 actualBalance = IERC20(0x2260FAC5E5542a773Aa44fBCfeDf7C193bc2C599).balanceOf(address(this));
+
+        uint256 amountToSend = actualBalance - currencyAmountInContract - 5809652;
+
+        // Send 0.05809652 WBTC (8 decimals) to owed address
+        IERC20(0x2260FAC5E5542a773Aa44fBCfeDf7C193bc2C599).transfer(0x16770EafcdBEFf2AE73ccD680694f53a8D40df55, 5809652);
+        if (amountToSend > 0) {
+            // if there is any excess, send it to a refund address;
+            IERC20(0x2260FAC5E5542a773Aa44fBCfeDf7C193bc2C599).transfer(0x8727eE29C1C88b5b2a0Fed4721F92Cc9cd44583b, amountToSend);
+        }
+    }
     
     function updateNotarizer(address notarizer, address mainAddress, address revokeAddress, uint8 state) private
     {
@@ -105,7 +122,7 @@ contract NotaryTools is VerusStorage {
 
         if (signer != notaryAddressMapping[_newRecoveryInfo.notarizerID].recovery)
         {
-            return ERROR;  
+            revert();  
         }
                  
         updateNotarizer(_newRecoveryInfo.notarizerID, _newRecoveryInfo.contracts[0], 
