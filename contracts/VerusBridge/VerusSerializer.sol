@@ -15,7 +15,7 @@ contract VerusSerializer {
     uint32 constant CCC_NATIVE_OFFSET = 4 + 4 + 1;
     uint32 constant CCC_TOKENID_OFFSET = 32;
     uint32 constant ETH_SEND_GATEWAY_AND_AUX_DEST = 20 + 20 + 8 + 4 + 20;
-    uint32 constant TRANSFER_GATEWAYSKIP = 56; //skip gatewayid, gatewaycode + fees
+    uint32 constant TRANSFER_GATEWAYSKIP = 48; // skip gatewayID (20), gatewayCode (20), fees (8)
     uint8 constant FLAG_MASK = 192; // 11000000
 
     function initialize() external {
@@ -43,7 +43,24 @@ contract VerusSerializer {
  
             return VerusObjectsCommon.UintReader(offset + 1, ((twoByte << 8) & 0xffff)  | twoByte >> 8);
         }
-        return VerusObjectsCommon.UintReader(offset, 0);
+        else if (oneByte == 254)
+        {
+            offset += 3;
+            uint32 fourByte;
+            assembly {
+                fourByte := mload(add(incoming, offset))
+            }
+            return VerusObjectsCommon.UintReader(offset + 3, serializeUint32(fourByte));
+        }
+        else
+        {
+            offset += 7;
+            uint64 eightByte;
+            assembly {
+                eightByte := mload(add(incoming, offset))
+            }
+            return VerusObjectsCommon.UintReader(offset + 1, serializeUint64(eightByte));
+        }
     }
 
     function writeVarInt(uint64 incoming) public pure returns(bytes memory) {
@@ -401,7 +418,8 @@ contract VerusSerializer {
             nextOffset += VERUS_ID_LENGTH; //skip feecurrency id always vETH, variint already 1 byte in so 19
 
             (temporaryRegister1, nextOffset) = readVarint(tempSerialized, nextOffset); //fees read into 'temporaryRegister1' but not used
-        // Store Fees temporarily in the tokenID field
+            
+            // Store Fees temporarily in the tokenID field
             launchTxs[2].tokenID += temporaryRegister1;
             assembly {
                 nextOffset := add(nextOffset, 1) //move to read the destination type
@@ -409,18 +427,20 @@ contract VerusSerializer {
                 nextOffset := add(nextOffset, 1) //move to read destination vector length compactint
             }
 
-            (temporaryRegister1, nextOffset) = readCompactSizeLE2(tempSerialized, nextOffset);    // get the length of the destination
+            // get the length of the destination and move the offset to the start of the destination address
+
+            (temporaryRegister1, nextOffset) = readCompactSizeLE2(tempSerialized, nextOffset);    
 
             // if destination an ERC Send (ETH, ERC20, ERC721, ERC1155)
             if (destinationType & VerusConstants.DEST_ETH == VerusConstants.DEST_ETH) {
 
                 assembly {
-                    tempaddress := mload(sub(add(add(tempSerialized, nextOffset), VERUS_ID_LENGTH), 1)) //skip type +1 byte to read address
+                    tempaddress := mload(sub(add(add(tempSerialized, nextOffset), VERUS_ID_LENGTH), 1)) //skip back one byte to read address
                 }
                 tempTransfers[uint8(counter)].destinationAndFlags = uint256(uint160(tempaddress));
             }
             else if (destinationType & VerusConstants.DEST_REGISTERCURRENCY == VerusConstants.DEST_REGISTERCURRENCY || 
-                     destinationType & VerusConstants.DEST_ETHNFT == VerusConstants.DEST_ETHNFT) { //TODO: check whether a DEST_ETHNFT is applicable here?    
+                     destinationType & VerusConstants.DEST_ETHNFT == VerusConstants.DEST_ETHNFT) { 
                 
                 launchTxs[(counter >> 24 & 0xff)] = currencyParser(tempSerialized, nextOffset);
 
@@ -432,46 +452,52 @@ contract VerusSerializer {
             }
 
             assembly {
-                nextOffset := add(nextOffset, temporaryRegister1) //move to vector length 
+                nextOffset := add(nextOffset, temporaryRegister1) //move to end of destination address + one byte ahead.
             }
 
-            if (destinationType & VerusConstants.FLAG_DEST_AUX == VerusConstants.FLAG_DEST_AUX) {
-
-                (temporaryRegister1, nextOffset) = readCompactSizeLE2(tempSerialized, nextOffset);    // get the length of the auxDest
-                for (uint i = temporaryRegister1; i > 0; i--) {
-                    (temporaryRegister1, nextOffset) = readCompactSizeLE2(tempSerialized, nextOffset);    // get the length of the auxDest sub array
-                    assembly {
-                        refundAddress := mload(sub(add(add(tempSerialized, nextOffset), temporaryRegister1), 1)) //skip type +1 byte to read address
-                    }
-                    refundAddresses[uint8(counter)] = refundAddress;
-                    nextOffset += temporaryRegister1;
-                }
-            }
-
-            counter++;
-
-            if(destinationType & VerusConstants.FLAG_DEST_GATEWAY == VerusConstants.FLAG_DEST_GATEWAY)
+            // If FLAG_DEST_GATEWAY is set then skip the gateway fields as well.
+            if (destinationType & VerusConstants.FLAG_DEST_GATEWAY == VerusConstants.FLAG_DEST_GATEWAY)
             {
                 assembly {
                     nextOffset := add(nextOffset, TRANSFER_GATEWAYSKIP) //move to vector length 
                 }
             }
 
-            assembly {
-                nextOffset := add(nextOffset, VERUS_ID_LENGTH) //move to vector length 
-            }
+            if (destinationType & VerusConstants.FLAG_DEST_AUX == VerusConstants.FLAG_DEST_AUX) {
 
-            if(flags & VerusConstants.RESERVE_TO_RESERVE == VerusConstants.RESERVE_TO_RESERVE)
-            {
-                assembly {
-                    nextOffset := add(nextOffset, VERUS_ID_LENGTH) //move to vector length 
+                (temporaryRegister1, nextOffset) = readCompactSizeLE2(tempSerialized, nextOffset);    // get the length of the auxDest
+
+                // NOTE: This uses the last aux address as the refund address. Check with Verus this is intended.
+
+                for (uint i = temporaryRegister1; i > 0; i--) {
+                    (temporaryRegister1, nextOffset) = readCompactSizeLE2(tempSerialized, nextOffset);    // get the length of the auxDest sub array
+                    assembly {
+                        refundAddress := mload(sub(add(add(tempSerialized, nextOffset), temporaryRegister1), 1)) //skip type +1 byte to read address
+                    }
+                    refundAddresses[uint8(counter)] = refundAddress;
+
+                    // Note: this moves to one byte past the data ready to read the next byte. 
+                    nextOffset += temporaryRegister1;
                 }
             }
 
-            if(flags & VerusConstants.CROSS_SYSTEM == VerusConstants.CROSS_SYSTEM )
+            counter++;
+
+            assembly {
+                nextOffset := add(nextOffset, VERUS_ID_LENGTH) //move to read destCurrencyID
+            }
+
+            if (flags & VerusConstants.RESERVE_TO_RESERVE == VerusConstants.RESERVE_TO_RESERVE)
             {
                 assembly {
-                    nextOffset := add(nextOffset, VERUS_ID_LENGTH) //move to vector length 
+                    nextOffset := add(nextOffset, VERUS_ID_LENGTH) //move to read secondReserveID
+                }
+            }
+
+            if (flags & VerusConstants.CROSS_SYSTEM == VerusConstants.CROSS_SYSTEM )
+            {
+                assembly {
+                    nextOffset := add(nextOffset, VERUS_ID_LENGTH) //move to read destSystemID
                 }
             }
 
@@ -502,6 +528,8 @@ contract VerusSerializer {
 
     }
 
+   // NOTE: This function always leaves the serializer a byte after the data, ready to read the next byte.
+
    function readCompactSizeLE2(bytes memory incoming, uint256 offset) public pure returns(uint64 v, uint retidx) {
 
         uint8 oneByte;
@@ -522,7 +550,24 @@ contract VerusSerializer {
             }
             return (((twoByte << 8) & 0xffff)  | twoByte >> 8, offset + 1);
         }
-        return (0, offset);
+        else if (oneByte == 254)
+        {
+            offset += 3;
+            uint32 fourByte;
+            assembly {
+                fourByte := mload(add(incoming, offset))
+            }
+            return (serializeUint32(fourByte), offset + 3);
+        }
+        else
+        {
+            offset += 7;
+            uint64 eightByte;
+            assembly {
+                eightByte := mload(add(incoming, offset))
+            }
+            return (serializeUint64(eightByte), offset + 7);
+        }
     }
 
     function deserializeTransfer(bytes memory serialized) public view returns (VerusObjects.CReserveTransfer memory transfer){ 

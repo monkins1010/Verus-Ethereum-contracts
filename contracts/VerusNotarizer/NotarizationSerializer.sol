@@ -92,6 +92,11 @@ contract NotarizationSerializer is VerusStorage {
                     }
                  }
 
+        if (proposerType & VerusConstants.FLAG_DEST_GATEWAY == VerusConstants.FLAG_DEST_GATEWAY)
+        {
+            nextOffset += VerusConstants.FLAG_DEST_GATEWAY_LENGTH;  // skip past gateway ID to get to auxdest vector length
+        }
+
         if (proposerType & VerusConstants.FLAG_DEST_AUX == VerusConstants.FLAG_DEST_AUX)
         {
             nextOffset += 1;  // goto auxdest parent vec length position
@@ -385,7 +390,24 @@ contract NotarizationSerializer is VerusStorage {
  
             return VerusObjectsCommon.UintReader(offset + 1, ((twoByte << 8) & 0xffff)  | twoByte >> 8);
         }
-        return VerusObjectsCommon.UintReader(offset, 0);
+        else if (oneByte == 254)
+        {
+            offset += 3;
+            uint32 fourByte;
+            assembly {
+                fourByte := mload(add(incoming, offset))
+            }
+            return VerusObjectsCommon.UintReader(offset + 3, serializeUint32(fourByte));
+        }
+        else
+        {
+            offset += 7;
+            uint64 eightByte;
+            assembly {
+                eightByte := mload(add(incoming, offset))
+            }
+            return VerusObjectsCommon.UintReader(offset + 1, serializeUint64(eightByte));
+        }
     }
 
     function serializeUint32(uint32 number) public pure returns(uint32){

@@ -269,6 +269,10 @@ contract VerusNotarizer is VerusStorage {
         {
             encodeNotarization(uint(forkIdx), VerusObjectsNotarization.NotarizationForks(hashedNotarization,
                 txidHash, proposer));
+            // Write proofs entry so that if this notarization later becomes confirmed via fork resolution,
+            // getLastConfirmedVRSCStateRoot() can find its stateRoot. Without this, a fork resolution sets
+            // bestForks[0] slot 2 to this notarization's height, but proofs[height] would be empty.
+            proofs[bytes32(uint256(uint32(uint256(proposer >> FORKS_DATA_OFFSET_FOR_HEIGHT))))] = abi.encodePacked(stateRoot, uint32(uint256(notarizations[uint(forkPos)].proposerPacked) >> FORKS_DATA_OFFSET_FOR_HEIGHT));
         }
     }
 

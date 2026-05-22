@@ -24,6 +24,7 @@ library VerusConstants {
     uint32 constant VALID = 1;
     uint32 constant CONVERT = 2;
     uint32 constant CROSS_SYSTEM = 0x40; 
+    uint8 constant FLAG_SUPPLEMENTAL = 8;
     uint32 constant BURN_CHANGE_PRICE = 0x80;              
     uint32 constant IMPORT_TO_SOURCE = 0x200;          
     uint32 constant RESERVE_TO_RESERVE = 0x400; 
@@ -55,6 +56,7 @@ library VerusConstants {
     uint8 constant DEST_ETHNFT = 10;
     uint8 constant FLAG_DEST_AUX = 64;
     uint8 constant FLAG_DEST_GATEWAY = 128;
+    uint8 constant FLAG_DEST_GATEWAY_LENGTH = 48;
     uint8 constant CURRENT_VERSION = 1;
 
     // deploy & launch Token flags These must match the constants in deploycontracts.js

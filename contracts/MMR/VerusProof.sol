@@ -33,12 +33,13 @@ contract VerusProof is VerusStorage  {
     // which are designed to ensure smart transaction provability, care must be take to ensure that OUTPUT_SCRIPT_OFFSET
     // is present and substituted for all equivalent values (currently (32 + 8))
     uint8 constant CCE_EVAL_EXPORT = 0xc;
-    uint32 constant CCE_COPTP_HEADERSIZE = 24 + 1;
+    uint32 constant CCE_COPTP_HEADERSIZE = 4 + 1;   // skips: 1(PUSHDATA len) + 2(version) + 2(flags) = 5, ready to read flags
     uint32 constant CCE_COPTP_EVALOFFSET = 2;
     uint32 constant CCE_SOURCE_SYSTEM_OFFSET = 24;
     uint32 constant CCE_HASH_TRANSFERS_DELTA = 32;
     uint32 constant CCE_DEST_SYSTEM_DELTA = 20;
     uint32 constant CCE_DEST_CURRENCY_DELTA = 20;
+    uint32 constant CCE_SOURCE_SYSTEM_DELTA = 20;  // advance past flags(2) to sourceSystemID... no: flags read inline, then +20 for sourceID
 
     uint32 constant OUTPUT_SCRIPT_OFFSET = (8 + 1);                 // start of prevector serialization for output script
     uint32 constant SCRIPT_OP_CHECKCRYPTOCONDITION = 0xcc;
@@ -136,7 +137,6 @@ contract VerusProof is VerusStorage  {
 
             nextOffset = uint32(readerLen.offset + readerLen.value);        // add the length of the push of master to point to cc opcode
 
-            //TODO: Check any other type would fail
             assembly {
                 var1 := mload(add(firstObj, nextOffset))         // this should be OP_CHECKCRYPTOCONDITION
                 nextOffset := add(nextOffset, 1)                    // and after that...
@@ -183,13 +183,14 @@ contract VerusProof is VerusStorage  {
                 opCode2 := mload(add(firstObj, nextOffset))         // should be OP_PUSHDATA1 or OP_PUSHDATA2
             }
 
-            nextOffset += CCE_COPTP_HEADERSIZE;
             
             if (opCode2 == SCRIPT_OP_PUSHDATA2)
             {
                     nextOffset += 1; // one extra byte taken for varint
             } 
-           
+            nextOffset += CCE_COPTP_HEADERSIZE;
+
+            // nVersion is last two bytes of header, but we don't currently use it for anything, so just read and move on
             // validate source and destination values as well and set reward address
             return (checkCCEValues(firstObj, nextOffset, hashedTransfers, nIndex));
         
@@ -207,6 +208,11 @@ contract VerusProof is VerusStorage  {
         uint128 packedRegister;
         
         assembly {
+            let flags := and(mload(add(firstObj, nextOffset)), 0x0800)  // flags LE uint16: byte0=0x08 lands at bits 15-8 in mload word, byte1=0x00 at bits 7-0; mask 0x0800 checks FLAG_SUPPLEMENTAL
+            if gt(flags, 0) {
+                revert(0, 0)  
+            }
+            nextOffset := add(nextOffset, CCE_SOURCE_SYSTEM_DELTA)
             systemSourceID := mload(add(firstObj, nextOffset))       // source system ID, which should match expected source (VRSC/VRSCTEST)
             nextOffset := add(nextOffset, CCE_HASH_TRANSFERS_DELTA)
             hashReserveTransfers := mload(add(firstObj, nextOffset)) // get hash of reserve transfers from partial transaction proof
@@ -221,6 +227,11 @@ contract VerusProof is VerusStorage  {
                 nextOffset := add(nextOffset, lengthOfExporter)  // goto exporter destination
                 exporter := mload(add(firstObj, nextOffset))     // read exporter destination
             }
+        }
+
+        if(tmpuint8 & VerusConstants.FLAG_DEST_GATEWAY == VerusConstants.FLAG_DEST_GATEWAY)
+        {
+            nextOffset += VerusConstants.FLAG_DEST_GATEWAY_LENGTH;  // skip past gateway ID to get to auxdest vector length
         }
 
         if (tmpuint8 & VerusConstants.FLAG_DEST_AUX == VerusConstants.FLAG_DEST_AUX)
