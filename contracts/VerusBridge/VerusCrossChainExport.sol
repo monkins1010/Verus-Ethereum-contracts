@@ -34,10 +34,11 @@ contract VerusCrossChainExport is VerusStorage {
     }
 
     function initialize() external {
-        VatLike vat = VatLike(PotLike(pot).vat());
-        vat.hope(daiJoin);
-        vat.hope(pot);
-        IERC20(DAIERC20).approve(daiJoin, uint256(int256(-1)));
+        // NOTE: removed as already ran.
+        // VatLike vat = VatLike(PotLike(pot).vat());
+        // vat.hope(daiJoin);
+        // vat.hope(pot);
+        // IERC20(DAIERC20).approve(daiJoin, uint256(int256(-1)));
     }
 
     uint256 constant RAY = 10 ** 27;

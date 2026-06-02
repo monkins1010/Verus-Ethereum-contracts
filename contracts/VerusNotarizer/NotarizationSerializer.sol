@@ -40,10 +40,18 @@ contract NotarizationSerializer is VerusStorage {
     uint8 constant WINNINGAMOUNT = 51;
     uint8 constant UINT64_BYTES_SIZE = 8;
     uint8 constant PROOF_TYPE_ETH = 2;
+    uint32 constant FLAG_START_NOTARIZATION = 4;
+    uint32 constant FLAG_LAUNCH_CONFIRMED = 8;
+    uint32 constant FLAG_LAUNCH_COMPLETE = 0x100;
+    uint32 constant FLAG_CONTRACT_UPGRADE = 0x200;
+    uint32 constant REQUIRED_NOTARIZATION_FLAGS = FLAG_START_NOTARIZATION + FLAG_LAUNCH_CONFIRMED + FLAG_LAUNCH_COMPLETE;
+    uint32 constant ALLOWED_OPTIONAL_NOTARIZATION_FLAGS = FLAG_CONTRACT_UPGRADE;
+    uint32 constant ALLOWED_NOTARIZATION_FLAGS = REQUIRED_NOTARIZATION_FLAGS + ALLOWED_OPTIONAL_NOTARIZATION_FLAGS;
     enum Currency {VETH, DAI, VERUS, MKR}
 
     function initialize() external {
-        rollingVoteIndex = VerusConstants.DEFAULT_INDEX_VALUE;
+        // NOTE: removed as akready ran.
+        // rollingVoteIndex = VerusConstants.DEFAULT_INDEX_VALUE;
     }
     
     function readVarint(bytes memory buf, uint32 idx) public pure returns (uint32 v, uint32 retidx) {
@@ -80,6 +88,12 @@ contract NotarizationSerializer is VerusStorage {
 
         notarizationFlags = uint32(readerLen.value);
         nextOffset = readerLen.offset;
+
+        require(
+            (notarizationFlags & REQUIRED_NOTARIZATION_FLAGS) == REQUIRED_NOTARIZATION_FLAGS &&
+            (notarizationFlags & ~ALLOWED_NOTARIZATION_FLAGS) == 0,
+            "invalid notarization flags"
+        );
 
         assembly {
                     nextOffset := add(nextOffset, 1)  // move to read type

@@ -95,7 +95,7 @@ contract VerusProof is VerusStorage  {
 
     }
     
-    function checkExportAndTransfers(VerusObjects.CReserveTransferImport memory _import, bytes32 hashedTransfers) public view returns (uint256, uint176) {
+    function checkExportAndTransfers(VerusObjects.CReserveTransferImport memory _import, bytes32 hashedTransfers) public view returns (uint128, uint176) {
 
         // the first component of the import partial transaction proof is the transaction header, for each version of
         // transaction header, we have a specific offset for the hash of transfers. if we change this, we must
@@ -195,10 +195,10 @@ contract VerusProof is VerusStorage  {
             return (checkCCEValues(firstObj, nextOffset, hashedTransfers, nIndex));
         
         }
-        return (uint256(0), uint176(0));
+        return (uint128(0), uint176(0));
     }
 
-    function checkCCEValues(bytes memory firstObj, uint32 nextOffset, bytes32 hashedTransfers, uint32 nIndex) public view returns(uint256 tmpPacked, uint176 exporter)
+    function checkCCEValues(bytes memory firstObj, uint32 nextOffset, bytes32 hashedTransfers, uint32 nIndex) public view returns(uint128 tmpPacked, uint176 exporter)
     {
         bytes32 hashReserveTransfers;
         address systemSourceID;
@@ -273,7 +273,7 @@ contract VerusProof is VerusStorage  {
             revert("CCE information does not checkout");
         }
 
-        tmpPacked = uint256(packedRegister);
+        tmpPacked = packedRegister;
         return (tmpPacked, exporter); 
 
     }
@@ -333,14 +333,10 @@ contract VerusProof is VerusStorage  {
         (VerusObjects.CReserveTransferImport memory _import, bytes32 hashOfTransfers) = abi.decode(dataIn, (VerusObjects.CReserveTransferImport, bytes32));
         bytes32 confirmedStateRoot;
         bytes32 retStateRoot;
-        uint256 tmp;
         uint176 exporter;
         uint128 heightsAndTXNum;
 
-        (tmp, exporter) = checkExportAndTransfers(_import, hashOfTransfers);
-
-
-        heightsAndTXNum = uint128(tmp);
+        (heightsAndTXNum, exporter) = checkExportAndTransfers(_import, hashOfTransfers);
         
         bytes32 txRoot = proveComponents(_import);
 

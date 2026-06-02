@@ -2,7 +2,7 @@
 
 ## 22 May 2026
 
-Source: `git diff` (working tree)
+Source: `git diff` (working tree) "Add fixes for CCE, CompactInt, Proof storage" 3c88fd6bfa97b087a85491ac14d976ef5a941885
 
 ### `contracts/Libraries/VerusConstants.sol`
 

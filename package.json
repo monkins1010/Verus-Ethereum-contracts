@@ -4,14 +4,14 @@
         "test-win": "echo To run test in windows run a terminal window with [ganache-cli -l 1500000000 ---account \"0x8e..yourprivkey, 100000000000000000000\"] And another windows with [truffle test ./test/deployed.js]"
     },
     "dependencies": {
-        "@openzeppelin/contracts": "^4.5.0",
+        "@openzeppelin/contracts": "^4.9.6",
         "@truffle/hdwallet-provider": "^1.4.1",
-        "ganache-cli": "^6.12.2",
         "dotenv": "^16.3.1",
+        "ganache-cli": "^6.12.2",
         "openzeppelin-solidity": "^3.4.1",
         "truffle-contract-size": "^2.0.1",
-        "web3": "^1.4.0",
-        "verus-typescript-primitives": "https://github.com/VerusCoin/verus-typescript-primitives.git"
+        "verus-typescript-primitives": "https://github.com/VerusCoin/verus-typescript-primitives.git",
+        "web3": "^1.4.0"
     },
     "devDependencies": {
         "@openzeppelin/contracts-upgradeable": "^4.5.2",

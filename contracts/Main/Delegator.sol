@@ -13,6 +13,7 @@ contract Delegator is VerusStorage, ERC1155Holder, ERC721Holder {
 
     constructor(address[] memory _notaries, address[] memory _notariesEthAddress, address[] memory _notariesColdStoreEthAddress, address[] memory _newContractAddress) {
         remainingLaunchFeeReserves = VerusConstants.verusBridgeLaunchFeeShare;
+        rollingVoteIndex = VerusConstants.DEFAULT_INDEX_VALUE;
 
         for(uint i =0; i < _notaries.length; i++) {
             notaryAddressMapping[_notaries[i]] = VerusObjects.notarizer(_notariesEthAddress[i], _notariesColdStoreEthAddress[i], VerusConstants.NOTARY_VALID);

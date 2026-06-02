@@ -272,7 +272,12 @@ contract VerusNotarizer is VerusStorage {
             // Write proofs entry so that if this notarization later becomes confirmed via fork resolution,
             // getLastConfirmedVRSCStateRoot() can find its stateRoot. Without this, a fork resolution sets
             // bestForks[0] slot 2 to this notarization's height, but proofs[height] would be empty.
-            proofs[bytes32(uint256(uint32(uint256(proposer >> FORKS_DATA_OFFSET_FOR_HEIGHT))))] = abi.encodePacked(stateRoot, uint32(uint256(notarizations[uint(forkPos)].proposerPacked) >> FORKS_DATA_OFFSET_FOR_HEIGHT));
+            // Guard: notarizations is only populated when bestForks was non-empty (i.e. a previous
+            // notarization existed). On the very first call bestForks is empty and notarizations has
+            // length 0, so accessing notarizations[forkPos] would panic with array out-of-bounds.
+            if (notarizations.length > 0) {
+                proofs[bytes32(uint256(uint32(uint256(proposer >> FORKS_DATA_OFFSET_FOR_HEIGHT))))] = abi.encodePacked(stateRoot, uint32(uint256(notarizations[uint(forkPos)].proposerPacked) >> FORKS_DATA_OFFSET_FOR_HEIGHT));
+            }
         }
     }
 

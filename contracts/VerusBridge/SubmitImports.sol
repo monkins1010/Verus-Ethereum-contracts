@@ -89,7 +89,7 @@ contract SubmitImports is VerusStorage {
         uint feeCalculation;
         uint reserves = claimableFees[bytes32(uint256(uint160(VerusConstants.VDXF_ETH_DAI_VRSC_LAST_RESERVES)))];
 
-        // Get the uint64 location in the uin256 word to calculate fees
+        // Get the uint64 location in the uint256 word to calculate fees
         if (currency == DAI){
             feeCalculation = uint(Currency.DAI) << 6;
         } else if (currency == MKR){
@@ -203,7 +203,8 @@ contract SubmitImports is VerusStorage {
             (refundAddresses.length * VerusConstants.GAS_BASE_COST_FOR_REFUND_PAYOUTS)) 
             * tx.gasprice;
 
-        notaryFees = uint64(((priceOfImports * 14) / 10) / VerusConstants.SATS_TO_WEI_STD); // Use a Buffer of 40% for notary fees.
+        // Use a Buffer of 40% for notary fees. (In Verus sats)
+        notaryFees = uint64(((priceOfImports * 14) / 10) / VerusConstants.SATS_TO_WEI_STD); 
 
         if (fees > (notaryFees + (notaryFees >> 4))){
 
@@ -225,7 +226,8 @@ contract SubmitImports is VerusStorage {
                 feeRefunds = feeRefunds - (feeRefunds / blockDivisor);
                 processorsFees = processorsFees - feeRefunds;
 
-                feeRefunds = feeRefunds / uint64(refundAddresses.length);    // Divide by number of transactions to get refund share per number of transfers.
+                // Divide by number of transactions to get refund share per number of transfers.
+                feeRefunds = feeRefunds / uint64(refundAddresses.length);
 
                 for(uint i = 0; i < refundAddresses.length; i++) {
                     bytes32 feeRefundAddress;
