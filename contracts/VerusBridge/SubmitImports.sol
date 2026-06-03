@@ -110,7 +110,9 @@ contract SubmitImports is VerusStorage {
     }
 
     function _createImports(bytes calldata data) external returns(uint64, uint176) {
-              
+
+        if (claimableFees[VerusConstants.VDXF_CONTROLS_CONTROL_KEY] & VerusConstants.HALT_SUBMIT_IMPORTS != 0) revert("Bridge halted");
+
         uint256 gasleftStart = gasleft();
         VerusObjects.CReserveTransferImport memory _import = abi.decode(data, (VerusObjects.CReserveTransferImport));
         bytes32 txidfound;

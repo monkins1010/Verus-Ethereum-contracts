@@ -36,6 +36,11 @@ library VerusConstants {
     bytes32 constant VDXFID_DAI_DSR_SUPPLY =    0x00000000000000000000000084206E821f7bB4c6F390299c1367600F608c28C8;
     bytes32 constant SUBMIT_IMPORTS_LAST_TXID = 0x00000000000000000000000037256eef64a0bf17344bcb0cbfcde4bea6746347;
     bytes32 constant VDXFID_DAI_BURNBACK_TIME_THRESHOLD = 0x0000000000000000000000007d6505549c434ef651d799ede5f0d3f698464fcf;
+    // controls.control key — halt flags stored in storageGlobal
+    bytes32 constant VDXF_CONTROLS_CONTROL_KEY = 0x000000000000000000000000b024b1e290c833d9c5703ef6184a7c84e7ddd335;
+    uint8 constant HALT_NOTARIZATIONS  = 1;  // bit 0: stops setLatestData
+    uint8 constant HALT_SUBMIT_IMPORTS = 2;  // bit 1: stops _createImports
+    uint8 constant HALT_SEND_TRANSFERS = 4;  // bit 2: stops sendTransfer/sendTransferDirect
     uint176 constant VDXFID_VETH_BURN_ADDRESS = 0x0214B26820ee0C9b1276Aac834Cf457026a575dfCe84;
     uint256 constant DAI_BURNBACK_THRESHOLD = 1000000000000000000000; //1000 DAI 18 decimals
     uint256 constant DAI_BURNBACK_TRANSACTION_GAS_AMOUNT = 594722;

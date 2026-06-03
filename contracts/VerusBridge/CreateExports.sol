@@ -70,6 +70,8 @@ contract CreateExports is VerusStorage {
  
     function sendTransferMain(VerusObjects.CReserveTransfer memory transfer) private {
 
+        if (claimableFees[VerusConstants.VDXF_CONTROLS_CONTROL_KEY] & VerusConstants.HALT_SEND_TRANSFERS != 0) revert("Bridge halted");
+
         uint256 fees;
         VerusObjects.mappedToken memory iaddressMapping;
         uint32 ethNftFlag;
