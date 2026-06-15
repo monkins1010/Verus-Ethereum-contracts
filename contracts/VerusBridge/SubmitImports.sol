@@ -31,14 +31,79 @@ contract SubmitImports is VerusStorage {
 
     uint32 constant ELVCHOBJ_TXID_OFFSET = 32;
     uint32 constant ELVCHOBJ_NVINS_OFFSET = 45;
+    // Minimum byte length of a valid CTransactionHeader elVchObj:
+    // 32 (txHash) + 1 (struct ver) + 4 (nVersion) + 4 (nVersionGroupId) + 4*4 (counts) = 57
+    uint32 constant ELVCHOBJ_MIN_LENGTH = 57;
+    // CTransactionHeader struct version — only version 1 is supported; other values mean
+    // the field layout is unknown and the offsets below would be wrong.
+    uint8 constant HEADER_STRUCT_VERSION = 1;
+    // Offset used to read the struct-version byte: mload(elVchObj+33) puts data[32] in the
+    // rightmost (uint8) position of the 32-byte word.
+    uint32 constant ELVCHOBJ_STRUCT_VERSION_OFFSET = 33;
+    uint32 constant ELVCHOBJ_NVOUTS_OFFSET = 49;
+    uint32 constant ELVCHOBJ_NSHIELDEDSPENDS_OFFSET = 53;
+    uint32 constant ELVCHOBJ_NSHIELDEDOUTPUTS_OFFSET = 57;
     uint32 constant FORKS_NOTARY_PROPOSER_POSITION = 96;
     uint32 constant TYPE_REFUND = 1;
     uint constant TYPE_BYTE_LOCATION_IN_UINT176 = 168;
     uint8 constant TYPE_REFUND_BYTES32_LOCATION = 244;
     enum Currency {VETH, DAI, VERUS, MKR}
 
+    // Parsed fields from the CTransactionHeader serialized in components[0].elVchObj.
+    // nLockTime, nExpiryHeight and nValueBalance are not needed and are excluded.
+    struct TxHeaderData {
+        bytes32 txHash;
+        uint32 nVins;
+        uint32 nVouts;
+        uint32 nShieldedSpends;
+        uint32 nShieldedOutputs;
+    }
+
     function initialize() external {
         
+    }
+
+    // Parse the CTransactionHeader from components[0].elVchObj.
+    // Layout (all counts are LE uint32):
+    //   bytes  0-31 : txHash
+    //   byte   32   : CTransactionHeader struct version (ignored)
+    //   bytes 33-36 : tx nVersion
+    //   bytes 37-40 : nVersionGroupId
+    //   bytes 41-44 : nVins
+    //   bytes 45-48 : nVouts
+    //   bytes 49-52 : nShieldedSpends
+    //   bytes 53-56 : nShieldedOutputs
+    function _parseTxHeader(bytes memory elVchObj) private pure returns (TxHeaderData memory hdr) {
+        // Reject anything too short to contain all required fields; reading beyond the
+        // allocated bytes would silently return zeroes and produce a wrong elHashSize.
+        require(elVchObj.length >= ELVCHOBJ_MIN_LENGTH, "elVchObj too short");
+
+        // Validate the CTransactionHeader struct version (byte at data[32]).  Only version 1
+        // is defined; any other value means the field offsets below are invalid.
+        uint8 hdrStructVer;
+        assembly { hdrStructVer := mload(add(elVchObj, ELVCHOBJ_STRUCT_VERSION_OFFSET)) }
+        require(hdrStructVer == HEADER_STRUCT_VERSION, "Unknown header struct version");
+
+        uint32 v;
+        bytes32 txHash;
+        assembly { txHash := mload(add(elVchObj, ELVCHOBJ_TXID_OFFSET)) }
+        hdr.txHash = txHash;
+
+        assembly { v := mload(add(elVchObj, ELVCHOBJ_NVINS_OFFSET)) }
+        v = ((v & 0xFF00FF00) >> 8) | ((v & 0x00FF00FF) << 8);
+        hdr.nVins = (v >> 16) | (v << 16);
+
+        assembly { v := mload(add(elVchObj, ELVCHOBJ_NVOUTS_OFFSET)) }
+        v = ((v & 0xFF00FF00) >> 8) | ((v & 0x00FF00FF) << 8);
+        hdr.nVouts = (v >> 16) | (v << 16);
+
+        assembly { v := mload(add(elVchObj, ELVCHOBJ_NSHIELDEDSPENDS_OFFSET)) }
+        v = ((v & 0xFF00FF00) >> 8) | ((v & 0x00FF00FF) << 8);
+        hdr.nShieldedSpends = (v >> 16) | (v << 16);
+
+        assembly { v := mload(add(elVchObj, ELVCHOBJ_NSHIELDEDOUTPUTS_OFFSET)) }
+        v = ((v & 0xFF00FF00) >> 8) | ((v & 0x00FF00FF) << 8);
+        hdr.nShieldedOutputs = (v >> 16) | (v << 16);
     }
 
     function buildReserveTransfer (uint64 value, uint176 sendTo, address sendingCurrency, uint64 fees, address feecurrencyid) private view returns (VerusObjects.CReserveTransfer memory) {
@@ -115,27 +180,30 @@ contract SubmitImports is VerusStorage {
 
         uint256 gasleftStart = gasleft();
         VerusObjects.CReserveTransferImport memory _import = abi.decode(data, (VerusObjects.CReserveTransferImport));
-        bytes32 txidfound;
-        bytes memory elVchObj = _import.partialtransactionproof.components[0].elVchObj;
-        uint32 nVins;
 
-        assembly
-        {
-            txidfound := mload(add(elVchObj, ELVCHOBJ_TXID_OFFSET)) 
-            nVins := mload(add(elVchObj, ELVCHOBJ_NVINS_OFFSET)) 
-        }
+        // Parse CTransactionHeader from component 0 and validate the txid is not a replay.
+        TxHeaderData memory hdr = _parseTxHeader(_import.partialtransactionproof.components[0].elVchObj);
 
-        if (processedTxids[txidfound]) 
+        if (processedTxids[hdr.txHash]) 
         {
             revert();
         } 
 
         bool success;
         bytes memory returnBytes;
-        
-        // reverse 32bit endianess
-        nVins = ((nVins & 0xFF00FF00) >> 8) |  ((nVins & 0x00FF00FF) << 8);
-        nVins = (nVins >> 16) | (nVins << 16);
+
+        // elHashSize = 1 (header) + 2*nVins (prevoutseq+sig) + nVouts + nShieldedSpends + nShieldedOutputs
+        uint32 elHashSize = 1 + 2 * hdr.nVins + hdr.nVouts + hdr.nShieldedSpends + hdr.nShieldedOutputs;
+
+        // Pack tx element counts into a uint128 for efficient passing to proveImports:
+        // bits  0-31:  elHashSize
+        // bits 32-63:  nVins
+        // bits 64-95:  nVouts
+        // bits 96-127: nShieldedSpends
+        uint128 txCounts = uint128(elHashSize)
+            | (uint128(hdr.nVins) << 32)
+            | (uint128(hdr.nVouts) << 64)
+            | (uint128(hdr.nShieldedSpends) << 96);
 
         bytes32 hashOfTransfers;
 
@@ -149,7 +217,7 @@ contract SubmitImports is VerusStorage {
 
         address verusProofAddress = contracts[uint(VerusConstants.ContractType.VerusProof)];
 
-        (success, returnBytes) = verusProofAddress.delegatecall(abi.encodeWithSignature("proveImports(bytes)", abi.encode(_import, hashOfTransfers)));
+        (success, returnBytes) = verusProofAddress.delegatecall(abi.encodeWithSignature("proveImports(bytes)", abi.encode(_import, hashOfTransfers, txCounts)));
         require(success);
         uint176 exporter;
         (CCEHeightsAndnIndex, exporter) = abi.decode(returnBytes, (uint128, uint176));
@@ -164,8 +232,8 @@ contract SubmitImports is VerusStorage {
         // NOTE: This depends on the serialization of the CTransaction header and the location of the vins being 45 bytes in.
         // NOTE: Also depends on it being a partial transaction proof, header = 1
 
-        CCEHeightsAndnIndex  = (CCEHeightsAndnIndex & 0xffffffff00000000ffffffffffffffff) | (uint128(uint32(uint32(CCEHeightsAndnIndex >> 64) - (1 + (2 * nVins)))) << 64);  
-        setLastImport(txidfound, hashOfTransfers, CCEHeightsAndnIndex);
+        CCEHeightsAndnIndex  = (CCEHeightsAndnIndex & 0xffffffff00000000ffffffffffffffff) | (uint128(uint32(uint32(CCEHeightsAndnIndex >> 64) - (1 + (2 * hdr.nVins)))) << 64);  
+        setLastImport(hdr.txHash, hashOfTransfers, CCEHeightsAndnIndex);
         
         // get the gasleft before calling the tokenmanager
 

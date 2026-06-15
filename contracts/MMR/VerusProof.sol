@@ -33,6 +33,13 @@ contract VerusProof is VerusStorage  {
     // which are designed to ensure smart transaction provability, care must be take to ensure that OUTPUT_SCRIPT_OFFSET
     // is present and substituted for all equivalent values (currently (32 + 8))
     uint8 constant CCE_EVAL_EXPORT = 0xc;
+    uint8 constant BRANCH_MMRBLAKE_NODE = 2;      // CMerkleBranchBase::BRANCH_MMRBLAKE_NODE
+    uint8 constant VERSION_TXHASH_CAP = 2;         // only proofs with version >= this are accepted
+    uint8 constant TX_PREVOUTSEQ = 2;              // CTransactionHeader::TX_PREVOUTSEQ
+    uint8 constant TX_SIGNATURE_TYPE = 3;          // CTransactionHeader::TX_SIGNATURE
+    // TX_HEADER = 1, TYPE_TX_OUTPUT = 4 already defined above
+    uint8 constant TX_SHIELDEDSPEND = 5;           // CTransactionHeader::TX_SHIELDEDSPEND
+    uint8 constant TX_SHIELDEDOUTPUT = 6;          // CTransactionHeader::TX_SHIELDEDOUTPUT
     uint32 constant CCE_COPTP_HEADERSIZE = 4 + 1;   // skips: 1(PUSHDATA len) + 2(version) + 2(flags) = 5, ready to read flags
     uint32 constant CCE_COPTP_EVALOFFSET = 2;
     uint32 constant CCE_SOURCE_SYSTEM_OFFSET = 24;
@@ -124,8 +131,9 @@ contract VerusProof is VerusStorage  {
             nIndex = _import.partialtransactionproof.components[i].elProof[0].proofSequence.nIndex;
 
             VerusObjectsCommon.UintReader memory readerLen;
-
+            // should check for max size of compact int 13 million, also max voutsize, and must be a a canonical number
             readerLen = VerusSerializer(contracts[uint(VerusConstants.ContractType.VerusSerializer)]).readCompactSizeLE(firstObj, OUTPUT_SCRIPT_OFFSET);    // get the length of the output script
+            // this should be a opcode for a push of the output script, which should be less than 75 bytes, as that is how it is encoded in the script, if not, fail as this is not a valid output script
             readerLen = VerusSerializer(contracts[uint(VerusConstants.ContractType.VerusSerializer)]).readCompactSizeLE(firstObj, readerLen.offset);        // then length of first master push
 
             // must be push less than 75 bytes, as that is an op code encoded similarly to a vector.
@@ -301,6 +309,109 @@ contract VerusProof is VerusStorage  {
             return (nextOffset, exporter);
     }
 
+    // Returns the MMR leaf position for a given transaction element type and sub-index.
+    // Mirrors the layout used by _CTransactionMap in transaction.cpp:
+    //   pos 0            : TX_HEADER
+    //   pos 1..nVins     : TX_PREVOUTSEQ[0..nVins-1]
+    //   pos nVins+1..2*nVins : TX_SIGNATURE[0..nVins-1]
+    //   pos 2*nVins+1..  : TX_OUTPUT[0..nVouts-1]
+    //   pos ..           : TX_SHIELDEDSPEND, TX_SHIELDEDOUTPUT
+    function _mmrPosition(
+        uint8 elType, uint8 elIdx,
+        uint32 nVins, uint32 nVouts, uint32 nShieldedSpends
+    ) private pure returns (uint32) {
+        if (elType == TX_PREVOUTSEQ)    return 1 + uint32(elIdx);
+        if (elType == TX_SIGNATURE_TYPE) return 1 + nVins + uint32(elIdx);
+        if (elType == TYPE_TX_OUTPUT)   return 1 + 2 * nVins + uint32(elIdx);
+        if (elType == TX_SHIELDEDSPEND)  return 1 + 2 * nVins + nVouts + uint32(elIdx);
+        if (elType == TX_SHIELDEDOUTPUT) return 1 + 2 * nVins + nVouts + nShieldedSpends + uint32(elIdx);
+        revert("Unknown elType");
+    }
+
+    // Validates the MMR proof structure of the partial transaction proof against the
+    // parsed transaction header counts
+    //   - component[0] has exactly one BRANCH_MMRBLAKE_NODE proof covering elHashSize elements
+    //     at position 0 (the header)
+    //   - anti-spoofing size check (capped: last branch hash == elHashSize;
+    //     uncapped: no hash in the proof sequence is <= UINT16_MAX)
+    //   - each subsequent component has a valid proof pointing to the expected MMR position
+    //     for its (elType, elIdx) pair, and its element index is within the known bounds
+    function _validateHeaderProof(
+        VerusObjects.CReserveTransferImport memory _import,
+        uint32 elHashSize,
+        uint32 nVins,
+        uint32 nVouts,
+        uint32 nShieldedSpends
+    ) private pure {
+        VerusObjects.CComponents memory comp0 = _import.partialtransactionproof.components[0];
+
+        // component[0] must declare itself as a TX_HEADER; this is also enforced downstream
+        // by proveComponents and checkExportAndTransfers, but fail fast here.
+        require(comp0.elType == TX_HEADER, "comp0 must be TX_HEADER");
+
+        require(
+            comp0.elProof.length == 1 &&
+            comp0.elProof[0].branchType == BRANCH_MMRBLAKE_NODE,
+            "Invalid header proof type"
+        );
+
+        VerusObjects.CMerkleBranch memory b0 = comp0.elProof[0].proofSequence;
+
+        require(elHashSize > 0,                "Empty tx element set");
+        require(b0.nSize == elHashSize,        "Header nSize mismatch");
+        // GetMMRProofIndex(0, nSize, 0) always returns 0; header must be at position 0
+        require(b0.nIndex == 0,                "Header nIndex must be 0");
+        require(b0.branch.length > 0,          "Empty header branch");
+
+        // --- Anti-spoofing check (capped proofs only) ---
+        // The last branch element encodes the total element count, preventing the prover
+        // from extending the tree to a larger size than was actually committed.
+        require(
+            _import.partialtransactionproof.version >= VERSION_TXHASH_CAP,
+            "Only capped proofs accepted"
+        );
+        require(
+            uint256(b0.branch[b0.branch.length - 1]) == elHashSize,
+            "Capped: size hash mismatch"
+        );
+
+        // --- Per-component structural validation ---
+        // Each component i >= 1 must:
+        //   1. Have exactly one BRANCH_MMRBLAKE_NODE proof over the same elHashSize tree.
+        //   2. Claim an element index within the known bounds for its type.
+        //   3. Declare an nIndex equal to the expected MMR leaf position for (elType, elIdx).
+        //      (The cryptographic proof that this hash is in the tree is done by proveComponents.)
+        for (uint i = 1; i < _import.partialtransactionproof.components.length; i++) {
+            VerusObjects.CComponents memory comp = _import.partialtransactionproof.components[i];
+
+            require(
+                comp.elProof.length == 1 &&
+                comp.elProof[0].branchType == BRANCH_MMRBLAKE_NODE &&
+                comp.elProof[0].proofSequence.nSize == elHashSize,
+                "Component proof invalid"
+            );
+
+            uint8 elType = comp.elType;
+            uint8 elIdx  = comp.elIdx;
+
+            // Bounds check per element type
+            if (elType == TX_PREVOUTSEQ || elType == TX_SIGNATURE_TYPE) {
+                require(elIdx < nVins,          "vin idx out of bounds");
+            } else if (elType == TYPE_TX_OUTPUT) {
+                require(elIdx < nVouts,         "vout idx out of bounds");
+            } else if (elType == TX_SHIELDEDSPEND) {
+                require(elIdx < nShieldedSpends, "shielded spend idx OOB");
+            }
+
+            // nIndex must match the expected MMR leaf position for this element
+            uint32 expected = _mmrPosition(elType, elIdx, nVins, nVouts, nShieldedSpends);
+            require(
+                comp.elProof[0].proofSequence.nIndex == expected,
+                "Component nIndex mismatch"
+            );
+        }
+    }
+
     // roll through each proveComponents
     function proveComponents(VerusObjects.CReserveTransferImport memory _import) public view returns(bytes32 txRoot){
      
@@ -330,7 +441,18 @@ contract VerusProof is VerusStorage  {
     
     function proveImports(bytes calldata dataIn ) external view returns(uint128, uint176){
         
-        (VerusObjects.CReserveTransferImport memory _import, bytes32 hashOfTransfers) = abi.decode(dataIn, (VerusObjects.CReserveTransferImport, bytes32));
+        // txCounts packs: bits 0-31 elHashSize, 32-63 nVins, 64-95 nVouts, 96-127 nShieldedSpends
+        (VerusObjects.CReserveTransferImport memory _import, bytes32 hashOfTransfers, uint128 txCounts) =
+            abi.decode(dataIn, (VerusObjects.CReserveTransferImport, bytes32, uint128));
+
+        uint32 elHashSize     = uint32(txCounts);
+        uint32 nVins          = uint32(txCounts >> 32);
+        uint32 nVouts         = uint32(txCounts >> 64);
+        uint32 nShieldedSpends = uint32(txCounts >> 96);
+
+        // Validate MMR proof structure and anti-spoofing before processing export data
+        _validateHeaderProof(_import, elHashSize, nVins, nVouts, nShieldedSpends);
+
         bytes32 confirmedStateRoot;
         bytes32 retStateRoot;
         uint176 exporter;
