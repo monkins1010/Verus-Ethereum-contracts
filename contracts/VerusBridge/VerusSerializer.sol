@@ -40,8 +40,9 @@ contract VerusSerializer {
             assembly {
                 twoByte := mload(add(incoming, offset))
             }
- 
-            return VerusObjectsCommon.UintReader(offset + 1, ((twoByte << 8) & 0xffff)  | twoByte >> 8);
+            uint16 value16 = ((twoByte << 8) & 0xffff) | twoByte >> 8;
+            require(value16 >= 253, "Non-canonical compact-size");
+            return VerusObjectsCommon.UintReader(offset + 1, value16);
         }
         else if (oneByte == 254)
         {
@@ -50,7 +51,9 @@ contract VerusSerializer {
             assembly {
                 fourByte := mload(add(incoming, offset))
             }
-            return VerusObjectsCommon.UintReader(offset + 3, serializeUint32(fourByte));
+            uint32 value32 = serializeUint32(fourByte);
+            require(value32 >= 65536, "Non-canonical compact-size");
+            return VerusObjectsCommon.UintReader(offset + 3, value32);
         }
         else
         {
@@ -59,7 +62,9 @@ contract VerusSerializer {
             assembly {
                 eightByte := mload(add(incoming, offset))
             }
-            return VerusObjectsCommon.UintReader(offset + 1, serializeUint64(eightByte));
+            uint64 value64 = serializeUint64(eightByte);
+            require(value64 >= 4294967296, "Non-canonical compact-size");
+            return VerusObjectsCommon.UintReader(offset + 1, value64);
         }
     }
 

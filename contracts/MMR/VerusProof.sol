@@ -37,12 +37,9 @@ contract VerusProof is VerusStorage  {
     uint8 constant VERSION_TXHASH_CAP = 2;         // only proofs with version >= this are accepted
     uint8 constant TX_PREVOUTSEQ = 2;              // CTransactionHeader::TX_PREVOUTSEQ
     uint8 constant TX_SIGNATURE_TYPE = 3;          // CTransactionHeader::TX_SIGNATURE
-    // TX_HEADER = 1, TYPE_TX_OUTPUT = 4 already defined above
+    uint8 constant CCOPTPARAMS_VERSION = 3;
     uint8 constant TX_SHIELDEDSPEND = 5;           // CTransactionHeader::TX_SHIELDEDSPEND
     uint8 constant TX_SHIELDEDOUTPUT = 6;          // CTransactionHeader::TX_SHIELDEDOUTPUT
-    uint32 constant CCE_COPTP_HEADERSIZE = 4 + 1;   // skips: 1(PUSHDATA len) + 2(version) + 2(flags) = 5, ready to read flags
-    uint32 constant CCE_COPTP_EVALOFFSET = 2;
-    uint32 constant CCE_SOURCE_SYSTEM_OFFSET = 24;
     uint32 constant CCE_HASH_TRANSFERS_DELTA = 32;
     uint32 constant CCE_DEST_SYSTEM_DELTA = 20;
     uint32 constant CCE_DEST_CURRENCY_DELTA = 20;
@@ -102,201 +99,323 @@ contract VerusProof is VerusStorage  {
 
     }
     
-    function checkExportAndTransfers(VerusObjects.CReserveTransferImport memory _import, bytes32 hashedTransfers) public view returns (uint128, uint176) {
+    // Fields extracted from a CCrossChainExport serialization.
+    // Only the subset needed for import validation is populated.
+    struct CCEData {
+        address sourceSystemID;       // CCE.sourceSystemID  (uint160)
+        bytes32 hashReserveTransfers; // CCE.hashReserveTransfers (uint256)
+        address destSystemID;         // CCE.destSystemID    (uint160)
+        address destCurrencyID;       // CCE.destCurrencyID  (uint160)
+        uint176 exporter;             // CCE.exporter destination (type+address, ≤22 bytes)
+        uint32  numInputs;            // CCE.numInputs       (num reserve transfers)
+        uint32  sourceHeightStart;    // CCE.sourceHeightStart (VARINT)
+        uint32  sourceHeightEnd;      // CCE.sourceHeightEnd   (VARINT)
+    }
 
-        // the first component of the import partial transaction proof is the transaction header, for each version of
-        // transaction header, we have a specific offset for the hash of transfers. if we change this, we must
-        // deprecate and deploy new contracts
+    // Parse a serialized CTxOut (firstObj) to locate the CCrossChainExport body.
+    //
+    // CTxOut wire format (from CTxOut::SerializationOp):
+    //   nValue(8 LE) | compact-size(scriptLen) | script
+    // NOTE: CTxOut::interest is a runtime field only — it is NOT written by SerializationOp.
+    //
+    // CScript layout (CScript::IsPayToCryptoCondition / CScript::GetOp2):
+    //   Step 2  direct push (0x01-0x4b)  → master COptCCParams
+    //   Step 3  OP_CHECKCRYPTOCONDITION (0xcc)
+    //   Step 4  PUSHDATA1/2              → secondary COptCCParams body
+    //   Step 5  direct push ≥4 bytes     → {version, evalCode, m, n}
+    //   Step 6  n × direct push          → keys (all ≤75 bytes each)
+    //   Step 7  PUSHDATA1/2              → CCE serialization blob
+    //
+    // Canonical push encoding is enforced (mirrors Bitcoin minimal-push rules):
+    //   0x01-0x4b — canonical for dataLen 1-75
+    //   0x4c (PUSHDATA1) — canonical for 76 ≤ dataLen ≤ 255
+    //   0x4d (PUSHDATA2) — canonical for 256 ≤ dataLen ≤ 65535
+    //
+    // Returns (offset one-past CCE.flags, true) or (0, false) on any failure.
+    function _parseCTxOut(bytes memory firstObj)
+        private pure
+        returns (uint32 nextOffset, bool ok)
+    {
+        if (firstObj.length < OUTPUT_SCRIPT_OFFSET) return (0, false);
 
-        if(_import.partialtransactionproof.components[0].elType != TX_HEADER){
-            return (uint64(0), uint128(0));
+        // Step 1: skip nValue(8) and read scriptPubKey compact-size inline (LE encoding).
+        //   single-byte form used for values 0-252,
+        //   0xfd two-byte form used for 253-65535.
+        //   0xfe/0xff forms imply script > 65535 bytes — rejected for our use case.
+        {
+            uint8 leadByte;
+            uint32 scriptLen;
+            assembly { leadByte := mload(add(firstObj, OUTPUT_SCRIPT_OFFSET)) }
+            if (leadByte < 253) {
+                scriptLen  = uint32(leadByte);
+                nextOffset = OUTPUT_SCRIPT_OFFSET + 1;
+            } else if (leadByte == 253) {
+                if (firstObj.length < OUTPUT_SCRIPT_OFFSET + 2) return (0, false);
+                uint8 lo; uint8 hi;
+                assembly {
+                    lo := mload(add(firstObj, add(OUTPUT_SCRIPT_OFFSET, 1)))
+                    hi := mload(add(firstObj, add(OUTPUT_SCRIPT_OFFSET, 2)))
+                }
+                scriptLen = uint32(lo) | (uint32(hi) << 8);
+                require(scriptLen >= 253, "Non-canonical compact-size");
+                nextOffset = OUTPUT_SCRIPT_OFFSET + 3;
+            } else {
+                return (0, false); // 4- or 8-byte compact-size: script too large
+            }
+            // Mirrors IsPayToCryptoCondition: 0 < scriptLen ≤ MAX_SCRIPT_SIZE (10000).
+            if (scriptLen == 0 || scriptLen > 10000) return (0, false);
+            // Full script must fit within firstObj.
+            if (firstObj.length < nextOffset + scriptLen - 1) return (0, false);
+        }
+        uint8 op;
+
+        // Step 2: master COptCCParams — must be a direct push (opcode 0x01-0x4b).
+        assembly { op := mload(add(firstObj, nextOffset)) }
+        nextOffset++;
+        if (op < 0x01 || op > 0x4b) return (0, false);
+        nextOffset += uint32(op); // skip firstParam data vector
+
+        // Step 3: OP_CHECKCRYPTOCONDITION (0xcc).
+        assembly { op := mload(add(firstObj, nextOffset)) }
+        nextOffset++;
+        if (op != SCRIPT_OP_CHECKCRYPTOCONDITION) return (0, false);
+
+        // Step 4: PUSHDATA1/2 wrapping the secondary COptCCParams body.
+        // Canonical check: PUSHDATA1 only if dataLen > 75; PUSHDATA2 only if dataLen > 255.
+        {
+            uint8 lenLo;
+            assembly { op := mload(add(firstObj, nextOffset)) }
+            nextOffset++;
+            if (op == SCRIPT_OP_PUSHDATA1) {
+                assembly { lenLo := mload(add(firstObj, nextOffset)) }
+                if (lenLo <= 75) return (0, false); // non-canonical
+                nextOffset += 1;
+            } else if (op == SCRIPT_OP_PUSHDATA2) {
+                uint8 lenHi;
+                assembly {
+                    lenLo := mload(add(firstObj, nextOffset))
+                    lenHi := mload(add(firstObj, add(nextOffset, 1)))
+                }
+                if (uint32(lenLo) | (uint32(lenHi) << 8) <= 255) return (0, false); // non-canonical
+                nextOffset += 2;
+            } else {
+                return (0, false);
+            }
+        }
+        // nextOffset now points to the first byte of the secondary COptCCParams body.
+
+        // Step 5: {version, evalCode, m, n} — a direct push of ≥4 bytes.
+        {
+            uint8 version; 
+            uint8 evalCode;
+            uint8 nKeys;
+            assembly { op := mload(add(firstObj, nextOffset)) }
+            nextOffset++;
+            if (op < 0x04 || op > 0x4b) return (0, false);
+            // nextOffset-1 = version, nextOffset = evalCode, nextOffset+1 = m, nextOffset+2 = n
+            assembly {
+                version  := mload(add(firstObj, nextOffset))
+                evalCode := mload(add(firstObj, add(nextOffset, 1)))
+                // skip m keys
+                nKeys    := mload(add(firstObj, add(nextOffset, 3)))
+            }
+            if (evalCode != CCE_EVAL_EXPORT || version != CCOPTPARAMS_VERSION) return (0, false);
+            if (nKeys > 10) return (0, false); // sanity cap
+            nextOffset += uint32(op); // skip all header data bytes
+
+            // Step 6: skip n key pushes (each a direct push, opcode 0x01-0x4b).
+            // Key types (PKH/ID/SH/PK) are always ≤75 bytes, so PUSHDATA1/2 is unexpected.
+            for (uint8 i = 0; i < nKeys; i++) {
+                assembly { op := mload(add(firstObj, nextOffset)) }
+                nextOffset++;
+                if (op < 0x01 || op > 0x4b) return (0, false);
+                nextOffset += uint32(op);
+            }
         }
 
-        for (uint i = 1; i < _import.partialtransactionproof.components.length; i++)
+        // Step 7: CCE data push (PUSHDATA1 or PUSHDATA2), canonical length enforced.
+        // dOff = assembly-offset of first CCE byte (CCE.nVersion[0]).
+        uint32 dOff;
         {
+            uint8 lenLo;
+            assembly { op := mload(add(firstObj, nextOffset)) }
+            nextOffset++;
+            if (op == SCRIPT_OP_PUSHDATA1) {
+                assembly { lenLo := mload(add(firstObj, nextOffset)) }
+                if (lenLo <= 75) return (0, false); // non-canonical
+                nextOffset += 1;
+            } else if (op == SCRIPT_OP_PUSHDATA2) {
+                uint8 lenHi;
+                assembly {
+                    lenLo := mload(add(firstObj, nextOffset))
+                    lenHi := mload(add(firstObj, add(nextOffset, 1)))
+                }
+                if (uint32(lenLo) | (uint32(lenHi) << 8) <= 255) return (0, false); // non-canonical
+                nextOffset += 2;
+            } else {
+                return (0, false);
+            }
+            dOff = nextOffset;
+        }
+
+        // _readCCEFields expects nextOffset = dOff + 3, so that:
+        //   data[nextOffset-4..nextOffset-3] = CCE.nVersion LE
+        //   data[nextOffset-2..nextOffset-1] = CCE.flags    LE
+        nextOffset = dOff + 3;
+        return (nextOffset, true);
+    }
+
+    // Deserialize the CCrossChainExport fields that are needed for import validation.
+    // nextOffset must be the value returned by _parseCTxOut (assembly convention,
+    // pointing one-past CCE.flags so that data[nextOffset-2..nextOffset-1] = CCE.flags LE).
+    //
+    // Field layout starting from CCE.nVersion (4 bytes before nextOffset):
+    //   nVersion(2) | flags(2) | sourceSystemID(20) | hashReserveTransfers(32) |
+    //   destSystemID(20) | destCurrencyID(20) | exporter(CTransferDestination) |
+    //   firstInput(4 LE) | numInputs(4 LE) | VARINT(sourceHeightStart) | VARINT(sourceHeightEnd)
+    function _readCCEFields(bytes memory firstObj, uint32 nextOffset)
+        private pure
+        returns (CCEData memory cce)
+    {
+        // Validate CCE nVersion == 1 (LE bytes 0x01 0x00; read big-endian = 0x0100).
+        // CCE.nVersion is 4 bytes before nextOffset: data[nextOffset-4..nextOffset-3].
+        // uint16 mload at (nextOffset-2) reads the last 2 bytes = data[nextOffset-4..nextOffset-3].
+        uint16 cceNVersion;
+        assembly { cceNVersion := mload(add(firstObj, sub(nextOffset, 2))) }
+        require(cceNVersion == 0x0100, "CCE nVersion must be 1");
+
+        // Only FLAG_POSTLAUNCH (0x0080) may be set; no other CCE flags are accepted.
+        // Exactly 0x8000 means flags_lo == 0x80 (FLAG_POSTLAUNCH) and flags_hi == 0x00.
+        assembly {
+            if iszero(eq(and(mload(add(firstObj, nextOffset)), 0xFFFF), 0x8000)) { revert(0, 0) }
+        }
+
+        // sourceSystemID (uint160, 20 bytes): advance past it and read as address
+        nextOffset += CCE_SOURCE_SYSTEM_DELTA;
+        address srcSys;
+        assembly { srcSys := mload(add(firstObj, nextOffset)) }
+        cce.sourceSystemID = srcSys;
+
+        // hashReserveTransfers (uint256, 32 bytes)
+        nextOffset += CCE_HASH_TRANSFERS_DELTA;
+        bytes32 hRT;
+        assembly { hRT := mload(add(firstObj, nextOffset)) }
+        cce.hashReserveTransfers = hRT;
+
+        // destSystemID (uint160, 20 bytes)
+        nextOffset += CCE_DEST_SYSTEM_DELTA;
+        address dstSys;
+        assembly { dstSys := mload(add(firstObj, nextOffset)) }
+        cce.destSystemID = dstSys;
+
+        // destCurrencyID (uint160, 20 bytes)
+        nextOffset += CCE_DEST_CURRENCY_DELTA;
+        address dstCur;
+        assembly { dstCur := mload(add(firstObj, nextOffset)) }
+        cce.destCurrencyID = dstCur;
+
+        // exporter (CTransferDestination): type(1 byte) | length(1 byte) | dest-bytes
+        nextOffset += 1;
+        uint8 exporterType;
+        assembly { exporterType := mload(add(firstObj, nextOffset)) }
+
+        nextOffset += 1;
+        uint8 exporterLen;
+        assembly { exporterLen := mload(add(firstObj, nextOffset)) }
+        if (exporterLen > 0) {
+            nextOffset += exporterLen;
+            uint176 exporterVal;
+            assembly { exporterVal := mload(add(firstObj, nextOffset)) }
+            cce.exporter = exporterVal;
+        }
+
+        // Optional gateway ID prefix (FLAG_DEST_GATEWAY = 128): skip 48 bytes
+        if (exporterType & VerusConstants.FLAG_DEST_GATEWAY == VerusConstants.FLAG_DEST_GATEWAY) {
+            nextOffset += VerusConstants.FLAG_DEST_GATEWAY_LENGTH;
+        }
+
+        // Optional AUX destination (FLAG_DEST_AUX = 64): may override exporter with ETH address
+        if (exporterType & VerusConstants.FLAG_DEST_AUX == VerusConstants.FLAG_DEST_AUX) {
+            nextOffset += 1;
+            uint176 auxAddr;
+            (nextOffset, auxAddr) = readAuxDest(firstObj, nextOffset, 0);
+            nextOffset -= 1;  // readAuxDest returns assembly offset; readVarint below needs it unchanged
+            if (auxAddr != 0) cce.exporter = auxAddr;
+        }
+
+        // firstInput (int32 LE, 4 bytes) is skipped; numInputs (int32 LE, 4 bytes) is read.
+        // After += 8, the rightmost 4 bytes of mload = numInputs bytes in memory order.
+        // serializeUint32 byte-reverses to obtain the correct integer value.
+        uint32 numInputsRaw;
+        assembly {
+            nextOffset  := add(nextOffset, 8)
+            numInputsRaw := mload(add(firstObj, nextOffset))
+        }
+        cce.numInputs = serializeUint32(numInputsRaw);
+
+        // VARINT(sourceHeightStart) then VARINT(sourceHeightEnd)
+        uint32 startH;
+        uint32 endH;
+        (startH, nextOffset) = readVarint(firstObj, nextOffset);
+        cce.sourceHeightStart = startH;
+        (endH, nextOffset)    = readVarint(firstObj, nextOffset);
+        cce.sourceHeightEnd   = endH;
+
+        require(firstObj[firstObj.length - 1] == 0x75, "Script must end with OP_DROP (0x75)");
+    }
+
+    function checkExportAndTransfers(VerusObjects.CReserveTransferImport memory _import, bytes32 hashedTransfers) public view returns (uint128, uint176) {
+
+
+        for (uint i = 1; i < _import.partialtransactionproof.components.length; i++) {
             if (_import.partialtransactionproof.components[i].elType != TYPE_TX_OUTPUT)
                 continue;
-            
-            bytes memory firstObj = _import.partialtransactionproof.components[i].elVchObj; // we should have a first entry that is the txout with the export
 
-            // ensure this is an export to VETH and pull the hash for reserve transfers
-            // to ensure a valid export.
-            // the eval code for the main COptCCParams must be EVAL_CROSSCHAIN_EXPORT, and the destination system
-            // must match VETH
+            bytes memory firstObj = _import.partialtransactionproof.components[i].elVchObj;
+            uint32 nIndex = _import.partialtransactionproof.components[i].elProof[0].proofSequence.nIndex;
 
-            uint32 nextOffset;
-            uint8 var1;
-            uint8 opCode2;
-            uint32 nIndex; 
-            nIndex = _import.partialtransactionproof.components[i].elProof[0].proofSequence.nIndex;
+            // Parse CTxOut: validate scriptPubKey structure and locate the CCE body
+            (uint32 cceBodyOffset, bool ok) = _parseCTxOut(firstObj);
+            if (!ok) return (uint128(0), uint176(0));
 
-            VerusObjectsCommon.UintReader memory readerLen;
-            // should check for max size of compact int 13 million, also max voutsize, and must be a a canonical number
-            readerLen = VerusSerializer(contracts[uint(VerusConstants.ContractType.VerusSerializer)]).readCompactSizeLE(firstObj, OUTPUT_SCRIPT_OFFSET);    // get the length of the output script
-            // this should be a opcode for a push of the output script, which should be less than 75 bytes, as that is how it is encoded in the script, if not, fail as this is not a valid output script
-            readerLen = VerusSerializer(contracts[uint(VerusConstants.ContractType.VerusSerializer)]).readCompactSizeLE(firstObj, readerLen.offset);        // then length of first master push
+            // Deserialize CCE fields from the located body
+            CCEData memory cce = _readCCEFields(firstObj, cceBodyOffset);
 
-            // must be push less than 75 bytes, as that is an op code encoded similarly to a vector.
-            // all we do here is ensure that is the case and skip master
-            if (readerLen.value == 0 || readerLen.value > 0x4b)
-            {
-                return (uint64(0), uint128(0));
+            // Validate: correct source chain, correct destination chain, correct currency, correct transfer hash
+            if (!(cce.hashReserveTransfers == hashedTransfers &&
+                  cce.sourceSystemID == VERUS &&
+                  cce.destSystemID   == VETH &&
+                  cce.destCurrencyID == VETH)) {
+                revert("CCE information does not checkout");
             }
 
-            nextOffset = uint32(readerLen.offset + readerLen.value);        // add the length of the push of master to point to cc opcode
+            // Pack heights + nIndex + numInputs into a single uint128 for the caller.
+            // Layout (matches SubmitImports unpack convention):
+            //   bits  0-31 : sourceHeightStart
+            //   bits 32-63 : sourceHeightEnd
+            //   bits 64-95 : nIndex (output position in the tx)
+            //   bits 96-127: numInputs (= number of reserve transfers)
+            uint128 packed = uint128(cce.sourceHeightStart)
+                           | (uint128(cce.sourceHeightEnd) << 32)
+                           | (uint128(nIndex)              << 64)
+                           | (uint128(cce.numInputs)       << 96);
 
-            assembly {
-                var1 := mload(add(firstObj, nextOffset))         // this should be OP_CHECKCRYPTOCONDITION
-                nextOffset := add(nextOffset, 1)                    // and after that...
-                opCode2 := mload(add(firstObj, nextOffset))         // should be OP_PUSHDATA1 or OP_PUSHDATA2
-                nextOffset := add(nextOffset, 1)                    // point to the length of the pushed data after CC instruction
-            }
-
-            if (var1 != SCRIPT_OP_CHECKCRYPTOCONDITION ||
-                (opCode2 != SCRIPT_OP_PUSHDATA1 && opCode2 != SCRIPT_OP_PUSHDATA2))
-            {
-                return (uint64(0), uint128(0));
-            }
-
-            if (opCode2 == SCRIPT_OP_PUSHDATA1)
-            {
-                assembly {
-                    nextOffset := add(nextOffset, 1)
-                }
-            }
-            else
-            {
-                assembly {
-                    nextOffset := add(nextOffset, 2)
-                }
-
-            }
-
-            // COptCCParams are serialized as pushes in a script, first the header, then the keys, then the data
-            // skip right to the serialized export and then to the source system
-
-            nextOffset += CCE_COPTP_EVALOFFSET;
-            assembly {
-                var1 := mload(add(firstObj, nextOffset))
-            }
-
-            if (var1 != CCE_EVAL_EXPORT)
-            {
-                return (uint64(0), uint128(0));
-            }
-
-            nextOffset += CCE_SOURCE_SYSTEM_OFFSET;
-
-            assembly {
-                opCode2 := mload(add(firstObj, nextOffset))         // should be OP_PUSHDATA1 or OP_PUSHDATA2
-            }
-
-            
-            if (opCode2 == SCRIPT_OP_PUSHDATA2)
-            {
-                    nextOffset += 1; // one extra byte taken for varint
-            } 
-            nextOffset += CCE_COPTP_HEADERSIZE;
-
-            // nVersion is last two bytes of header, but we don't currently use it for anything, so just read and move on
-            // validate source and destination values as well and set reward address
-            return (checkCCEValues(firstObj, nextOffset, hashedTransfers, nIndex));
-        
+            return (packed, cce.exporter);
         }
         return (uint128(0), uint176(0));
     }
 
-    function checkCCEValues(bytes memory firstObj, uint32 nextOffset, bytes32 hashedTransfers, uint32 nIndex) public view returns(uint128 tmpPacked, uint176 exporter)
-    {
-        bytes32 hashReserveTransfers;
-        address systemSourceID;
-        address destSystemID;
-        uint32 tempRegister;
-        uint8 tmpuint8;
-        uint128 packedRegister;
-        
-        assembly {
-            let flags := and(mload(add(firstObj, nextOffset)), 0x0800)  // flags LE uint16: byte0=0x08 lands at bits 15-8 in mload word, byte1=0x00 at bits 7-0; mask 0x0800 checks FLAG_SUPPLEMENTAL
-            if gt(flags, 0) {
-                revert(0, 0)  
-            }
-            nextOffset := add(nextOffset, CCE_SOURCE_SYSTEM_DELTA)
-            systemSourceID := mload(add(firstObj, nextOffset))       // source system ID, which should match expected source (VRSC/VRSCTEST)
-            nextOffset := add(nextOffset, CCE_HASH_TRANSFERS_DELTA)
-            hashReserveTransfers := mload(add(firstObj, nextOffset)) // get hash of reserve transfers from partial transaction proof
-            nextOffset := add(nextOffset, CCE_DEST_SYSTEM_DELTA)
-            destSystemID := mload(add(firstObj, nextOffset))         // destination system, which should be vETH
-            nextOffset := add(nextOffset, CCE_DEST_CURRENCY_DELTA)   // goto destcurrencyid
-            nextOffset := add(nextOffset, 1)                         // goto exporter type  
-            tmpuint8 := mload(add(firstObj, nextOffset))             // read exporter type
-            nextOffset := add(nextOffset, 1)                         // goto exporter destination length
-            let lengthOfExporter := and(mload(add(firstObj, nextOffset)), 0xff)  
-            if gt(lengthOfExporter, 0) {
-                nextOffset := add(nextOffset, lengthOfExporter)  // goto exporter destination
-                exporter := mload(add(firstObj, nextOffset))     // read exporter destination
-            }
-        }
-
-        if(tmpuint8 & VerusConstants.FLAG_DEST_GATEWAY == VerusConstants.FLAG_DEST_GATEWAY)
-        {
-            nextOffset += VerusConstants.FLAG_DEST_GATEWAY_LENGTH;  // skip past gateway ID to get to auxdest vector length
-        }
-
-        if (tmpuint8 & VerusConstants.FLAG_DEST_AUX == VerusConstants.FLAG_DEST_AUX)
-        {
-            nextOffset += 1;  // goto auxdest parent vec length position
-            (nextOffset, exporter) = readAuxDest(firstObj, nextOffset, exporter); //NOTE: If Auxdest present use address
-            nextOffset -= 1;  // NOTE: Next Varint call takes array pos not array pos +1
-        }
-
-        assembly {
-            nextOffset := add(nextOffset, 8)                               // move to read num inputs
-            tempRegister := mload(add(firstObj, nextOffset))                // number of numInputs                 
-        }
-
-        (packedRegister, nextOffset)  = readVarint(firstObj, nextOffset);   // put startheight at [0] 32bit chunk
-        tempRegister = serializeUint32(tempRegister);                          // reverse endian of no. transfers
-        packedRegister  |= (uint128(tempRegister) << 96) ;                     // put number of transfers at [3] 32-bit chunk     
-        
-        (tempRegister, nextOffset)  = readVarint(firstObj, nextOffset); 
-        packedRegister  |= (uint128(tempRegister) << 32) ;                   // put endheight at [1] 32 bit chunk
-        packedRegister  |= (uint128(nIndex) << 64) ;                        // put nindex at [2] 32 bit chunk
-        assembly {
-            nextOffset := add(nextOffset, 1)                                // move to next byte for mapsize
-            tmpuint8 := mload(add(firstObj, nextOffset)) 
-        }
-
-        if (tmpuint8 == 1) 
-        {
-            assembly {
-                nextOffset := add(add(nextOffset, CCE_DEST_CURRENCY_DELTA), 8)  // move 20 + 8 bytes for (address + 64bit)
-            }
-
-        }
-
-        if (!(hashedTransfers == hashReserveTransfers &&
-                systemSourceID == VERUS &&
-                destSystemID == VETH)) {
-
-            revert("CCE information does not checkout");
-        }
-
-        tmpPacked = packedRegister;
-        return (tmpPacked, exporter); 
-
-    }
-
-    function readAuxDest (bytes memory firstObj, uint32 nextOffset, uint176 exporter) public view returns (uint32, uint176)
+    function readAuxDest (bytes memory firstObj, uint32 nextOffset, uint176 exporter) private pure returns (uint32, uint176)
     {
                                                   
             VerusObjectsCommon.UintReader memory readerLen;
-            readerLen = VerusSerializer(contracts[uint(VerusConstants.ContractType.VerusSerializer)]).readCompactSizeLE(firstObj, nextOffset);    // get the length of the auxDest
+            readerLen = readCompactSizeLE(firstObj, nextOffset);    // get the length of the auxDest
             nextOffset = readerLen.offset;
             uint arraySize = readerLen.value;
             
             for (uint i = 0; i < arraySize; i++)
             {
-                    readerLen = VerusSerializer(contracts[uint(VerusConstants.ContractType.VerusSerializer)]).readCompactSizeLE(firstObj, nextOffset);    // get the length of the auxDest sub array
+                    readerLen = readCompactSizeLE(firstObj, nextOffset);    // get the length of the auxDest sub array
                     if (readerLen.value == AUX_DEST_ETH_VEC_LENGTH)
                     {
                          assembly {
@@ -527,7 +646,7 @@ contract VerusProof is VerusStorage  {
         }
     }
 
-    function getTokenList(uint256 start, uint256 end) external returns(VerusObjects.setupToken[] memory ) {
+    function getTokenList(uint256 start, uint256 end) public view returns(VerusObjects.setupToken[] memory ) {
 
         uint tokenListLength;
         tokenListLength = tokenList.length;
@@ -565,24 +684,7 @@ contract VerusProof is VerusStorage  {
             else if(recordedToken.flags & VerusConstants.MAPPING_ERC20_DEFINITION == VerusConstants.MAPPING_ERC20_DEFINITION )
             {
                 temp[j].erc20ContractAddress = recordedToken.erc20ContractAddress;
-                bytes memory tempName;
-                tempName = bytes(recordedToken.name);
-                if (tempName[1] == "." && tempName[2] == "." && tempName[3] == ".") {
-
-                    temp[j].name = string(abi.encodePacked("[", toHexString(uint160(recordedToken.erc20ContractAddress), 20), "]", slice(tempName, 5, tempName.length - 5)));
-
-                } else {
-                    temp[j].name = recordedToken.name;
-                }
-                (bool success, bytes memory retval) = recordedToken.erc20ContractAddress.call(abi.encodeWithSignature("symbol()"));
-
-                if (success && retval.length > 0x40) {
-                    temp[j].ticker = abi.decode(retval, (string));
-                } else if (retval.length == 0x20) {
-                    temp[j].ticker = string(slice(retval, 0, (retval[3] == 0 ? 3 : 4)));
-                } else {
-                    temp[j].ticker = string(slice(bytes(temp[j].name), 3, 4));
-                }
+                temp[j].name = recordedToken.name;
             }
             else if(recordedToken.flags & VerusConstants.MAPPING_ERC721_NFT_DEFINITION == VerusConstants.MAPPING_ERC721_NFT_DEFINITION
                         || recordedToken.flags & VerusConstants.MAPPING_ERC1155_NFT_DEFINITION == VerusConstants.MAPPING_ERC1155_NFT_DEFINITION
@@ -598,66 +700,51 @@ contract VerusProof is VerusStorage  {
         return temp;
     }
 
-    function serializeUint32(uint32 number) public pure returns(uint32){
+    function serializeUint32(uint32 number) private pure returns(uint32){
         // swap bytes
         number = ((number & 0xFF00FF00) >> 8) | ((number & 0x00FF00FF) << 8);
         number = (number >> 16) | (number << 16);
         return number;
-    }
+    }    
 
-    function toHexString(uint160 value, uint256 length) internal pure returns (string memory) {
-        bytes memory buffer = new bytes(2 * length + 2);
-        buffer[0] = "0";
-        buffer[1] = "x";
-        for (uint256 i = 2 * length + 1; i > 1; --i) {
-            buffer[i] = _SYMBOLS[value & 0xf];
-            value >>= 4;
-        }
-        require(value == 0, "Strings: hex length insufficient");
-        return string(buffer);
-    }
+    function readCompactSizeLE(bytes memory incoming, uint32 offset) private pure returns(VerusObjectsCommon.UintReader memory) {
 
-function slice(
-        bytes memory _bytes,
-        uint256 _start,
-        uint256 _length
-    )
-        internal
-        pure
-        returns (bytes memory)
-    {
-        require(_length + 31 >= _length, "slice_overflow");
-        require(_bytes.length >= _start + _length, "slice_outOfBounds");
-
-        bytes memory tempBytes;
+        uint8 oneByte;
         assembly {
-            switch iszero(_length)
-            case 0 {
-                tempBytes := mload(0x40)
-                let lengthmod := and(_length, 31)
-                let mc := add(add(tempBytes, lengthmod), mul(0x20, iszero(lengthmod)))
-                let end := add(mc, _length)
-
-                for {
-                    let cc := add(add(add(_bytes, lengthmod), mul(0x20, iszero(lengthmod))), _start)
-                } lt(mc, end) {
-                    mc := add(mc, 0x20)
-                    cc := add(cc, 0x20)
-                } {
-                    mstore(mc, mload(cc))
-                }
-                mstore(tempBytes, _length)
-                mstore(0x40, and(add(mc, 31), not(31)))
-            }
-            default {
-                tempBytes := mload(0x40)
-                mstore(tempBytes, 0)
-                mstore(0x40, add(tempBytes, 0x20))
-            }
+            oneByte := mload(add(incoming, offset))
         }
-        return tempBytes;
+        offset++;
+        if (oneByte < 253)
+        {
+            return VerusObjectsCommon.UintReader(offset, oneByte);
+        }
+        else if (oneByte == 253)
+        {
+            offset++;
+            uint16 twoByte;
+            assembly {
+                twoByte := mload(add(incoming, offset))
+            }
+            uint16 value16 = ((twoByte << 8) & 0xffff) | twoByte >> 8;
+            require(value16 >= 253, "Non-canonical compact-size");
+            return VerusObjectsCommon.UintReader(offset + 1, value16);
+        }
+        else if (oneByte == 254)
+        {
+            offset += 3;
+            uint32 fourByte;
+            assembly {
+                fourByte := mload(add(incoming, offset))
+            }
+            uint32 value32 = serializeUint32(fourByte);
+            require(value32 >= 65536, "Non-canonical compact-size");
+            return VerusObjectsCommon.UintReader(offset + 3, value32);
+        }
+        else
+        {
+            revert("Compact-size too large");
+        }
     }
-    
 }
 
 
