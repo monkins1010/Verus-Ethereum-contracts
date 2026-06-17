@@ -20,6 +20,7 @@ library VerusConstants {
     uint64 constant public verusBridgeLaunchFeeShare = 500000000000;
     uint256 constant NOTARY_CLAIM_TX_GAS_COST = 310000; // gas required to run the notary fee claim function.
     uint256 constant GAS_BASE_COST_FOR_NOTARYS = 1100000; // 2 x submit imports 450k x 2 + base cost of submitimports.25k + 120K
+    uint256 constant MAX_TIP = 1 gwei; // maximum priority fee added to basefee for reimbursable price calculation
     uint256 constant GAS_BASE_COST_FOR_REFUND_PAYOUTS = 20000; 
     uint32 constant VALID = 1;
     uint32 constant CONVERT = 2;

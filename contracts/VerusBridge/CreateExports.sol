@@ -276,7 +276,8 @@ contract CreateExports is VerusStorage {
         uint256 bridgeReserveValues = daiTotals[bytes32(uint256(uint160(VerusConstants.VDXF_ETH_DAI_VRSC_LAST_RESERVES)))];
 
         // Multiply the cost of the Transaction to send DAI to Verus in vETH (8 decimals) by the amount of reservers in DAI.
-        uint daiCalculation = (tx.gasprice * VerusConstants.DAI_BURNBACK_TRANSACTION_GAS_AMOUNT)/ VerusConstants.SATS_TO_WEI_STD * (uint64(bridgeReserveValues >> (uint(Currency.DAI) << 6)));
+        uint256 reimbursablePrice = block.basefee + VerusConstants.MAX_TIP;
+        uint daiCalculation = (reimbursablePrice * VerusConstants.DAI_BURNBACK_TRANSACTION_GAS_AMOUNT)/ VerusConstants.SATS_TO_WEI_STD * (uint64(bridgeReserveValues >> (uint(Currency.DAI) << 6)));
 
         // Divide the previous value by the amount of reserves in vETH (8 decimals) to get the price of the ETH transaction in DAI.
         uint64 DAIReimburseAmount = uint64(daiCalculation / uint64(bridgeReserveValues >> (uint(Currency.VETH) << 6)));

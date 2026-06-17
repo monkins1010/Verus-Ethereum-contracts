@@ -238,7 +238,7 @@ contract SubmitImports is VerusStorage {
         // get the gasleft before calling the tokenmanager
 
         //returns success, refund addresses bytes & refund address array which is abi.encoded-ed, these are any refunds that didnt pay out.
-        (success, returnBytes) = contracts[uint(VerusConstants.ContractType.TokenManager)].delegatecall(abi.encodeWithSelector(TokenManager.processTransactions.selector, _import.serializedTransfers, uint256(uint8(CCEHeightsAndnIndex >> 96))));
+        (success, returnBytes) = contracts[uint(VerusConstants.ContractType.TokenManager)].delegatecall(abi.encodeWithSelector(TokenManager.processTransactions.selector, _import.serializedTransfers, uint256(uint32(CCEHeightsAndnIndex >> 96))));
         require(success);
 
         uint176[] memory refundAddresses;
@@ -269,9 +269,10 @@ contract SubmitImports is VerusStorage {
 
         // Using the gas used gives us an indication of how much the transaction will cost.
         // i.e. the gas used to do 2 * notaryimports + fixedcost for submitimport + (gas to process the tx payements)
+        uint256 reimbursablePrice = block.basefee + VerusConstants.MAX_TIP;
         priceOfImports = uint256((gasStart - gasleft()) + VerusConstants.GAS_BASE_COST_FOR_NOTARYS + 
             (refundAddresses.length * VerusConstants.GAS_BASE_COST_FOR_REFUND_PAYOUTS)) 
-            * tx.gasprice;
+            * reimbursablePrice;
 
         // Use a Buffer of 40% for notary fees. (In Verus sats)
         notaryFees = uint64(((priceOfImports * 14) / 10) / VerusConstants.SATS_TO_WEI_STD); 
@@ -409,10 +410,10 @@ contract SubmitImports is VerusStorage {
 
             bytes memory proposerBytes = bestForks[0];
             uint176 proposer;
-
+            require(proposerBytes.length >= FORKS_NOTARY_PROPOSER_POSITION + 22, "bestForks[0] too short");
             assembly {
                     proposer := mload(add(proposerBytes, FORKS_NOTARY_PROPOSER_POSITION))
-            } 
+            }
 
             setClaimedFees(bytes32(uint256(proposer)), feeShare); // 1/3 to proposer
             setClaimedFees(bytes32(uint256(exporter)), feeShare + (feeShare % 3)); // any remainder from main division goes to exporter
@@ -433,7 +434,8 @@ contract SubmitImports is VerusStorage {
             uint256 txReimburse;
 
             // truncate reimburse amount
-            txReimburse = ((tx.gasprice * VerusConstants.NOTARY_CLAIM_TX_GAS_COST) / VerusConstants.SATS_TO_WEI_STD) * VerusConstants.SATS_TO_WEI_STD;
+            uint256 reimbursablePrice = block.basefee + VerusConstants.MAX_TIP;
+            txReimburse = ((reimbursablePrice * VerusConstants.NOTARY_CLAIM_TX_GAS_COST) / VerusConstants.SATS_TO_WEI_STD) * VerusConstants.SATS_TO_WEI_STD;
 
             if (claimableFees[bytes32(0)] > 0) {
                 // When there is no proposer fees are sent to bytes(0)
@@ -506,7 +508,8 @@ contract SubmitImports is VerusStorage {
 
         uint256 txReimburse;
         // keep the Reimburse value in wei until end for accuracy
-        txReimburse = (tx.gasprice * VerusConstants.REFUND_FEE_REIMBURSE_GAS_AMOUNT);
+        uint256 reimbursablePrice = block.basefee + VerusConstants.MAX_TIP;
+        txReimburse = (reimbursablePrice * VerusConstants.REFUND_FEE_REIMBURSE_GAS_AMOUNT);
 
         uint reserves = claimableFees[bytes32(uint256(uint160(VerusConstants.VDXF_ETH_DAI_VRSC_LAST_RESERVES)))];
         uint feeCalculation;
