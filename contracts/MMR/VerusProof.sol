@@ -44,7 +44,7 @@ contract VerusProof is VerusStorage  {
     uint32 constant CCE_DEST_SYSTEM_DELTA = 20;
     uint32 constant CCE_DEST_CURRENCY_DELTA = 20;
     uint32 constant CCE_SOURCE_SYSTEM_DELTA = 20;  // advance past flags(2) to sourceSystemID... no: flags read inline, then +20 for sourceID
-
+    uint8 constant CCE_NVERSION_1 = 1;
     uint32 constant OUTPUT_SCRIPT_OFFSET = (8 + 1);                 // start of prevector serialization for output script
     uint32 constant SCRIPT_OP_CHECKCRYPTOCONDITION = 0xcc;
     uint32 constant SCRIPT_OP_PUSHDATA1 = 0x4c;
@@ -58,6 +58,10 @@ contract VerusProof is VerusStorage  {
     uint8 constant AUX_DEST_ETH_VEC_LENGTH = 22;
     uint8 constant TX_HEADER = 1;
     uint8 constant NUM_TX_PROOFS = 3;
+    // Minimum byte length of a CCE blob (from dOff) required by _readCCEFields:
+    // nVersion(2)+flags(2)+sourceSystemID(20)+hashRT(32)+destSys(20)+destCur(20)
+    // +exporterType(1)+exporterLen(1)+firstInput(4)+numInputs(4)+2×VARINT(2) = 108
+    uint32 constant CCE_FIELDS_LENGTH = 108;
 
     bytes16 constant _SYMBOLS = "0123456789abcdef";
 
@@ -83,7 +87,7 @@ contract VerusProof is VerusStorage  {
 
         uint hashIndex = VerusMMR.GetMMRProofIndex(_branch.nIndex, _branch.nSize, _branch.extraHashes);
         
-       for(uint i = 0;i < branchLength; i++){
+        for (uint i = 0;i < branchLength; i++) {
             if(hashIndex & 1 > 0){
                 require(_branch.branch[i] != _hashToCheck,"Value can be equal to node but never on the right");
                 //join the two arrays and pass to blake2b
@@ -106,7 +110,9 @@ contract VerusProof is VerusStorage  {
         bytes32 hashReserveTransfers; // CCE.hashReserveTransfers (uint256)
         address destSystemID;         // CCE.destSystemID    (uint160)
         address destCurrencyID;       // CCE.destCurrencyID  (uint160)
-        uint176 exporter;             // CCE.exporter destination (type+address, ≤22 bytes)
+        uint176 exporter;             // addr1: main CTransferDestination body
+        uint176 exporter2;            // addr2: first AUX dest (AUX_DEST_ETH_VEC_LENGTH)
+        uint176 exporter3;            // addr3: second AUX dest (AUX_DEST_ETH_VEC_LENGTH)
         uint32  numInputs;            // CCE.numInputs       (num reserve transfers)
         uint32  sourceHeightStart;    // CCE.sourceHeightStart (VARINT)
         uint32  sourceHeightEnd;      // CCE.sourceHeightEnd   (VARINT)
@@ -182,6 +188,7 @@ contract VerusProof is VerusStorage  {
 
         // Step 4: PUSHDATA1/2 wrapping the secondary COptCCParams body.
         // Canonical check: PUSHDATA1 only if dataLen > 75; PUSHDATA2 only if dataLen > 255.
+        uint32 COptCCParamsMainLength;
         {
             uint8 lenLo;
             assembly { op := mload(add(firstObj, nextOffset)) }
@@ -189,6 +196,7 @@ contract VerusProof is VerusStorage  {
             if (op == SCRIPT_OP_PUSHDATA1) {
                 assembly { lenLo := mload(add(firstObj, nextOffset)) }
                 if (lenLo <= 75) return (0, false); // non-canonical
+                COptCCParamsMainLength = uint32(lenLo);
                 nextOffset += 1;
             } else if (op == SCRIPT_OP_PUSHDATA2) {
                 uint8 lenHi;
@@ -197,10 +205,12 @@ contract VerusProof is VerusStorage  {
                     lenHi := mload(add(firstObj, add(nextOffset, 1)))
                 }
                 if (uint32(lenLo) | (uint32(lenHi) << 8) <= 255) return (0, false); // non-canonical
+                COptCCParamsMainLength = uint32(lenLo) | (uint32(lenHi) << 8);
                 nextOffset += 2;
             } else {
                 return (0, false);
             }
+            require(firstObj.length >= nextOffset + COptCCParamsMainLength, "Script too short for PUSHDATA2");
         }
         // nextOffset now points to the first byte of the secondary COptCCParams body.
 
@@ -211,7 +221,8 @@ contract VerusProof is VerusStorage  {
             uint8 nKeys;
             assembly { op := mload(add(firstObj, nextOffset)) }
             nextOffset++;
-            if (op < 0x04 || op > 0x4b) return (0, false);
+            if (op != 0x04 ) return (0, false);
+            
             // nextOffset-1 = version, nextOffset = evalCode, nextOffset+1 = m, nextOffset+2 = n
             assembly {
                 version  := mload(add(firstObj, nextOffset))
@@ -219,18 +230,18 @@ contract VerusProof is VerusStorage  {
                 // skip m keys
                 nKeys    := mload(add(firstObj, add(nextOffset, 3)))
             }
-            if (evalCode != CCE_EVAL_EXPORT || version != CCOPTPARAMS_VERSION) return (0, false);
-            if (nKeys > 10) return (0, false); // sanity cap
+            if (evalCode != CCE_EVAL_EXPORT || version < CCOPTPARAMS_VERSION) return (0, false);
+            if (nKeys != 1) return (0, false); // sanity cap
             nextOffset += uint32(op); // skip all header data bytes
 
             // Step 6: skip n key pushes (each a direct push, opcode 0x01-0x4b).
             // Key types (PKH/ID/SH/PK) are always ≤75 bytes, so PUSHDATA1/2 is unexpected.
-            for (uint8 i = 0; i < nKeys; i++) {
-                assembly { op := mload(add(firstObj, nextOffset)) }
-                nextOffset++;
-                if (op < 0x01 || op > 0x4b) return (0, false);
-                nextOffset += uint32(op);
-            }
+
+            assembly { op := mload(add(firstObj, nextOffset)) }
+            nextOffset++;
+            if (op < 0x01 || op > 0x4b) return (0, false);
+            nextOffset += uint32(op);
+
         }
 
         // Step 7: CCE data push (PUSHDATA1 or PUSHDATA2), canonical length enforced.
@@ -255,8 +266,10 @@ contract VerusProof is VerusStorage  {
             } else {
                 return (0, false);
             }
-            dOff = nextOffset;
+            dOff = nextOffset;            
         }
+        // check there is enough data left in the script for the CCE fields
+        require(firstObj.length >= dOff + CCE_FIELDS_LENGTH, "Script too short for CCE fields");
 
         // _readCCEFields expects nextOffset = dOff + 3, so that:
         //   data[nextOffset-4..nextOffset-3] = CCE.nVersion LE
@@ -282,12 +295,13 @@ contract VerusProof is VerusStorage  {
         // uint16 mload at (nextOffset-2) reads the last 2 bytes = data[nextOffset-4..nextOffset-3].
         uint16 cceNVersion;
         assembly { cceNVersion := mload(add(firstObj, sub(nextOffset, 2))) }
-        require(cceNVersion == 0x0100, "CCE nVersion must be 1");
+        require(serializeUint16(cceNVersion) >= CCE_NVERSION_1, "CCE nVersion must be 1");
 
-        // Only FLAG_POSTLAUNCH (0x0080) may be set; no other CCE flags are accepted.
-        // Exactly 0x8000 means flags_lo == 0x80 (FLAG_POSTLAUNCH) and flags_hi == 0x00.
+        // Only FLAG_POSTLAUNCH (0x0080) must be set; accept FLAG_UNUSED  0x20
+   
         assembly {
-            if iszero(eq(and(mload(add(firstObj, nextOffset)), 0xFFFF), 0x8000)) { revert(0, 0) }
+            let mask := 0xDFFF // only FLAG_POSTLAUNCH (0x0080) must be set; accept FLAG_UNUSED  0x20, note flipped endian.
+            if iszero(eq(and(mload(add(firstObj, nextOffset)), mask), 0x8000)) { revert(0, 0) }
         }
 
         // sourceSystemID (uint160, 20 bytes): advance past it and read as address
@@ -315,32 +329,16 @@ contract VerusProof is VerusStorage  {
         cce.destCurrencyID = dstCur;
 
         // exporter (CTransferDestination): type(1 byte) | length(1 byte) | dest-bytes
-        nextOffset += 1;
-        uint8 exporterType;
-        assembly { exporterType := mload(add(firstObj, nextOffset)) }
-
-        nextOffset += 1;
-        uint8 exporterLen;
-        assembly { exporterLen := mload(add(firstObj, nextOffset)) }
-        if (exporterLen > 0) {
-            nextOffset += exporterLen;
-            uint176 exporterVal;
-            assembly { exporterVal := mload(add(firstObj, nextOffset)) }
-            cce.exporter = exporterVal;
-        }
-
-        // Optional gateway ID prefix (FLAG_DEST_GATEWAY = 128): skip 48 bytes
-        if (exporterType & VerusConstants.FLAG_DEST_GATEWAY == VerusConstants.FLAG_DEST_GATEWAY) {
-            nextOffset += VerusConstants.FLAG_DEST_GATEWAY_LENGTH;
-        }
-
-        // Optional AUX destination (FLAG_DEST_AUX = 64): may override exporter with ETH address
-        if (exporterType & VerusConstants.FLAG_DEST_AUX == VerusConstants.FLAG_DEST_AUX) {
+        // Delegate to helper to avoid stack-too-deep (collects up to 3 exporter addresses,
+        // returns the last non-zero one and the advanced offset).
+        {
             nextOffset += 1;
-            uint176 auxAddr;
-            (nextOffset, auxAddr) = readAuxDest(firstObj, nextOffset, 0);
-            nextOffset -= 1;  // readAuxDest returns assembly offset; readVarint below needs it unchanged
-            if (auxAddr != 0) cce.exporter = auxAddr;
+            uint8 exporterType;
+            assembly { exporterType := mload(add(firstObj, nextOffset)) }
+            nextOffset += 1;
+            uint8 exporterLen;
+            assembly { exporterLen := mload(add(firstObj, nextOffset)) }
+            (nextOffset, cce.exporter, cce.exporter2, cce.exporter3) = _collectExporter(firstObj, nextOffset, exporterType, exporterLen);
         }
 
         // firstInput (int32 LE, 4 bytes) is skipped; numInputs (int32 LE, 4 bytes) is read.
@@ -364,19 +362,46 @@ contract VerusProof is VerusStorage  {
         require(firstObj[firstObj.length - 1] == 0x75, "Script must end with OP_DROP (0x75)");
     }
 
-    function checkExportAndTransfers(VerusObjects.CReserveTransferImport memory _import, bytes32 hashedTransfers) public view returns (uint128, uint176) {
+    function checkExportAndTransfers(VerusObjects.CReserveTransferImport memory _import, bytes32 hashedTransfers) public view returns (uint128, uint176, uint176, uint176) {
 
+        bool foundInput = false;
+        bool inputMatchesLastCCE = false;
+        bytes32 lastTxid = lastImportInfo[VerusConstants.SUBMIT_IMPORTS_LAST_TXID].exporttxid;
 
         for (uint i = 1; i < _import.partialtransactionproof.components.length; i++) {
-            if (_import.partialtransactionproof.components[i].elType != TYPE_TX_OUTPUT)
+            uint8 elType = _import.partialtransactionproof.components[i].elType;
+
+            // TX_PREVOUTSEQ (type 2): deserialize the COutPoint from elVchObj.
+            // COutPoint wire format (from BaseOutPoint::SerializationOp):
+            //   hash (uint256, 32 bytes LE) | n (uint32, 4 bytes LE)
+            // Validate that at least one input spends from the previous CCE transaction.
+            if (elType == TX_PREVOUTSEQ) {
+                bytes memory prevoutData = _import.partialtransactionproof.components[i].elVchObj;
+                require(prevoutData.length >= 36, "Prevout elVchObj too short");
+                bytes32 prevoutHash;
+                // mload(add(ptr, 32)) reads data[0..31] as bytes32 — the COutPoint.hash
+                assembly { prevoutHash := mload(add(prevoutData, 32)) }
+                foundInput = true;
+                // On the first import lastTxid is zero; skip the hash check in that case.
+                if (lastTxid == bytes32(0) || prevoutHash == lastTxid) {
+                    inputMatchesLastCCE = true;
+                }
                 continue;
+            }
+
+            if (elType != TYPE_TX_OUTPUT)
+                continue;
+
+            // Every import must prove at least one input that spends from the last CCE tx.
+            require(foundInput, "No TX input component found");
+            require(inputMatchesLastCCE, "Input does not spend from last CCE tx");
 
             bytes memory firstObj = _import.partialtransactionproof.components[i].elVchObj;
             uint32 nIndex = _import.partialtransactionproof.components[i].elProof[0].proofSequence.nIndex;
 
             // Parse CTxOut: validate scriptPubKey structure and locate the CCE body
             (uint32 cceBodyOffset, bool ok) = _parseCTxOut(firstObj);
-            if (!ok) return (uint128(0), uint176(0));
+            if (!ok) return (uint128(0), uint176(0), uint176(0), uint176(0));
 
             // Deserialize CCE fields from the located body
             CCEData memory cce = _readCCEFields(firstObj, cceBodyOffset);
@@ -400,32 +425,75 @@ contract VerusProof is VerusStorage  {
                            | (uint128(nIndex)              << 64)
                            | (uint128(cce.numInputs)       << 96);
 
-            return (packed, cce.exporter);
+            return (packed, cce.exporter, cce.exporter2, cce.exporter3);
         }
-        return (uint128(0), uint176(0));
+        return (uint128(0), uint176(0), uint176(0), uint176(0));
     }
 
-    function readAuxDest (bytes memory firstObj, uint32 nextOffset, uint176 exporter) private pure returns (uint32, uint176)
+    // Collects all 3 exporter addresses from the CTransferDestination and optional AUX dests.
+    // Returns the advanced nextOffset and all three raw addresses (any may be zero):
+    //   addr1 — main CTransferDestination body (exporterLen bytes)
+    //   addr2 — first AUX dest matching AUX_DEST_ETH_VEC_LENGTH
+    //   addr3 — second AUX dest matching AUX_DEST_ETH_VEC_LENGTH
+    // The caller decides which to use (e.g. first non-zero). Extracted to avoid stack-too-deep.
+    function _collectExporter(
+        bytes memory firstObj,
+        uint32 nextOffset,
+        uint8 exporterType,
+        uint8 exporterLen
+    ) private pure returns (uint32, uint176, uint176, uint176) {
+        uint176 addr1;
+        uint176 addr2;
+        uint176 addr3;
+
+        if (exporterLen > 0) {
+            nextOffset += exporterLen;
+            assembly { addr1 := mload(add(firstObj, nextOffset)) }
+        }
+
+        if (exporterType & VerusConstants.FLAG_DEST_GATEWAY == VerusConstants.FLAG_DEST_GATEWAY) {
+            nextOffset += VerusConstants.FLAG_DEST_GATEWAY_LENGTH;
+        }
+
+        if (exporterType & VerusConstants.FLAG_DEST_AUX == VerusConstants.FLAG_DEST_AUX) {
+            nextOffset += 1;
+            (nextOffset, addr2, addr3) = readAuxDest(firstObj, nextOffset);
+            nextOffset -= 1;  // readAuxDest returns assembly offset; readVarint below needs it unchanged
+        }
+
+        return (nextOffset, addr1, addr2, addr3);
+    }
+
+    // Returns the offset after the aux-dest array plus the first two ETH-typed aux-dest
+    // addresses found (each exactly AUX_DEST_ETH_VEC_LENGTH = 22 bytes).  Addresses beyond
+    // the second are skipped so the caller never sees more than two.
+    function readAuxDest (bytes memory firstObj, uint32 nextOffset) private pure returns (uint32, uint176, uint176)
     {
-                                                  
             VerusObjectsCommon.UintReader memory readerLen;
-            readerLen = readCompactSizeLE(firstObj, nextOffset);    // get the length of the auxDest
+            readerLen = readCompactSizeLE(firstObj, nextOffset);    // get the count of aux-dest entries
             nextOffset = readerLen.offset;
             uint arraySize = readerLen.value;
-            
+
+            uint176 addr1;
+            uint176 addr2;
+            uint auxCount;
+
             for (uint i = 0; i < arraySize; i++)
             {
-                    readerLen = readCompactSizeLE(firstObj, nextOffset);    // get the length of the auxDest sub array
-                    if (readerLen.value == AUX_DEST_ETH_VEC_LENGTH)
+                    readerLen = readCompactSizeLE(firstObj, nextOffset);
+                    if (readerLen.value == AUX_DEST_ETH_VEC_LENGTH && auxCount < 2)
                     {
-                         assembly {
-                            exporter := mload(add(add(firstObj, nextOffset),AUX_DEST_ETH_VEC_LENGTH))
-                         }
+                        uint176 auxAddr;
+                        assembly {
+                            auxAddr := mload(add(add(firstObj, nextOffset), AUX_DEST_ETH_VEC_LENGTH))
+                        }
+                        if (auxCount == 0) addr1 = auxAddr;
+                        else               addr2 = auxAddr;
+                        auxCount++;
                     }
-
                     nextOffset = (readerLen.offset + uint32(readerLen.value));
             }
-            return (nextOffset, exporter);
+            return (nextOffset, addr1, addr2);
     }
 
     // Returns the MMR leaf position for a given transaction element type and sub-index.
@@ -445,6 +513,22 @@ contract VerusProof is VerusStorage  {
         if (elType == TX_SHIELDEDSPEND)  return 1 + 2 * nVins + nVouts + uint32(elIdx);
         if (elType == TX_SHIELDEDOUTPUT) return 1 + 2 * nVins + nVouts + nShieldedSpends + uint32(elIdx);
         revert("Unknown elType");
+    }
+
+    // Decode capped-size branch tail format:
+    // - top 4 bytes contain a little-endian uint32 size
+    // - remaining 28 bytes must be zero
+    function _decodeCappedSize(bytes32 raw) private pure returns (uint32) {
+        uint256 rawU = uint256(raw);
+        // Lower 224 bits must be zero padding.
+        require(
+            (rawU & ((uint256(1) << 224) - 1)) == 0,
+            "Capped size non-zero padding"
+        );
+
+        // Extract the first 4 bytes then reverse LE -> native uint32.
+        uint32 lePacked = uint32(rawU >> 224);
+        return serializeUint32(lePacked);
     }
 
     // Validates the MMR proof structure of the partial transaction proof against the
@@ -490,16 +574,27 @@ contract VerusProof is VerusStorage  {
             "Only capped proofs accepted"
         );
         require(
-            uint256(b0.branch[b0.branch.length - 1]) == elHashSize,
+            _decodeCappedSize(b0.branch[b0.branch.length - 1]) == elHashSize,
             "Capped: size hash mismatch"
         );
 
         // --- Per-component structural validation ---
         // Each component i >= 1 must:
         //   1. Have exactly one BRANCH_MMRBLAKE_NODE proof over the same elHashSize tree.
-        //   2. Claim an element index within the known bounds for its type.
-        //   3. Declare an nIndex equal to the expected MMR leaf position for (elType, elIdx).
-        //      (The cryptographic proof that this hash is in the tree is done by proveComponents.)
+        //   2. Have a non-empty branch (so checkBranch never operates on zero hashes).
+        //   3. Claim an element index within the known bounds for its type.
+        //   4. Declare an nIndex equal to the expected MMR leaf position for (elType, elIdx).
+        //
+        // Note on branch.length: in Verus's MMR the proof length is POSITION-DEPENDENT, not
+        // only nSize-dependent (e.g. position 1 in a 6-element tree needs 3 hashes; position 5
+        // needs only 2).  branch.length therefore cannot independently verify nVins; it is
+        // already implicitly validated by proveComponents — an incorrect length produces an
+        // intermediate-node or post-root hash, which won't match the committed txRoot.
+        //
+        // The cryptographic binding is:
+        //   nSize == elHashSize  → proof is from the same-size tree as the header
+        //   nIndex == expected   → element is at the correct MMR leaf for its (type, idx)
+        //   proveComponents      → the element hash at nIndex produces the committed txRoot
         for (uint i = 1; i < _import.partialtransactionproof.components.length; i++) {
             VerusObjects.CComponents memory comp = _import.partialtransactionproof.components[i];
 
@@ -510,10 +605,27 @@ contract VerusProof is VerusStorage  {
                 "Component proof invalid"
             );
 
+            // Explicit branch non-empty check: mirrors the comp0 check above.
+            // proveComponents/checkBranch would also catch this, but fail early and clearly.
+            require(comp.elProof[0].proofSequence.branch.length > 0, "Empty component branch");
+
+            // Capped proof anti-spoofing for subsequent components: the last branch element
+            // must equal elHashSize (same as the check already done on component[0]).
+            // Since version >= VERSION_TXHASH_CAP is required for the whole proof, every
+            // component's branch must have been generated against the same committed tree size.
+            // An attacker cannot forge this: the last element participates in the hash chain
+            // verified by proveComponents, so a wrong value produces a wrong txRoot.
+            require(
+                _decodeCappedSize(comp.elProof[0].proofSequence.branch[comp.elProof[0].proofSequence.branch.length - 1]) == elHashSize,
+                "Capped: component size hash mismatch"
+            );
+
             uint8 elType = comp.elType;
             uint8 elIdx  = comp.elIdx;
 
-            // Bounds check per element type
+            // Bounds check per element type (elIdx must be < the relevant count from the header).
+            // These counts come from the cryptographically-proven header bytes, so after
+            // proveComponents verifies the header hash these bounds are themselves proven.
             if (elType == TX_PREVOUTSEQ || elType == TX_SIGNATURE_TYPE) {
                 require(elIdx < nVins,          "vin idx out of bounds");
             } else if (elType == TYPE_TX_OUTPUT) {
@@ -522,7 +634,9 @@ contract VerusProof is VerusStorage  {
                 require(elIdx < nShieldedSpends, "shielded spend idx OOB");
             }
 
-            // nIndex must match the expected MMR leaf position for this element
+            // nIndex must match the expected MMR leaf position for this (elType, elIdx).
+            // Combined with proveComponents this is the cryptographic position guarantee:
+            // if nIndex is wrong the Merkle path diverges and txRoot won't match.
             uint32 expected = _mmrPosition(elType, elIdx, nVins, nVouts, nShieldedSpends);
             require(
                 comp.elProof[0].proofSequence.nIndex == expected,
@@ -558,46 +672,46 @@ contract VerusProof is VerusStorage  {
         return txRoot;
     }
     
-    function proveImports(bytes calldata dataIn ) external view returns(uint128, uint176){
+    function proveImports(bytes calldata dataIn ) external view returns(uint128, uint176, uint176, uint176){
         
         // txCounts packs: bits 0-31 elHashSize, 32-63 nVins, 64-95 nVouts, 96-127 nShieldedSpends
-        (VerusObjects.CReserveTransferImport memory _import, bytes32 hashOfTransfers, uint128 txCounts) =
-            abi.decode(dataIn, (VerusObjects.CReserveTransferImport, bytes32, uint128));
+        // Use a scoped block so txCounts and the count unpacking go out of scope before
+        // exporter2/exporter3 are declared, preventing stack-too-deep.
+        VerusObjects.CReserveTransferImport memory _import;
+        bytes32 hashOfTransfers;
+        {
+            uint128 txCounts;
+            (_import, hashOfTransfers, txCounts) = abi.decode(dataIn, (VerusObjects.CReserveTransferImport, bytes32, uint128));
 
-        uint32 elHashSize     = uint32(txCounts);
-        uint32 nVins          = uint32(txCounts >> 32);
-        uint32 nVouts         = uint32(txCounts >> 64);
-        uint32 nShieldedSpends = uint32(txCounts >> 96);
+            _validateHeaderProof(
+                _import,
+                uint32(txCounts),
+                uint32(txCounts >> 32),
+                uint32(txCounts >> 64),
+                uint32(txCounts >> 96)
+            );
+        }
 
-        // Validate MMR proof structure and anti-spoofing before processing export data
-        _validateHeaderProof(_import, elHashSize, nVins, nVouts, nShieldedSpends);
-
-        bytes32 confirmedStateRoot;
-        bytes32 retStateRoot;
-        uint176 exporter;
         uint128 heightsAndTXNum;
+        uint176 exporter;
+        uint176 exporter2;
+        uint176 exporter3;
 
-        (heightsAndTXNum, exporter) = checkExportAndTransfers(_import, hashOfTransfers);
-        
-        bytes32 txRoot = proveComponents(_import);
+        (heightsAndTXNum, exporter, exporter2, exporter3) = checkExportAndTransfers(_import, hashOfTransfers);
 
-        if(txRoot == bytes32(0))
-        { 
-            revert("Components do not validate"); 
+        {
+            bytes32 txRoot = proveComponents(_import);
+            if(txRoot == bytes32(0)) revert("Components do not validate");
+
+            require(_import.partialtransactionproof.txproof.length == NUM_TX_PROOFS);
+
+            bytes32 retStateRoot = checkProof(txRoot, _import.partialtransactionproof.txproof);
+            if (retStateRoot == bytes32(0) || retStateRoot != getLastConfirmedVRSCStateRoot()) {
+                revert("Stateroot does not match");
+            }
         }
-        
-        require(_import.partialtransactionproof.txproof.length == NUM_TX_PROOFS);
 
-        retStateRoot = checkProof(txRoot, _import.partialtransactionproof.txproof);
-        confirmedStateRoot = getLastConfirmedVRSCStateRoot();
-
-        if (retStateRoot == bytes32(0) || retStateRoot != confirmedStateRoot) {
-
-            revert("Stateroot does not match");
-        }
-        //truncate to only return heights as, contract will revert if issue with proofs.
-        return (heightsAndTXNum, exporter);
- 
+        return (heightsAndTXNum, exporter, exporter2, exporter3);
     }
 
     function getLastConfirmedVRSCStateRoot() public view returns (bytes32) {
@@ -699,6 +813,12 @@ contract VerusProof is VerusStorage  {
 
         return temp;
     }
+
+    function serializeUint16(uint16 number) private pure returns(uint16){
+        // swap bytes
+        number = (number >> 8) | (number << 8);
+        return number;
+    }    
 
     function serializeUint32(uint32 number) private pure returns(uint32){
         // swap bytes

@@ -46,7 +46,7 @@ contract VerusNotarizer is VerusStorage {
     function setLatestData(bytes calldata serializedNotarization, bytes32 txid, uint32 n, bytes calldata data
         ) external {
 
-        if (claimableFees[VerusConstants.VDXF_CONTROLS_CONTROL_KEY] & VerusConstants.HALT_NOTARIZATIONS != 0) revert("Bridge halted");
+        if (claimableFees[VerusConstants.VDXF_DISABLE_CONTRACT_KEY] & VerusConstants.HALT_NOTARIZATIONS != 0) revert("Bridge halted");
 
         require(!knownNotarizationTxids[txid], "known TXID");
         knownNotarizationTxids[txid] = true;

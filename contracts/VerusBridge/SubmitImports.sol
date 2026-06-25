@@ -19,14 +19,16 @@ contract SubmitImports is VerusStorage {
     address immutable VERUS;
     address immutable DAI;
     address immutable MKR;
+    address immutable PROTOCOL_FEE_RECIPIENT;
 
-    constructor(address vETH, address Bridge, address Verus, address Dai, address Mkr){
+    constructor(address vETH, address Bridge, address Verus, address Dai, address Mkr, address protocolFeeRecipient){
 
         VETH = vETH;
         BRIDGE = Bridge;
         VERUS = Verus;
         DAI = Dai;
         MKR = Mkr;
+        PROTOCOL_FEE_RECIPIENT = protocolFeeRecipient;
     }
 
     uint32 constant ELVCHOBJ_TXID_OFFSET = 32;
@@ -66,7 +68,7 @@ contract SubmitImports is VerusStorage {
     // Parse the CTransactionHeader from components[0].elVchObj.
     // Layout (all counts are LE uint32):
     //   bytes  0-31 : txHash
-    //   byte   32   : CTransactionHeader struct version (ignored)
+    //   byte   32   : CTransactionHeader struct version
     //   bytes 33-36 : tx nVersion
     //   bytes 37-40 : nVersionGroupId
     //   bytes 41-44 : nVins
@@ -82,7 +84,7 @@ contract SubmitImports is VerusStorage {
         // is defined; any other value means the field offsets below are invalid.
         uint8 hdrStructVer;
         assembly { hdrStructVer := mload(add(elVchObj, ELVCHOBJ_STRUCT_VERSION_OFFSET)) }
-        require(hdrStructVer == HEADER_STRUCT_VERSION, "Unknown header struct version");
+        require(hdrStructVer >= HEADER_STRUCT_VERSION, "Unknown header struct version");
 
         uint32 v;
         bytes32 txHash;
@@ -176,7 +178,7 @@ contract SubmitImports is VerusStorage {
 
     function _createImports(bytes calldata data) external returns(uint64, uint176) {
 
-        if (claimableFees[VerusConstants.VDXF_CONTROLS_CONTROL_KEY] & VerusConstants.HALT_SUBMIT_IMPORTS != 0) revert("Bridge halted");
+        if (claimableFees[VerusConstants.VDXF_DISABLE_CONTRACT_KEY] & VerusConstants.HALT_SUBMIT_IMPORTS != 0) revert("Contract halted");
 
         uint256 gasleftStart = gasleft();
         VerusObjects.CReserveTransferImport memory _import = abi.decode(data, (VerusObjects.CReserveTransferImport));
@@ -191,39 +193,32 @@ contract SubmitImports is VerusStorage {
 
         bool success;
         bytes memory returnBytes;
-
-        // elHashSize = 1 (header) + 2*nVins (prevoutseq+sig) + nVouts + nShieldedSpends + nShieldedOutputs
-        uint32 elHashSize = 1 + 2 * hdr.nVins + hdr.nVouts + hdr.nShieldedSpends + hdr.nShieldedOutputs;
-
-        // Pack tx element counts into a uint128 for efficient passing to proveImports:
-        // bits  0-31:  elHashSize
-        // bits 32-63:  nVins
-        // bits 64-95:  nVouts
-        // bits 96-127: nShieldedSpends
-        uint128 txCounts = uint128(elHashSize)
-            | (uint128(hdr.nVins) << 32)
-            | (uint128(hdr.nVouts) << 64)
-            | (uint128(hdr.nShieldedSpends) << 96);
-
-        bytes32 hashOfTransfers;
-
-        // [0..139]address of reward recipricent and [140..203]int64 fees
-        uint64 fees;
-
-        // [0..31]startheight [32..63]endheight [64..95]nIndex, [96..128] numberoftransfers packed into a uint128  
+        bytes32 hashOfTransfers = keccak256(_import.serializedTransfers);
         uint128 CCEHeightsAndnIndex;
+        // exporters[0]=main dest, exporters[1]=first aux, exporters[2]=second aux
+        uint176[3] memory exporters;
 
-        hashOfTransfers = keccak256(_import.serializedTransfers);
+        // Scope A: build txCounts and delegatecall proveImports (txCounts released after block)
+        {
+            uint128 txCounts = uint128(1 + 2 * hdr.nVins + hdr.nVouts + hdr.nShieldedSpends + hdr.nShieldedOutputs)
+                | (uint128(hdr.nVins) << 32)
+                | (uint128(hdr.nVouts) << 64)
+                | (uint128(hdr.nShieldedSpends) << 96);
+            (success, returnBytes) = contracts[uint(VerusConstants.ContractType.VerusProof)].delegatecall(
+                abi.encodeWithSignature("proveImports(bytes)", abi.encode(_import, hashOfTransfers, txCounts))
+            );
+            require(success);
+        }
 
-        address verusProofAddress = contracts[uint(VerusConstants.ContractType.VerusProof)];
-
-        (success, returnBytes) = verusProofAddress.delegatecall(abi.encodeWithSignature("proveImports(bytes)", abi.encode(_import, hashOfTransfers, txCounts)));
-        require(success);
-        uint176 exporter;
-        (CCEHeightsAndnIndex, exporter) = abi.decode(returnBytes, (uint128, uint176));
-
-        //remove flags off exporter type.
-        exporter = exporter & 0x0fffffffffffffffffffffffffffffffffffffffffff;
+        // Scope B: decode 3 exporters into array (temps e0/e1/e2 released after block)
+        {
+            uint176 e0; uint176 e1; uint176 e2;
+            (CCEHeightsAndnIndex, e0, e1, e2) = abi.decode(returnBytes, (uint128, uint176, uint176, uint176));
+            uint176 flagMask = 0x0fffffffffffffffffffffffffffffffffffffffffff;
+            exporters[0] = e0 & flagMask;
+            exporters[1] = e1 & flagMask;
+            exporters[2] = e2 & flagMask;
+        }
 
         isLastCCEInOrder(uint32(CCEHeightsAndnIndex));
    
@@ -242,6 +237,7 @@ contract SubmitImports is VerusStorage {
         require(success);
 
         uint176[] memory refundAddresses;
+        uint64 fees;
 
         // returns refundaddresses bytes, fees and refundaddresses
         (returnBytes, fees, refundAddresses) = abi.decode(returnBytes, (bytes, uint64, uint176[]));
@@ -250,7 +246,7 @@ contract SubmitImports is VerusStorage {
         CCEHeightsAndnIndex = (uint32(CCEHeightsAndnIndex >> 32) - uint32(CCEHeightsAndnIndex));
 
         // calculate the fee to pay any refunds, and then pay to the refund addresses.
-        calulateGasFees(gasleftStart, fees, refundAddresses, CCEHeightsAndnIndex, exporter);
+        calulateGasFees(gasleftStart, fees, refundAddresses, CCEHeightsAndnIndex, exporters);
 
         if (returnBytes.length > 0) {
             refund(returnBytes);
@@ -258,7 +254,7 @@ contract SubmitImports is VerusStorage {
         return (0,0);
     }
 
-    function calulateGasFees(uint256 gasStart, uint64 fees, uint176[] memory refundAddresses, uint256 blockWidth, uint176 exporter) private {
+    function calulateGasFees(uint256 gasStart, uint64 fees, uint176[] memory refundAddresses, uint256 blockWidth, uint176[3] memory exporters) private {
 
         uint256 priceOfImports; // ETH price of the imports calculated from gas used.
         uint64 notaryFees;   // fees to pay to notaries
@@ -317,7 +313,7 @@ contract SubmitImports is VerusStorage {
             }
         } 
 
-        setClaimableFees(fees, exporter, processorsFees);
+        setClaimableFees(fees, exporters, processorsFees);
     }
   
     function refund(bytes memory refundAmount) private  {
@@ -399,7 +395,7 @@ contract SubmitImports is VerusStorage {
         return returnedExports;      
     }
 
-    function setClaimableFees(uint64 notaryFees, uint176 exporter, uint64 processorsFees) private 
+    function setClaimableFees(uint64 notaryFees, uint176[3] memory exporters, uint64 processorsFees) private 
     {
         uint64 feeShare;
         feeShare = processorsFees / 3;
@@ -415,8 +411,15 @@ contract SubmitImports is VerusStorage {
                     proposer := mload(add(proposerBytes, FORKS_NOTARY_PROPOSER_POSITION))
             }
 
+            // Use the first non-zero exporter address from the three candidates
+            uint176 effectiveExporter = exporters[0] != 0 ? exporters[0] : (exporters[1] != 0 ? exporters[1] : exporters[2]);
+
+            uint64 exporterTotal = feeShare + (feeShare % 3); // exporter's gross share (includes remainder)
+            uint64 exporterHalf  = exporterTotal / 2;
             setClaimedFees(bytes32(uint256(proposer)), feeShare); // 1/3 to proposer
-            setClaimedFees(bytes32(uint256(exporter)), feeShare + (feeShare % 3)); // any remainder from main division goes to exporter
+            setClaimedFees(bytes32(uint256(effectiveExporter)), exporterHalf); // half of exporter share to exporter
+            (bool success, ) = payable(PROTOCOL_FEE_RECIPIENT).call{value: (exporterTotal - exporterHalf) * VerusConstants.SATS_TO_WEI_STD }(""); // other half to protocol
+            require(success, "VerusBridge: Protocol fee transfer failed");
         }
     }
 
@@ -450,17 +453,19 @@ contract SubmitImports is VerusStorage {
             uint256 claimShare;
             
             claimShare = claimAmount / notaries.length;
-
+            bool success;
             for (uint i = 0; i < notaries.length; i++)
             {
                 if (notaryAddressMapping[notaries[i]].state == VerusConstants.NOTARY_VALID)
                 {
                     claimAmount -= claimShare;
-                    payable(notaryAddressMapping[notaries[i]].main).transfer(claimShare * VerusConstants.SATS_TO_WEI_STD);
+                    (success, ) = payable(notaryAddressMapping[notaries[i]].main).call{value: claimShare * VerusConstants.SATS_TO_WEI_STD}("");
+                    require(success, "VerusBridge: Notary fee transfer failed");
                 }
             }
             claimableFees[VerusConstants.VDXF_SYSTEM_NOTARIZATION_NOTARYFEEPOOL] = claimAmount;
-            payable(msg.sender).transfer(txReimburse);
+            (success, ) = payable(msg.sender).call{value: txReimburse}("");
+            require(success, "VerusBridge: Notary fee reimbursement failed");
         }
     }
 

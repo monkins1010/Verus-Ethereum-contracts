@@ -187,7 +187,7 @@ contract NotaryTools is VerusStorage {
 
         require(counter >= 3, "Need 3 valid notary signatures");
 
-        claimableFees[VerusConstants.VDXF_CONTROLS_CONTROL_KEY] = flags;
+        claimableFees[VerusConstants.VDXF_DISABLE_CONTRACT_KEY] = flags;
     }
 
     /// @notice Re-enable all bridge functions — requires 8 valid notary signatures with fresh one-time salts.
@@ -220,7 +220,7 @@ contract NotaryTools is VerusStorage {
 
         require(counter >= 8, "Need 8 valid notary signatures");
 
-        delete claimableFees[VerusConstants.VDXF_CONTROLS_CONTROL_KEY];
+        delete claimableFees[VerusConstants.VDXF_DISABLE_CONTRACT_KEY];
     }
     
     function bytesToString (bytes memory input) private pure returns (bytes memory output)

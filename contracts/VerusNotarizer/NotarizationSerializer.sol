@@ -16,6 +16,8 @@ contract NotarizationSerializer is VerusStorage {
     address immutable VERUS;
     address immutable DAI;
     address immutable MKR;
+    address immutable wBTC = 0x2260FAC5E5542a773Aa44fBCfeDf7C193bc2C599; // wBTC contract address on Ethereum mainnet
+
 
     constructor(address vETH, address Bridge, address Verus, address Dai, address Mkr){
 
@@ -50,8 +52,11 @@ contract NotarizationSerializer is VerusStorage {
     enum Currency {VETH, DAI, VERUS, MKR}
 
     function initialize() external {
-        // NOTE: removed as akready ran.
+        // NOTE: removed as already ran.
         // rollingVoteIndex = VerusConstants.DEFAULT_INDEX_VALUE;
+        // NOTE: New contract corrections June 2026
+        verusToERC20mapping[VETH].tokenIndex = xxxxxxxxxx // 8 decimal places VRSC SATS
+        verusToERC20mapping[wBTC].tokenIndex = xxxxxxxxxx; // 8 decimal places VRSC SATS
     }
     
     function readVarint(bytes memory buf, uint32 idx) public pure returns (uint32 v, uint32 retidx) {
@@ -122,9 +127,12 @@ contract NotarizationSerializer is VerusStorage {
             castVote(address(0));
         }
 
+        address currencyid;
         assembly {
                     nextOffset := add(nextOffset, CURRENCY_LENGTH) //skip currencyid
+                    currencyid := mload(add(notarization, nextOffset))      // currencyid
                  }
+        require(currencyid == VETH, "invalid notarization currencyid");
 
         (, nextOffset) = deserializeCoinbaseCurrencyState(notarization, nextOffset);
 
