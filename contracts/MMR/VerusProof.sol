@@ -58,6 +58,7 @@ contract VerusProof is VerusStorage  {
     uint8 constant AUX_DEST_ETH_VEC_LENGTH = 22;
     uint8 constant TX_HEADER = 1;
     uint8 constant NUM_TX_PROOFS = 3;
+    uint32 constant MAX_SCRIPT_SIZE = 10000;
     // Minimum byte length of a CCE blob (from dOff) required by _readCCEFields:
     // nVersion(2)+flags(2)+sourceSystemID(20)+hashRT(32)+destSys(20)+destCur(20)
     // +exporterType(1)+exporterLen(1)+firstInput(4)+numInputs(4)+2×VARINT(2) = 108
@@ -168,8 +169,8 @@ contract VerusProof is VerusStorage  {
             } else {
                 return (0, false); // 4- or 8-byte compact-size: script too large
             }
-            // Mirrors IsPayToCryptoCondition: 0 < scriptLen ≤ MAX_SCRIPT_SIZE (10000).
-            if (scriptLen == 0 || scriptLen > 10000) return (0, false);
+            // Mirrors IsPayToCryptoCondition: 0 < scriptLen ≤ MAX_SCRIPT_SIZE.
+            if (scriptLen == 0 || scriptLen > MAX_SCRIPT_SIZE) return (0, false);
             // Full script must fit within firstObj.
             if (firstObj.length < nextOffset + scriptLen - 1) return (0, false);
         }
@@ -336,9 +337,9 @@ contract VerusProof is VerusStorage  {
             uint8 exporterType;
             assembly { exporterType := mload(add(firstObj, nextOffset)) }
             nextOffset += 1;
-            uint8 exporterLen;
-            assembly { exporterLen := mload(add(firstObj, nextOffset)) }
-            (nextOffset, cce.exporter, cce.exporter2, cce.exporter3) = _collectExporter(firstObj, nextOffset, exporterType, exporterLen);
+            VerusObjectsCommon.UintReader memory exporterLenReader = readCompactSizeLE(firstObj, nextOffset);
+            require(exporterLenReader.value <= type(uint16).max, "Exporter length too large");
+            (nextOffset, cce.exporter, cce.exporter2, cce.exporter3) = _collectExporter(firstObj, uint32(exporterLenReader.offset), exporterType, uint16(exporterLenReader.value));
         }
 
         // firstInput (int32 LE, 4 bytes) is skipped; numInputs (int32 LE, 4 bytes) is read.
@@ -440,7 +441,7 @@ contract VerusProof is VerusStorage  {
         bytes memory firstObj,
         uint32 nextOffset,
         uint8 exporterType,
-        uint8 exporterLen
+        uint16 exporterLen
     ) private pure returns (uint32, uint176, uint176, uint176) {
         uint176 addr1;
         uint176 addr2;

@@ -46,7 +46,7 @@ library VerusConstants {
     uint176 constant VDXFID_VETH_BURN_ADDRESS = 0x0214B26820ee0C9b1276Aac834Cf457026a575dfCe84;
     // Protocol fee recipient: half of the exporter's fee share is redirected here.
     // TODO: Placeholder address — replace with the real recipient before mainnet deployment.
-    address constant PROTOCOL_FEE_RECIPIENT = 0x;
+    address constant PROTOCOL_FEE_RECIPIENT = address(0);
     uint256 constant DAI_BURNBACK_THRESHOLD = 1000000000000000000000; //1000 DAI 18 decimals
     uint256 constant DAI_BURNBACK_TRANSACTION_GAS_AMOUNT = 594722;
     uint256 constant DAI_BURNBACK_MAX_FEE_THRESHOLD = 40000000000;   //400 DAI in verus 8 decimals

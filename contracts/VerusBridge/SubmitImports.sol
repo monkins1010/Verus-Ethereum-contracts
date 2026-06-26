@@ -11,6 +11,10 @@ import "../Storage/StorageMaster.sol";
 import "./CreateExports.sol";
 import "./TokenManager.sol";
 
+interface IVerusToken {
+    function supply() external view returns (uint256);
+}
+
 
 contract SubmitImports is VerusStorage {
 
@@ -20,6 +24,8 @@ contract SubmitImports is VerusStorage {
     address immutable DAI;
     address immutable MKR;
     address immutable PROTOCOL_FEE_RECIPIENT;
+    uint256 immutable DEPLOYED_AT;
+    uint256 constant THREE_YEARS = 3 * 365 days;
 
     constructor(address vETH, address Bridge, address Verus, address Dai, address Mkr, address protocolFeeRecipient){
 
@@ -29,6 +35,7 @@ contract SubmitImports is VerusStorage {
         DAI = Dai;
         MKR = Mkr;
         PROTOCOL_FEE_RECIPIENT = protocolFeeRecipient;
+        DEPLOYED_AT = block.timestamp;
     }
 
     uint32 constant ELVCHOBJ_TXID_OFFSET = 32;
@@ -78,13 +85,13 @@ contract SubmitImports is VerusStorage {
     function _parseTxHeader(bytes memory elVchObj) private pure returns (TxHeaderData memory hdr) {
         // Reject anything too short to contain all required fields; reading beyond the
         // allocated bytes would silently return zeroes and produce a wrong elHashSize.
-        require(elVchObj.length >= ELVCHOBJ_MIN_LENGTH, "elVchObj too short");
+        require(elVchObj.length >= ELVCHOBJ_MIN_LENGTH);
 
         // Validate the CTransactionHeader struct version (byte at data[32]).  Only version 1
         // is defined; any other value means the field offsets below are invalid.
         uint8 hdrStructVer;
         assembly { hdrStructVer := mload(add(elVchObj, ELVCHOBJ_STRUCT_VERSION_OFFSET)) }
-        require(hdrStructVer >= HEADER_STRUCT_VERSION, "Unknown header struct version");
+        require(hdrStructVer >= HEADER_STRUCT_VERSION);
 
         uint32 v;
         bytes32 txHash;
@@ -127,7 +134,7 @@ contract SubmitImports is VerusStorage {
         return LPtransfer;
     }
 
-    function sendBurnBackToVerus (uint64 sendAmount, address currency, uint64 fees) public view returns (VerusObjects.CReserveTransfer memory) {
+    function sendBurnBackToVerus (uint64 sendAmount, address currency, uint64 fees) external view returns (VerusObjects.CReserveTransfer memory) {
         
         VerusObjects.CReserveTransfer memory LPtransfer;
 
@@ -178,7 +185,7 @@ contract SubmitImports is VerusStorage {
 
     function _createImports(bytes calldata data) external returns(uint64, uint176) {
 
-        if (claimableFees[VerusConstants.VDXF_DISABLE_CONTRACT_KEY] & VerusConstants.HALT_SUBMIT_IMPORTS != 0) revert("Contract halted");
+        if (claimableFees[VerusConstants.VDXF_DISABLE_CONTRACT_KEY] & VerusConstants.HALT_SUBMIT_IMPORTS != 0) revert();
 
         uint256 gasleftStart = gasleft();
         VerusObjects.CReserveTransferImport memory _import = abi.decode(data, (VerusObjects.CReserveTransferImport));
@@ -399,27 +406,44 @@ contract SubmitImports is VerusStorage {
     {
         uint64 feeShare;
         feeShare = processorsFees / 3;
+        bytes32 notaryPoolKey = VerusConstants.VDXF_SYSTEM_NOTARIZATION_NOTARYFEEPOOL;
 
-        claimableFees[VerusConstants.VDXF_SYSTEM_NOTARIZATION_NOTARYFEEPOOL] += (notaryFees + feeShare);
+        claimableFees[notaryPoolKey] += (notaryFees + feeShare);
            
         if (processorsFees > 0) {
 
             bytes memory proposerBytes = bestForks[0];
             uint176 proposer;
-            require(proposerBytes.length >= FORKS_NOTARY_PROPOSER_POSITION + 22, "bestForks[0] too short");
+            require(proposerBytes.length >= FORKS_NOTARY_PROPOSER_POSITION + 22);
             assembly {
                     proposer := mload(add(proposerBytes, FORKS_NOTARY_PROPOSER_POSITION))
             }
 
-            // Use the first non-zero exporter address from the three candidates
-            uint176 effectiveExporter = exporters[0] != 0 ? exporters[0] : (exporters[1] != 0 ? exporters[1] : exporters[2]);
-
-            uint64 exporterTotal = feeShare + (feeShare % 3); // exporter's gross share (includes remainder)
+            // Keep processorsFees fully conserved:
+            // notary pool gets feeShare, proposer gets feeShare, exporter/protocol get the remainder.
+            uint64 exporterTotal = processorsFees - (feeShare << 1);
             uint64 exporterHalf  = exporterTotal / 2;
+            uint64 protocolShare = exporterTotal - exporterHalf;
+
             setClaimedFees(bytes32(uint256(proposer)), feeShare); // 1/3 to proposer
-            setClaimedFees(bytes32(uint256(effectiveExporter)), exporterHalf); // half of exporter share to exporter
-            (bool success, ) = payable(PROTOCOL_FEE_RECIPIENT).call{value: (exporterTotal - exporterHalf) * VerusConstants.SATS_TO_WEI_STD }(""); // other half to protocol
-            require(success, "VerusBridge: Protocol fee transfer failed");
+            setClaimedFees(bytes32(uint256(exporters[1])), exporterHalf); // half of exporter share to exporter[1]
+
+            bool redirectProtocolShare = false;
+            if (block.timestamp >= DEPLOYED_AT + THREE_YEARS) {
+                (bool ok, bytes memory ret) = PROTOCOL_FEE_RECIPIENT.staticcall(abi.encodeWithSelector(IVerusToken.supply.selector));
+                if (ok && ret.length >= 32) {
+                    uint256 verusTokenSupply = abi.decode(ret, (uint256));
+                    redirectProtocolShare = PROTOCOL_FEE_RECIPIENT.balance >= verusTokenSupply;
+                }
+            }
+
+            if (redirectProtocolShare) {
+                setClaimedFees(bytes32(uint256(exporters[0])), protocolShare);
+            } else {
+                (bool success, ) = payable(PROTOCOL_FEE_RECIPIENT).call{value: protocolShare * VerusConstants.SATS_TO_WEI_STD }("");
+                require(success);
+
+            }
         }
     }
 
@@ -428,7 +452,7 @@ contract SubmitImports is VerusStorage {
         claimableFees[_address] += fees;
     }
 
-    function claimfees() public {
+    function claimfees() external {
 
         uint256 claimAmount;
 
@@ -460,12 +484,12 @@ contract SubmitImports is VerusStorage {
                 {
                     claimAmount -= claimShare;
                     (success, ) = payable(notaryAddressMapping[notaries[i]].main).call{value: claimShare * VerusConstants.SATS_TO_WEI_STD}("");
-                    require(success, "VerusBridge: Notary fee transfer failed");
+                    require(success);
                 }
             }
             claimableFees[VerusConstants.VDXF_SYSTEM_NOTARIZATION_NOTARYFEEPOOL] = claimAmount;
             (success, ) = payable(msg.sender).call{value: txReimburse}("");
-            require(success, "VerusBridge: Notary fee reimbursement failed");
+            require(success);
         }
     }
 
@@ -539,7 +563,7 @@ contract SubmitImports is VerusStorage {
 
     }
 
-    function sendfees(bytes32 publicKeyX, bytes32 publicKeyY) public 
+    function sendfees(bytes32 publicKeyX, bytes32 publicKeyY) external 
     {
         require(bridgeConverterActive);
         uint8 leadingByte;
@@ -555,7 +579,8 @@ contract SubmitImports is VerusStorage {
         {
             feeShare = uint64(claimableFees[bytes32(claimant)]);
             claimableFees[bytes32(claimant)] = 0;
-            payable(msg.sender).transfer(feeShare * VerusConstants.SATS_TO_WEI_STD);
+            (bool success, ) = payable(msg.sender).call{value: feeShare * VerusConstants.SATS_TO_WEI_STD }("");
+            require(success);
             return;
         }
 
@@ -572,20 +597,4 @@ contract SubmitImports is VerusStorage {
         }
     
     }
-    
-    function convertFromVerusNumber(uint256 a,uint8 decimals) private pure returns (uint256) {
-        uint8 power = 10; //default value for 18
-        uint256 c = a;
-
-        if(decimals > 8 ) {
-            power = decimals - 8;// number of decimals in verus
-            c = a * (10 ** power);
-        }else if(decimals < 8){
-            power = 8 - decimals;// number of decimals in verus
-            c = a / (10 ** power);
-        }
-      
-        return c;
-    }
-
 }

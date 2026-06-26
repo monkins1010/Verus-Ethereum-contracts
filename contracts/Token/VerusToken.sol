@@ -28,11 +28,8 @@ import "@openzeppelin/contracts/utils/math/Math.sol";
  * There is no owner; the contract is fully autonomous after deployment.
  */
 contract VerusToken is ERC20, ReentrancyGuard {
-    /// @notice Total tokens minted at deployment – never changes.
-    uint256 public immutable originalSupply;
-
-    /// @notice Total ETH (wei) that represents complete 1-to-1 restitution.
-    uint256 public immutable targetEth;
+    /// @notice Total tokens minted at deployment.
+    uint256 public supply;
 
     event TokensRedeemed(address indexed redeemer, uint256 tokenAmount, uint256 ethAmount);
     event EthDonated(address indexed donor, uint256 amount);
@@ -40,16 +37,12 @@ contract VerusToken is ERC20, ReentrancyGuard {
     /**
      * @param initialSupply Tokens to mint, expressed in base units (include decimals).
      *                      Example: 1 000 000 tokens with 18 dp = 1_000_000 * 1e18.
-     * @param targetEthAmount Total ETH in wei for full restitution.
-     *                        Example: 3 ETH = 3e18.
      */
-    constructor(uint256 initialSupply, uint256 targetEthAmount)
+    constructor(uint256 initialSupply)
         ERC20("Verus Restitution Token", "VRT")
     {
         require(initialSupply > 0, "VerusToken: supply must be > 0");
-        require(targetEthAmount > 0, "VerusToken: target ETH must be > 0");
-        originalSupply = initialSupply;
-        targetEth = targetEthAmount;
+        supply = initialSupply;
         _mint(msg.sender, initialSupply);
     }
 
@@ -110,28 +103,6 @@ contract VerusToken is ERC20, ReentrancyGuard {
     }
 
     // -------------------------------------------------------------------------
-    // View helpers
-    // -------------------------------------------------------------------------
-
-    /**
-     * @notice Preview how much ETH `tokenAmount` would currently return.
-     * @param tokenAmount Token base units.
-     * @return ethAmount ETH in wei that would be sent.
-     */
-    function calculateRedemption(uint256 tokenAmount) external view returns (uint256 ethAmount) {
-        ethAmount = Math.mulDiv(tokenAmount, address(this).balance, originalSupply);
-    }
-
-    /**
-     * @notice Returns the current ETH balance and the target ETH for full restitution.
-     * @return current Contract ETH balance in wei.
-     * @return target  Target ETH in wei (set at construction).
-     */
-    function fundingProgress() external view returns (uint256 current, uint256 target) {
-        return (address(this).balance, targetEth);
-    }
-
-    // -------------------------------------------------------------------------
     // Internal
     // -------------------------------------------------------------------------
 
@@ -154,7 +125,8 @@ contract VerusToken is ERC20, ReentrancyGuard {
         require(ethBalance > 0, "VerusToken: no ETH in contract yet");
 
         // Use mulDiv for overflow safety (OZ Math, rounds down).
-        uint256 ethToSend = Math.mulDiv(tokenAmount, ethBalance, originalSupply);
+        uint256 ethToSend = Math.mulDiv(tokenAmount, ethBalance, supply);
+        supply -= tokenAmount;  // reduce supply to reflect burnt tokens
 
         // Guard against dust: if the token amount is so small that the integer
         // division rounds to zero, revert rather than burning tokens for nothing.
