@@ -6,7 +6,7 @@ import "@openzeppelin/contracts/security/ReentrancyGuard.sol";
 import "@openzeppelin/contracts/utils/math/Math.sol";
 
 /**
- * @title VerusToken – Restitution ERC-20
+ * @title VerusUsageToken – ERC-20
  *
  * Mechanics
  * ---------
@@ -27,7 +27,7 @@ import "@openzeppelin/contracts/utils/math/Math.sol";
  *
  * There is no owner; the contract is fully autonomous after deployment.
  */
-contract VerusToken is ERC20, ReentrancyGuard {
+contract VerusUsageToken is ERC20, ReentrancyGuard {
     /// @notice Total tokens minted at deployment.
     uint256 public supply;
 
@@ -39,9 +39,9 @@ contract VerusToken is ERC20, ReentrancyGuard {
      *                      Example: 1 000 000 tokens with 18 dp = 1_000_000 * 1e18.
      */
     constructor(uint256 initialSupply)
-        ERC20("Verus Restitution Token", "VRT")
+        ERC20("Verus Usage Token", "VUT")
     {
-        require(initialSupply > 0, "VerusToken: supply must be > 0");
+        require(initialSupply > 0, "VerusUsageToken: supply must be > 0");
         supply = initialSupply;
         _mint(msg.sender, initialSupply);
     }
@@ -73,23 +73,6 @@ contract VerusToken is ERC20, ReentrancyGuard {
         return super.transfer(to, amount);
     }
 
-    /**
-     * @dev Overrides ERC-20 `transferFrom` for the same auto-redemption path.
-     */
-    function transferFrom(address from, address to, uint256 amount)
-        public
-        override
-        nonReentrant
-        returns (bool)
-    {
-        if (to == address(this)) {
-            _spendAllowance(from, msg.sender, amount);
-            _redeem(from, amount);
-            return true;
-        }
-        return super.transferFrom(from, to, amount);
-    }
-
     // -------------------------------------------------------------------------
     // Explicit redemption
     // -------------------------------------------------------------------------
@@ -119,10 +102,10 @@ contract VerusToken is ERC20, ReentrancyGuard {
      *      accidentally trigger the auto-redeem path before any ETH is donated).
      */
     function _redeem(address redeemer, uint256 tokenAmount) internal {
-        require(tokenAmount > 0, "VerusToken: amount must be > 0");
+        require(tokenAmount > 0, "VerusUsageToken: amount must be > 0");
 
         uint256 ethBalance = address(this).balance;
-        require(ethBalance > 0, "VerusToken: no ETH in contract yet");
+        require(ethBalance > 0, "VerusUsageToken: no ETH in contract yet");
 
         // Use mulDiv for overflow safety (OZ Math, rounds down).
         uint256 ethToSend = Math.mulDiv(tokenAmount, ethBalance, supply);
@@ -130,14 +113,14 @@ contract VerusToken is ERC20, ReentrancyGuard {
 
         // Guard against dust: if the token amount is so small that the integer
         // division rounds to zero, revert rather than burning tokens for nothing.
-        require(ethToSend > 0, "VerusToken: redemption rounds to zero");
+        require(ethToSend > 0, "VerusUsageToken: redemption rounds to zero");
 
         // Burn first (state change before external call – Checks-Effects-Interactions).
         _burn(redeemer, tokenAmount);
 
         // slither-disable-next-line arbitrary-send-eth
         (bool success, ) = payable(redeemer).call{value: ethToSend}("");
-        require(success, "VerusToken: ETH transfer failed");
+        require(success, "VerusUsageToken: ETH transfer failed");
 
         emit TokensRedeemed(redeemer, tokenAmount, ethToSend);
     }
