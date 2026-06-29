@@ -56,6 +56,7 @@ contract SubmitImports is VerusStorage {
     uint32 constant TYPE_REFUND = 1;
     uint constant TYPE_BYTE_LOCATION_IN_UINT176 = 168;
     uint8 constant TYPE_REFUND_BYTES32_LOCATION = 244;
+    bytes32 constant SUBMIT_IMPORTS_REENTRANCY_GUARD = "submitimports.reentrancy.lock";
     enum Currency {VETH, DAI, VERUS, MKR}
 
     // Parsed fields from the CTransactionHeader serialized in components[0].elVchObj.
@@ -185,6 +186,9 @@ contract SubmitImports is VerusStorage {
 
     function _createImports(bytes calldata data) external returns(uint64, uint176) {
 
+        require(storageGlobal[SUBMIT_IMPORTS_REENTRANCY_GUARD].length == 0, "Reentrancy guard");
+        storageGlobal[SUBMIT_IMPORTS_REENTRANCY_GUARD] = abi.encodePacked(uint8(1));
+
         if (claimableFees[VerusConstants.VDXF_DISABLE_CONTRACT_KEY] & VerusConstants.HALT_SUBMIT_IMPORTS != 0) revert();
 
         uint256 gasleftStart = gasleft();
@@ -258,6 +262,9 @@ contract SubmitImports is VerusStorage {
         if (returnBytes.length > 0) {
             refund(returnBytes);
         }
+
+        delete storageGlobal[SUBMIT_IMPORTS_REENTRANCY_GUARD];
+
         return (0,0);
     }
 

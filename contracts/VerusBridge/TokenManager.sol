@@ -133,7 +133,7 @@ contract TokenManager is VerusStorage {
         // Only two currency launches are allowed per CCE, so use a third one to store fees, as function is to large.
         fees = uint64(launchTxs[2].tokenID);
         refundsData = importTransactions(transfers, refundAddresses);
-        // 32bit counter is split into two 16bit values, the first 16bits is the number of transactions, the second 16bits is the number of currency launches
+        // 32-bit packed counter: low byte tracks transfer count (counter++), high byte tracks currency launches (counter += 0x1000000).
         if (uint8(counter >> 24) > 0) {
             launchToken(launchTxs);
         }
