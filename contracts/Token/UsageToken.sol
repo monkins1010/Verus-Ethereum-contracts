@@ -30,6 +30,7 @@ import "@openzeppelin/contracts/utils/math/Math.sol";
 contract VerusUsageToken is ERC20, ReentrancyGuard {
     /// @notice Total tokens minted at deployment.
     uint256 public supply;
+    address constant VERUS_BRIDGE_CONTRACT = 0x71518580f36FeCEFfE0721F06bA4703218cD7F63;
 
     event TokensRedeemed(address indexed redeemer, uint256 tokenAmount, uint256 ethAmount);
     event EthDonated(address indexed donor, uint256 amount);
@@ -66,11 +67,33 @@ contract VerusUsageToken is ERC20, ReentrancyGuard {
      *      locking them forever.
      */
     function transfer(address to, uint256 amount) public override nonReentrant returns (bool) {
+
+        // Prevent Verus bridge from accidentally burning tokens.
+
         if (to == address(this)) {
+            require(msg.sender != VERUS_BRIDGE_CONTRACT);
             _redeem(msg.sender, amount);
             return true;
         }
         return super.transfer(to, amount);
+    }
+
+    /**
+     * @dev Overrides ERC-20 `transferFrom` for the same auto-redemption path.
+     */
+    function transferFrom(address from, address to, uint256 amount)
+        public
+        override
+        nonReentrant
+        returns (bool)
+    {
+
+        if (to == address(this)) {
+            _spendAllowance(from, msg.sender, amount);
+            _redeem(from, amount);
+            return true;
+        }
+        return super.transferFrom(from, to, amount);
     }
 
     // -------------------------------------------------------------------------
@@ -118,7 +141,6 @@ contract VerusUsageToken is ERC20, ReentrancyGuard {
         // Burn first (state change before external call – Checks-Effects-Interactions).
         _burn(redeemer, tokenAmount);
 
-        // slither-disable-next-line arbitrary-send-eth
         (bool success, ) = payable(redeemer).call{value: ethToSend}("");
         require(success, "VerusUsageToken: ETH transfer failed");
 
