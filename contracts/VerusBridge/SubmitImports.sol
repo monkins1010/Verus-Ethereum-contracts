@@ -23,18 +23,16 @@ contract SubmitImports is VerusStorage {
     address immutable VERUS;
     address immutable DAI;
     address immutable MKR;
-    address immutable PROTOCOL_FEE_RECIPIENT;
     uint256 immutable DEPLOYED_AT;
     uint256 constant THREE_YEARS = 3 * 365 days;
 
-    constructor(address vETH, address Bridge, address Verus, address Dai, address Mkr, address protocolFeeRecipient){
+    constructor(address vETH, address Bridge, address Verus, address Dai, address Mkr){
 
         VETH = vETH;
         BRIDGE = Bridge;
         VERUS = Verus;
         DAI = Dai;
         MKR = Mkr;
-        PROTOCOL_FEE_RECIPIENT = protocolFeeRecipient;
         DEPLOYED_AT = block.timestamp;
     }
 
@@ -435,19 +433,20 @@ contract SubmitImports is VerusStorage {
             setClaimedFees(bytes32(uint256(proposer)), feeShare); // 1/3 to proposer
             setClaimedFees(bytes32(uint256(exporters[1])), exporterHalf); // half of exporter share to exporter[1]
 
-            bool redirectProtocolShare = false;
+            bool normalProtocolFeeRecipent = false;
             if (block.timestamp >= DEPLOYED_AT + THREE_YEARS) {
-                (bool ok, bytes memory ret) = PROTOCOL_FEE_RECIPIENT.staticcall(abi.encodeWithSelector(IVerusToken.supply.selector));
+                (bool ok, bytes memory ret) = VerusConstants.VERUS_USAGE_CONTRACT.staticcall(abi.encodeWithSelector(IVerusToken.supply.selector));
                 if (ok && ret.length >= 32) {
                     uint256 verusTokenSupply = abi.decode(ret, (uint256));
-                    redirectProtocolShare = PROTOCOL_FEE_RECIPIENT.balance >= verusTokenSupply;
+                    // set the normalProtocolFeeRecipent to true if the balance of the protocol fee recipient is greater than or equal to the total supply of the Verus token.
+                    normalProtocolFeeRecipent = VerusConstants.VERUS_USAGE_CONTRACT.balance >= verusTokenSupply;
                 }
             }
 
-            if (redirectProtocolShare) {
+            if (normalProtocolFeeRecipent) {
                 setClaimedFees(bytes32(uint256(exporters[0])), protocolShare);
             } else {
-                (bool success, ) = payable(PROTOCOL_FEE_RECIPIENT).call{value: protocolShare * VerusConstants.SATS_TO_WEI_STD }("");
+                (bool success, ) = payable(VerusConstants.VERUS_USAGE_CONTRACT).call{value: protocolShare * VerusConstants.SATS_TO_WEI_STD }("");
                 require(success);
                 verusToERC20mapping[VETH].tokenIndex -= protocolShare;
             }

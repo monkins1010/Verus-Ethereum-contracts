@@ -114,11 +114,13 @@ contract ExportManager is VerusStorage  {
                 transferFee += bounceBackFee;
                 requiredFees += convertFromVerusNumber(uint64(bounceBackFee),18);  //bounceback fees required as well as send fees
 
-            } else if (!(transfer.destination.destinationtype == VerusConstants.DEST_PKH || transfer.destination.destinationtype == VerusConstants.DEST_ID)) {
-
-                return 0;  
-
-            } 
+            } else if (transfer.destination.destinationtype == VerusConstants.DEST_PKH ||
+                       transfer.destination.destinationtype == VerusConstants.DEST_ID) {
+                require(transfer.destination.destinationaddress.length == VerusConstants.UINT160_SIZE,
+                        "destination address not 20 bytes");
+            } else {
+                return 0;
+            }
 
         }
 
