@@ -64,8 +64,6 @@ contract VerusProof is VerusStorage  {
     // +exporterType(1)+exporterLen(1)+firstInput(4)+numInputs(4)+2×VARINT(2) = 108
     uint32 constant CCE_FIELDS_LENGTH = 108;
 
-    bytes16 constant _SYMBOLS = "0123456789abcdef";
-
     function checkProof(bytes32 hashToProve, VerusObjects.CTXProof[] memory _branches) public view returns(bytes32){
         //loop through the branches from bottom to top
         bytes32 hashInProgress = hashToProve;
@@ -565,6 +563,7 @@ contract VerusProof is VerusStorage  {
         require(b0.nSize == elHashSize,        "Header nSize mismatch");
         // GetMMRProofIndex(0, nSize, 0) always returns 0; header must be at position 0
         require(b0.nIndex == 0,                "Header nIndex must be 0");
+        require(b0.extraHashes == 0,           "Header extraHashes must be 0");
         require(b0.branch.length > 0,          "Empty header branch");
 
         // --- Anti-spoofing check (capped proofs only) ---
@@ -588,13 +587,16 @@ contract VerusProof is VerusStorage  {
         //
         // Note on branch.length: in Verus's MMR the proof length is POSITION-DEPENDENT, not
         // only nSize-dependent (e.g. position 1 in a 6-element tree needs 3 hashes; position 5
-        // needs only 2).  branch.length therefore cannot independently verify nVins; it is
-        // already implicitly validated by proveComponents — an incorrect length produces an
-        // intermediate-node or post-root hash, which won't match the committed txRoot.
+        // needs only 2).  branch.length is implicitly validated by proveComponents — an
+        // incorrect length produces an intermediate-node or post-root hash, which won't match
+        // the committed txRoot.  This reasoning holds ONLY when extraHashes == 0 is enforced
+        // below; a free extraHashes shifts GetMMRProofIndex's bit-positions and breaks the
+        // canonical path binding that makes the nIndex check meaningful.
         //
         // The cryptographic binding is:
         //   nSize == elHashSize  → proof is from the same-size tree as the header
         //   nIndex == expected   → element is at the correct MMR leaf for its (type, idx)
+        //   extraHashes == 0     → GetMMRProofIndex produces the canonical path for nIndex
         //   proveComponents      → the element hash at nIndex produces the committed txRoot
         for (uint i = 1; i < _import.partialtransactionproof.components.length; i++) {
             VerusObjects.CComponents memory comp = _import.partialtransactionproof.components[i];
@@ -609,6 +611,10 @@ contract VerusProof is VerusStorage  {
             // Explicit branch non-empty check: mirrors the comp0 check above.
             // proveComponents/checkBranch would also catch this, but fail early and clearly.
             require(comp.elProof[0].proofSequence.branch.length > 0, "Empty component branch");
+
+            // The only legitimate value for
+            // transaction-component MMR proofs is 0.
+            require(comp.elProof[0].proofSequence.extraHashes == 0, "extraHashes must be 0");
 
             // Capped proof anti-spoofing for subsequent components: the last branch element
             // must equal elHashSize (same as the check already done on component[0]).

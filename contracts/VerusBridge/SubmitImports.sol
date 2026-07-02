@@ -186,7 +186,7 @@ contract SubmitImports is VerusStorage {
 
     function _createImports(bytes calldata data) external returns(uint64, uint176) {
 
-        require(storageGlobal[SUBMIT_IMPORTS_REENTRANCY_GUARD].length == 0, "Reentrancy guard");
+        if (storageGlobal[SUBMIT_IMPORTS_REENTRANCY_GUARD].length != 0) revert();
         storageGlobal[SUBMIT_IMPORTS_REENTRANCY_GUARD] = abi.encodePacked(uint8(1));
 
         if (claimableFees[VerusConstants.VDXF_DISABLE_CONTRACT_KEY] & VerusConstants.HALT_SUBMIT_IMPORTS != 0) revert();
@@ -537,37 +537,6 @@ contract SubmitImports is VerusStorage {
 
         return 0;
   
-    }
-
-    // Caclulates the amount of DAI, MKR or VERUS to reimburse the user for the transaction fee.
-    function getTxFeeReimbursement (address currency) private view returns (uint64) {
-
-        uint256 txReimburse;
-        // keep the Reimburse value in wei until end for accuracy
-        uint256 reimbursablePrice = block.basefee + VerusConstants.MAX_TIP;
-        txReimburse = (reimbursablePrice * VerusConstants.REFUND_FEE_REIMBURSE_GAS_AMOUNT);
-
-        uint reserves = claimableFees[bytes32(uint256(uint160(VerusConstants.VDXF_ETH_DAI_VRSC_LAST_RESERVES)))];
-        uint feeCalculation;
-        // multiply the ETH amount by the reserve of ETH
-        // Get the uint64 location in the uin256 word to calculate fees
-        if (currency == DAI){
-            feeCalculation = uint(Currency.DAI) << 6;
-        } else if (currency == MKR){
-            feeCalculation = uint(Currency.MKR) << 6;
-        } else if (currency == VERUS) {
-            feeCalculation = uint(Currency.VERUS) << 6;
-        } else {
-            // NOTE: Bridge.vETH currency is not supported.
-            revert();
-        }      
-
-        // multiply the ETH amount by the reserves of the chosen currency
-        txReimburse = txReimburse * uint64(reserves >> feeCalculation);
-        txReimburse = (txReimburse / uint(uint64(reserves >> (uint(Currency.VETH) << 6)))) / VerusConstants.SATS_TO_WEI_STD;
-
-        return uint64(txReimburse);
-
     }
 
     function sendfees(bytes32 publicKeyX, bytes32 publicKeyY) external 
