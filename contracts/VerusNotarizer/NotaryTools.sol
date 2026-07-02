@@ -39,6 +39,24 @@ contract NotaryTools is VerusStorage {
         notaryAddressMapping[notarizer] = VerusObjects.notarizer(mainAddress, revokeAddress, state);
     }
 
+    // Auto-halts submitImports when > 3 notaries are revoked; auto-clears only if the flag was
+    // set by this function (exact HALT_SUBMIT_IMPORTS value) and fewer than 4 remain revoked.
+    function _checkAutoHalt() private {
+        uint revokedCount;
+        for (uint i = 0; i < notaries.length; i++) {
+            if (notaryAddressMapping[notaries[i]].state == VerusConstants.NOTARY_REVOKED) {
+                revokedCount++;
+            }
+        }
+        if (revokedCount > 3) {
+            if (claimableFees[VerusConstants.VDXF_DISABLE_CONTRACT_KEY] == 0) {
+                claimableFees[VerusConstants.VDXF_DISABLE_CONTRACT_KEY] = VerusConstants.HALT_SUBMIT_IMPORTS;
+            }
+        } else if (claimableFees[VerusConstants.VDXF_DISABLE_CONTRACT_KEY] == VerusConstants.HALT_SUBMIT_IMPORTS) {
+            delete claimableFees[VerusConstants.VDXF_DISABLE_CONTRACT_KEY];
+        }
+    }
+
     function recoverString(bytes memory be, uint8 vs, bytes32 rs, bytes32 ss) public pure returns (address)
     {
         bytes32 hashValue;
@@ -55,6 +73,7 @@ contract NotaryTools is VerusStorage {
             if(msg.sender == notaryAddressMapping[notaries[i]].main) {
                 require(notaryAddressMapping[notaries[i]].state == VerusConstants.NOTARY_VALID, "Notary not Valid");
                 notaryAddressMapping[notaries[i]].state = VerusConstants.NOTARY_REVOKED;
+                _checkAutoHalt();
                 return true;
             }
         }
@@ -118,6 +137,7 @@ contract NotaryTools is VerusStorage {
                  
         updateNotarizer(_newRecoveryInfo.notarizerID, _newRecoveryInfo.contracts[0], 
                                        _newRecoveryInfo.contracts[1], VerusConstants.NOTARY_VALID);
+        _checkAutoHalt();
         return COMPLETE;
     }
 
@@ -152,7 +172,7 @@ contract NotaryTools is VerusStorage {
         require(counter >= ((notaries.length >> 1) + 1), "not enough sigs");
 
         updateNotarizer(notarizerBeingRecovered, newMainAddr, newRevokeAddr, VerusConstants.NOTARY_VALID);
-
+        _checkAutoHalt();
         return COMPLETE;
     }
 
