@@ -67,10 +67,6 @@ contract SubmitImports is VerusStorage {
         uint32 nShieldedOutputs;
     }
 
-    function initialize() external {
-        
-    }
-
     // Parse the CTransactionHeader from components[0].elVchObj.
     // Layout (all counts are LE uint32):
     //   bytes  0-31 : txHash
@@ -377,34 +373,16 @@ contract SubmitImports is VerusStorage {
         }
     }
     
-    function getReadyExportsByRange(uint _startBlock,uint _endBlock) external view returns(VerusObjects.CReserveTransferSetCalled[] memory returnedExports){
-    
-        uint outputSize;
-        uint heights = _startBlock;
-        bool loop = cceLastEndHeight > 0;
-
-        if(!loop) return returnedExports;
-
-        while(loop){
-
-            heights = _readyExports[heights].endHeight + 1;
-            if (heights > _endBlock || heights == 1) {
-                break;
-            }
-            outputSize++;
+    function getReadyExportsByRange(uint /*_startBlock*/, uint /*_endBlock*/) external returns(VerusObjects.CReserveTransferSetCalled[] memory) {
+        address target = contracts[uint(VerusConstants.ContractType.ExportManager)];
+        assembly {
+            calldatacopy(0, 0, calldatasize())
+            let result := delegatecall(gas(), target, 0, calldatasize(), 0, 0)
+            returndatacopy(0, 0, returndatasize())
+            switch result
+            case 0 { revert(0, returndatasize()) }
+            default { return(0, returndatasize()) }
         }
-
-        returnedExports = new VerusObjects.CReserveTransferSetCalled[](outputSize);
-        VerusObjects.CReserveTransferSet memory tempSet;
-        heights = _startBlock;
-
-        for (uint i = 0; i < outputSize; i++)
-        {
-            tempSet = _readyExports[heights];
-            returnedExports[i] = VerusObjects.CReserveTransferSetCalled(tempSet.exportHash, tempSet.prevExportHash, uint64(heights), tempSet.endHeight, tempSet.transfers);
-            heights = tempSet.endHeight + 1;
-        }
-        return returnedExports;      
     }
 
     function setClaimableFees(uint64 notaryFees, uint176[3] memory exporters, uint64 processorsFees) private 

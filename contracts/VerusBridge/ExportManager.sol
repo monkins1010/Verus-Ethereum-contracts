@@ -255,4 +255,32 @@ contract ExportManager is VerusStorage  {
       
         return c;
     }
+
+    function getReadyExportsByRange(uint _startBlock, uint _endBlock) external view returns(VerusObjects.CReserveTransferSetCalled[] memory returnedExports){
+
+        uint outputSize;
+        uint heights = _startBlock;
+        bool loop = cceLastEndHeight > 0;
+
+        if (!loop) return returnedExports;
+
+        while (loop) {
+            heights = _readyExports[heights].endHeight + 1;
+            if (heights > _endBlock || heights == 1) {
+                break;
+            }
+            outputSize++;
+        }
+
+        returnedExports = new VerusObjects.CReserveTransferSetCalled[](outputSize);
+        VerusObjects.CReserveTransferSet memory tempSet;
+        heights = _startBlock;
+
+        for (uint i = 0; i < outputSize; i++) {
+            tempSet = _readyExports[heights];
+            returnedExports[i] = VerusObjects.CReserveTransferSetCalled(tempSet.exportHash, tempSet.prevExportHash, uint64(heights), tempSet.endHeight, tempSet.transfers);
+            heights = tempSet.endHeight + 1;
+        }
+        return returnedExports;
+    }
 }
