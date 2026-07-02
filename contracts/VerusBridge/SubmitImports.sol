@@ -449,7 +449,7 @@ contract SubmitImports is VerusStorage {
             } else {
                 (bool success, ) = payable(PROTOCOL_FEE_RECIPIENT).call{value: protocolShare * VerusConstants.SATS_TO_WEI_STD }("");
                 require(success);
-
+                verusToERC20mapping[VETH].tokenIndex -= protocolShare;
             }
         }
     }
@@ -492,11 +492,13 @@ contract SubmitImports is VerusStorage {
                     claimAmount -= claimShare;
                     (success, ) = payable(notaryAddressMapping[notaries[i]].main).call{value: claimShare * VerusConstants.SATS_TO_WEI_STD}("");
                     require(success);
+                    verusToERC20mapping[VETH].tokenIndex -= claimShare;
                 }
             }
             claimableFees[VerusConstants.VDXF_SYSTEM_NOTARIZATION_NOTARYFEEPOOL] = claimAmount;
             (success, ) = payable(msg.sender).call{value: txReimburse}("");
             require(success);
+            verusToERC20mapping[VETH].tokenIndex -= (txReimburse / VerusConstants.SATS_TO_WEI_STD);
         }
     }
 
@@ -557,6 +559,7 @@ contract SubmitImports is VerusStorage {
             claimableFees[bytes32(claimant)] = 0;
             (bool success, ) = payable(msg.sender).call{value: feeShare * VerusConstants.SATS_TO_WEI_STD }("");
             require(success);
+            verusToERC20mapping[VETH].tokenIndex -= feeShare;
             return;
         }
 

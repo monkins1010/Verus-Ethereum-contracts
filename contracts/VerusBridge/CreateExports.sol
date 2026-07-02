@@ -148,7 +148,10 @@ contract CreateExports is VerusStorage {
             }
 
             exportERC20Tokens(tokenAmount, token, iaddressMapping.flags & VerusConstants.MAPPING_VERUS_OWNED == VerusConstants.MAPPING_VERUS_OWNED);
-        } 
+        } else {
+            // VETH - account for ETH received into the bridge
+            verusToERC20mapping[VETH].tokenIndex += transfer.currencyvalue.amount;
+        }
 
         _createExports(transfer, false);
     }
