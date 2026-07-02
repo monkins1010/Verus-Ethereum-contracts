@@ -26,6 +26,8 @@ contract VerusProof is VerusStorage  {
         VERUS = Verus;
     }
 
+    function initialize() external {}
+
     using VerusBlake2b for bytes;
     
     // these constants should be able to reference each other, as many are relative, but Solidity does not

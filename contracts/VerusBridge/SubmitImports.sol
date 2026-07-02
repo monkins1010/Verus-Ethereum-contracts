@@ -36,6 +36,8 @@ contract SubmitImports is VerusStorage {
         DEPLOYED_AT = block.timestamp;
     }
 
+    function initialize() external {}
+
     uint32 constant ELVCHOBJ_TXID_OFFSET = 32;
     uint32 constant ELVCHOBJ_NVINS_OFFSET = 45;
     // Minimum byte length of a valid CTransactionHeader elVchObj:

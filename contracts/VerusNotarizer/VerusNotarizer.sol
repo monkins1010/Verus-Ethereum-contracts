@@ -25,7 +25,9 @@ contract VerusNotarizer is VerusStorage {
         BRIDGE = Bridge;
         VERUS = Verus;
     }
-        
+
+    function initialize() external {}
+
     uint8 constant FORKS_DATA_OFFSET_FOR_HEIGHT = 224;
 
     uint32 constant FORKS_DATA_CONFIRMED_PROPOSER = 96;
