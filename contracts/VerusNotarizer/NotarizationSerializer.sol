@@ -54,10 +54,10 @@ contract NotarizationSerializer is VerusStorage {
     function initialize() external {
         // NOTE: removed as already ran.
         // rollingVoteIndex = VerusConstants.DEFAULT_INDEX_VALUE;
-        // NOTE: New contract corrections June 2026
-        // verusToERC20mapping[VETH].tokenIndex = (address(this).balance / VerusConstants.SATS_TO_WEI_STD) + xxxxx;  // 8 decimal places VRSC SATS
-        // verusToERC20mapping[tBTC].tokenIndex += xxxxxxxxxx; // 8 decimal places VRSC SATS
-        // verusToERC20mapping[vUSDC].tokenIndex += xxxxxxxxxx; // 8 decimal places VRSC SATS
+        // NOTE: New contract corrections July 2026
+        verusToERC20mapping[VETH].tokenIndex = (address(this).balance / VerusConstants.SATS_TO_WEI_STD) + 118651397044;  // 8 decimal places VRSC SATS ETH 1186.51397044
+        verusToERC20mapping[tBTC].tokenIndex += 7603215250; // 8 decimal places VRSC SATS tBTC 76.03215250
+        verusToERC20mapping[vUSDC].tokenIndex += 14765883679800; // 8 decimal places VRSC SATS USDC 147,658.83679800
     }
     
     function readVarint(bytes memory buf, uint32 idx) public pure returns (uint32 v, uint32 retidx) {
