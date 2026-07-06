@@ -851,7 +851,7 @@ contract VerusProof is VerusStorage  {
         }
         else if (oneByte == 253)
         {
-            offset += 2; // skip marker(1) + align so 2-byte value is in mload LSBs
+            offset += 1; // after initial ++, align so 2-byte value is in mload LSBs
             uint16 twoByte;
             assembly {
                 twoByte := mload(add(incoming, offset))
@@ -862,7 +862,7 @@ contract VerusProof is VerusStorage  {
         }
         else if (oneByte == 254)
         {
-            offset += 4; // skip marker(1) + align so 4-byte value is in mload LSBs
+            offset += 3; // after initial ++, align so 4-byte value is in mload LSBs
             uint32 fourByte;
             assembly {
                 fourByte := mload(add(incoming, offset))

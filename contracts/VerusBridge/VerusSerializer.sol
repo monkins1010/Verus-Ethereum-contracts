@@ -495,13 +495,14 @@ contract VerusSerializer {
         assembly {
             oneByte := mload(add(incoming, offset))
         }
+        offset++;
         if (oneByte < 253)
         {
-            return (uint64(oneByte), offset + 1);
+            return (uint64(oneByte), offset);
         }
         else if (oneByte == 253)
         {
-            offset += 2; // skip marker(1) + align so 2-byte value is in mload LSBs
+            offset += 1; // skip marker(1) + align so 2-byte value is in mload LSBs
             uint16 twoByte;
             assembly {
                 twoByte := mload(add(incoming, offset))
@@ -510,7 +511,7 @@ contract VerusSerializer {
         }
         else if (oneByte == 254)
         {
-            offset += 4; // skip marker(1) + align so 4-byte value is in mload LSBs
+            offset += 3; // skip marker(1) + align so 4-byte value is in mload LSBs
             uint32 fourByte;
             assembly {
                 fourByte := mload(add(incoming, offset))
@@ -519,7 +520,7 @@ contract VerusSerializer {
         }
         else
         {
-            offset += 8; // skip marker(1) + align so 8-byte value is in mload LSBs
+            offset += 7; // skip marker(1) + align so 8-byte value is in mload LSBs
             uint64 eightByte;
             assembly {
                 eightByte := mload(add(incoming, offset))

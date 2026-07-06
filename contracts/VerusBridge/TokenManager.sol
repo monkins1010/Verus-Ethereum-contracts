@@ -214,7 +214,11 @@ contract TokenManager is VerusStorage {
             if(!success) {
                 return SEND_FAILED;
             }
-            amount = convertFromVerusNumber(sendAmount, abi.decode(data, (uint8)));
+            uint8 dec = abi.decode(data, (uint8));
+            if (dec > 18) {                 // 10**18 is the largest decimals used.
+                return SEND_FAILED;
+            }
+            amount = convertFromVerusNumber(sendAmount, dec);
         }
 
         if(tokenERCAddress == DAIERC20ADDRESS) {
