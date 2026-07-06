@@ -22,52 +22,6 @@ contract VerusSerializer {
         
     }
 
-    function readCompactSizeLE(bytes memory incoming, uint32 offset) public pure returns(VerusObjectsCommon.UintReader memory) {
-
-        uint8 oneByte;
-        assembly {
-            oneByte := mload(add(incoming, offset))
-        }
-        offset++;
-        if (oneByte < 253)
-        {
-            return VerusObjectsCommon.UintReader(offset, oneByte);
-        }
-        else if (oneByte == 253)
-        {
-            offset++;
-            uint16 twoByte;
-            assembly {
-                twoByte := mload(add(incoming, offset))
-            }
-            uint16 value16 = ((twoByte << 8) & 0xffff) | twoByte >> 8;
-            require(value16 >= 253, "Non-canonical compact-size");
-            return VerusObjectsCommon.UintReader(offset + 1, value16);
-        }
-        else if (oneByte == 254)
-        {
-            offset += 3;
-            uint32 fourByte;
-            assembly {
-                fourByte := mload(add(incoming, offset))
-            }
-            uint32 value32 = serializeUint32(fourByte);
-            require(value32 >= 65536, "Non-canonical compact-size");
-            return VerusObjectsCommon.UintReader(offset + 3, value32);
-        }
-        else
-        {
-            offset += 7;
-            uint64 eightByte;
-            assembly {
-                eightByte := mload(add(incoming, offset))
-            }
-            uint64 value64 = serializeUint64(eightByte);
-            require(value64 >= 4294967296, "Non-canonical compact-size");
-            return VerusObjectsCommon.UintReader(offset + 1, value64);
-        }
-    }
-
     function writeVarInt(uint64 incoming) public pure returns(bytes memory) {
         bytes1 inProgress;
         bytes memory output;
@@ -434,7 +388,7 @@ contract VerusSerializer {
 
             // get the length of the destination and move the offset to the start of the destination address
 
-            (temporaryRegister1, nextOffset) = readCompactSizeLE2(tempSerialized, nextOffset);    
+            (temporaryRegister1, nextOffset) = readCompactSizeLE(tempSerialized, nextOffset);    
 
             // if destination an ERC Send (ETH, ERC20, ERC721, ERC1155)
             if (destinationType & VerusConstants.DEST_ETH == VerusConstants.DEST_ETH) {
@@ -470,12 +424,12 @@ contract VerusSerializer {
 
             if (destinationType & VerusConstants.FLAG_DEST_AUX == VerusConstants.FLAG_DEST_AUX) {
 
-                (temporaryRegister1, nextOffset) = readCompactSizeLE2(tempSerialized, nextOffset);    // get the length of the auxDest
+                (temporaryRegister1, nextOffset) = readCompactSizeLE(tempSerialized, nextOffset);    // get the length of the auxDest
 
                 // NOTE: This uses the last aux address as the refund address. Check with Verus this is intended.
 
                 for (uint i = temporaryRegister1; i > 0; i--) {
-                    (temporaryRegister1, nextOffset) = readCompactSizeLE2(tempSerialized, nextOffset);    // get the length of the auxDest sub array
+                    (temporaryRegister1, nextOffset) = readCompactSizeLE(tempSerialized, nextOffset);    // get the length of the auxDest sub array
                     assembly {
                         refundAddress := mload(sub(add(add(tempSerialized, nextOffset), temporaryRegister1), 1)) //skip type +1 byte to read address
                     }
@@ -535,43 +489,42 @@ contract VerusSerializer {
 
    // NOTE: This function always leaves the serializer a byte after the data, ready to read the next byte.
 
-   function readCompactSizeLE2(bytes memory incoming, uint256 offset) public pure returns(uint64 v, uint retidx) {
+   function readCompactSizeLE(bytes memory incoming, uint256 offset) public pure returns(uint64 v, uint retidx) {
 
         uint8 oneByte;
         assembly {
             oneByte := mload(add(incoming, offset))
         }
-        offset++;
         if (oneByte < 253)
         {
-            return (uint64(oneByte), offset);
+            return (uint64(oneByte), offset + 1);
         }
         else if (oneByte == 253)
         {
-            offset++;
+            offset += 2; // skip marker(1) + align so 2-byte value is in mload LSBs
             uint16 twoByte;
             assembly {
                 twoByte := mload(add(incoming, offset))
             }
-            return (((twoByte << 8) & 0xffff)  | twoByte >> 8, offset + 1);
+            return (((twoByte << 8) & 0xffff) | twoByte >> 8, offset + 1);
         }
         else if (oneByte == 254)
         {
-            offset += 3;
+            offset += 4; // skip marker(1) + align so 4-byte value is in mload LSBs
             uint32 fourByte;
             assembly {
                 fourByte := mload(add(incoming, offset))
             }
-            return (serializeUint32(fourByte), offset + 3);
+            return (serializeUint32(fourByte), offset + 1);
         }
         else
         {
-            offset += 7;
+            offset += 8; // skip marker(1) + align so 8-byte value is in mload LSBs
             uint64 eightByte;
             assembly {
                 eightByte := mload(add(incoming, offset))
             }
-            return (serializeUint64(eightByte), offset + 7);
+            return (serializeUint64(eightByte), offset + 1);
         }
     }
 
@@ -699,10 +652,10 @@ contract VerusSerializer {
 
         uint64 temporaryRegister1;
         uint256 tokenID;
-        (temporaryRegister1, nextOffset) = readCompactSizeLE2(input, nextOffset);    // get the length of the auxDest
+        (temporaryRegister1, nextOffset) = readCompactSizeLE(input, nextOffset);    // get the length of the auxDest
 
         if (temporaryRegister1 == 1) {
-            (temporaryRegister1, nextOffset) = readCompactSizeLE2(input, nextOffset);    // get the length of the auxDest sub array, this will be a CReserveDestination
+            (temporaryRegister1, nextOffset) = readCompactSizeLE(input, nextOffset);    // get the length of the auxDest sub array, this will be a CReserveDestination
             if (uint8(input[nextOffset - 1]) == VerusConstants.DEST_PK && uint8(input[nextOffset]) == 0x21 //check for PKH and 33 bytes
                 && uint8(input[nextOffset + 1]) == VerusConstants.DEST_PKH) {
 

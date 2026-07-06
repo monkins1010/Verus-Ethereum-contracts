@@ -836,6 +836,8 @@ contract VerusProof is VerusStorage  {
         return number;
     }    
 
+    // NOTE: This function always leaves the serializer a byte after the data, ready to read the next byte.
+
     function readCompactSizeLE(bytes memory incoming, uint32 offset) private pure returns(VerusObjectsCommon.UintReader memory) {
 
         uint8 oneByte;
@@ -849,7 +851,7 @@ contract VerusProof is VerusStorage  {
         }
         else if (oneByte == 253)
         {
-            offset++;
+            offset += 2; // skip marker(1) + align so 2-byte value is in mload LSBs
             uint16 twoByte;
             assembly {
                 twoByte := mload(add(incoming, offset))
@@ -860,14 +862,14 @@ contract VerusProof is VerusStorage  {
         }
         else if (oneByte == 254)
         {
-            offset += 3;
+            offset += 4; // skip marker(1) + align so 4-byte value is in mload LSBs
             uint32 fourByte;
             assembly {
                 fourByte := mload(add(incoming, offset))
             }
             uint32 value32 = serializeUint32(fourByte);
             require(value32 >= 65536, "Non-canonical compact-size");
-            return VerusObjectsCommon.UintReader(offset + 3, value32);
+            return VerusObjectsCommon.UintReader(offset + 1, value32);
         }
         else
         {
