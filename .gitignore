@@ -7,3 +7,5 @@ build/
 *.log
 truffle-config.js
 .env
+testnet
+truffle-config.js

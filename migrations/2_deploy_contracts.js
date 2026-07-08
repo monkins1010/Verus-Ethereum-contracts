@@ -15,6 +15,8 @@ var VerusBlake2b = artifacts.require("./MMR/VerusBlake2b.sol");
 var VerusMMR = artifacts.require("./MMR/VerusMMR.sol");
 var VerusDelegator = artifacts.require("./Main/Delegator.sol");
 var Token = artifacts.require("./VerusBridge/Token.sol");
+var MockDaiJoin = artifacts.require("MockDaiJoin");
+var MockPot     = artifacts.require("MockPot");
 
 const abi = web3.eth.abi
 
@@ -28,20 +30,29 @@ const { returnConstructorCurrencies,
     getDSRMANAGER,
     getDAIERC20Address } = setup;
     
-module.exports = async function(deployer) {
+module.exports = async function(deployer, network, accounts) {
         
     const isTestnet = deployer.network == "development" || deployer.network == "sepolia" || deployer.network == "sepolia-fork";
     
     const currencyConstants = returnConstructorCurrencies(isTestnet);
     const DAI = getDAI(isTestnet);
     const MKR = getMKR(isTestnet);
-    const { DSRPOT, DSRJOIN } = getDSRMANAGER(isTestnet);
+    let { DSRPOT, DSRJOIN } = getDSRMANAGER(isTestnet);
     let DAIERC20 = getDAIERC20Address(isTestnet);
-    const launchCurrencies = await getCurrencies(deployer);
+    const launchCurrencies = await getCurrencies(deployer, accounts);
     
     if (deployer.network == "development") { 
 
         DAIERC20 = globalDAI;
+
+        // Deploy mock DSR contracts so DAI transfers don't revert on local ganache
+        await deployer.deploy(MockDaiJoin, globalDAI);
+        const mockDaiJoinInst = await MockDaiJoin.deployed();
+        await deployer.deploy(MockPot);
+        const mockPotInst = await MockPot.deployed();
+        DSRJOIN = mockDaiJoinInst.address;
+        DSRPOT  = mockPotInst.address;
+        console.log("\nMock DSR deployed - DSRJOIN:", DSRJOIN, "DSRPOT:", DSRPOT);
     }
     
     await deployer.deploy(UpgradeManager);
@@ -115,17 +126,18 @@ module.exports = async function(deployer) {
     console.log("\nSettings to be pasted into *.conf file and website constants \n", settingString);        
 };
 
-const getCurrencies = async (deployer) => {
+const getCurrencies = async (deployer, accounts) => {
     
     // if testnetERC is not null then we are running ganache test and need to replace the DAI address with the testnetERC address.
     let isTestnet = deployer.network == "development" || deployer.network == "sepolia" || deployer.network == "sepolia-fork"
     let currencies = arrayofcurrencies(isTestnet);
+    const minter = accounts[0]; // use accounts[0] - always valid, deployer.networks.from may be undefined
 
     if (deployer.network == "development"){
         
         await deployer.deploy(Token, "DAI (Testnet)", "DAI");
         const TokenInst = await Token.deployed();
-        TokenInst.mint(deployer.networks.development.from, "100000000000000000000000");
+        await TokenInst.mint(minter, "100000000000000000000000");
         console.log("\nDAI DEPLOYED\n", TokenInst.address); 
         currencies[3][1] = TokenInst.address;
         globalDAI = TokenInst.address;
@@ -135,7 +147,7 @@ const getCurrencies = async (deployer) => {
 
         await deployer.deploy(Token, "MKR (Testnet)", "MKR"); //TODO: Replace if there is an offical sepolia ERC20 MKR
         const TokenInst = await Token.deployed();
-        TokenInst.mint(deployer.networks[deployer.network].from, "100000000000000000000000");
+        await TokenInst.mint(minter, "100000000000000000000000");
         console.log("\nMKR DEPLOYED\n", TokenInst.address); 
         currencies[4][1] = TokenInst.address;
     }

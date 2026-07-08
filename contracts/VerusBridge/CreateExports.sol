@@ -24,6 +24,7 @@ contract CreateExports is VerusStorage {
     address immutable DAIERC20ADDRESS;
     enum Currency {VETH, DAI, VERUS, MKR}
     using SafeERC20 for Token;
+    bytes32 constant SUBMIT_IMPORTS_REENTRANCY_GUARD = "submitimports.reentrancy.lock";
 
     constructor(address vETH, address Bridge, address Verus, address Dai, address daiERC20Address){
 
@@ -72,6 +73,8 @@ contract CreateExports is VerusStorage {
 
         if (claimableFees[VerusConstants.VDXF_DISABLE_CONTRACT_KEY] & VerusConstants.HALT_SEND_TRANSFERS != 0) revert("Bridge halted");
 
+        require(storageGlobal[SUBMIT_IMPORTS_REENTRANCY_GUARD].length == 0);
+        storageGlobal[SUBMIT_IMPORTS_REENTRANCY_GUARD] = abi.encode(true);  
         uint256 fees;
         VerusObjects.mappedToken memory iaddressMapping;
         uint32 ethNftFlag;
@@ -154,6 +157,8 @@ contract CreateExports is VerusStorage {
         }
 
         _createExports(transfer, false);
+
+        delete storageGlobal[SUBMIT_IMPORTS_REENTRANCY_GUARD];
     }
 
     function exportERC20Tokens(uint256 _tokenAmount, Token token, bool burn) public {

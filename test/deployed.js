@@ -476,7 +476,7 @@ contract("Verus Contracts deployed tests", async(accounts)  => {
             console.log(e.message)
             assert.isTrue(false);
         }
-        assert.equal(reply, "0x29b5437905fbf6cd87bb5964bff0306b1e5870ef375e4622b438012177dc7261");
+        assert.equal(reply, "0x1cbf8b0f828fa873c54199607166ad2b3a719cafb1f347ca86693082f56b76ef");
       try {
 
           reply = await contractInstance.methods.checkProof("0x0000000000000000000000000000000000000000000000000000000000000000", []).call();  

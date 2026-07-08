@@ -10,7 +10,7 @@ ganache_pid=$!
 sleep 3
 
 # Run Truffle tests
-truffle test --stacktrace
+truffle test --stacktrace --to 2
 
 # Stop ganache-cli
 kill $ganache_pid

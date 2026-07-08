@@ -1,7 +1,24 @@
 {
     "scripts": {
         "test": "node ./test/launchGanache.js; pkill -f ganache-cli",
-        "test-win": "echo To run test in windows run a terminal window with [ganache-cli -l 1500000000 ---account \"0x8e..yourprivkey, 100000000000000000000\"] And another windows with [truffle test ./test/deployed.js]"
+        "test-win": "echo To run test in windows run a terminal window with [ganache-cli -l 1500000000 ---account \"0x8e..yourprivkey, 100000000000000000000\"] And another windows with [truffle test ./test/deployed.js]",
+        "testnet": "node testnet/start-ganache.js",
+        "testnet:reset": "node testnet/start-ganache.js --reset",
+        "send-transfers": "node testnet/send-transfers.js",
+        "advance": "node testnet/send-transfers.js advance",
+        "random-eth-loop": "node testnet/random-eth-loop.js",
+        "debug:submitimports": "node testnet/debug-submitimports.js",
+        "debug:verusproof": "node testnet/debug-verusproof-direct.js",
+
+        "deploy:all:ganache":  "truffle migrate --f 2 --to 2 --network development",
+        "deploy:all:sepolia":  "truffle migrate --f 2 --to 2 --network sepolia",
+        "deploy:all:mainnet":  "truffle migrate --f 2 --to 2 --network mainnet",
+        "deploy:all:mainnet:dry": "truffle migrate --f 2 --to 2 --network mainnet --dry-run",
+
+        "deploy:selective:ganache":  "truffle migrate --f 3 --to 3 --network development",
+        "deploy:selective:sepolia":  "truffle migrate --f 3 --to 3 --network sepolia",
+        "deploy:selective:mainnet":  "truffle migrate --f 3 --to 3 --network mainnet",
+        "deploy:selective:mainnet:dry": "truffle migrate --f 3 --to 3 --network mainnet --dry-run"
     },
     "dependencies": {
         "@openzeppelin/contracts": "^4.9.6",
@@ -15,6 +32,7 @@
     },
     "devDependencies": {
         "@openzeppelin/contracts-upgradeable": "^4.5.2",
-        "@openzeppelin/truffle-upgrades": "^1.14.0"
+        "@openzeppelin/truffle-upgrades": "^1.14.0",
+        "ganache": "^7.9.2"
     }
 }

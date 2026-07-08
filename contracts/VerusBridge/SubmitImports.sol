@@ -442,6 +442,11 @@ contract SubmitImports is VerusStorage {
 
         uint256 claimAmount;
 
+        // Reentrancy guard
+
+        require(bridgeConverterActive && storageGlobal[SUBMIT_IMPORTS_REENTRANCY_GUARD].length == 0);
+        storageGlobal[SUBMIT_IMPORTS_REENTRANCY_GUARD] = abi.encode(true);
+
         if ((claimableFees[VerusConstants.VDXF_SYSTEM_NOTARIZATION_NOTARYFEEPOOL] * VerusConstants.SATS_TO_WEI_STD) > VerusConstants.CLAIM_NOTARY_FEE_THRESHOLD)
         {
             uint256 txReimburse;
@@ -479,6 +484,7 @@ contract SubmitImports is VerusStorage {
             require(success);
             verusToERC20mapping[VETH].tokenIndex -= (txReimburse / VerusConstants.SATS_TO_WEI_STD);
         }
+        delete storageGlobal[SUBMIT_IMPORTS_REENTRANCY_GUARD];
     }
 
     function claimRefund(uint176 verusAddress, address currency) external payable returns (uint)
