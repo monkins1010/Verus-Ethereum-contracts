@@ -51,7 +51,7 @@ contract MockPot {
     // chi is already declared as a public state var, no extra function needed.
 
     /// @dev No-op drip – real Pot accrues interest here.
-    function drip() external returns (uint256) {
+    function drip() external view returns (uint256) {
         return chi;
     }
 

@@ -15,7 +15,7 @@ import "@openzeppelin/contracts/utils/math/Math.sol";
  * • Token holders can redeem their tokens for a proportional share of the
  *   ETH currently held by the contract at the time of redemption.
  *
- *   ETH returned = tokenAmount × contractETH / originalSupply
+ *   ETH returned = tokenAmount × contractETH / supply
  *
  *   If more ETH is donated than the original target the excess is shared
  *   proportionally – there is no upper cap on the redemption amount.

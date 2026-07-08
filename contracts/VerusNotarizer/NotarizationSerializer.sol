@@ -398,7 +398,7 @@ contract NotarizationSerializer is VerusStorage {
             return;
         }
         
-        if(rollingVoteIndex > (VerusConstants.VOTE_LENGTH - 1)) {
+        if(rollingVoteIndex >= (VerusConstants.VOTE_LENGTH - 1)) {
             rollingVoteIndex = 0;
         } else {
             rollingVoteIndex = rollingVoteIndex + 1;

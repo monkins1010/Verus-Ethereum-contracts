@@ -150,7 +150,7 @@ contract CreateExports is VerusStorage {
                 
             }
 
-            exportERC20Tokens(tokenAmount, token, iaddressMapping.flags & VerusConstants.MAPPING_VERUS_OWNED == VerusConstants.MAPPING_VERUS_OWNED);
+            exportERC20Tokens(tokenAmount, token, (iaddressMapping.flags & VerusConstants.MAPPING_VERUS_OWNED) == VerusConstants.MAPPING_VERUS_OWNED);
         } else {
             // VETH - account for ETH received into the bridge
             verusToERC20mapping[VETH].tokenIndex += transfer.currencyvalue.amount;
@@ -266,74 +266,79 @@ contract CreateExports is VerusStorage {
     function burnFees(bytes calldata) external {
 
         require(bridgeConverterActive, "Bridge Converter not active");
-        
-        uint256 interestAccrued;
-        uint64 truncatedInterest;
+
         bool success;
         bytes memory retData;
-        
-        // NOTE: Accrued interest is truncated from 18 decimals to 8, to be compatible with verus SATS.
         address crossChainExportAddress = contracts[uint(VerusConstants.ContractType.VerusCrossChainExport)];
-        (success, retData) = crossChainExportAddress.delegatecall(abi.encodeWithSelector(VerusCrossChainExport.daiBalance.selector));
+
+        // 1. Fetch current DSR balance and compute gross interest since last burn (18-decimal WEI).
+        (success, retData) = crossChainExportAddress.delegatecall(
+            abi.encodeWithSelector(VerusCrossChainExport.daiBalance.selector)
+        );
         require(success);
 
-        mapping (bytes32 => uint256) storage daiTotals = claimableFees;
+        mapping(bytes32 => uint256) storage daiTotals = claimableFees;
 
-        interestAccrued = abi.decode(retData, (uint256)) - daiTotals[VerusConstants.VDXF_SYSTEM_DAI_HOLDINGS];
+        uint256 grossInterestWei = abi.decode(retData, (uint256)) - daiTotals[VerusConstants.VDXF_SYSTEM_DAI_HOLDINGS];
 
+        // 2. Compute caller reimbursement in DAI SATS: cost of the Verus burn-back tx at current gas,
+        //    expressed as a DAI amount using current bridge reserve ratios.
         uint256 bridgeReserveValues = daiTotals[bytes32(uint256(uint160(VerusConstants.VDXF_ETH_DAI_VRSC_LAST_RESERVES)))];
+        uint256 reimbursablePrice   = block.basefee + VerusConstants.MAX_TIP;
 
-        // Multiply the cost of the Transaction to send DAI to Verus in vETH (8 decimals) by the amount of reservers in DAI.
-        uint256 reimbursablePrice = block.basefee + VerusConstants.MAX_TIP;
-        uint daiCalculation = (reimbursablePrice * VerusConstants.DAI_BURNBACK_TRANSACTION_GAS_AMOUNT)/ VerusConstants.SATS_TO_WEI_STD * (uint64(bridgeReserveValues >> (uint(Currency.DAI) << 6)));
+        uint256 daiCostNumerator = (reimbursablePrice * VerusConstants.DAI_BURNBACK_TRANSACTION_GAS_AMOUNT)
+            / VerusConstants.SATS_TO_WEI_STD
+            * uint64(bridgeReserveValues >> (uint(Currency.DAI) << 6));
 
-        // Divide the previous value by the amount of reserves in vETH (8 decimals) to get the price of the ETH transaction in DAI.
-        uint64 DAIReimburseAmount = uint64(daiCalculation / uint64(bridgeReserveValues >> (uint(Currency.VETH) << 6)));
+        uint64 DAIReimburseAmount = uint64(daiCostNumerator / uint64(bridgeReserveValues >> (uint(Currency.VETH) << 6)));
 
-        require (DAIReimburseAmount < VerusConstants.DAI_BURNBACK_MAX_FEE_THRESHOLD &&
-                    daiTotals[VerusConstants.VDXFID_DAI_BURNBACK_TIME_THRESHOLD] + VerusConstants.SECONDS_IN_DAY < block.timestamp, "Fee too high or not enough time passed");
-        
+        // Enforce cooldown period and fee sanity cap before proceeding.
+        require(
+            DAIReimburseAmount < VerusConstants.DAI_BURNBACK_MAX_FEE_THRESHOLD &&
+            daiTotals[VerusConstants.VDXFID_DAI_BURNBACK_TIME_THRESHOLD] + VerusConstants.SECONDS_IN_DAY < block.timestamp,
+            "Fee too high or not enough time passed"
+        );
         daiTotals[VerusConstants.VDXFID_DAI_BURNBACK_TIME_THRESHOLD] = block.timestamp;
 
-        //truncate DAI to 8 DECIMALS of precision from 18
-        truncatedInterest = uint64(interestAccrued / VerusConstants.SATS_TO_WEI_STD);
+        // 3. Truncate gross interest from 18-decimal WEI to 8-decimal SATS (Verus compatibility),
+        //    then convert back to WEI for internal accounting.
+        //    NOTE: exit() later subtracts (DAIReimburseAmount * SATS_TO_WEI_STD) from
+        //    VDXF_SYSTEM_DAI_HOLDINGS when it transfers the reimbursement DAI to msg.sender.
+        //    Do NOT subtract DAIReimburseAmount here — that would double-deduct the reimbursement.
+        uint64  truncatedInterest = uint64(grossInterestWei / VerusConstants.SATS_TO_WEI_STD);
+        uint256 interestAccrued   = truncatedInterest * VerusConstants.SATS_TO_WEI_STD;
 
-        // Recalculate the interest accrued by subtracting the amount of DAI to be reimbursed.
-        interestAccrued = (truncatedInterest * VerusConstants.SATS_TO_WEI_STD) - DAIReimburseAmount;
-        
-        // The interest accrued must be a significant amount to be worth sending back to Verus.
-        require (interestAccrued > VerusConstants.DAI_BURNBACK_THRESHOLD);
-        // Increase the supply of DAI by the amount of interest accrued - minus the payback fee.
+        require(interestAccrued > VerusConstants.DAI_BURNBACK_THRESHOLD, "Interest below threshold");
+
+        // Credit DAI holdings; exit() will deduct the reimbursement portion.
         daiTotals[VerusConstants.VDXF_SYSTEM_DAI_HOLDINGS] += interestAccrued;
 
-        uint64 fees; 
-        
-        (success, retData) = contracts[uint(VerusConstants.ContractType.SubmitImports)]
-                                .delegatecall(abi.encodeWithSelector(SubmitImports.getImportFeeForReserveTransfer.selector, DAI));
+        // 4. Look up the current import fee for a DAI reserve transfer.
+        (success, retData) = contracts[uint(VerusConstants.ContractType.SubmitImports)].delegatecall(
+            abi.encodeWithSelector(SubmitImports.getImportFeeForReserveTransfer.selector, DAI)
+        );
         require(success);
 
-        fees = abi.decode(retData, (uint64));
-        require (truncatedInterest > fees, "Not enough DAI to pay fees");
+        uint64 fees = abi.decode(retData, (uint64));
+        require(truncatedInterest > fees, "Not enough DAI to pay fees");
 
-        (success, retData) = contracts[uint(VerusConstants.ContractType.SubmitImports)]
-                                .delegatecall(abi.encodeWithSelector(SubmitImports.sendBurnBackToVerus.selector, truncatedInterest, DAI, fees));
+        // 5. Build the burn-back reserve transfer and queue it as a CCE export.
+        (success, retData) = contracts[uint(VerusConstants.ContractType.SubmitImports)].delegatecall(
+            abi.encodeWithSelector(SubmitImports.sendBurnBackToVerus.selector, truncatedInterest, DAI, fees)
+        );
         require(success);
-        // When the bridge launches to make sure a fresh block with no pending vrsc transfers is used as not to mix destination currencies.
-        (VerusObjects.CReserveTransfer memory LPtransfer,) = abi.decode(retData, (VerusObjects.CReserveTransfer, bool)); 
 
+        (VerusObjects.CReserveTransfer memory LPtransfer,) = abi.decode(retData, (VerusObjects.CReserveTransfer, bool));
         _createExports(LPtransfer, false);
 
-        //transfer DAI to the msg.senders address.
+        // 6. Transfer DAI reimbursement to the caller via DSR exit.
         (success,) = crossChainExportAddress.delegatecall(
-                                                        abi.encodeWithSelector(
-                                                            VerusCrossChainExport.exit.selector, 
-                                                            msg.sender, 
-                                                            DAIReimburseAmount * VerusConstants.SATS_TO_WEI_STD));
+            abi.encodeWithSelector(VerusCrossChainExport.exit.selector, msg.sender, DAIReimburseAmount * VerusConstants.SATS_TO_WEI_STD)
+        );
         require(success);
 
-        // Add the amount sent to Verus to the DAI holdings.
+        // Track DAI sent to Verus in SATS (mirrors verusToERC20mapping accounting units).
         verusToERC20mapping[DAI].tokenIndex += truncatedInterest;
-
     }
         
     function convertFromVerusNumber(uint256 a,uint8 decimals) public pure returns (uint256) {

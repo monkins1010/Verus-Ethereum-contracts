@@ -13,7 +13,6 @@ contract ExportManager is VerusStorage  {
     address immutable VETH;
     address immutable BRIDGE;
     address immutable VERUS;
-    bool runonce;
 
     constructor(address vETH, address Bridge, address Verus){
 
