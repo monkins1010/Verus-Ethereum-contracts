@@ -7,5 +7,8 @@ build/
 *.log
 truffle-config.js
 .env
-testnet
 truffle-config.js
+testnet/.ganache-db
+testnet/*.md
+testnet/debug*
+.deps
