@@ -18,9 +18,8 @@ contract VerusSerializer {
     uint32 constant TRANSFER_GATEWAYSKIP = 48; // skip gatewayID (20), gatewayCode (20), fees (8)
     uint8 constant FLAG_MASK = 192; // 11000000
 
-    function initialize() external {
-        
-    }
+    //reset to empty 9-July-26
+    function initialize() external {}
 
     function writeVarInt(uint64 incoming) public pure returns(bytes memory) {
         bytes1 inProgress;

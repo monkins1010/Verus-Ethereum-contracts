@@ -21,6 +21,7 @@ contract ExportManager is VerusStorage  {
         VERUS = Verus;
     }
 
+    //reset to empty 9-July-26
     function initialize() external {}
 
     uint8 constant UINT160_SIZE = 20; 

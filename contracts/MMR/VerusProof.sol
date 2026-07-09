@@ -26,6 +26,7 @@ contract VerusProof is VerusStorage  {
         VERUS = Verus;
     }
 
+    //reset to empty 9-July-26
     function initialize() external {}
 
     using VerusBlake2b for bytes;

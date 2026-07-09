@@ -43,9 +43,8 @@ contract TokenManager is VerusStorage {
         DAIERC20ADDRESS = DaiERC20Address;
     }
 
-    function initialize() external {
-
-    } 
+    //reset to empty 9-July-26
+    function initialize() external {} 
 
     function launchToken(VerusObjects.PackedCurrencyLaunch[] memory _tx) private {
         

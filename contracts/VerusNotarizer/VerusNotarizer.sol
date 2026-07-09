@@ -26,6 +26,7 @@ contract VerusNotarizer is VerusStorage {
         VERUS = Verus;
     }
 
+    //reset to empty 9-July-26
     function initialize() external {}
 
     uint8 constant FORKS_DATA_OFFSET_FOR_HEIGHT = 224;

@@ -51,33 +51,8 @@ contract NotarizationSerializer is VerusStorage {
     uint32 constant ALLOWED_NOTARIZATION_FLAGS = REQUIRED_NOTARIZATION_FLAGS + ALLOWED_OPTIONAL_NOTARIZATION_FLAGS;
     enum Currency {VETH, DAI, VERUS, MKR}
 
-    function initialize() external {
-        // NOTE: removed as already ran.
-        // rollingVoteIndex = VerusConstants.DEFAULT_INDEX_VALUE;
-        // NOTE: New contract corrections July 2026
-        verusToERC20mapping[VETH].tokenIndex = (address(this).balance / VerusConstants.SATS_TO_WEI_STD) + 118651397044 + 556405765;  // 8 decimal places VRSC SATS ETH 1186.51397044 in Verus, 5.56405765 in unclaimed fees.
-        verusToERC20mapping[tBTC].tokenIndex += 7603215250; // 8 decimal places VRSC SATS tBTC 76.03215250
-        verusToERC20mapping[vUSDC].tokenIndex += 14765883679800; // 8 decimal places VRSC SATS USDC 147,658.83679800
-        // NOTE: Reset lastImportInfo to last known good export:
-        //   Verus sourceheightend 4070448
-        //   txid (verus) 7712d764c1cfa4758faa3fa2c9bf96e1928d23c5658c4932e0a8d18879220a69, txoutnum 0
-        //   hashtransfers (verus) 42412cbbb5222979a701e711ce864b0cda823e77b036a59a10d968c1eb9979f3
-        lastImportInfo[VerusConstants.SUBMIT_IMPORTS_LAST_TXID] = VerusObjects.lastImportInfo(
-            bytes32(0xf37999ebc168d9109aa536b0773e82da0c4b86ce11e701a7792922b5bb2c4142), // hashtransfers reversed
-            bytes32(0x690a227988d1a8e032498c65c5238d92e196bfc9a23faa8f75a4cfc164d71277), // exporttxid reversed
-            0,       // exporttxoutnum
-            4070448  // sourceheightend
-        );
-
-        // Block attacker/stuck CCEs from re-submission (each key is the display txid byte-reversed).
-        // 9b045a80c036fd737dec10fd4f6415887a05529ecb20c8189a2098d97dff6038 (height 4070982)
-        processedTxids[bytes32(0x3860ff7dd998209a18c820cb9e52057a8815644ffd10ec7d73fd36c0805a049b)] = true;
-        // 97e1c41f0b2889a46ddfe519df5a0fbf24ec562fba73627f093290dd15e400f8 (height 4070995)
-        processedTxids[bytes32(0xf800e415dd9032097f6273ba2f56ec24bf0f5adf19e5df6da489280b1fc4e197)] = true;
-        // 7af0be458eaf3773f551c71b2cf6584add01b278fb55dfa5a50d549b802e7f1e (height 4071014)
-        processedTxids[bytes32(0x1e7f2e809b540da5a5df55fb78b201dd4a58f62c1bc751f57337af8e45bef07a)] = true;
-        // f899e6984dc7c3d7737bbca5d87db3682de355743349d40396a5fc34b9f5a733 (height 4071017)
-        processedTxids[bytes32(0x33a7f5b934fca59603d449337455e32d68b37dd8a5bc7b73d7c3c74d98e699f8)] = true;    }
+    //reset to empty 9-July-26
+    function initialize() external {}
     
     function readVarint(bytes memory buf, uint32 idx) public pure returns (uint32 v, uint32 retidx) {
 

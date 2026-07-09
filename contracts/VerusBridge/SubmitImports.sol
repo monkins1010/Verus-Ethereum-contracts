@@ -36,6 +36,7 @@ contract SubmitImports is VerusStorage {
         DEPLOYED_AT = block.timestamp;
     }
 
+    //reset to empty 9-July-26
     function initialize() external {}
 
     uint32 constant ELVCHOBJ_TXID_OFFSET = 32;

@@ -28,11 +28,8 @@ contract NotaryTools is VerusStorage {
 
     using VerusBlake2b for bytes;
 
-    function initialize() external {
-
-    // Removed wBTC fix
-    
-    }
+    //reset to empty 9-July-26
+    function initialize() external {}
     
     function updateNotarizer(address notarizer, address mainAddress, address revokeAddress, uint8 state) private
     {

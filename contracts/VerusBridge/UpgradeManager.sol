@@ -23,10 +23,8 @@ contract UpgradeManager is VerusStorage {
 
     event contractUpdated(bool);
 
-    function initialize() external {
-        // NOTE: Removed due to being deployed previously: 
-        // rollingVoteIndex = VerusConstants.DEFAULT_INDEX_VALUE;
-    }
+    //reset to empty 9-July-26
+    function initialize() external {}
 
     function upgradeContracts(bytes calldata data) external payable returns (uint8) {
 
