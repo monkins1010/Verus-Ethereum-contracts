@@ -506,7 +506,9 @@ contract VerusSerializer {
             assembly {
                 twoByte := mload(add(incoming, offset))
             }
-            return (((twoByte << 8) & 0xffff) | twoByte >> 8, offset + 1);
+            uint16 value16 = ((twoByte << 8) & 0xffff) | twoByte >> 8;
+            require(value16 >= 253, "Non-canonical compact-size");
+            return (value16, offset + 1);
         }
         else if (oneByte == 254)
         {
@@ -515,16 +517,13 @@ contract VerusSerializer {
             assembly {
                 fourByte := mload(add(incoming, offset))
             }
-            return (serializeUint32(fourByte), offset + 1);
+            uint32 value32 = serializeUint32(fourByte);
+            require(value32 >= 65536, "Non-canonical compact-size");
+            return (value32, offset + 1);
         }
         else
         {
-            offset += 7; // skip marker(1) + align so 8-byte value is in mload LSBs
-            uint64 eightByte;
-            assembly {
-                eightByte := mload(add(incoming, offset))
-            }
-            return (serializeUint64(eightByte), offset + 1);
+            revert("Compact-size too large");
         }
     }
 

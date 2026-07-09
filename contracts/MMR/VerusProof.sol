@@ -403,7 +403,7 @@ contract VerusProof is VerusStorage  {
 
             // Parse CTxOut: validate scriptPubKey structure and locate the CCE body
             (uint32 cceBodyOffset, bool ok) = _parseCTxOut(firstObj);
-            if (!ok) return (uint128(0), uint176(0), uint176(0), uint176(0));
+            if (!ok) revert("No CCE output component proven"); 
 
             // Deserialize CCE fields from the located body
             CCEData memory cce = _readCCEFields(firstObj, cceBodyOffset);

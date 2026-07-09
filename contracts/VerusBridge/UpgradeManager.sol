@@ -19,7 +19,7 @@ contract UpgradeManager is VerusStorage {
     uint8 constant UPGRADE_IN_PROCESS = 3;
     uint8 constant ERROR = 4;
     uint8 constant REQUIREDAMOUNTOFVOTES = 100;
-    uint8 constant WINNINGAMOUNT = 51;
+    uint8 constant WINNINGAMOUNT = 25;
 
     event contractUpdated(bool);
 
@@ -62,7 +62,7 @@ contract UpgradeManager is VerusStorage {
         require(contractsHash != address(0), "Invalid contract hash");
 
         // If the vote on the hash has already been used, then we can't use it again.
-        if (getVoteCount(contractsHash) > 25 && successfulVoteHashes[contractsHash] != VerusConstants.MAX_UINT256) {
+        if (getVoteCount(contractsHash) > WINNINGAMOUNT && successfulVoteHashes[contractsHash] != VerusConstants.MAX_UINT256) {
             
             // Set the upgrade hash address as used
             successfulVoteHashes[contractsHash] = VerusConstants.MAX_UINT256;

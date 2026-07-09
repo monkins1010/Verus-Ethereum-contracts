@@ -106,7 +106,7 @@ contract NotaryTools is VerusStorage {
         require(counter >= ((notaries.length >> 1) + 1), "not enough signatures");
 
         notaryAddressMapping[notarizerBeingRevoked].state = VerusConstants.NOTARY_REVOKED;
-
+        _checkAutoHalt();
         return true;
     }
 

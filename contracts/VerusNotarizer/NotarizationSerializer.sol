@@ -38,8 +38,6 @@ contract NotarizationSerializer is VerusStorage {
     uint8 constant AUX_DEST_ETH_VEC_LENGTH = 22;
     uint8 constant AUX_DEST_VOTE_HASH = 21;
     uint8 constant VOTE_BYTE_POSITION = 22;
-    uint8 constant REQUIREDAMOUNTOFVOTES = 100;
-    uint8 constant WINNINGAMOUNT = 51;
     uint8 constant UINT64_BYTES_SIZE = 8;
     uint8 constant PROOF_TYPE_ETH = 2;
     uint32 constant FLAG_START_NOTARIZATION = 4;
@@ -404,8 +402,9 @@ contract NotarizationSerializer is VerusStorage {
             assembly {
                 twoByte := mload(add(incoming, offset))
             }
- 
-            return VerusObjectsCommon.UintReader(offset + 1, ((twoByte << 8) & 0xffff)  | twoByte >> 8);
+            uint16 value16 = ((twoByte << 8) & 0xffff) | twoByte >> 8;
+            require(value16 >= 253, "Non-canonical compact-size");
+            return VerusObjectsCommon.UintReader(offset + 1, value16);
         }
         else if (oneByte == 254)
         {
@@ -414,16 +413,13 @@ contract NotarizationSerializer is VerusStorage {
             assembly {
                 fourByte := mload(add(incoming, offset))
             }
-            return VerusObjectsCommon.UintReader(offset + 1, serializeUint32(fourByte));
+            uint32 value32 = serializeUint32(fourByte);
+            require(value32 >= 65536, "Non-canonical compact-size");
+            return VerusObjectsCommon.UintReader(offset + 1, value32);
         }
         else
         {
-            offset += 7; // after initial ++, align so 8-byte value is in mload LSBs
-            uint64 eightByte;
-            assembly {
-                eightByte := mload(add(incoming, offset))
-            }
-            return VerusObjectsCommon.UintReader(offset + 1, serializeUint64(eightByte));
+            revert("Compact-size too large");
         }
     }
 
