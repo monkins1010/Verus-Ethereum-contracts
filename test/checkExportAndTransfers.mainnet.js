@@ -19,8 +19,39 @@ contract("VerusProof mainnet checkExportAndTransfers", async () => {
 
     const result = await verusProof.checkExportAndTransfers.call(mainInput, HASHED_TRANSFERS);
 
-    // Expect a non-zero packed value when CCE fields are accepted.
-    assert.notEqual(result[0].toString(), "0", "Expected non-zero packed result");
+    const packed   = BigInt(result[0].toString());
+    const startH   = Number(packed         & BigInt("0xFFFFFFFF"));
+    const endH     = Number((packed >> 32n) & BigInt("0xFFFFFFFF"));
+    const numIn    = Number((packed >> 96n) & BigInt("0xFFFFFFFF"));
+
+    console.log("\n  packed (hex)     :", "0x" + packed.toString(16).padStart(32, "0"));
+    console.log("  sourceHeightStart:", startH);
+    console.log("  sourceHeightEnd  :", endH);
+    console.log("  numInputs        :", numIn);
+    console.log("  exporter         :", result[1].toString(16));
+    console.log("  exporter2        :", result[2].toString(16));
+    console.log("  exporter3        :", result[3].toString(16));
+
+    // CCE varint "80 f7 b3 12" decodes to 4 069 906.
+    assert.equal(startH, 4069906,  "sourceHeightStart mismatch");
+    // CCE varint "80 f7 b7 30" decodes to 4 070 448.
+    assert.equal(endH,   4070448,  "sourceHeightEnd mismatch");
+    assert.equal(numIn,  1,        "numInputs mismatch");
+
+    // exporter: type(0x44) + compact-size(0x14) + 20-byte address = uint176
+    assert.equal(
+      result[1].toString(16).padStart(44, "0"),
+      "441463bb9f612be23a8f51aad6d62ec8b8342ddba6ac",
+      "exporter (addr1) mismatch"
+    );
+    // exporter2: aux-dest entry is exactly AUX_DEST_ETH_VEC_LENGTH (22) bytes
+    assert.equal(
+      result[2].toString(16).padStart(44, "0"),
+      "021444a5b8ead66bba58d568c684ae8910541d4ac4fc",
+      "exporter2 (aux-dest addr) mismatch"
+    );
+    // exporter3: only one aux-dest entry, so zero
+    assert.equal(result[3].toString(), "0", "exporter3 should be zero");
   });
 
   it("reverts when CCE nVersion is changed from 1 to 0", async () => {

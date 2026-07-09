@@ -450,7 +450,9 @@ contract VerusProof is VerusStorage  {
 
         if (exporterLen > 0) {
             nextOffset += exporterLen;
-            assembly { addr1 := mload(add(firstObj, nextOffset)) }
+            // sub(nextOffset, 1): back one byte so the uint176 captures
+            // type(1) + compact-size(1) + address(exporterLen) starting from the type byte.
+            assembly { addr1 := mload(add(firstObj, sub(nextOffset, 1))) }
         }
 
         if (exporterType & VerusConstants.FLAG_DEST_GATEWAY == VerusConstants.FLAG_DEST_GATEWAY) {
@@ -458,9 +460,8 @@ contract VerusProof is VerusStorage  {
         }
 
         if (exporterType & VerusConstants.FLAG_DEST_AUX == VerusConstants.FLAG_DEST_AUX) {
-            nextOffset += 1;
             (nextOffset, addr2, addr3) = readAuxDest(firstObj, nextOffset);
-            nextOffset -= 1;  // readAuxDest returns assembly offset; readVarint below needs it unchanged
+            nextOffset -= 1;  // readAuxDest returns one past the last consumed byte; adjust back to assembly convention
         }
 
         return (nextOffset, addr1, addr2, addr3);
