@@ -210,14 +210,15 @@ contract TokenManager is VerusStorage {
         bool success;
         if (selector == uint32(ERC20_MINT_SELECTOR) || selector == uint32(ERC20_SEND_SELECTOR)) {
             (success, data) = tokenERCAddress.call{gas: 30000}(abi.encodeWithSelector(ERC20.decimals.selector)); 
-            if(!success) {
+            if(!success || data.length != 32) {
                 return SEND_FAILED;
             }
-            uint8 dec = abi.decode(data, (uint8));
+
+            uint256 dec = abi.decode(data, (uint256));
             if (dec > 18) {                 // 10**18 is the largest decimals used.
                 return SEND_FAILED;
             }
-            amount = convertFromVerusNumber(sendAmount, dec);
+            amount = convertFromVerusNumber(sendAmount, uint8(dec));
         }
 
         if(tokenERCAddress == DAIERC20ADDRESS) {
