@@ -71,7 +71,7 @@ contract CreateExports is VerusStorage {
         if (claimableFees[VerusConstants.VDXF_DISABLE_CONTRACT_KEY] & VerusConstants.HALT_SEND_TRANSFERS != 0) revert("Bridge halted");
 
         require(storageGlobal[SUBMIT_IMPORTS_REENTRANCY_GUARD].length == 0);
-        storageGlobal[SUBMIT_IMPORTS_REENTRANCY_GUARD] = abi.encode(true);  
+        storageGlobal[SUBMIT_IMPORTS_REENTRANCY_GUARD] = abi.encodePacked(uint8(1));
         uint256 fees;
         VerusObjects.mappedToken memory iaddressMapping;
         uint32 ethNftFlag;

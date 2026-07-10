@@ -446,7 +446,7 @@ contract SubmitImports is VerusStorage {
         // Reentrancy guard
 
         require(bridgeConverterActive && storageGlobal[SUBMIT_IMPORTS_REENTRANCY_GUARD].length == 0);
-        storageGlobal[SUBMIT_IMPORTS_REENTRANCY_GUARD] = abi.encode(true);
+        storageGlobal[SUBMIT_IMPORTS_REENTRANCY_GUARD] = abi.encodePacked(uint8(1));
 
         if ((claimableFees[VerusConstants.VDXF_SYSTEM_NOTARIZATION_NOTARYFEEPOOL] * VerusConstants.SATS_TO_WEI_STD) > VerusConstants.CLAIM_NOTARY_FEE_THRESHOLD)
         {
