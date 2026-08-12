@@ -123,7 +123,15 @@ contract VerusNotarizer is VerusStorage {
         require(success);
 
         (bytes32 launchedAndProposer, bytes32 prevnotarizationtxid, bytes32 hashprevnotarization, bytes32 stateRoot, 
-                uint32 verusProofheight) = abi.decode(returnBytes, (bytes32, bytes32, bytes32, bytes32, uint32));
+                uint32 verusProofheight, address votetxid, uint256 reserves) = abi.decode(returnBytes, (bytes32, bytes32, bytes32, bytes32, uint32, address, uint256));
+
+        if (votetxid != address(0)) {
+            castVote(votetxid);
+        }
+
+        if( reserves != 0) {
+            claimableFees[bytes32(uint256(uint160(VerusConstants.VDXF_ETH_DAI_VRSC_LAST_RESERVES)))] = reserves;
+        }
 
         voutAndHeight |= uint64(verusProofheight) << 32; // pack two 32bit numbers into one uint64
         launchedAndProposer |= bytes32(uint256(voutAndHeight) << VerusConstants.NOTARIZATION_VOUT_NUM_INDEX); // Also pack in the voutnum at the end of the uint256
@@ -145,6 +153,39 @@ contract VerusNotarizer is VerusStorage {
             }
         }
         emit NewNotarization(blakeNotarizationHash);
+    }
+
+    function castVote(address votetxid) private {
+
+        // If the vote is address(0) and the vote has not started, or the vote hash has already been used, return
+        if ((votetxid == address(0) && rollingVoteIndex == VerusConstants.DEFAULT_INDEX_VALUE)
+                || successfulVoteHashes[votetxid] == VerusConstants.MAX_UINT256) {
+            return;
+        }
+
+        // if the vote hash has not been used, save the vote start timestamp
+        if(votetxid != address(0) && successfulVoteHashes[votetxid] == 0) {
+            successfulVoteHashes[votetxid] = block.timestamp;
+        } else if (votetxid != address(0) && (block.timestamp - successfulVoteHashes[votetxid]) > (VerusConstants.SECONDS_IN_DAY * 20)) {
+            // if 20 days have passed since the vote started, set the vote hash as used
+            successfulVoteHashes[votetxid] = VerusConstants.MAX_UINT256;
+
+            // reset the rolling vote index to DEFAULT, if there are other hashes they will continue, otherwise voting will go idle.
+            rollingVoteIndex = VerusConstants.DEFAULT_INDEX_VALUE;
+            return;
+        }
+        
+        if(rollingVoteIndex >= (VerusConstants.VOTE_LENGTH - 1)) {
+            rollingVoteIndex = 0;
+        } else {
+            rollingVoteIndex = rollingVoteIndex + 1;
+        }
+
+        // save an empty global write if the value to be written is the same as the current value
+        if (votetxid != rollingUpgradeVotes[rollingVoteIndex]) {
+            rollingUpgradeVotes[rollingVoteIndex] = votetxid;
+        }
+
     }
 
     function decodeNotarization(uint index) public view returns (VerusObjectsNotarization.NotarizationForks[] memory)

@@ -8,6 +8,8 @@ var VerusProof = artifacts.require("./MMR/VerusProof.sol");
 var VerusCCE = artifacts.require("./VerusBridge/VerusCrossChainExport.sol");
 var CreateExports = artifacts.require("./VerusBridge/CreateExports.sol");
 var SubmitImports = artifacts.require("./VerusBridge/SubmitImports.sol");
+var PendingImports = artifacts.require("./VerusBridge/PendingImports.sol");
+var Imports = artifacts.require("./VerusBridge/Imports.sol");
 var NotarizationSerializer = artifacts.require("./VerusNotarizer/NotarizationSerializer.sol");
 var VerusNotaryTools = artifacts.require("./VerusNotarizer/NotaryTools.sol");
 var ExportManager = artifacts.require("./VerusBridge/ExportManager.sol");
@@ -55,7 +57,13 @@ module.exports = async function(deployer, network, accounts) {
         console.log("\nMock DSR deployed - DSRJOIN:", DSRJOIN, "DSRPOT:", DSRPOT);
     }
     
-    await deployer.deploy(UpgradeManager);
+    await deployer.deploy(PendingImports, currencyConstants[0]);
+    const PendingImportsInst = await PendingImports.deployed();
+
+    await deployer.deploy(Imports, currencyConstants[0], currencyConstants[2]);
+    const ImportsInst = await Imports.deployed();
+
+    await deployer.deploy(UpgradeManager, PendingImportsInst.address, ImportsInst.address);
     const UpgradeInst = await UpgradeManager.deployed();
     
     await deployer.deploy(VerusBlake2b);
@@ -84,7 +92,7 @@ module.exports = async function(deployer, network, accounts) {
     await deployer.deploy(VerusCCE, ...currencyConstants, DAIERC20, DSRPOT, DSRJOIN);
     const CCEInst = await VerusCCE.deployed();
     
-    await deployer.deploy(ExportManager, ...currencyConstants);
+    await deployer.deploy(ExportManager, ...currencyConstants, DAIERC20);
     const ExportManInst = await ExportManager.deployed();
 
     await deployer.deploy(CreateExports, ...currencyConstants, DAI, DAIERC20);
@@ -116,6 +124,9 @@ module.exports = async function(deployer, network, accounts) {
 
     const VerusDelegatorInst = await VerusDelegator.deployed();
     await VerusDelegatorInst.launchContractTokens(launchCurrencies);
+    // UpgradeManager.initialize() (called via replacecontract) extends contracts[] to length 13:
+    // pushes PendingImports at slot 11 and Imports at slot 12, and registers all VDXF routes.
+    await VerusDelegatorInst.replacecontract(UpgradeInst.address, 10, {gas: 4700000});
     if (deployer.network == "sepolia" || deployer.network == "mainnet" || deployer.network == "mainnet-fork") { 
         await VerusDelegatorInst.replacecontract(CCEInst.address, 3, {gas: 4700000}); // CCE is position 3 in list of contracts
     }

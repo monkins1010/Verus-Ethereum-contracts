@@ -117,7 +117,9 @@ library VerusConstants {
         ExportManager,
         SubmitImports,
         NotarizationSerializer,
-        UpgradeManager
+        UpgradeManager,
+        PendingImports,
+        Imports          // import execution pipeline (executePendingImport + token payouts + fee distribution)
     } 
 
     uint8 constant UINT160_SIZE = 20;

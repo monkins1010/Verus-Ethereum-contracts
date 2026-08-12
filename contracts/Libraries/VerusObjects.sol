@@ -76,8 +76,11 @@ library VerusObjects {
     }
 
     struct PackedSend {
-        uint256 currencyAndAmount;    //tokenID
-        uint256 destinationAndFlags;  //ETH address concatenated with flags
+        address currency;               //currency to send
+        uint64 amount;                  //amount of currency to send
+        address destination;            //destination address
+        uint176 refundAddress;          //aux destination used for refund routing
+        uint32 launchTxIndexPlusOne;     //0 = normal send, otherwise index+1 into launchTxs
     }
 
     struct PackedCurrencyLaunch {
@@ -196,6 +199,35 @@ library VerusObjects {
         bytes32 exporttxid;
         uint32 exporttxoutnum;
         uint32 height;
+    }
+
+    struct pendingImport {
+        bytes32 importTxid;
+        uint32 nout;
+        bytes32 confirmedNotarizationTxid;
+        uint32 confirmedNotarizationN;
+        PackedSend[] transfers;
+        PackedCurrencyLaunch[] launchTxs;
+        uint64 fees;
+        uint128 cceHeightsAndIndex;
+        uint176[3] exporters;
+        uint64 nonce;
+        uint64 submittedAt;
+        uint8 state;
+    }
+
+    struct pendingImportOutput {
+        uint8 outputType; // 1 = PackedSend, 2 = PackedCurrencyLaunch
+        PackedSend transfer;
+        PackedCurrencyLaunch launch;
+    }
+
+    struct pendingImportView {
+        bytes32 txid;
+        uint32 nout;
+        bytes32 confirmedNotarizationTxid;
+        uint32 confirmedNotarizationN;
+        pendingImportOutput[] outputs;
     }
 
     struct voteState {

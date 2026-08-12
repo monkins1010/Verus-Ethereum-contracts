@@ -16,6 +16,8 @@
  *   8  – SubmitImports
  *   9  – NotarizationSerializer
  *  10  – UpgradeManager
+ *  11  – PendingImports
+ *  12  – Imports
  *
  * Examples:
  *   DEPLOY_CONTRACTS=0,3,7 truffle migrate --f 3 --to 3 --network mainnet
@@ -37,6 +39,8 @@ var VerusProof         = artifacts.require("./MMR/VerusProof.sol");
 var VerusCCE           = artifacts.require("./VerusBridge/VerusCrossChainExport.sol");
 var CreateExports      = artifacts.require("./VerusBridge/CreateExports.sol");
 var SubmitImports      = artifacts.require("./VerusBridge/SubmitImports.sol");
+var PendingImports       = artifacts.require("./VerusBridge/PendingImports.sol");
+var Imports            = artifacts.require("./VerusBridge/Imports.sol");
 var NotarizationSerializer = artifacts.require("./VerusNotarizer/NotarizationSerializer.sol");
 var VerusNotaryTools   = artifacts.require("./VerusNotarizer/NotaryTools.sol");
 var ExportManager      = artifacts.require("./VerusBridge/ExportManager.sol");
@@ -60,6 +64,8 @@ const CONTRACT_NAMES = [
     "SubmitImports",          // 8
     "NotarizationSerializer", // 9
     "UpgradeManager",         // 10
+    "PendingImports",           // 11
+    "Imports",                // 12
 ];
 
 const abi = web3.eth.abi;
@@ -238,7 +244,7 @@ module.exports = async function(deployer, network, accounts) {
 
     // [7] ExportManager
     if (deploySet.has(7)) {
-        await deployer.deploy(ExportManager, ...currencyConstants);
+        await deployer.deploy(ExportManager, ...currencyConstants, DAIERC20);
         const inst = await ExportManager.deployed();
         deployed[7] = { name: CONTRACT_NAMES[7], address: inst.address };
     }
@@ -257,9 +263,37 @@ module.exports = async function(deployer, network, accounts) {
         deployed[9] = { name: CONTRACT_NAMES[9], address: inst.address };
     }
 
-    // [10] UpgradeManager
+    // [11] PendingImports — deployed before [10] UpgradeManager so its address can be
+    // passed into the UpgradeManager constructor.
+    if (deploySet.has(11)) {
+        await deployer.deploy(PendingImports, currencyConstants[0]);
+        const inst = await PendingImports.deployed();
+        deployed[11] = { name: CONTRACT_NAMES[11], address: inst.address };
+    }
+
+    // [12] Imports — deployed before [10] for the same reason.
+    if (deploySet.has(12)) {
+        await deployer.deploy(Imports, currencyConstants[0], currencyConstants[2]);
+        const inst = await Imports.deployed();
+        deployed[12] = { name: CONTRACT_NAMES[12], address: inst.address };
+    }
+
+    // [10] UpgradeManager — must be deployed AFTER [11] and [12] so their addresses
+    // can be baked into its constructor.  When replacecontract() calls initialize(),
+    // it extends contracts[] to length 13 and registers PendingImports's VDXF routes.
     if (deploySet.has(10)) {
-        await deployer.deploy(UpgradeManager);
+        // Resolve addresses: use freshly deployed instances or fall back to env vars
+        // (set PENDING_IMPORTS_ADDRESS / IMPORTS_ADDRESS when not deploying 11/12 here).
+        const PendingImportsAddr = deployed[11]
+            ? deployed[11].address
+            : process.env.PENDING_IMPORTS_ADDRESS
+                || (() => { throw new Error("PENDING_IMPORTS_ADDRESS env var required when not deploying PendingImports (11) in the same run"); })();
+        const importsAddr = deployed[12]
+            ? deployed[12].address
+            : process.env.IMPORTS_ADDRESS
+                || (() => { throw new Error("IMPORTS_ADDRESS env var required when not deploying Imports (12) in the same run"); })();
+
+        await deployer.deploy(UpgradeManager, PendingImportsAddr, importsAddr);
         const inst = await UpgradeManager.deployed();
         deployed[10] = { name: CONTRACT_NAMES[10], address: inst.address };
     }
@@ -275,9 +309,12 @@ module.exports = async function(deployer, network, accounts) {
     if (delegatorAddress) {
         console.log("\nDELEGATOR_ADDRESS detected – calling replacecontract() for each deployed contract …");
         const delegatorInst = await VerusDelegator.at(delegatorAddress);
-        for (const [idx, info] of Object.entries(deployed)) {
-            console.log(`  replacecontract(${info.address}, ${idx}) …`);
-            await delegatorInst.replacecontract(info.address, parseInt(idx), { gas: 4700000 });
+        // Sort ascending so [10] UpgradeManager fires initialize() (extending contracts[]
+        // to 13) before any direct replacecontract at slots 11 or 12.
+        for (const [idx, info] of Object.entries(deployed).sort((a, b) => parseInt(a[0]) - parseInt(b[0]))) {
+            const idxInt = parseInt(idx);
+            console.log(`  replacecontract(${info.address}, ${idxInt}) …`);
+            await delegatorInst.replacecontract(info.address, idxInt, { gas: 4700000 });
             console.log(`  ✓ [${idx}] ${info.name} registered`);
         }
     } else {

@@ -9,11 +9,6 @@ import "../Libraries/VerusConstants.sol";
 import "./Token.sol";
 import "../Storage/StorageMaster.sol";
 import "./CreateExports.sol";
-import "./TokenManager.sol";
-
-interface IVerusToken {
-    function supply() external view returns (uint256);
-}
 
 
 contract SubmitImports is VerusStorage {
@@ -23,8 +18,6 @@ contract SubmitImports is VerusStorage {
     address immutable VERUS;
     address immutable DAI;
     address immutable MKR;
-    uint256 immutable DEPLOYED_AT;
-    uint256 constant THREE_YEARS = 3 * 365 days;
 
     constructor(address vETH, address Bridge, address Verus, address Dai, address Mkr){
 
@@ -33,7 +26,6 @@ contract SubmitImports is VerusStorage {
         VERUS = Verus;
         DAI = Dai;
         MKR = Mkr;
-        DEPLOYED_AT = block.timestamp;
     }
 
     //reset to empty 9-July-26
@@ -53,11 +45,11 @@ contract SubmitImports is VerusStorage {
     uint32 constant ELVCHOBJ_NVOUTS_OFFSET = 49;
     uint32 constant ELVCHOBJ_NSHIELDEDSPENDS_OFFSET = 53;
     uint32 constant ELVCHOBJ_NSHIELDEDOUTPUTS_OFFSET = 57;
-    uint32 constant FORKS_NOTARY_PROPOSER_POSITION = 96;
     uint32 constant TYPE_REFUND = 1;
     uint constant TYPE_BYTE_LOCATION_IN_UINT176 = 168;
     uint8 constant TYPE_REFUND_BYTES32_LOCATION = 244;
     bytes32 constant SUBMIT_IMPORTS_REENTRANCY_GUARD = "submitimports.reentrancy.lock";
+    bytes32 constant PENDING_IMPORT_KEY_PREFIX = keccak256("pending.import");
     enum Currency {VETH, DAI, VERUS, MKR}
 
     // Parsed fields from the CTransactionHeader serialized in components[0].elVchObj.
@@ -188,7 +180,7 @@ contract SubmitImports is VerusStorage {
 
         if (claimableFees[VerusConstants.VDXF_DISABLE_CONTRACT_KEY] & VerusConstants.HALT_SUBMIT_IMPORTS != 0) revert();
 
-        uint256 gasleftStart = gasleft();
+      //  uint256 gasleftStart = gasleft();
         VerusObjects.CReserveTransferImport memory _import = abi.decode(data, (VerusObjects.CReserveTransferImport));
 
         // Parse CTransactionHeader from component 0 and validate the txid is not a replay.
@@ -241,118 +233,39 @@ contract SubmitImports is VerusStorage {
         // get the gasleft before calling the tokenmanager
 
         //returns success, refund addresses bytes & refund address array which is abi.encoded-ed, these are any refunds that didnt pay out.
-        (success, returnBytes) = contracts[uint(VerusConstants.ContractType.TokenManager)].delegatecall(abi.encodeWithSelector(TokenManager.processTransactions.selector, _import.serializedTransfers, uint256(uint32(CCEHeightsAndnIndex >> 96))));
+        (success, returnBytes) = contracts[uint(VerusConstants.ContractType.TokenManager)].delegatecall(
+            abi.encodeWithSignature(
+                "processTransactions(bytes,uint128,bytes32,uint176[3])",
+                _import.serializedTransfers,
+                CCEHeightsAndnIndex,
+                hdr.txHash,
+                exporters
+            )
+        );
         require(success);
 
-        uint176[] memory refundAddresses;
-        uint64 fees;
+        //TODO: this needs to be moved somewhere else, as it is not being used here.  It is being used in the tokenmanager to calculate fees and refunds.
 
-        // returns refundaddresses bytes, fees and refundaddresses
-        (returnBytes, fees, refundAddresses) = abi.decode(returnBytes, (bytes, uint64, uint176[]));
+        // uint176[] memory refundAddresses;
+        // uint64 fees;
 
-        // get the cceblockwidth of the cce from endheight - startheight and copy back into CCEHeightsAndnIndex
-        CCEHeightsAndnIndex = (uint32(CCEHeightsAndnIndex >> 32) - uint32(CCEHeightsAndnIndex));
+        // // returns refundaddresses bytes, fees and refundaddresses
+        // (returnBytes, fees, refundAddresses) = abi.decode(returnBytes, (bytes, uint64, uint176[]));
 
-        // calculate the fee to pay any refunds, and then pay to the refund addresses.
-        calulateGasFees(gasleftStart, fees, refundAddresses, CCEHeightsAndnIndex, exporters);
+        // // get the cceblockwidth of the cce from endheight - startheight and copy back into CCEHeightsAndnIndex
+        // CCEHeightsAndnIndex = (uint32(CCEHeightsAndnIndex >> 32) - uint32(CCEHeightsAndnIndex));
 
-        if (returnBytes.length > 0) {
-            refund(returnBytes);
-        }
+        // // calculate the fee to pay any refunds, and then pay to the refund addresses.
+        // calulateGasFees(gasleftStart, fees, refundAddresses, CCEHeightsAndnIndex, exporters);
+
+        // if (returnBytes.length > 0) {
+        //     refund(returnBytes);
+        // }
 
         delete storageGlobal[SUBMIT_IMPORTS_REENTRANCY_GUARD];
 
         return (0,0);
     }
-
-    function calulateGasFees(uint256 gasStart, uint64 fees, uint176[] memory refundAddresses, uint256 blockWidth, uint176[3] memory exporters) private {
-
-        uint256 priceOfImports; // ETH price of the imports calculated from gas used.
-        uint64 notaryFees;   // fees to pay to notaries
-        uint64 blockDivisor; // ratio adjustment when traffic is high
-        uint64 minTxesForRefund; // minimum number of transactions for a refund
-        uint64 feeRefunds;
-        uint64 processorsFees; // fees shared out between notaries / exporters / proposers.
-
-        // Using the gas used gives us an indication of how much the transaction will cost.
-        // i.e. the gas used to do 2 * notaryimports + fixedcost for submitimport + (gas to process the tx payements)
-        uint256 reimbursablePrice = block.basefee + VerusConstants.MAX_TIP;
-        priceOfImports = uint256((gasStart - gasleft()) + VerusConstants.GAS_BASE_COST_FOR_NOTARYS + 
-            (refundAddresses.length * VerusConstants.GAS_BASE_COST_FOR_REFUND_PAYOUTS)) 
-            * reimbursablePrice;
-
-        // Use a Buffer of 40% for notary fees. (In Verus sats)
-        notaryFees = uint64(((priceOfImports * 14) / 10) / VerusConstants.SATS_TO_WEI_STD); 
-
-        if (fees > (notaryFees + (notaryFees >> 4))){
-
-            blockDivisor = 20;
-            minTxesForRefund = VerusConstants.MINIMUM_TRANSACTIONS_FOR_REFUNDS;
-
-            if (blockWidth > 1)
-            {
-                blockDivisor = 10;
-                minTxesForRefund = VerusConstants.MINIMUM_TRANSACTIONS_FOR_REFUNDS_HALF;
-            }
-
-            if (refundAddresses.length > minTxesForRefund)
-            {
-                processorsFees = fees - notaryFees;
-                fees = notaryFees;
-
-                feeRefunds = uint64((processorsFees / refundAddresses.length) * (refundAddresses.length - minTxesForRefund));
-                feeRefunds = feeRefunds - (feeRefunds / blockDivisor);
-                processorsFees = processorsFees - feeRefunds;
-
-                // Divide by number of transactions to get refund share per number of transfers.
-                feeRefunds = feeRefunds / uint64(refundAddresses.length);
-
-                for(uint i = 0; i < refundAddresses.length; i++) {
-                    bytes32 feeRefundAddress;
-                    feeRefundAddress = bytes32(uint256(refundAddresses[i]));
-
-                    if (feeRefundAddress != bytes32(0)) {
-                        feeRefundAddress |= bytes32(uint256(TYPE_REFUND) << TYPE_REFUND_BYTES32_LOCATION);
-                        refunds[feeRefundAddress][VETH] += feeRefunds;
-                    } else {
-                        processorsFees += feeRefunds;                    
-                    }
-                }
-            } else {
-                processorsFees = fees - notaryFees;
-                fees = notaryFees;
-            }
-        } 
-
-        setClaimableFees(fees, exporters, processorsFees);
-    }
-  
-    function refund(bytes memory refundAmount) private  {
-
-        if (refundAmount.length < 50) return; //early return if no refunds.
-
-        // Note each refund is 50 bytes = 22bytes(uint176) + uint64 + uint160 (currency)
-        for(uint i = 0; i < refundAmount.length; i = i + 50) {
-
-            uint176 verusAddress;
-            uint64 amount;
-            address currency;
-            assembly 
-            {
-                verusAddress := mload(add(add(refundAmount, 22), i))
-                amount := mload(add(add(refundAmount, 30), i))
-                currency := mload(add(add(refundAmount, 50), i))
-            }
-
-            bytes32 refundAddress;
-
-            // The leftmost byte is the TYPE_REFUND;
-            refundAddress = bytes32(uint256(verusAddress) | uint256(TYPE_REFUND) << TYPE_REFUND_BYTES32_LOCATION);
-
-            refunds[refundAddress][currency] += amount;
-
-        }
-     }
 
     function setLastImport(bytes32 processedTXID, bytes32 hashofTXs, uint128 CCEheightsandTXNum ) private {
 
@@ -386,57 +299,6 @@ contract SubmitImports is VerusStorage {
             case 0 { revert(0, returndatasize()) }
             default { return(0, returndatasize()) }
         }
-    }
-
-    function setClaimableFees(uint64 notaryFees, uint176[3] memory exporters, uint64 processorsFees) private 
-    {
-        uint64 feeShare;
-        feeShare = processorsFees / 3;
-        bytes32 notaryPoolKey = VerusConstants.VDXF_SYSTEM_NOTARIZATION_NOTARYFEEPOOL;
-
-        claimableFees[notaryPoolKey] += (notaryFees + feeShare);
-           
-        if (processorsFees > 0) {
-
-            bytes memory proposerBytes = bestForks[0];
-            uint176 proposer;
-            require(proposerBytes.length >= FORKS_NOTARY_PROPOSER_POSITION + 22);
-            assembly {
-                    proposer := mload(add(proposerBytes, FORKS_NOTARY_PROPOSER_POSITION))
-            }
-
-            // Keep processorsFees fully conserved:
-            // notary pool gets feeShare, proposer gets feeShare, exporter/protocol get the remainder.
-            uint64 exporterTotal = processorsFees - (feeShare << 1);
-            uint64 exporterHalf  = exporterTotal / 2;
-            uint64 protocolShare = exporterTotal - exporterHalf;
-
-            setClaimedFees(bytes32(uint256(proposer)), feeShare); // 1/3 to proposer
-            setClaimedFees(bytes32(uint256(exporters[1])), exporterHalf); // half of exporter share to exporter[1]
-
-            bool normalProtocolFeeRecipent = false;
-            if (block.timestamp >= DEPLOYED_AT + THREE_YEARS) {
-                (bool ok, bytes memory ret) = VerusConstants.VERUS_USAGE_CONTRACT.staticcall(abi.encodeWithSelector(IVerusToken.supply.selector));
-                if (ok && ret.length >= 32) {
-                    uint256 verusTokenSupply = abi.decode(ret, (uint256));
-                    // set the normalProtocolFeeRecipent to true if the balance of the protocol fee recipient is greater than or equal to the total supply of the Verus token.
-                    normalProtocolFeeRecipent = VerusConstants.VERUS_USAGE_CONTRACT.balance >= verusTokenSupply;
-                }
-            }
-
-            if (normalProtocolFeeRecipent) {
-                setClaimedFees(bytes32(uint256(exporters[0])), protocolShare);
-            } else {
-                (bool success, ) = payable(VerusConstants.VERUS_USAGE_CONTRACT).call{value: protocolShare * VerusConstants.SATS_TO_WEI_STD }("");
-                require(success);
-                verusToERC20mapping[VETH].tokenIndex -= protocolShare;
-            }
-        }
-    }
-
-    function setClaimedFees(bytes32 _address, uint256 fees) private  {
-
-        claimableFees[_address] += fees;
     }
 
     function claimfees() external {
