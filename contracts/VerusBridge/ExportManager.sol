@@ -312,7 +312,7 @@ contract ExportManager is VerusStorage  {
         uint256 sendAmount,
         uint32 selector,
         uint256 TokenId
-    ) private returns (uint8) {
+    ) public returns (uint8) {
 
         bytes memory data;
         uint256 amount;

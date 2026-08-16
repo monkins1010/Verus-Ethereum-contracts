@@ -25,7 +25,6 @@ contract PendingImports is VerusStorage {
 
     uint8 constant IMPORT_STATE_PENDING = 1;
     uint8 constant IMPORT_STATE_RELEASED = 2;
-    uint8 constant IMPORT_STATE_REJECTED = 3;
 
     uint256 constant IMPORT_RELEASE_COOLDOWN = 1 hours;
     uint256 constant IMPORT_TIMEOUT = 4 hours;
@@ -34,7 +33,7 @@ contract PendingImports is VerusStorage {
     event PendingImportQueued(bytes32 indexed importTxid, uint32 indexed nout, uint128 cceHeightsAndIndex, uint64 nonce);
     event PendingImportReleased(bytes32 indexed importTxid, address indexed releaser);
     event PendingImportApproved(bytes32 indexed importTxid, address indexed notarizerID, uint256 approvalCount);
-    event BridgePaused(bytes32 indexed importTxid);
+    event BridgePaused();
     event HaltVoteSubmitted(address indexed notarizerID, bool voteToHalt, uint256 voteCount, bool bridgePaused);
 
     constructor(address veth) {
@@ -369,7 +368,7 @@ contract PendingImports is VerusStorage {
                 VerusConstants.HALT_NOTARIZATIONS +
                 VerusConstants.HALT_SEND_TRANSFERS;
             bridgePaused = true;
-            emit BridgePaused(bytes32(0));
+            emit BridgePaused();
         }
 
         emit HaltVoteSubmitted(iAddr, voteToHalt, voteCount, bridgePaused);
@@ -451,7 +450,7 @@ contract PendingImports is VerusStorage {
     // Status helpers.
     // -------------------------------------------------------------------------
 
-    /// @notice Returns true if the bridge has been paused due to 3 rejection votes on any import.
+    /// @notice Returns true if the bridge has been paused by 3 notary halt votes.
     function isBridgePaused() external view returns (bool) {
         return storageGlobal[BRIDGE_PAUSED_KEY].length != 0;
     }
@@ -467,7 +466,7 @@ contract PendingImports is VerusStorage {
         bytes32 pendingKey,
         VerusObjects.pendingImport memory pending
     ) private {
-        // Safety latch: once paused by rejection quorum, no further pending imports can execute.
+        // Safety latch: once paused by halt quorum, no further pending imports can execute.
         require(storageGlobal[BRIDGE_PAUSED_KEY].length == 0);
 
         pending.state = IMPORT_STATE_RELEASED;

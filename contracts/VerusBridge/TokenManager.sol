@@ -79,6 +79,7 @@ contract TokenManager is VerusStorage {
         VerusObjects.PackedSend[] memory transfers;
         VerusObjects.PackedCurrencyLaunch[] memory launchTxs;
         uint64 fees;
+        require(uint32(cceHeightsAndIndex >> 96) < 256);
         uint8 numberOfTransfers = uint8(uint32(cceHeightsAndIndex >> 96));
 
         (transfers, launchTxs, fees) = VerusSerializer(contracts[uint(VerusConstants.ContractType.VerusSerializer)])

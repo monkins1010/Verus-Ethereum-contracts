@@ -33,10 +33,10 @@ contract UpgradeManager is VerusStorage {
     bytes32 constant PENDING_IMPORTS_CONTRACT_INDEX_KEY     = keccak256("PendingImports.contract.index");
     bytes32 constant IMPORTS_CONTRACT_INDEX_KEY           = keccak256("Imports.contract.index");
     bytes32 constant APPROVE_IMPORT_VDXF_KEY              = keccak256("approveImport");
-    bytes32 constant REJECT_IMPORT_VDXF_KEY               = keccak256("rejectImport");
     bytes32 constant EXECUTE_TIMED_OUT_IMPORT_VDXF_KEY    = keccak256("executeTimedOutImport");
     bytes32 constant IS_BRIDGE_PAUSED_VDXF_KEY            = keccak256("isBridgePaused");
     bytes32 constant GET_NOTARY_IADDRESS_VDXF_KEY         = keccak256("getNotaryIAddress");
+    bytes32 constant SUBMIT_HALT_VOTE_VDXF_KEY            = keccak256("submitHaltVote");
 
     event contractUpdated(bool);
 
@@ -62,11 +62,11 @@ contract UpgradeManager is VerusStorage {
             storageGlobal[GET_PENDING_IMPORTS_VDXF_KEY]      = abi.encode(uint256(11));
             storageGlobal[GET_PENDING_IMPORT_COUNT_VDXF_KEY] = abi.encode(uint256(11));
             storageGlobal[APPROVE_IMPORT_VDXF_KEY]           = abi.encode(uint256(11));
-            storageGlobal[REJECT_IMPORT_VDXF_KEY]            = abi.encode(uint256(11));
             storageGlobal[EXECUTE_TIMED_OUT_IMPORT_VDXF_KEY] = abi.encode(uint256(11));
             storageGlobal[IS_BRIDGE_PAUSED_VDXF_KEY]         = abi.encode(uint256(11));
             storageGlobal[GET_NOTARY_IADDRESS_VDXF_KEY]      = abi.encode(uint256(11));
             storageGlobal[PENDING_IMPORTS_CONTRACT_INDEX_KEY]   = abi.encode(uint256(11));
+            storageGlobal[SUBMIT_HALT_VOTE_VDXF_KEY]         = abi.encode(uint256(11));
             storageGlobal[IMPORTS_CONTRACT_INDEX_KEY]         = abi.encode(uint256(12));
         } else if (contracts.length == 12) {
             contracts.push(IMPORTS_ADDR);
