@@ -140,7 +140,7 @@ contract Imports is VerusStorage {
                     == VerusConstants.MAPPING_ETHEREUM_OWNED)
             {
                 (bool success, bytes memory result) = _tx[j].ERCContract.call{gas: 30000}(abi.encodeWithSignature("name()"));
-                outputName = success ? abi.decode(result, (string)) : "...";
+                outputName = success ? result.length >= 64 ? abi.decode(result, (string)) : "..." : "...";
                 outputName = string(abi.encodePacked("[", outputName, "] as "));
             }
 

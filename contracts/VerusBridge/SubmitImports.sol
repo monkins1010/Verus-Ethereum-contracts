@@ -140,7 +140,9 @@ contract SubmitImports is VerusStorage {
                                                DAI,
                                                fees,
                                                DAI );
-        } 
+        } else {
+            revert();
+        }
 
         LPtransfer.flags += VerusConstants.BURN_CHANGE_PRICE ;
 
@@ -412,7 +414,12 @@ contract SubmitImports is VerusStorage {
         }
 
         if ((claimableFees[publicKeyX] > (VerusConstants.verusvETHTransactionFee << 1))) {
+            // check that the public key is a DEST_ID
             require(publicKeyX[10]  == 0x04);
+
+            //require publicKeyX[0..9] are all empty.            
+            require(uint256(publicKeyX) >> 176 == 0);
+    
             require(claimableFees[publicKeyX] > VerusConstants.verusvETHTransactionFee);
             feeShare = uint64(claimableFees[publicKeyX]) - VerusConstants.verusvETHTransactionFee;
             claimableFees[publicKeyX] = 0;

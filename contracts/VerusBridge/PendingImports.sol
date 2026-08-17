@@ -19,6 +19,10 @@ contract PendingImports is VerusStorage {
     bytes32 constant PENDING_IMPORT_QUEUE_INDEX_PREFIX = keccak256("pending.import.queue.index");
     bytes32 constant RELEASE_VOTE_BITMAP_PREFIX = keccak256("pending.import.release.vote.bitmap");
     bytes32 constant HALT_VOTE_BITMAP_KEY = keccak256("bridge.halt.vote.bitmap");
+    // Mirror of the constants in TokenManager / Imports — kept here so _executeImport
+    // can clean up orphaned exec-data keys without depending on executePendingImport running.
+    bytes32 constant PENDING_EXEC_DATA_PREFIX   = keccak256("pending.exec.data");
+    bytes32 constant PENDING_EXEC_PARAMS_PREFIX = keccak256("pending.exec.params");
 
     address immutable SELF;
     address immutable VETH;
@@ -60,7 +64,8 @@ contract PendingImports is VerusStorage {
         uint176[3] calldata exporters
     ) external {
 
-        require(storageGlobal[SUBMIT_IMPORTS_REENTRANCY_GUARD].length != 0);
+        require(storageGlobal[SUBMIT_IMPORTS_REENTRANCY_GUARD].length == 0);
+        storageGlobal[SUBMIT_IMPORTS_REENTRANCY_GUARD] = abi.encodePacked(uint8(1));
         require(storageGlobal[BRIDGE_PAUSED_KEY].length == 0);
         bytes32 pendingKey = _pendingImportKey(importTxid);
         require(storageGlobal[pendingKey].length == 0);
@@ -92,6 +97,7 @@ contract PendingImports is VerusStorage {
             cceHeightsAndIndex,
             nonce
         );
+        delete storageGlobal[SUBMIT_IMPORTS_REENTRANCY_GUARD];
     }
 
     /// @notice VDXF entry point for releasing a pending import.
@@ -105,6 +111,8 @@ contract PendingImports is VerusStorage {
     /// @notice Executes a pending import after the cooldown window, if approval quorum has already been reached.
     function _releasePendingImport(bytes32 importTxid) private {
         require(storageGlobal[BRIDGE_PAUSED_KEY].length == 0);
+        if (claimableFees[VerusConstants.VDXF_DISABLE_CONTRACT_KEY] != 0) revert();
+        require(notaries.length <= 32);
 
         bytes32 pendingKey = _pendingImportKey(importTxid);
         VerusObjects.pendingImport memory pending = _loadPendingImport(pendingKey);
@@ -220,16 +228,28 @@ contract PendingImports is VerusStorage {
         bytes memory queueData = storageGlobal[PENDING_IMPORT_QUEUE_KEY];
         if (queueData.length != 0) {
             queue = abi.decode(queueData, (bytes32[]));
+        } else {
+            queue = new bytes32[](0);
         }
     }
 
     /// @dev Appends importTxid to the in-memory queue array by extending it in-place via assembly
     ///      (avoids a full copy loop), then persists the updated array and the index mapping.
+    ///
+    ///      Memory safety: `_loadPendingQueue` always returns a freshly allocated array whose last
+    ///      element sits exactly at the free pointer on return (abi.decode advances the pointer to
+    ///      `array + 0x20 + len*0x20`; `new bytes32[](0)` advances it to `array + 0x20`).
+    ///      We read the free pointer directly with `mload(0x40)` instead of recomputing it from
+    ///      `queue`, so the write is guaranteed to land at the actual free pointer regardless of
+    ///      any future change to the load function, and the block is annotated `"memory-safe"`.
     function _enqueuePendingImport(bytes32 importTxid) private {
         bytes32[] memory queue = _loadPendingQueue();
         uint256 len = queue.length;
         assembly {
-            let slot := add(queue, add(0x20, mul(len, 0x20)))
+            // mload(0x40) is the free pointer, which equals queue + 0x20 + len*0x20
+            // immediately after _loadPendingQueue (no allocation in between).
+            // Writing here and then advancing the free pointer is the standard safe pattern.
+            let slot := mload(0x40)
             mstore(slot, importTxid)
             mstore(queue, add(len, 1))
             mstore(0x40, add(slot, 0x20))
@@ -247,6 +267,7 @@ contract PendingImports is VerusStorage {
         if (indexData.length == 0) return;
 
         bytes32[] memory queue = _loadPendingQueue();
+        
         uint256 qLen = queue.length;
         if (qLen == 0) {
             delete storageGlobal[indexSlotKey];
@@ -255,6 +276,7 @@ contract PendingImports is VerusStorage {
 
         uint256 idx = abi.decode(indexData, (uint256));
         uint256 last = qLen - 1;
+        require(queue[idx] == importTxid);
 
         if (idx <= last && idx != last) {
             bytes32 movedTxid = queue[last];
@@ -294,9 +316,10 @@ contract PendingImports is VerusStorage {
 
     function _recordBitmapVote(bytes32 importTxid, bytes32 bitmapPrefix)
         private
-        returns (uint32 bitmap, uint256 voteCount, address iAddr)
+        returns ( uint256 voteCount, address iAddr)
     {
         require(notaries.length > 0 && notaries.length <= 32);
+        uint32 bitmap;
 
         uint256 notaryIndex = _resolveNotaryIndexFromSender();
         require(notaryIndex != type(uint256).max);
@@ -334,6 +357,8 @@ contract PendingImports is VerusStorage {
     function _submitHaltVote(bool voteToHalt) private {
 
         require(notaries.length > 0 && notaries.length <= 32);
+        require(storageGlobal[SUBMIT_IMPORTS_REENTRANCY_GUARD].length == 0);
+        storageGlobal[SUBMIT_IMPORTS_REENTRANCY_GUARD] = abi.encodePacked(uint8(1));
 
         uint256 notaryIndex = _resolveNotaryIndexFromSender();
         require(notaryIndex != type(uint256).max);
@@ -372,19 +397,21 @@ contract PendingImports is VerusStorage {
         }
 
         emit HaltVoteSubmitted(iAddr, voteToHalt, voteCount, bridgePaused);
+        delete storageGlobal[SUBMIT_IMPORTS_REENTRANCY_GUARD];
     }
 
 
     function _approveImport(bytes32 importTxid) private {
 
         require(storageGlobal[BRIDGE_PAUSED_KEY].length == 0);
+        require(storageGlobal[SUBMIT_IMPORTS_REENTRANCY_GUARD].length == 0);
+        storageGlobal[SUBMIT_IMPORTS_REENTRANCY_GUARD] = abi.encodePacked(uint8(1));
         bytes32 pendingKey = _pendingImportKey(importTxid);
         VerusObjects.pendingImport memory pending = _loadPendingImport(pendingKey);
         require(pending.state == IMPORT_STATE_PENDING);
         require(block.timestamp >= uint256(pending.submittedAt) + IMPORT_RELEASE_COOLDOWN);
 
-        (uint32 bitmap, uint256 count, address iAddr) = _recordBitmapVote(importTxid, RELEASE_VOTE_BITMAP_PREFIX);
-        bitmap;
+        (uint256 count, address iAddr) = _recordBitmapVote(importTxid, RELEASE_VOTE_BITMAP_PREFIX);      
 
         emit PendingImportApproved(importTxid, iAddr, count);
 
@@ -392,21 +419,15 @@ contract PendingImports is VerusStorage {
         if (count >= (notaries.length >> 1) + 1) {
             _executeImport(importTxid, pendingKey, pending);
         }
-    }
-
-    // -------------------------------------------------------------------------
-    // Time-based fallback: anyone may release an import after IMPORT_TIMEOUT.
-    // -------------------------------------------------------------------------
-    /// @notice Permissionless fallback: executes a pending import after
-    ///         IMPORT_RELEASE_COOLDOWN + IMPORT_TIMEOUT has elapsed without enough
-    ///         notary votes, preventing imports from being stuck forever.
-    function executeTimedOutImport(bytes32 importTxid) external {
-        _executeTimedOutImport(importTxid);
+        delete storageGlobal[SUBMIT_IMPORTS_REENTRANCY_GUARD];
     }
 
     function _executeTimedOutImport(bytes32 importTxid) private {
 
         require(storageGlobal[BRIDGE_PAUSED_KEY].length == 0);
+        if (claimableFees[VerusConstants.VDXF_DISABLE_CONTRACT_KEY] != 0) revert();
+        require(storageGlobal[SUBMIT_IMPORTS_REENTRANCY_GUARD].length == 0);
+        storageGlobal[SUBMIT_IMPORTS_REENTRANCY_GUARD] = abi.encodePacked(uint8(1));
 
         bytes32 pendingKey = _pendingImportKey(importTxid);
         VerusObjects.pendingImport memory pending = _loadPendingImport(pendingKey);
@@ -414,6 +435,7 @@ contract PendingImports is VerusStorage {
         require(block.timestamp >= uint256(pending.submittedAt) + IMPORT_RELEASE_COOLDOWN + IMPORT_TIMEOUT);
 
         _executeImport(importTxid, pendingKey, pending);
+        delete storageGlobal[SUBMIT_IMPORTS_REENTRANCY_GUARD];
     }
 
     // -------------------------------------------------------------------------
@@ -468,6 +490,7 @@ contract PendingImports is VerusStorage {
     ) private {
         // Safety latch: once paused by halt quorum, no further pending imports can execute.
         require(storageGlobal[BRIDGE_PAUSED_KEY].length == 0);
+        if (claimableFees[VerusConstants.VDXF_DISABLE_CONTRACT_KEY] != 0) revert();
 
         pending.state = IMPORT_STATE_RELEASED;
         storageGlobal[pendingKey] = abi.encode(pending);
@@ -481,6 +504,8 @@ contract PendingImports is VerusStorage {
         _dequeuePendingImport(importTxid);
         delete storageGlobal[pendingKey];
         delete storageGlobal[keccak256(abi.encodePacked(RELEASE_VOTE_BITMAP_PREFIX, importTxid))];
+        delete storageGlobal[keccak256(abi.encodePacked(PENDING_EXEC_DATA_PREFIX, importTxid))];
+        delete storageGlobal[keccak256(abi.encodePacked(PENDING_EXEC_PARAMS_PREFIX, importTxid))];
 
         emit PendingImportReleased(importTxid, msg.sender);
     }

@@ -1,14 +1,24 @@
 // SPDX-License-Identifier: MIT
-// Bridge between ethereum and verus
-
 pragma solidity >=0.8.9;
 pragma abicoder v2;
-import "../Libraries/VerusObjects.sol";
 
-import "../Libraries/VerusObjectsCommon.sol";
-import "../VerusBridge/UpgradeManager.sol";
+import "../Libraries/VerusConstants.sol";
 import "../Storage/StorageMaster.sol";
 
+/**
+ * @title NotarizationSerializer
+ * @dev Clean deserializer for Verus CPBaaSNotarization binary format.
+ *      Replaces the old assembly-heavy implementation with the explicit field
+ *      parsers from NotarizationDeserializer.sol.
+ *
+ *      Called via delegatecall("deserializeNotarization(bytes)") from
+ *      VerusNotarizer.checkNotarization.  All storage side-effects
+ *      (castVote, claimableFees, bridgeConverterActive) are handled by the
+ *      caller; this contract is a pure parser that returns the 7 values
+ *      VerusNotarizer needs.
+ *
+ *      Inherits VerusStorage so the delegatecall storage layout is preserved.
+ */
 contract NotarizationSerializer is VerusStorage {
 
     address immutable VETH;
@@ -16,11 +26,8 @@ contract NotarizationSerializer is VerusStorage {
     address immutable VERUS;
     address immutable DAI;
     address immutable MKR;
-    address immutable tBTC = 0xf87F6d4412dAd7c4452e8293850Df5327f02C308; // tBTC iaddress iS8TfRPfVpKo5FVfSUzfHBQxo9KuzpnqLU as hex
-    address immutable vUSDC = 0x1Bd15cDbf0B5B8c9CC361FFBaf6D76cc2CdfD667; // vUSDC iaddress i61cV2uicKSi1rSMQCBNQeSYC3UAi9GVzd as hex
 
-    constructor(address vETH, address Bridge, address Verus, address Dai, address Mkr){
-
+    constructor(address vETH, address Bridge, address Verus, address Dai, address Mkr) {
         VETH = vETH;
         BRIDGE = Bridge;
         VERUS = Verus;
@@ -28,420 +35,539 @@ contract NotarizationSerializer is VerusStorage {
         MKR = Mkr;
     }
 
-    uint8 constant CURRENCY_LENGTH = 20;
-    uint8 constant BYTES32_LENGTH = 32;
-    uint8 constant TWO2BYTES32_LENGTH = 64;
-    uint8 constant FLAG_FRACTIONAL = 1;
-    uint8 constant FLAG_REFUNDING = 4;
-    uint8 constant FLAG_LAUNCHCONFIRMED = 0x10;
-    uint8 constant FLAG_LAUNCHCOMPLETEMARKER = 0x20;
-    uint8 constant AUX_DEST_ETH_VEC_LENGTH = 22;
-    uint8 constant AUX_DEST_VOTE_HASH = 21;
-    uint8 constant VOTE_BYTE_POSITION = 22;
-    uint8 constant UINT64_BYTES_SIZE = 8;
-    uint8 constant PROOF_TYPE_ETH = 2;
-    uint32 constant FLAG_START_NOTARIZATION = 4;
-    uint32 constant FLAG_LAUNCH_CONFIRMED = 8;
-    uint32 constant FLAG_LAUNCH_COMPLETE = 0x100;
-    uint32 constant FLAG_CONTRACT_UPGRADE = 0x200;
-    uint32 constant REQUIRED_NOTARIZATION_FLAGS = FLAG_START_NOTARIZATION + FLAG_LAUNCH_CONFIRMED + FLAG_LAUNCH_COMPLETE;
-    uint32 constant ALLOWED_OPTIONAL_NOTARIZATION_FLAGS = FLAG_CONTRACT_UPGRADE;
-    uint32 constant ALLOWED_NOTARIZATION_FLAGS = REQUIRED_NOTARIZATION_FLAGS + ALLOWED_OPTIONAL_NOTARIZATION_FLAGS;
-    enum Currency {VETH, DAI, VERUS, MKR}
-
-    //reset to empty 9-July-26
+    /// @notice No-op required by Delegator.replacecontract upgrade flow.
     function initialize() external {}
-    
-    function readVarint(bytes memory buf, uint32 idx) public pure returns (uint32 v, uint32 retidx) {
 
-        uint8 b; // store current byte content
+    // ── Notarization flags ─────────────────────────────────────────────────
+    uint32 private constant FLAG_START_NOTARIZATION = 0x004;
+    uint32 private constant FLAG_LAUNCH_CONFIRMED   = 0x008;
+    uint32 private constant FLAG_LAUNCH_COMPLETE    = 0x100;
+    uint32 private constant FLAG_CONTRACT_UPGRADE   = 0x200;
+    uint32 private constant REQUIRED_FLAGS =
+        FLAG_START_NOTARIZATION | FLAG_LAUNCH_CONFIRMED | FLAG_LAUNCH_COMPLETE;
+    uint32 private constant ALLOWED_FLAGS =
+        REQUIRED_FLAGS | FLAG_CONTRACT_UPGRADE;
 
-        for (uint32 i=0; i<10; i++) {
-            b = uint8(buf[i+idx]);
-            v = (v << 7) | b & 0x7F;
-            if (b & 0x80 == 0x80)
-                v++;
-            else
-            return (v, idx + i + 1);
-        }
-        revert(); // i=10, invalid varint stream
+    // ── CTransferDestination flags ─────────────────────────────────────────
+    uint8 private constant DEST_FLAG_GATEWAY = 0x80;
+    uint8 private constant DEST_FLAG_AUX     = 0x40;
+
+    // ── CProofRoot types ───────────────────────────────────────────────────
+    uint16 private constant PROOF_TYPE_PBAAS = 1;
+    uint16 private constant PROOF_TYPE_ETH   = 2;
+
+    // ── Fixed byte widths ──────────────────────────────────────────────────
+    uint32 private constant SZ_U160 = 20;
+    uint32 private constant SZ_U256 = 32;
+    uint32 private constant SZ_U32  = 4;
+    uint32 private constant SZ_U64  = 8;
+
+    // ── Version constants ──────────────────────────────────────────────────
+    uint64 private constant VERSION_PBAAS         = 1;
+    uint64 private constant VERSION_PBAAS_MAINNET = 2;
+
+    // ── Proposer packing ──────────────────────────────────────────────────
+    // Offset of the vote address inside the first auxDest sub-vector.
+    uint32 private constant AUX_VOTE_ADDR_OFFSET = 1;
+    // Minimum sub-vector length that contains a valid vote address.
+    uint32 private constant AUX_VOTE_MIN_LEN = 21;
+
+    // ── CCurrencyState flags ───────────────────────────────────────────────
+    uint16 private constant CS_FLAG_FRACTIONAL      = 0x001;
+    uint16 private constant CS_FLAG_REFUNDING       = 0x004;
+    uint16 private constant CS_FLAG_LAUNCH_CONFIRMED = 0x010;
+    uint16 private constant CS_FLAG_LAUNCH_COMPLETE  = 0x020;
+    // Bridge is launched when FRACTIONAL + LAUNCH_CONFIRMED + LAUNCH_COMPLETE
+    // are all set and REFUNDING is clear.
+    uint16 private constant CS_LAUNCH_CHECK_MASK =
+        CS_FLAG_FRACTIONAL | CS_FLAG_REFUNDING |
+        CS_FLAG_LAUNCH_CONFIRMED | CS_FLAG_LAUNCH_COMPLETE;
+    uint16 private constant CS_LAUNCH_REQUIRED =
+        CS_FLAG_FRACTIONAL | CS_FLAG_LAUNCH_CONFIRMED | CS_FLAG_LAUNCH_COMPLETE;
+
+    // ══════════════════════════════════════════════════════════════════════
+    //  External entry point
+    //  Called via delegatecall as "deserializeNotarization(bytes)" from
+    //  VerusNotarizer. Forwards to the internal parser with offset = 0.
+    // ══════════════════════════════════════════════════════════════════════
+
+    function deserializeNotarization(bytes memory notarization)
+        external view
+        returns (bytes32 proposerAndLaunched,
+                 bytes32 prevnotarizationtxid,
+                 bytes32 hashprevcrossnotarization,
+                 bytes32 stateRoot,
+                 uint32  height,
+                 address votetxid,
+                 uint256 reserves)
+    {
+        return _deserializeNotarization(notarization, 0);
     }
 
-    function deserializeNotarization(bytes memory notarization) external returns (bytes32 proposerAndLaunched, 
-                                                                                    bytes32 prevnotarizationtxid, 
-                                                                                    bytes32 hashprevcrossnotarization, 
-                                                                                    bytes32 stateRoot, 
-                                                                                    uint32 height) {
-        
-        uint32 nextOffset;
-        uint16 bridgeConverterLaunched;
-        uint8 proposerType;
-        uint32 notarizationFlags;
-        uint176 proposerMain;
+    // ══════════════════════════════════════════════════════════════════════
+    //  Internal parser
+    // ══════════════════════════════════════════════════════════════════════
 
-        VerusObjectsCommon.UintReader memory readerLen;
+    function _deserializeNotarization(bytes memory data, uint32 offset)
+        internal view
+        returns (bytes32 proposerAndLaunched,
+                 bytes32 prevnotarizationtxid,
+                 bytes32 hashprevcrossnotarization,
+                 bytes32 stateRoot,
+                 uint32  height,
+                 address votetxid,
+                 uint256 reserves)
+    {
+        uint32 pos = offset;
 
-        readerLen = readVarintStruct(notarization, 0);    // get the length of the varint version
-        readerLen = readVarintStruct(notarization, readerLen.offset);        // get the length of the flags
+        // ── version ───────────────────────────────────────────────────────
+        uint64 version;
+        (version, pos) = _readVarint(data, pos);
 
-        notarizationFlags = uint32(readerLen.value);
-        nextOffset = readerLen.offset;
-
+        // ── flags ─────────────────────────────────────────────────────────
+        uint64 flags;
+        (flags, pos) = _readVarint(data, pos);
         require(
-            (notarizationFlags & REQUIRED_NOTARIZATION_FLAGS) == REQUIRED_NOTARIZATION_FLAGS &&
-            (notarizationFlags & ~ALLOWED_NOTARIZATION_FLAGS) == 0,
+            (uint32(flags) & REQUIRED_FLAGS) == REQUIRED_FLAGS &&
+            (uint32(flags) & ~ALLOWED_FLAGS) == 0,
             "invalid notarization flags"
         );
 
+        // ── proposer (CTransferDestination) ───────────────────────────────
+        (proposerAndLaunched, votetxid, pos) = _readTransferDestination(data, pos);
+
+        // ── currencyID (uint160) – validate it is VETH ────────────────────
+        address currencyId;
         assembly {
-                    nextOffset := add(nextOffset, 1)  // move to read type
-                    proposerType := mload(add(nextOffset, notarization))
-                    if gt(and(proposerType, 0xff), 0) {
-                        nextOffset := add(nextOffset, 21) // move to proposer, type and vector length
-                        proposerMain := mload(add(nextOffset, notarization))
-                        //remove type flags of proposer.
-                        proposerMain := and(proposerMain, 0x0fffffffffffffffffffffffffffffffffffffffffff)
-                    }
-                 }
+            currencyId := shr(96, mload(add(add(data, 0x20), pos)))
+        }
+        require(currencyId == VETH, "invalid notarization currencyid");
+        pos += SZ_U160;
 
-        if (proposerType & VerusConstants.FLAG_DEST_GATEWAY == VerusConstants.FLAG_DEST_GATEWAY)
-        {
-            nextOffset += VerusConstants.FLAG_DEST_GATEWAY_LENGTH;  // skip past gateway ID to get to auxdest vector length
+        // ── main CCoinbaseCurrencyState ───────────────────────────────────
+        pos = _skipCoinbaseCurrencyState(data, pos);
+
+        // ── notarizationHeight (uint32 LE) – skip ─────────────────────────
+        pos += SZ_U32;
+
+        // ── prevNotarizationTxId (uint256) ────────────────────────────────
+        prevnotarizationtxid = _readBytes32(data, pos);
+        pos += SZ_U256;
+
+        // ── prevNotarizationOut (uint32 LE) – skip ────────────────────────
+        pos += SZ_U32;
+
+        // ── hashPrevCrossNotarization (uint256) ───────────────────────────
+        hashprevcrossnotarization = _readBytes32(data, pos);
+        pos += SZ_U256;
+
+        // ── prevHeight (uint32 LE) – skip ─────────────────────────────────
+        pos += SZ_U32;
+
+        // ── currencyStates vector ─────────────────────────────────────────
+        // Also extracts reserves and detects bridge launch.
+        bool launched;
+        (pos, reserves, launched) = _skipCurrencyStatesVector(data, pos, version);
+
+        // Pack bridgeConverterLaunched flag at bit 176 of proposerAndLaunched.
+        // VerusNotarizer gates activation on !bridgeConverterActive, so we pack
+        // unconditionally when detected and let the caller decide.
+        if (launched) {
+            proposerAndLaunched |= bytes32(uint256(1) << VerusConstants.UINT176_BITS_SIZE);
         }
 
-        if (proposerType & VerusConstants.FLAG_DEST_AUX == VerusConstants.FLAG_DEST_AUX)
-        {
-            nextOffset += 1;  // goto auxdest parent vec length position
-            nextOffset = processAux(notarization, nextOffset);
-            nextOffset -= 1;  // NOTE: Next Varint call takes array pos not array pos +1
-        }
-        //position 0 of the rolling vote is use to determine whether votes have started
-        else if (rollingVoteIndex != VerusConstants.DEFAULT_INDEX_VALUE){
-            castVote(address(0));
-        }
-
-        address currencyid;
-        assembly {
-                    nextOffset := add(nextOffset, CURRENCY_LENGTH) //skip currencyid
-                    currencyid := mload(add(notarization, nextOffset))      // currencyid
-                 }
-        require(currencyid == VETH, "invalid notarization currencyid");
-
-        (, nextOffset) = deserializeCoinbaseCurrencyState(notarization, nextOffset);
-
-        assembly {
-                    nextOffset := add(nextOffset, 4) // skip notarizationheight
-                    nextOffset := add(nextOffset, BYTES32_LENGTH) // move to read prevnotarizationtxid
-                    prevnotarizationtxid := mload(add(notarization, nextOffset))      // prevnotarizationtxid 
-                    nextOffset := add(nextOffset, 4) //skip prevnotarizationout
-                    nextOffset := add(nextOffset, BYTES32_LENGTH) // move to read hashprevcrossnotarization
-                    hashprevcrossnotarization := mload(add(notarization, nextOffset))      // hashprevcrossnotarization 
-                    nextOffset := add(nextOffset, 4) //skip prevheight
-                    nextOffset := add(nextOffset, 1) //move to read length of notarizationcurrencystate
-                }
-
-        readerLen = readCompactSizeLE(notarization, nextOffset);    // get the length of the currencyState
-
-        nextOffset = readerLen.offset - 1;   //readCompactSizeLE returns offset of next byte so move back to start of currencyState
-
-        for (uint i = 0; i < readerLen.value; i++)
-        {
-            uint16 temp; // store the currency state flags
-            (temp, nextOffset) = deserializeCoinbaseCurrencyState(notarization, nextOffset);
-            bridgeConverterLaunched |= temp;
-        }
-        
-        proposerAndLaunched = bytes32(uint256(proposerMain));
-       
-        if (!bridgeConverterActive && bridgeConverterLaunched > 0) {
-                proposerAndLaunched |= bytes32(uint256(bridgeConverterLaunched) << VerusConstants.UINT176_BITS_SIZE);  // Shift 16bit value 22 bytes to pack in bytes32
-        }
-
-        nextOffset++; //move forwards to read le
-        readerLen = readCompactSizeLE(notarization, nextOffset);    // get the length of proofroot array
-
-        (stateRoot, height) = deserializeProofRoots(notarization, uint32(readerLen.value), nextOffset);
+        // ── proofRoots vector ─────────────────────────────────────────────
+        (stateRoot, height) = _readProofRoots(data, pos, version);
     }
 
-    function deserializeCoinbaseCurrencyState(bytes memory notarization, uint32 nextOffset) private returns (uint16, uint32)
+    // ══════════════════════════════════════════════════════════════════════
+    //  Variable-length integer readers
+    // ══════════════════════════════════════════════════════════════════════
+
+    /**
+     * @dev Read a Verus/Bitcoin varint from `data[pos]`.
+     *      Each byte contributes 7 bits; high bit set means more follows.
+     */
+    function _readVarint(bytes memory data, uint32 pos)
+        internal pure returns (uint64 v, uint32 newPos)
     {
-        address currencyid;
-        uint16 bridgeLaunched;
-        uint16 flags;
-        
-        assembly {
-            nextOffset := add(nextOffset, 2) // move to version
-            nextOffset := add(nextOffset, 2) // move to flags
-            flags := mload(add(notarization, nextOffset))      // flags 
-            nextOffset := add(nextOffset, CURRENCY_LENGTH) //skip notarization currencystatecurrencyid
-            currencyid := mload(add(notarization, nextOffset))      // currencyid 
+        for (uint32 i = 0; i < 10; i++) {
+            uint8 b;
+            assembly {
+                b := byte(0, mload(add(add(data, 0x20), add(pos, i))))
+            }
+            v = uint64((v << 7) | (b & 0x7f));
+            if (b & 0x80 != 0x80) {
+                return (v, pos + i + 1);
+            }
+            v++;
         }
-        flags = (flags >> 8) | (flags << 8);
-        if ((currencyid == BRIDGE) && flags & (FLAG_FRACTIONAL + FLAG_REFUNDING + FLAG_LAUNCHCONFIRMED + FLAG_LAUNCHCOMPLETEMARKER) == 
-            (FLAG_FRACTIONAL + FLAG_LAUNCHCONFIRMED + FLAG_LAUNCHCOMPLETEMARKER)) 
-        {
-            bridgeLaunched = 1;
-        }
-        assembly {                    
-                    
-                    nextOffset := add(nextOffset, 1) // move to  read currency state length
-        }
-        VerusObjectsCommon.UintReader memory readerLen;
-
-        readerLen = readCompactSizeLE(notarization, nextOffset);        // get the length currencies
-
-        // reserves[2] contain the scaled reserve amounts for ETH and DAI
-        uint daiEthVRSCMKRReserves;
-        if (currencyid == BRIDGE && bridgeConverterActive) {
-            daiEthVRSCMKRReserves = getReserves(notarization, nextOffset, uint8(readerLen.value));
-            claimableFees[bytes32(uint256(uint160(VerusConstants.VDXF_ETH_DAI_VRSC_LAST_RESERVES)))] = daiEthVRSCMKRReserves; //store the fees in the notaryFeePool
-        }
-
-        nextOffset = nextOffset + (uint32(readerLen.value) * BYTES32_LENGTH) + 2;  
-
-        readerLen = readVarintStruct(notarization, nextOffset);        // get the length of the initialsupply
-        readerLen = readVarintStruct(notarization, readerLen.offset);        // get the length of the emitted
-        readerLen = readVarintStruct(notarization, readerLen.offset);        // get the length of the supply
-        nextOffset = readerLen.offset;
-        assembly {
-                    nextOffset := add(nextOffset, 33) //skip coinbasecurrencystate first 4 items fixed at 4 x 8
-                }
-
-        readerLen = readCompactSizeLE(notarization, nextOffset);    // get the length of the reservein array of uint64
-        nextOffset = readerLen.offset + (uint32(readerLen.value) * 60) + 6;     //skip 60 bytes of rest of state knowing array size always same as first
-
-        return (bridgeLaunched, nextOffset);
+        revert("invalid varint");
     }
 
-    function getReserves (bytes memory notarization, uint32 nextOffset, uint8 currenciesLen) private view returns (uint) {
-        
-        
-        Currency[4] memory currencyIndexes;
-
-        for (uint8 i = 0; i < currenciesLen; i++)
-        {
-            address currency;
-            assembly {
-                    nextOffset := add(nextOffset, CURRENCY_LENGTH) // move to  read currency length
-                    currency := mload(add(notarization, nextOffset)) // move to  read currencyid
-                }
-            if (currency == VETH)
-            {
-               currencyIndexes[i] = Currency.VETH;
-            }
-            else if (currency == DAI)
-            {
-               currencyIndexes[i] = Currency.DAI;
-            }
-            else if (currency == VERUS)
-            {
-               currencyIndexes[i] = Currency.VERUS;
-            }
-            else if (currency == MKR)
-            {
-               currencyIndexes[i] = Currency.MKR;
-            }
-            
-        }
-
-        //Skip the weights
-        nextOffset = nextOffset + 1 + (uint32(currenciesLen) * 4) + 1; //move to read len of reserves
-
-        //read the reserves, position [0..63] for DAI, [64..127] for ETH  [128..191] for VRSC pack into uint 64bit chunks
-        uint256 ethToDaiRatios;
-        for (uint8 i = 0; i < currenciesLen; i++)
-        {
-            uint64 reserve;
-            assembly {
-                    nextOffset := add(nextOffset, UINT64_BYTES_SIZE) // move to  read currency length
-                    reserve := mload(add(notarization, nextOffset)) // move to  read currencyid
-                }
-
-            ethToDaiRatios |= uint256(serializeUint64(reserve)) << (uint256(currencyIndexes[i]) << 6);
-        }
-
-        assembly {                    
-            nextOffset := add(nextOffset, 1) // move forward to read next varint.
-        }
-
-        return ethToDaiRatios;  
-    }
-
-    function deserializeProofRoots (bytes memory notarization, uint32 size, uint32 nextOffset) private view returns (bytes32 stateRoot, uint32 height)
+    /**
+     * @dev Read a Bitcoin compact-size integer (little-endian).
+     *      <253 → 1 byte   253+2LE → 3 bytes   254+4LE → 5 bytes
+     */
+    function _readCompactSize(bytes memory data, uint32 pos)
+        internal pure returns (uint64 v, uint32 newPos)
     {
-        for (uint i = 0; i < size; i++)
-        {
-            uint16 proofType;
-            address systemID;
-            bytes32 tempStateRoot;
-            uint32 tempHeight;
+        uint8 first;
+        assembly {
+            first := byte(0, mload(add(add(data, 0x20), pos)))
+        }
+        newPos = pos + 1;
 
+        if (first < 253) {
+            return (first, newPos);
+        }
+        if (first == 253) {
+            uint8 b0; uint8 b1;
             assembly {
-                nextOffset := add(nextOffset, 2) // move to version
-                nextOffset := add(nextOffset, 2) // move to read type
-                proofType := mload(add(notarization, nextOffset))      // read proofType 
-                nextOffset := add(nextOffset, CURRENCY_LENGTH) // move to read systemID
-                systemID := mload(add(notarization, nextOffset))  
-                nextOffset := add(nextOffset, 4) // move to height
-                tempHeight := mload(add(notarization, nextOffset))  
-                nextOffset := add(nextOffset, BYTES32_LENGTH) // move to read stateroot
-                tempStateRoot := mload(add(notarization, nextOffset))  
-                nextOffset := add(nextOffset, BYTES32_LENGTH) // move to read blockhash
-                nextOffset := add(nextOffset, BYTES32_LENGTH) // move to power
+                b0 := byte(0, mload(add(add(data, 0x20), newPos)))
+                b1 := byte(0, mload(add(add(data, 0x20), add(newPos, 1))))
             }
-            
-            if(systemID == VERUS)
-            {
-                stateRoot = tempStateRoot;
-                height = serializeUint32(tempHeight); //swapendian
+            return (uint64(b0) | (uint64(b1) << 8), newPos + 2);
+        }
+        if (first == 254) {
+            uint8 b0; uint8 b1; uint8 b2; uint8 b3;
+            assembly {
+                b0 := byte(0, mload(add(add(data, 0x20), newPos)))
+                b1 := byte(0, mload(add(add(data, 0x20), add(newPos, 1))))
+                b2 := byte(0, mload(add(add(data, 0x20), add(newPos, 2))))
+                b3 := byte(0, mload(add(add(data, 0x20), add(newPos, 3))))
             }
+            return (
+                uint64(b0) | (uint64(b1) << 8) | (uint64(b2) << 16) | (uint64(b3) << 24),
+                newPos + 4
+            );
+        }
+        revert("compact-size 0xff not supported");
+    }
 
-            //swap 16bit endian
-            if(((proofType >> 8) | (proofType << 8)) == PROOF_TYPE_ETH){
-                assembly {
-                    nextOffset := add(nextOffset, 8) // move to gasprice
-                }
-            }
-        }
- 
-    }
-    function readVarintStruct(bytes memory buf, uint idx) public pure returns (VerusObjectsCommon.UintReader memory) {
-        uint8 b;
-        uint64 v;
-        uint retidx;
-    
-        assembly {  ///assemmbly  2267 GAS
-            let end := add(idx, 10)
-            let i := idx
-            retidx := add(idx, 1)
-            for {} lt(i, end) {} {
-                b := mload(add(buf, retidx))
-                i := add(i, 1)
-                v := or(shl(7, v), and(b, 0x7f))
-                if iszero(eq(and(b, 0x80), 0x80)) {
-                    break
-                }
-                v := add(v, 1)
-                retidx := add(retidx, 1)
-            }
-        }
-        return VerusObjectsCommon.UintReader(uint32(retidx), v);
-    }
-    
-    function processAux (bytes memory firstObj, uint32 nextOffset) private returns (uint32)
+    // ══════════════════════════════════════════════════════════════════════
+    //  Primitive readers
+    // ══════════════════════════════════════════════════════════════════════
+
+    function _readBytes32(bytes memory data, uint32 pos)
+        internal pure returns (bytes32 result)
     {
-                                                  
-            VerusObjectsCommon.UintReader memory readerLen;
-            readerLen = readCompactSizeLE(firstObj, nextOffset);    // get the length of the auxDest
-            nextOffset = readerLen.offset;
-            uint arraySize = readerLen.value;
-            address tempAddress;
-            
-            for (uint i = 0; i < arraySize; i++)
-            {
-                    readerLen = readCompactSizeLE(firstObj, nextOffset);    // get the length of the auxDest sub array
+        assembly {
+            result := mload(add(add(data, 0x20), pos))
+        }
+    }
+
+    function _readUint32LE(bytes memory data, uint32 pos)
+        internal pure returns (uint32 result)
+    {
+        uint8 b0; uint8 b1; uint8 b2; uint8 b3;
+        assembly {
+            b0 := byte(0, mload(add(add(data, 0x20), pos)))
+            b1 := byte(0, mload(add(add(data, 0x20), add(pos, 1))))
+            b2 := byte(0, mload(add(add(data, 0x20), add(pos, 2))))
+            b3 := byte(0, mload(add(add(data, 0x20), add(pos, 3))))
+        }
+        result = uint32(b0) | (uint32(b1) << 8) | (uint32(b2) << 16) | (uint32(b3) << 24);
+    }
+
+    function _swapUint64(uint64 v) private pure returns (uint64) {
+        v = ((v & 0xFF00FF00FF00FF00) >> 8)  | ((v & 0x00FF00FF00FF00FF) << 8);
+        v = ((v & 0xFFFF0000FFFF0000) >> 16) | ((v & 0x0000FFFF0000FFFF) << 16);
+        return (v >> 32) | (v << 32);
+    }
+
+    function _readUint64LE(bytes memory data, uint32 pos)
+        internal pure returns (uint64 result)
+    {
+        assembly {
+            result := shr(192, mload(add(add(data, 0x20), pos)))
+        }
+        result = _swapUint64(result);
+    }
+
+    // ══════════════════════════════════════════════════════════════════════
+    //  CTransferDestination
+    // ══════════════════════════════════════════════════════════════════════
+
+    /**
+     * @dev Read a CTransferDestination.
+     *      proposer: type(1)+destLen(1)+address(20) packed into lower 176 bits,
+     *                type-flag nibble cleared. Zero when destLen != 20.
+     *      votetxid: 20-byte address at byte 1 of the first auxDest sub-vector.
+     */
+    function _readTransferDestination(bytes memory data, uint32 pos)
+        internal pure
+        returns (bytes32 proposer, address votetxid, uint32 newPos)
+    {
+        uint8 destType;
+        assembly {
+            destType := byte(0, mload(add(add(data, 0x20), pos)))
+        }
+        uint32 typePos = pos;
+        pos++;
+
+        uint64 destLen;
+        (destLen, pos) = _readCompactSize(data, pos);
+
+        if (destLen == 20) {
+            assembly {
+                let p := add(add(data, 0x20), typePos)
+                proposer := shr(80, mload(p))
+                proposer := and(proposer, 0x0fffffffffffffffffffffffffffffffffffffffffff)
+            }
+        }
+        pos += uint32(destLen);
+
+        // Optional gateway: gatewayID(20) + gatewayCode(20) + fees(8) = 48 bytes
+        if (destType & DEST_FLAG_GATEWAY != 0) {
+            pos += 48;
+        }
+
+        // Optional auxDests: vec<vec<uint8>>
+        if (destType & DEST_FLAG_AUX != 0) {
+            uint64 numAux;
+            (numAux, pos) = _readCompactSize(data, pos);
+            for (uint64 i = 0; i < numAux; i++) {
+                uint64 auxLen;
+                (auxLen, pos) = _readCompactSize(data, pos);
+                if (i == 0 && auxLen >= AUX_VOTE_MIN_LEN) {
                     assembly {
-                        tempAddress := mload(add(add(firstObj, nextOffset),AUX_DEST_ETH_VEC_LENGTH))
+                        votetxid := shr(96, mload(add(add(data, 0x20), add(pos, 1))))
                     }
-
-                    castVote(tempAddress);
-                    
-                    nextOffset = (readerLen.offset + uint32(readerLen.value));
+                }
+                pos += uint32(auxLen);
             }
-            return nextOffset;
+        }
+
+        newPos = pos;
     }
 
-    function castVote(address votetxid) private {
+    // ══════════════════════════════════════════════════════════════════════
+    //  CCurrencyState / CCoinbaseCurrencyState skippers
+    // ══════════════════════════════════════════════════════════════════════
 
-        // If the vote is address(0) and the vote has not started, or the vote hash has already been used, return
-        if ((votetxid == address(0) && rollingVoteIndex == VerusConstants.DEFAULT_INDEX_VALUE)
-                || successfulVoteHashes[votetxid] == VerusConstants.MAX_UINT256) {
-            return;
-        }
+    /**
+     * @dev Advance past a CCurrencyState.
+     *      Layout: version(2) + flags(2) + currencyID(20)
+     *              + currencies(vec<u160>) + weights(vec<i32>) + reserves(vec<i64>)
+     *              + varint(initialSupply) + varint(emitted) + varint(supply)
+     */
+    function _skipCurrencyState(bytes memory data, uint32 pos)
+        internal pure returns (uint32)
+    {
+        pos += 24; // version(2) + flags(2) + currencyID(20)
 
-        // if the vote hash has not been used, save the vote start timestamp
-        if(votetxid != address(0) && successfulVoteHashes[votetxid] == 0) {
-            successfulVoteHashes[votetxid] = block.timestamp;
-        } else if (votetxid != address(0) && (block.timestamp - successfulVoteHashes[votetxid]) > (VerusConstants.SECONDS_IN_DAY * 20)) {
-            // if 20 days have passed since the vote started, set the vote hash as used
-            successfulVoteHashes[votetxid] = VerusConstants.MAX_UINT256;
+        uint64 n;
+        (n, pos) = _readCompactSize(data, pos);
+        pos += uint32(n) * SZ_U160;  // currencies
 
-            // reset the rolling vote index to DEFAULT, if there are other hashes they will continue, otherwise voting will go idle.
-            rollingVoteIndex = VerusConstants.DEFAULT_INDEX_VALUE;
-            return;
-        }
-        
-        if(rollingVoteIndex >= (VerusConstants.VOTE_LENGTH - 1)) {
-            rollingVoteIndex = 0;
-        } else {
-            rollingVoteIndex = rollingVoteIndex + 1;
-        }
+        (n, pos) = _readCompactSize(data, pos);
+        pos += uint32(n) * SZ_U32;   // weights
 
-        // save an empty global write if the value to be written is the same as the current value
-        if (votetxid != rollingUpgradeVotes[rollingVoteIndex]) {
-            rollingUpgradeVotes[rollingVoteIndex] = votetxid;
-        }
+        (n, pos) = _readCompactSize(data, pos);
+        pos += uint32(n) * SZ_U64;   // reserves
 
+        (, pos) = _readVarint(data, pos); // initialSupply
+        (, pos) = _readVarint(data, pos); // emitted
+        (, pos) = _readVarint(data, pos); // supply
+
+        return pos;
     }
 
-    function readCompactSizeLE(bytes memory incoming, uint32 offset) public pure returns(VerusObjectsCommon.UintReader memory) {
+    /**
+     * @dev Advance past a CCoinbaseCurrencyState (CCurrencyState + extra fields).
+     *      Extra: primaryCurrencyOut(8)+preConvertedOut(8)+primaryCurrencyFees(8)
+     *             +primaryCurrencyConversionFees(8) = 32 bytes fixed
+     *             + reserveIn + primaryCurrencyIn + reserveOut + conversionPrice
+     *             + viaConversionPrice + fees (6 × vec<i64>)
+     *             + priorWeights (vec<i32>) + conversionFees (vec<i64>)
+     */
+    function _skipCoinbaseCurrencyState(bytes memory data, uint32 pos)
+        internal pure returns (uint32)
+    {
+        pos = _skipCurrencyState(data, pos);
+        pos += 4 * SZ_U64; // four fixed int64 fields
 
-        uint8 oneByte;
-        assembly {
-            oneByte := mload(add(incoming, offset))
+        uint64 n;
+        for (uint8 i = 0; i < 6; i++) {
+            (n, pos) = _readCompactSize(data, pos);
+            pos += uint32(n) * SZ_U64;
         }
-        offset++;
-        if (oneByte < 253)
-        {
-            return VerusObjectsCommon.UintReader(offset, oneByte);
-        }
-        else if (oneByte == 253)
-        {
-            offset += 1; // after initial ++, align so 2-byte value is in mload LSBs
-            uint16 twoByte;
+        (n, pos) = _readCompactSize(data, pos);
+        pos += uint32(n) * SZ_U32;   // priorWeights
+        (n, pos) = _readCompactSize(data, pos);
+        pos += uint32(n) * SZ_U64;   // conversionFees
+
+        return pos;
+    }
+
+    // ══════════════════════════════════════════════════════════════════════
+    //  Reserve extraction
+    // ══════════════════════════════════════════════════════════════════════
+
+    /**
+     * @dev Read packed reserve values from a fractional CCurrencyState.
+     *      Maps VETH→slot0, DAI→slot1, VERUS→slot2, MKR→slot3.
+     *      Each slot is a 64-bit LE value packed into the corresponding
+     *      64-bit range of the returned uint256.
+     *
+     * @param currPos       Position of the currencies compact-size byte.
+     * @param numCurrencies Value already read from currPos.
+     */
+    function _getReserves(bytes memory data, uint32 currPos, uint8 numCurrencies)
+        internal view returns (uint256 packed)
+    {
+        uint8[4] memory currSlot;
+        currSlot[0] = 0xff; currSlot[1] = 0xff;
+        currSlot[2] = 0xff; currSlot[3] = 0xff;
+
+        uint8 cap = numCurrencies < 4 ? numCurrencies : 4;
+        for (uint8 i = 0; i < cap; i++) {
+            address currency;
+            uint32 p = currPos + 1 + uint32(i) * 20;
             assembly {
-                twoByte := mload(add(incoming, offset))
+                currency := shr(96, mload(add(add(data, 0x20), p)))
             }
-            uint16 value16 = ((twoByte << 8) & 0xffff) | twoByte >> 8;
-            require(value16 >= 253, "Non-canonical compact-size");
-            return VerusObjectsCommon.UintReader(offset + 1, value16);
+            if      (currency == VETH)  currSlot[i] = 0;
+            else if (currency == DAI)   currSlot[i] = 1;
+            else if (currency == VERUS) currSlot[i] = 2;
+            else if (currency == MKR)   currSlot[i] = 3;
         }
-        else if (oneByte == 254)
-        {
-            offset += 3; // after initial ++, align so 4-byte value is in mload LSBs
-            uint32 fourByte;
+
+        // reservePos = currPos + 1(cs) + n*20(addrs) + 1(weights-cs) + n*4(weights) + 1(reserves-cs)
+        //            = currPos + 3 + n*24
+        uint32 reservePos = currPos + 3 + uint32(numCurrencies) * 24;
+
+        for (uint8 i = 0; i < cap; i++) {
+            if (currSlot[i] != 0xff) {
+                uint64 reserve = _readUint64LE(data, reservePos + uint32(i) * 8);
+                packed |= uint256(reserve) << (uint256(currSlot[i]) << 6);
+            }
+        }
+    }
+
+    // ══════════════════════════════════════════════════════════════════════
+    //  currencyStates vector
+    // ══════════════════════════════════════════════════════════════════════
+
+    /**
+     * @dev Advance past the currencyStates vector.
+     *      Also extracts packed reserves from the first fractional BRIDGE state
+     *      and detects whether the bridge launch conditions are met.
+     *
+     *      Bridge launched when BRIDGE currencyState has:
+     *        CS_FLAG_FRACTIONAL | CS_FLAG_LAUNCH_CONFIRMED | CS_FLAG_LAUNCH_COMPLETE
+     *        all set, and CS_FLAG_REFUNDING clear.
+     *
+     *      v1: each entry prefixed by a 20-byte key.
+     *      v2: no prefix; currencyID is inside the struct.
+     */
+    function _skipCurrencyStatesVector(bytes memory data, uint32 pos, uint64 version)
+        internal view returns (uint32 newPos, uint256 reserves, bool launched)
+    {
+        uint64 numStates;
+        (numStates, pos) = _readCompactSize(data, pos);
+
+        for (uint64 i = 0; i < numStates; i++) {
+            if (version == VERSION_PBAAS) {
+                pos += SZ_U160; // v1 key prefix
+            }
+
+            uint16 csFlags;
+            address currencyId;
             assembly {
-                fourByte := mload(add(incoming, offset))
+                let b0 := byte(0, mload(add(add(data, 0x20), add(pos, 2))))
+                let b1 := byte(0, mload(add(add(data, 0x20), add(pos, 3))))
+                csFlags    := or(b0, shl(8, b1))
+                currencyId := shr(96, mload(add(add(data, 0x20), add(pos, 4))))
             }
-            uint32 value32 = serializeUint32(fourByte);
-            require(value32 >= 65536, "Non-canonical compact-size");
-            return VerusObjectsCommon.UintReader(offset + 1, value32);
+
+            if (currencyId == BRIDGE) {
+                // Detect bridge launch: FRACTIONAL + LAUNCH_CONFIRMED + LAUNCH_COMPLETE set, REFUNDING clear.
+                if (!launched &&
+                    (csFlags & CS_LAUNCH_CHECK_MASK) == CS_LAUNCH_REQUIRED)
+                {
+                    launched = true;
+                }
+
+                // Extract reserves from the first fractional BRIDGE state.
+                if (reserves == 0 && (csFlags & CS_FLAG_FRACTIONAL) != 0) {
+                    uint32 csPos = pos + 24; // skip version(2)+flags(2)+currencyID(20)
+                    uint8 numCurrencies;
+                    assembly {
+                        numCurrencies := byte(0, mload(add(add(data, 0x20), csPos)))
+                    }
+                    reserves = _getReserves(data, csPos, numCurrencies);
+                }
+            }
+
+            pos = _skipCoinbaseCurrencyState(data, pos);
         }
-        else
-        {
-            revert("Compact-size too large");
-        }
+        newPos = pos;
     }
 
-    function serializeUint32(uint32 number) public pure returns(uint32){
-        // swap bytes
-        number = ((number & 0xFF00FF00) >> 8) | ((number & 0x00FF00FF) << 8);
-        number = (number >> 16) | (number << 16);
-        return number;
-    }
+    // ══════════════════════════════════════════════════════════════════════
+    //  proofRoots vector
+    // ══════════════════════════════════════════════════════════════════════
 
-    function serializeUint64(uint64 v) public pure returns(uint64){
-        
-        v = ((v & 0xFF00FF00FF00FF00) >> 8) |
-        ((v & 0x00FF00FF00FF00FF) << 8);
+    /**
+     * @dev Iterate the proofRoots vector; return stateRoot and height from the
+     *      FIRST type-1 (PBaaS) proof root whose systemID == VERUS.
+     *      Duplicate systemIDs are ignored (first-wins, matching C++ std::map).
+     *
+     *      CProofRoot layout:
+     *        version(i16 LE) + type(i16 LE) + systemID(u160)
+     *        + rootHeight(u32 LE) + stateRoot(u256) + blockHash(u256)
+     *        + compactPower(u256) [+ gasPrice(i64 LE) when type==ETH]
+     *
+     *      v1: each entry prefixed by a 20-byte systemID key.
+     *      v2: no prefix.
+     */
+    function _readProofRoots(bytes memory data, uint32 pos, uint64 version)
+        internal view returns (bytes32 stateRoot, uint32 height)
+    {
+        uint64 numRoots;
+        (numRoots, pos) = _readCompactSize(data, pos);
+        bool found;
 
-        // swap 2-byte long pairs
-        v = ((v & 0xFFFF0000FFFF0000) >> 16) |
-            ((v & 0x0000FFFF0000FFFF) << 16);
+        for (uint64 i = 0; i < numRoots; i++) {
+            if (version == VERSION_PBAAS) {
+                pos += SZ_U160;
+            }
 
-        // swap 4-byte long pairs
-        v = (v >> 32) | (v << 32);
-        return v;
+            uint16 proofType;
+            assembly {
+                let b0 := byte(0, mload(add(add(data, 0x20), add(pos, 2))))
+                let b1 := byte(0, mload(add(add(data, 0x20), add(pos, 3))))
+                proofType := or(b0, shl(8, b1))
+            }
+            pos += 4; // version(2) + type(2)
+
+            address systemID;
+            assembly {
+                systemID := shr(96, mload(add(add(data, 0x20), pos)))
+            }
+            pos += SZ_U160;
+
+            uint32 thisHeight = _readUint32LE(data, pos);
+            pos += SZ_U32;
+
+            bytes32 thisStateRoot = _readBytes32(data, pos);
+            pos += SZ_U256;
+
+            pos += SZ_U256; // blockHash
+            pos += SZ_U256; // compactPower
+
+            if (proofType == PROOF_TYPE_ETH) {
+                pos += SZ_U64; // gasPrice
+            }
+
+            if (!found && proofType == PROOF_TYPE_PBAAS && systemID == VERUS) {
+                stateRoot = thisStateRoot;
+                height    = thisHeight;
+                found     = true;
+            }
+        }
     }
 }
 
