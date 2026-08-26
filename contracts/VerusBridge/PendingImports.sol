@@ -24,7 +24,6 @@ contract PendingImports is VerusStorage {
     bytes32 constant PENDING_EXEC_DATA_PREFIX   = keccak256("pending.exec.data");
     bytes32 constant PENDING_EXEC_PARAMS_PREFIX = keccak256("pending.exec.params");
 
-    address immutable SELF;
     address immutable VETH;
 
     uint8 constant IMPORT_STATE_PENDING = 1;
@@ -41,7 +40,6 @@ contract PendingImports is VerusStorage {
     event HaltVoteSubmitted(address indexed notarizerID, bool voteToHalt, uint256 voteCount, bool bridgePaused);
 
     constructor(address veth) {
-        SELF = address(this);
         VETH = veth;
     }
 
@@ -64,8 +62,6 @@ contract PendingImports is VerusStorage {
         uint176[3] calldata exporters
     ) external {
 
-        require(storageGlobal[SUBMIT_IMPORTS_REENTRANCY_GUARD].length == 0);
-        storageGlobal[SUBMIT_IMPORTS_REENTRANCY_GUARD] = abi.encodePacked(uint8(1));
         require(storageGlobal[BRIDGE_PAUSED_KEY].length == 0);
         bytes32 pendingKey = _pendingImportKey(importTxid);
         require(storageGlobal[pendingKey].length == 0);
@@ -97,7 +93,6 @@ contract PendingImports is VerusStorage {
             cceHeightsAndIndex,
             nonce
         );
-        delete storageGlobal[SUBMIT_IMPORTS_REENTRANCY_GUARD];
     }
 
     /// @notice VDXF entry point for releasing a pending import.
@@ -113,6 +108,8 @@ contract PendingImports is VerusStorage {
         require(storageGlobal[BRIDGE_PAUSED_KEY].length == 0);
         if (claimableFees[VerusConstants.VDXF_DISABLE_CONTRACT_KEY] != 0) revert();
         require(notaries.length <= 32);
+        require(storageGlobal[SUBMIT_IMPORTS_REENTRANCY_GUARD].length == 0);
+        storageGlobal[SUBMIT_IMPORTS_REENTRANCY_GUARD] = abi.encodePacked(uint8(1));
 
         bytes32 pendingKey = _pendingImportKey(importTxid);
         VerusObjects.pendingImport memory pending = _loadPendingImport(pendingKey);
@@ -123,6 +120,7 @@ contract PendingImports is VerusStorage {
         require(approvalCount >= (notaries.length >> 1) + 1);
 
         _executeImport(importTxid, pendingKey, pending);
+        delete storageGlobal[SUBMIT_IMPORTS_REENTRANCY_GUARD];
     }
 
     // Brian Kerninghan's bit counting algorithm, O(number of set bits) instead of O(32).

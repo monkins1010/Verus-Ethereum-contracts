@@ -60,7 +60,7 @@ contract CreateExports is VerusStorage {
 
         (bool success, bytes memory returnData) = serializerAddress.call(abi.encodeWithSignature("deserializeTransfer(bytes)",datain));
 
-        require(success, "deserializetransfer failed");  
+        require(success);  
 
         VerusObjects.CReserveTransfer memory transfer = abi.decode(returnData, (VerusObjects.CReserveTransfer));
         sendTransferMain(transfer);
@@ -78,18 +78,18 @@ contract CreateExports is VerusStorage {
         address verusExportManagerAddress = contracts[uint(VerusConstants.ContractType.ExportManager)];
 
         (bool success, bytes memory returnData) = verusExportManagerAddress.delegatecall(abi.encodeWithSelector(ExportManager.checkExport.selector, transfer));
-        require(success, "checkExport call failed");
+        require(success);
 
         fees = abi.decode(returnData, (uint256)); 
 
-        require(fees != 0, "CheckExport Failed Checks"); 
+        require(fees != 0); 
 
         // ******* 2026-01-05 NOTE *******
-        // bridgeConverterActive == true, so fees must always be paid by user.
-        // if(!bridgeConverterActive) {
-        //     require (subtractPoolSize(uint64(transfer.fees)));
-        // }
-        // *******************************
+        //bridgeConverterActive == true, so fees must always be paid by user.
+        if(!bridgeConverterActive) {
+            remainingLaunchFeeReserves -= uint64(transfer.fees);
+        }
+        //*******************************
 
         if (transfer.currencyvalue.currency != VETH) {
             iaddressMapping = verusToERC20mapping[transfer.currencyvalue.currency];
@@ -225,7 +225,12 @@ contract CreateExports is VerusStorage {
             exportHeights[cceLastEndHeight] = cceLastStartHeight;
         }
 
-        setReadyExportTransfers(cceLastStartHeight, cceLastEndHeight, reserveTransfer, 50);
+        {
+            _readyExports[cceLastStartHeight].endHeight = cceLastEndHeight;
+            _readyExports[cceLastStartHeight].transfers.push(reserveTransfer);
+            require(_readyExports[cceLastStartHeight].transfers.length <= 50);
+        }
+      //  setReadyExportTransfers(cceLastStartHeight, cceLastEndHeight, reserveTransfer, 50);
         VerusObjects.CReserveTransferSet memory pendingTransfers = _readyExports[cceLastStartHeight];
         address crossChainExportAddress = contracts[uint(VerusConstants.ContractType.VerusCrossChainExport)];
 
@@ -253,12 +258,12 @@ contract CreateExports is VerusStorage {
         }
     }
 
-    function setReadyExportTransfers(uint64 _startHeight, uint64 _endHeight, VerusObjects.CReserveTransfer memory reserveTransfer, uint blockTxLimit) private {
+    // function setReadyExportTransfers(uint64 _startHeight, uint64 _endHeight, VerusObjects.CReserveTransfer memory reserveTransfer, uint blockTxLimit) private {
         
-        _readyExports[_startHeight].endHeight = _endHeight;
-        _readyExports[_startHeight].transfers.push(reserveTransfer);
-        require(_readyExports[_startHeight].transfers.length <= blockTxLimit);
-    }
+    //     _readyExports[_startHeight].endHeight = _endHeight;
+    //     _readyExports[_startHeight].transfers.push(reserveTransfer);
+    //     require(_readyExports[_startHeight].transfers.length <= blockTxLimit);
+    // }
 
     function burnFees(bytes calldata) external {
 
