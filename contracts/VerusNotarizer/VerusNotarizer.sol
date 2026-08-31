@@ -87,7 +87,14 @@ contract VerusNotarizer is VerusStorage {
             bytes32 hashedNotarizationByID;
             // hash the notarizations with the vdxf key, system, height & NotaryID. the address is masked in 98 bytes in .
             assembly {
+                // Update serialized blockheight for this notary (data bytes 74-77, at bits [31:0] of word at offset 78).
+                // serializeUint32 byte-swap performed inline: reverses 4 bytes of blockheights[i].
+                let bh := mload(add(blockheights, mul(add(i, 1), 32)))
+                let sbh := or(or(shl(24, and(bh, 0xFF)), shl(8, and(bh, 0xFF00))), or(shr(8, and(bh, 0xFF0000)), shr(24, and(bh, 0xFF000000))))
+                mstore(add(tempBytes, 78), or(and(mload(add(tempBytes, 78)), not(0xFFFFFFFF)), sbh))
+                // Update notary address for this iteration (the existing mask preserves VERUS-tail + updated blockheights).
                 mstore(add(tempBytes, 98), or(and(mload(add(tempBytes, 98)), shl(160, 0xffffffffffffffffffffffff)), mload(add(notaryAddresses, mul(add(i,1), 32)))))
+                
                 hashedNotarizationByID := keccak256(add(tempBytes, 0x20), mload(tempBytes))
             }
 
