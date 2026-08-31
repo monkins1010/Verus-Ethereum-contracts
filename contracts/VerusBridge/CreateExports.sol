@@ -158,7 +158,7 @@ contract CreateExports is VerusStorage {
         delete storageGlobal[SUBMIT_IMPORTS_REENTRANCY_GUARD];
     }
 
-    function exportERC20Tokens(uint256 _tokenAmount, Token token, bool burn) public {
+    function exportERC20Tokens(uint256 _tokenAmount, Token token, bool burn) internal {
         
         uint256 balance;
         balance = token.balanceOf(address(this));

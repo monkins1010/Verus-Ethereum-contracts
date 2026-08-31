@@ -9,9 +9,9 @@ function GetMMRProofIndex(uint64 pos, uint64 mmvSize, uint8 extrahashes) public 
     uint64 retIndex = 0;
     uint64 bitPos = 0;
 
-    // find a path from the indicated position to the root in the current view
-    if (pos > 0 && pos < mmvSize)
-    {
+    if (mmvSize == 0 || pos >= mmvSize) {
+        return type(uint64).max;
+    }
         // calculate array size first so we can use memory instead of storage
         // use x and j for counters
         uint j = 0;
@@ -133,7 +133,7 @@ function GetMMRProofIndex(uint64 pos, uint64 mmvSize, uint8 extrahashes) public 
                     }
 
                     // p is the position in the merkle tree of peaks
-                    assert(p < PeakIndexes.length);
+                    require(p < PeakIndexes.length, "MMR peak not found");
 
                     // move up to the top, which is always a peak of size 1
                     int64 layerNumA = -1;
@@ -172,7 +172,6 @@ function GetMMRProofIndex(uint64 pos, uint64 mmvSize, uint8 extrahashes) public 
                 }
             }
         }
-    }
     return retIndex;
     }
 }

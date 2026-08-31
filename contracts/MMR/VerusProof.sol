@@ -87,7 +87,8 @@ contract VerusProof is VerusStorage  {
         bytes memory joined;
         //hashInProgress = blake2b.bytesToBytes32(abi.encodePacked(_hashToCheck));
 
-        uint hashIndex = VerusMMR.GetMMRProofIndex(_branch.nIndex, _branch.nSize, _branch.extraHashes);
+        uint64 hashIndex = VerusMMR.GetMMRProofIndex(_branch.nIndex, _branch.nSize, _branch.extraHashes);
+        require(hashIndex != type(uint64).max);
         
         for (uint i = 0;i < branchLength; i++) {
             if(hashIndex & 1 > 0){
@@ -768,6 +769,7 @@ contract VerusProof is VerusStorage  {
                 v := add(v, 1)
                 retidx := add(retidx, 1)
             }
+            v := and(v, 0xFFFFFFFF)
         }
     }
 

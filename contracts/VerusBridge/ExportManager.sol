@@ -94,6 +94,7 @@ contract ExportManager is VerusStorage  {
 
         } else {
             
+            require(transfer.fees <= uint64(type(int64).max), "fee too large");
             transferFee = int64(transfer.fees);
 
             require(transfer.feecurrencyid == VETH, "Fee Currency not vETH"); //TODO:Accept more fee currencies

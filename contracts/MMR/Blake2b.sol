@@ -191,7 +191,6 @@ library Blake2b {
         view
         returns (bytes32 output)
     {
-        // FIXME: support incomplete blocks (zero pad them)
         uint input_length = data.length;
         if (input_length == 0 || (input_length % 128) != 0) {
             data = concat(data, new bytes(128 - (input_length % 128)));

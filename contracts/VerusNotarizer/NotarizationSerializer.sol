@@ -198,6 +198,7 @@ contract NotarizationSerializer is VerusStorage {
             assembly {
                 b := byte(0, mload(add(add(data, 0x20), add(pos, i))))
             }
+            require(v <= type(uint64).max >> 7, "varint overflow");
             v = uint64((v << 7) | (b & 0x7f));
             if (b & 0x80 != 0x80) {
                 return (v, pos + i + 1);
@@ -510,6 +511,7 @@ contract NotarizationSerializer is VerusStorage {
                 // Extract reserves from the first fractional BRIDGE state.
                 if (reserves == 0 && (csFlags & CS_FLAG_FRACTIONAL) != 0) {
                     uint32 csPos = pos + 24; // skip version(2)+flags(2)+currencyID(20)
+                    _checkBounds(data, csPos, 1);
                     uint8 numCurrencies;
                     assembly {
                         numCurrencies := byte(0, mload(add(add(data, 0x20), csPos)))
