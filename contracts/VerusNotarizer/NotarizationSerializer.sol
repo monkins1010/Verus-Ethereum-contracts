@@ -198,7 +198,7 @@ contract NotarizationSerializer is VerusStorage {
             assembly {
                 b := byte(0, mload(add(add(data, 0x20), add(pos, i))))
             }
-            require(v <= type(uint64).max >> 7, "varint overflow");
+            require(v <= type(uint64).max >> 7);
             v = uint64((v << 7) | (b & 0x7f));
             if (b & 0x80 != 0x80) {
                 return (v, pos + i + 1);

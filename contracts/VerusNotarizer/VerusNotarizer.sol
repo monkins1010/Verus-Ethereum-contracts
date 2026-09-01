@@ -51,7 +51,7 @@ contract VerusNotarizer is VerusStorage {
 
         if (claimableFees[VerusConstants.VDXF_DISABLE_CONTRACT_KEY] & VerusConstants.HALT_NOTARIZATIONS != 0) revert("Bridge halted");
 
-        require(!knownNotarizationTxids[txid], "known TXID");
+        require(!knownNotarizationTxids[txid]);
         knownNotarizationTxids[txid] = true;
 
         (uint8[] memory _vs,
@@ -59,6 +59,7 @@ contract VerusNotarizer is VerusStorage {
         bytes32[] memory _ss,
         uint32[] memory blockheights,
         address[] memory notaryAddresses) = abi.decode(data,(uint8[],bytes32[], bytes32[],uint32[],address[]));
+        require(blockheights.length == notaryAddresses.length);
 
         bytes32 keccakNotarizationHash;
         bytes32 txidHash;

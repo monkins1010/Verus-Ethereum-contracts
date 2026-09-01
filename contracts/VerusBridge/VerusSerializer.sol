@@ -513,6 +513,10 @@ contract VerusSerializer {
             let i := idx
             retidx := add(idx, 1)
             for {} lt(i, end) {} {
+                // bounds check: retidx must not exceed the buffer length
+                if gt(retidx, mload(buf)) { revert(0, 0) }
+                // overflow check: v must fit in 57 bits so that shl(7, v) stays within uint64
+                if gt(v, 0x1FFFFFFFFFFFFFFF) { revert(0, 0) }
                 b := mload(add(buf, retidx))
                 i := add(i, 1)
                 v := or(shl(7, v), and(b, 0x7f))
