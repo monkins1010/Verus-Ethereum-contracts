@@ -38,6 +38,9 @@ function findEvent(receipt, eventName, abi) {
 
 const findPI = (receipt, name) => findEvent(receipt, name, pendingImportsAbi);
 
+const encodeVote = (importTxid, approve) =>
+    web3.eth.abi.encodeParameters(['bytes32', 'bool'], [importTxid, approve]);
+
 const VDXF_DISABLE_CONTRACT_KEY =
     '0x000000000000000000000000b024b1e290c833d9c5703ef6184a7c84e7ddd335';
 const IMPORT_RELEASE_COOLDOWN_SECS = 3601;
@@ -123,12 +126,12 @@ contract('PendingImports lifecycle', async (accounts) => {
         assert.ok(importTxid, 'importTxid should be captured from PendingImportQueued event');
     });
 
-    it('approveImport vote 1 - import still pending (quorum not yet reached)', async function () {
+    it('approve vote 1 - import still pending (quorum not yet reached)', async function () {
         if (!importTxid) { this.skip(); return; }
         await increaseTime(IMPORT_RELEASE_COOLDOWN_SECS);
         await mine();
         const receipt = await vdxfSend(
-            web3.eth.abi.encodeParameter('bytes32', importTxid), 'approveImport', NOTARY_SIGNERS[0]);
+            encodeVote(importTxid, true), 'approveOrRejectAcceptedImport', NOTARY_SIGNERS[0]);
         const approvedEv = findPI(receipt, 'PendingImportApproved');
         assert.ok(approvedEv, 'expected PendingImportApproved event');
         assert.equal(approvedEv.approvalCount.toString(), '1', 'approval count should be 1 after first vote');
@@ -136,37 +139,25 @@ contract('PendingImports lifecycle', async (accounts) => {
             'import should NOT be released after only 1 vote (quorum = 2 of 3)');
     });
 
-    it('approveImport vote 2 - quorum reached, import executed and dequeued', async function () {
+    it('approve vote 2 - quorum reached, import executed and dequeued', async function () {
         if (!importTxid) { this.skip(); return; }
         const receipt = await vdxfSend(
-            web3.eth.abi.encodeParameter('bytes32', importTxid), 'approveImport', NOTARY_SIGNERS[1]);
+            encodeVote(importTxid, true), 'approveOrRejectAcceptedImport', NOTARY_SIGNERS[1]);
         const releasedEv = findPI(receipt, 'PendingImportReleased');
         assert.ok(releasedEv, 'expected PendingImportReleased event after quorum');
         assert.equal(releasedEv.importTxid.toLowerCase(), importTxid.toLowerCase(),
             'released txid should match the queued import');
     });
 
-    it('releasePendingImport - reverts after import is already executed', async function () {
+    it('approve vote - reverts for already-executed import (double-execute prevented)', async function () {
         if (!importTxid) { this.skip(); return; }
         try {
             await contractInstance.methods
-                .setVerusData(web3.eth.abi.encodeParameter('bytes32', importTxid), 'releasePendingImport')
-                .send({ from: accounts[0], gas: 6000000 });
-            assert.fail('expected revert: import already executed');
-        } catch (e) {
-            assert.include(e.message, 'revert', 'releasePendingImport should revert for an already-executed import');
-        }
-    });
-
-    it('approveImport - reverts for already-executed import (double-execute prevented)', async function () {
-        if (!importTxid) { this.skip(); return; }
-        try {
-            await contractInstance.methods
-                .setVerusData(web3.eth.abi.encodeParameter('bytes32', importTxid), 'approveImport')
+                .setVerusData(encodeVote(importTxid, true), 'approveOrRejectAcceptedImport')
                 .send({ from: NOTARY_SIGNERS[2], gas: 6000000 });
             assert.fail('expected revert: import already executed');
         } catch (e) {
-            assert.include(e.message, 'revert', 'approveImport should revert when import is no longer pending');
+            assert.include(e.message, 'revert', 'vote should revert when import is no longer pending');
         }
     });
 
@@ -228,15 +219,15 @@ contract('PendingImports lifecycle', async (accounts) => {
         }
     });
 
-    it('[halt] approveImport reverts when bridge is paused', async () => {
+    it('[halt] approve vote reverts when bridge is paused', async () => {
         const anyTxid = web3.utils.randomHex(32);
         try {
             await contractInstance.methods
-                .setVerusData(web3.eth.abi.encodeParameter('bytes32', anyTxid), 'approveImport')
+                .setVerusData(encodeVote(anyTxid, true), 'approveOrRejectAcceptedImport')
                 .send({ from: NOTARY_SIGNERS[0], gas: 6000000 });
             assert.fail('expected revert: bridge is paused');
         } catch (e) {
-            assert.include(e.message, 'revert', 'approveImport should revert when bridge is halted');
+            assert.include(e.message, 'revert', 'vote should revert when bridge is halted');
         }
     });
 

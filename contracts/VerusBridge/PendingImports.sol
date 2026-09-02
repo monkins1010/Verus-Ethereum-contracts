@@ -111,31 +111,6 @@ contract PendingImports is VerusStorage {
         );
     }
 
-    /// @notice VDXF entry point for releasing a pending import.
-    ///         Decodes importTxid from `data` and executes only if cooldown + quorum are satisfied.
-    function releasePendingImport(bytes calldata data) external {
-
-        (bytes32 importTxid) = abi.decode(data, (bytes32));
-        _releasePendingImport(importTxid);
-    }
-
-    /// @notice Executes a pending import after the cooldown window, if approval quorum has already been reached.
-    function _releasePendingImport(bytes32 importTxid) private {
-        require(storageGlobal[BRIDGE_PAUSED_KEY].length == 0);
-        if (claimableFees[VerusConstants.VDXF_DISABLE_CONTRACT_KEY] != 0) revert();
-        require(notaries.length <= 32);
-
-        bytes32 pendingKey = _pendingImportKey(importTxid);
-        VerusObjects.pendingImport memory pending = _loadPendingImport(pendingKey);
-        require(pending.state == IMPORT_STATE_PENDING);
-        require(block.timestamp >= uint256(pending.submittedAt) + IMPORT_RELEASE_COOLDOWN);
-
-        uint256 approvalCount = _getReleaseVoteCount(importTxid);
-        require(approvalCount >= (notaries.length >> 1) + 1);
-
-        _executeImport(importTxid, pendingKey, pending);
-    }
-
     // Brian Kerninghan's bit counting algorithm, O(number of set bits) instead of O(32).
     function _countSetBits32(uint32 value) private pure returns (uint256 count) {
         uint32 x = value;
