@@ -14,13 +14,25 @@ const verusMainnetNotariserSigner = [];
 const verusMainnetNotariserRecovery = [];
 
 // These are the notaries Sepolia iaddresses in hex form.
-const verusSepoliaNotariserIDS = [];
+const verusSepoliaNotariserIDS = [
+    "0x92f1da285c842f0a32fcab6f3a09687b01ef156b",
+    "0x3ddd9b798b23a7ab889afabeae86ab160dd9e877",
+    "0x6e8ff64931874f78e82db8eedcad509bee7f9d58"
+];
 
 // These are the equivelent ETH Sepolia addresses of the notaries Spending R addresses
-const verusSepoliaNotariserSigner = [];
+const verusSepoliaNotariserSigner = [
+    "0x64F72EE454f8effBcce9Eb6f7fC5B988AD195Aa2",
+    "0xf773BAF2e33Db56fC9688FfDc8fAf90B230fCC24",
+    "0xE21A9492b1218c49dE27c0222d4F239bCC10aB1b"
+];
 
 // These are the equivelent ETH Sepolia addresses of the notaries Recovery R addresses
-const verusSepoliaNotariserRecovery = [];
+const verusSepoliaNotariserRecovery = [
+    "0x64F72EE454f8effBcce9Eb6f7fC5B988AD195Aa2",
+    "0xf773BAF2e33Db56fC9688FfDc8fAf90B230fCC24",
+    "0xE21A9492b1218c49dE27c0222d4F239bCC10aB1b"
+];
 
 // These are the development notaries iaddresses in hex form.
 const TestVerusNotariserIDS = [
@@ -28,17 +40,19 @@ const TestVerusNotariserIDS = [
     "0x51f9f5f053ce16cb7ca070f5c68a1cb0616ba624", 
     "0x65374d6a8b853a5f61070ad7d774ee54621f9638"];
 
-// These are the equivelent ETH development addresses of the notaries Spending R addresses
+// These are the equivelent ETH development addresses of the notaries Spending R addresses.
+// Must match ganache-cli -d (deterministic) accounts[1..3] so integration tests can
+// sign notary transactions without knowing a private key.
 const TestVerusNotariserSigner = [
-    "0xD010dEBcBf4183188B00cafd8902e34a2C1E9f41", 
-    "0xD010dEBcBf4183188B00cafd8902e34a2C1E9f41", 
-    "0xD010dEBcBf4183188B00cafd8902e34a2C1E9f41"];
+    "0xFFcf8FDEE72ac11b5c542428B35EEF5769C409f0",   // accounts[1]
+    "0x22d491Bde2303f2f43325b2108D26f1eAbA1e32b",   // accounts[2]
+    "0xE11BA2b4D45Eaed5996Cd0823791E0C93114882d"];  // accounts[3]
 
 // These are the equivelent ETH development addresses of the notaries Recovery R addresses
 const TestVerusNotariserRecovery = [
-    "0xD010dEBcBf4183188B00cafd8902e34a2C1E9f41", 
-    "0xD3258AD271066B7a780C68e527A6ee69ecA15b7F", 
-    "0x68f56bA248E23b7d5DE4Def67592a1366431d345"];
+    "0xFFcf8FDEE72ac11b5c542428B35EEF5769C409f0",
+    "0x22d491Bde2303f2f43325b2108D26f1eAbA1e32b",
+    "0xE11BA2b4D45Eaed5996Cd0823791E0C93114882d"];
 
 const getNotarizerIDS = (network) => {
 
@@ -69,7 +83,7 @@ const id = {
         VRSC: "0xA6ef9ea235635E328124Ff3429dB9F9E91b64e2d",
         BRIDGE: "0xffEce948b8A38bBcC813411D2597f7f8485a0689",
         DAI: "0xcce5d18f305474f1e0e0ec1c507d8c85e7315fdf",
-        DAIERC20: "0x11fE4B6AE13d2a6055C8D9cF65c55bac32B5d844", //NOTE: Testnet DAI on maintestnet is 0xB897f2448054bc5b133268A53090e110D101FFf0
+        DAIERC20: "0xC0617bAC6679F525F696930F24D6566744cB7B58", //NOTE: Testnet DAI on maintestnet is 0xB897f2448054bc5b133268A53090e110D101FFf0
         DAIPOT: "0x50672F0a14B40051B65958818a7AcA3D54Bd81Af",
         DAIJOIN: "0x6a60b7070befb2bfc964F646efDF70388320f4E0",
         MKR: "0x005005b2b10a897fed36fbd71c878213a7a169bf" , 

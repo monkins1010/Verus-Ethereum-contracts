@@ -24,7 +24,6 @@ interface IVerusToken {
 contract Imports is VerusStorage {
 
     // ── Immutables ──────────────────────────────────────────────────────────
-    address immutable SELF;
     address immutable VETH;
     address immutable VERUS;
     uint256 immutable DEPLOYED_AT;
@@ -41,7 +40,6 @@ contract Imports is VerusStorage {
     bytes32 constant IMPORTS_CONTRACT_INDEX_KEY  = keccak256("Imports.contract.index");
 
     constructor(address vETH, address verus) {
-        SELF        = address(this);
         VETH        = vETH;
         VERUS       = verus;
         DEPLOYED_AT = block.timestamp;
@@ -140,7 +138,19 @@ contract Imports is VerusStorage {
                     == VerusConstants.MAPPING_ETHEREUM_OWNED)
             {
                 (bool success, bytes memory result) = _tx[j].ERCContract.call{gas: 30000}(abi.encodeWithSignature("name()"));
-                outputName = success ? result.length >= 64 ? abi.decode(result, (string)) : "..." : "...";
+                if (success && result.length >= 64) {
+                    uint256 offset;
+                    uint256 strlen;
+                    assembly {
+                        offset := mload(add(result, 0x20))
+                        strlen := mload(add(result, 0x40))
+                    }
+                    outputName = (offset == 0x20 && strlen <= result.length - 64)
+                        ? abi.decode(result, (string))
+                        : "...";
+                } else {
+                    outputName = "...";
+                }
                 outputName = string(abi.encodePacked("[", outputName, "] as "));
             }
 

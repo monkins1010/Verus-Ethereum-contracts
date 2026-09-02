@@ -43,7 +43,7 @@ module.exports = async function(deployer, network, accounts) {
     let DAIERC20 = getDAIERC20Address(isTestnet);
     const launchCurrencies = await getCurrencies(deployer, accounts);
     
-    if (deployer.network == "development") { 
+    if (isTestnet) { 
 
         DAIERC20 = globalDAI;
 
@@ -144,7 +144,7 @@ const getCurrencies = async (deployer, accounts) => {
     let currencies = arrayofcurrencies(isTestnet);
     const minter = accounts[0]; // use accounts[0] - always valid, deployer.networks.from may be undefined
 
-    if (deployer.network == "development"){
+    if (isTestnet){
         
         await deployer.deploy(Token, "DAI (Testnet)", "DAI");
         const TokenInst = await Token.deployed();

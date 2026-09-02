@@ -17,6 +17,9 @@ contract VerusSerializer {
     uint32 constant ETH_SEND_GATEWAY_AND_AUX_DEST = 20 + 20 + 8 + 4 + 20;
     uint32 constant TRANSFER_GATEWAYSKIP = 48; // skip gatewayID (20), gatewayCode (20), fees (8)
     uint8 constant FLAG_MASK = 192; // 11000000
+    // version(1) + currencyID(20) + varint_amount(1) + varint_flags(1) + feecurrencyid(20) +
+    // varint_fees(1) + desttype(1) + vec_length(1) + destaddress(20) + destcurrencyid(20) = 86
+    uint32 constant MIN_TRANSFER_LENGTH = 86;
 
     //reset to empty 9-July-26
     function initialize() external {}
@@ -510,6 +513,10 @@ contract VerusSerializer {
             let i := idx
             retidx := add(idx, 1)
             for {} lt(i, end) {} {
+                // bounds check: retidx must not exceed the buffer length
+                if gt(retidx, mload(buf)) { revert(0, 0) }
+                // overflow check: v must fit in 57 bits so that shl(7, v) stays within uint64
+                if gt(v, 0x1FFFFFFFFFFFFFFF) { revert(0, 0) }
                 b := mload(add(buf, retidx))
                 i := add(i, 1)
                 v := or(shl(7, v), and(b, 0x7f))
@@ -519,6 +526,7 @@ contract VerusSerializer {
                 v := add(v, 1)
                 retidx := add(retidx, 1)
             }
+            v := and(v, 0xFFFFFFFFFFFFFFFF)
         }
 
     }
@@ -527,6 +535,7 @@ contract VerusSerializer {
 
    function readCompactSizeLE(bytes memory incoming, uint256 offset) public pure returns(uint64 v, uint retidx) {
 
+        require(incoming.length >= offset, "compact-size: out of bounds");
         uint8 oneByte;
         assembly {
             oneByte := mload(add(incoming, offset))
@@ -539,6 +548,7 @@ contract VerusSerializer {
         else if (oneByte == 253)
         {
             offset += 1; // skip marker(1) + align so 2-byte value is in mload LSBs
+            require(incoming.length >= offset, "compact-size 2-byte: out of bounds");
             uint16 twoByte;
             assembly {
                 twoByte := mload(add(incoming, offset))
@@ -550,6 +560,7 @@ contract VerusSerializer {
         else if (oneByte == 254)
         {
             offset += 3; // skip marker(1) + align so 4-byte value is in mload LSBs
+            require(incoming.length >= offset, "compact-size 4-byte: out of bounds");
             uint32 fourByte;
             assembly {
                 fourByte := mload(add(incoming, offset))
@@ -566,6 +577,7 @@ contract VerusSerializer {
 
     function deserializeTransfer(bytes memory serialized) public view returns (VerusObjects.CReserveTransfer memory transfer){ 
 
+        require(serialized.length >= MIN_TRANSFER_LENGTH, "Transfer too short");
         uint256 nextOffset;
         address tempaddress;
         uint64 tempReg1;

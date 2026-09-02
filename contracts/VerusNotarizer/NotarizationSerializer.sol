@@ -137,6 +137,7 @@ contract NotarizationSerializer is VerusStorage {
         (proposerAndLaunched, votetxid, pos) = _readTransferDestination(data, pos);
 
         // ── currencyID (uint160) – validate it is VETH ────────────────────
+        _checkBounds(data, pos, SZ_U160);
         address currencyId;
         assembly {
             currencyId := shr(96, mload(add(add(data, 0x20), pos)))
@@ -192,10 +193,12 @@ contract NotarizationSerializer is VerusStorage {
         internal pure returns (uint64 v, uint32 newPos)
     {
         for (uint32 i = 0; i < 10; i++) {
+            _checkBounds(data, pos + i, 1);
             uint8 b;
             assembly {
                 b := byte(0, mload(add(add(data, 0x20), add(pos, i))))
             }
+            require(v <= type(uint64).max >> 7);
             v = uint64((v << 7) | (b & 0x7f));
             if (b & 0x80 != 0x80) {
                 return (v, pos + i + 1);
@@ -212,6 +215,7 @@ contract NotarizationSerializer is VerusStorage {
     function _readCompactSize(bytes memory data, uint32 pos)
         internal pure returns (uint64 v, uint32 newPos)
     {
+        _checkBounds(data, pos, 1);
         uint8 first;
         assembly {
             first := byte(0, mload(add(add(data, 0x20), pos)))
@@ -222,6 +226,7 @@ contract NotarizationSerializer is VerusStorage {
             return (first, newPos);
         }
         if (first == 253) {
+            _checkBounds(data, newPos, 2);
             uint8 b0; uint8 b1;
             assembly {
                 b0 := byte(0, mload(add(add(data, 0x20), newPos)))
@@ -230,6 +235,7 @@ contract NotarizationSerializer is VerusStorage {
             return (uint64(b0) | (uint64(b1) << 8), newPos + 2);
         }
         if (first == 254) {
+            _checkBounds(data, newPos, 4);
             uint8 b0; uint8 b1; uint8 b2; uint8 b3;
             assembly {
                 b0 := byte(0, mload(add(add(data, 0x20), newPos)))
@@ -249,9 +255,15 @@ contract NotarizationSerializer is VerusStorage {
     //  Primitive readers
     // ══════════════════════════════════════════════════════════════════════
 
+    /// @dev Single revert covering all out-of-bounds reads in this contract.
+    function _checkBounds(bytes memory data, uint32 pos, uint32 n) private pure {
+        require(uint256(pos) + n <= data.length, "read past end");
+    }
+
     function _readBytes32(bytes memory data, uint32 pos)
         internal pure returns (bytes32 result)
     {
+        _checkBounds(data, pos, 32);
         assembly {
             result := mload(add(add(data, 0x20), pos))
         }
@@ -260,6 +272,7 @@ contract NotarizationSerializer is VerusStorage {
     function _readUint32LE(bytes memory data, uint32 pos)
         internal pure returns (uint32 result)
     {
+        _checkBounds(data, pos, 4);
         uint8 b0; uint8 b1; uint8 b2; uint8 b3;
         assembly {
             b0 := byte(0, mload(add(add(data, 0x20), pos)))
@@ -279,6 +292,7 @@ contract NotarizationSerializer is VerusStorage {
     function _readUint64LE(bytes memory data, uint32 pos)
         internal pure returns (uint64 result)
     {
+        _checkBounds(data, pos, 8);
         assembly {
             result := shr(192, mload(add(add(data, 0x20), pos)))
         }
@@ -299,6 +313,7 @@ contract NotarizationSerializer is VerusStorage {
         internal pure
         returns (bytes32 proposer, address votetxid, uint32 newPos)
     {
+        _checkBounds(data, pos, 1);
         uint8 destType;
         assembly {
             destType := byte(0, mload(add(add(data, 0x20), pos)))
@@ -331,6 +346,7 @@ contract NotarizationSerializer is VerusStorage {
                 uint64 auxLen;
                 (auxLen, pos) = _readCompactSize(data, pos);
                 if (i == 0 && auxLen >= AUX_VOTE_MIN_LEN) {
+                    _checkBounds(data, pos + 1, 20);
                     assembly {
                         votetxid := shr(96, mload(add(add(data, 0x20), add(pos, 1))))
                     }
@@ -422,6 +438,7 @@ contract NotarizationSerializer is VerusStorage {
         currSlot[2] = 0xff; currSlot[3] = 0xff;
 
         uint8 cap = numCurrencies < 4 ? numCurrencies : 4;
+        _checkBounds(data, currPos + 1, uint32(cap) * SZ_U160);
         for (uint8 i = 0; i < cap; i++) {
             address currency;
             uint32 p = currPos + 1 + uint32(i) * 20;
@@ -473,6 +490,7 @@ contract NotarizationSerializer is VerusStorage {
                 pos += SZ_U160; // v1 key prefix
             }
 
+            _checkBounds(data, pos, 24); // version(2)+flags(2)+currencyID(20)
             uint16 csFlags;
             address currencyId;
             assembly {
@@ -493,6 +511,7 @@ contract NotarizationSerializer is VerusStorage {
                 // Extract reserves from the first fractional BRIDGE state.
                 if (reserves == 0 && (csFlags & CS_FLAG_FRACTIONAL) != 0) {
                     uint32 csPos = pos + 24; // skip version(2)+flags(2)+currencyID(20)
+                    _checkBounds(data, csPos, 1);
                     uint8 numCurrencies;
                     assembly {
                         numCurrencies := byte(0, mload(add(add(data, 0x20), csPos)))
@@ -535,6 +554,7 @@ contract NotarizationSerializer is VerusStorage {
                 pos += SZ_U160;
             }
 
+            _checkBounds(data, pos, 4); // version(2)+type(2)
             uint16 proofType;
             assembly {
                 let b0 := byte(0, mload(add(add(data, 0x20), add(pos, 2))))
@@ -543,6 +563,7 @@ contract NotarizationSerializer is VerusStorage {
             }
             pos += 4; // version(2) + type(2)
 
+            _checkBounds(data, pos, SZ_U160);
             address systemID;
             assembly {
                 systemID := shr(96, mload(add(add(data, 0x20), pos)))

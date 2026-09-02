@@ -170,6 +170,7 @@ contract SubmitImports is VerusStorage {
         }      
             
         feeCalculation = VerusConstants.VERUS_IMPORT_FEE_X2 * uint64(reserves >> feeCalculation);
+        require(uint64(reserves >> (uint(Currency.VERUS) << 6)) > 0 );
         feeShare = uint64(feeCalculation / uint(uint64(reserves >> (uint(Currency.VERUS) << 6))));
 
         return feeShare;
