@@ -9,7 +9,10 @@ import "../Storage/StorageMaster.sol";
 contract PendingImports is VerusStorage {
 
     bytes32 constant SUBMIT_IMPORTS_REENTRANCY_GUARD = "submitimports.reentrancy.lock";
-    bytes32 constant RELEASE_IMPORT_VDXF_KEY = keccak256("releasePendingImport");
+    bytes32 constant APPROVE_OR_REJECT_IMPORT_VDXF_KEY = keccak256("approveOrRejectAcceptedImport");
+    // Routes superseded by APPROVE_OR_REJECT_IMPORT_VDXF_KEY; deleted by initialize() on upgrade.
+    bytes32 constant LEGACY_RELEASE_IMPORT_VDXF_KEY = keccak256("releasePendingImport");
+    bytes32 constant LEGACY_APPROVE_IMPORT_VDXF_KEY = keccak256("approveImport");
     bytes32 constant GET_PENDING_IMPORTS_VDXF_KEY = keccak256("getPendingImports");
     bytes32 constant GET_PENDING_IMPORT_COUNT_VDXF_KEY = keccak256("getPendingImportCount");
     bytes32 constant PENDING_IMPORTS_CONTRACT_INDEX_KEY = keccak256("PendingImports.contract.index");
@@ -18,6 +21,7 @@ contract PendingImports is VerusStorage {
     bytes32 constant PENDING_IMPORT_QUEUE_KEY = keccak256("pending.import.queue");
     bytes32 constant PENDING_IMPORT_QUEUE_INDEX_PREFIX = keccak256("pending.import.queue.index");
     bytes32 constant RELEASE_VOTE_BITMAP_PREFIX = keccak256("pending.import.release.vote.bitmap");
+    bytes32 constant REJECT_VOTE_BITMAP_PREFIX = keccak256("pending.import.reject.vote.bitmap");
     bytes32 constant HALT_VOTE_BITMAP_KEY = keccak256("bridge.halt.vote.bitmap");
     // Mirror of the constants in TokenManager / Imports — kept here so _executeImport
     // can clean up orphaned exec-data keys without depending on executePendingImport running.
@@ -29,6 +33,7 @@ contract PendingImports is VerusStorage {
 
     uint8 constant IMPORT_STATE_PENDING = 1;
     uint8 constant IMPORT_STATE_RELEASED = 2;
+    uint8 constant IMPORT_STATE_REJECTED = 3;
 
     uint256 constant IMPORT_RELEASE_COOLDOWN = 1 hours;
     uint256 constant IMPORT_TIMEOUT = 4 hours;
@@ -37,6 +42,8 @@ contract PendingImports is VerusStorage {
     event PendingImportQueued(bytes32 indexed importTxid, uint32 indexed nout, uint128 cceHeightsAndIndex, uint64 nonce);
     event PendingImportReleased(bytes32 indexed importTxid, address indexed releaser);
     event PendingImportApproved(bytes32 indexed importTxid, address indexed notarizerID, uint256 approvalCount);
+    event PendingImportRejectVote(bytes32 indexed importTxid, address indexed notarizerID, uint256 rejectionCount);
+    event PendingImportRejected(bytes32 indexed importTxid);
     event BridgePaused();
     event HaltVoteSubmitted(address indexed notarizerID, bool voteToHalt, uint256 voteCount, bool bridgePaused);
 
@@ -45,10 +52,19 @@ contract PendingImports is VerusStorage {
         VETH = veth;
     }
 
-    /// @notice No-op — array extension and VDXF route registration are handled by
-    ///         UpgradeManager.initialize(), which is called whenever the UpgradeManager
-    ///         is upgraded and has these addresses baked into its constructor.
-    function initialize() external {}
+    /// @notice Run once per upgrade of this contract via delegatecall from Delegator.replacecontract()
+    ///         (or the UpgradeManager upgrade loop). Re-points the notary vote route at this slot and
+    ///         retires the split approve/release routes it replaced.
+    ///         No-op on a first deployment, where UpgradeManager.initialize() does the registration
+    ///         before the slot-index key exists.
+    function initialize() external {
+        bytes memory indexData = storageGlobal[PENDING_IMPORTS_CONTRACT_INDEX_KEY];
+        if (indexData.length == 0) return;
+
+        storageGlobal[APPROVE_OR_REJECT_IMPORT_VDXF_KEY] = indexData;
+        delete storageGlobal[LEGACY_RELEASE_IMPORT_VDXF_KEY];
+        delete storageGlobal[LEGACY_APPROVE_IMPORT_VDXF_KEY];
+    }
 
     /// @notice Called by SubmitImports (via reentrancy guard) to place an incoming cross-chain
     ///         import into pending. Assigns a monotonic nonce and adds the entry to the pending queue.
@@ -98,31 +114,6 @@ contract PendingImports is VerusStorage {
             nonce
         );
         delete storageGlobal[SUBMIT_IMPORTS_REENTRANCY_GUARD];
-    }
-
-    /// @notice VDXF entry point for releasing a pending import.
-    ///         Decodes importTxid from `data` and executes only if cooldown + quorum are satisfied.
-    function releasePendingImport(bytes calldata data) external {
-
-        (bytes32 importTxid) = abi.decode(data, (bytes32));
-        _releasePendingImport(importTxid);
-    }
-
-    /// @notice Executes a pending import after the cooldown window, if approval quorum has already been reached.
-    function _releasePendingImport(bytes32 importTxid) private {
-        require(storageGlobal[BRIDGE_PAUSED_KEY].length == 0);
-        if (claimableFees[VerusConstants.VDXF_DISABLE_CONTRACT_KEY] != 0) revert();
-        require(notaries.length <= 32);
-
-        bytes32 pendingKey = _pendingImportKey(importTxid);
-        VerusObjects.pendingImport memory pending = _loadPendingImport(pendingKey);
-        require(pending.state == IMPORT_STATE_PENDING);
-        require(block.timestamp >= uint256(pending.submittedAt) + IMPORT_RELEASE_COOLDOWN);
-
-        uint256 approvalCount = _getReleaseVoteCount(importTxid);
-        require(approvalCount >= (notaries.length >> 1) + 1);
-
-        _executeImport(importTxid, pendingKey, pending);
     }
 
     // Brian Kerninghan's bit counting algorithm, O(number of set bits) instead of O(32).
@@ -314,40 +305,6 @@ contract PendingImports is VerusStorage {
         return _resolveNotaryIAddress();
     }
 
-    function _recordBitmapVote(bytes32 importTxid, bytes32 bitmapPrefix)
-        private
-        returns ( uint256 voteCount, address iAddr)
-    {
-        require(notaries.length > 0 && notaries.length <= 32);
-        uint32 bitmap;
-
-        uint256 notaryIndex = _resolveNotaryIndexFromSender();
-        require(notaryIndex != type(uint256).max);
-        iAddr = notaries[notaryIndex];
-
-        bytes32 voteKey = keccak256(abi.encodePacked(bitmapPrefix, importTxid));
-        bitmap = storageGlobal[voteKey].length == 0
-            ? uint32(0)
-            : abi.decode(storageGlobal[voteKey], (uint32));
-
-        uint32 mask = uint32(1) << uint32(notaryIndex);
-        require((bitmap & mask) == 0);
-
-        bitmap |= mask;
-        storageGlobal[voteKey] = abi.encode(bitmap);
-        voteCount = _countSetBits32(bitmap);
-    }
-
-    function _getReleaseVoteCount(bytes32 importTxid) private view returns (uint256) {
-        bytes32 voteKey = keccak256(abi.encodePacked(RELEASE_VOTE_BITMAP_PREFIX, importTxid));
-        if (storageGlobal[voteKey].length == 0) {
-            return 0;
-        }
-
-        uint32 bitmap = abi.decode(storageGlobal[voteKey], (uint32));
-        return _countSetBits32(bitmap);
-    }
-
     function _loadHaltVoteBitmap() private view returns (uint32 bitmap) {
         if (storageGlobal[HALT_VOTE_BITMAP_KEY].length != 0) {
             bitmap = abi.decode(storageGlobal[HALT_VOTE_BITMAP_KEY], (uint32));
@@ -401,25 +358,86 @@ contract PendingImports is VerusStorage {
     }
 
 
-    function _approveImport(bytes32 importTxid) private {
+    /// @notice Single notary entry point: records an approve or reject vote for a pending import and,
+    ///         when that vote completes quorum, immediately executes (approve) or rejects and halts
+    ///         the bridge (reject) in the same transaction — no follow-up call is required.
+    /// @dev    Checks are ordered cheapest-first so that losing races (a notary voting on an import
+    ///         that another notary just completed, or double voting) revert before any expensive
+    ///         storage decode of the pending import record.
+    function _approveOrRejectAcceptedImport(bytes32 importTxid, bool approve) private {
 
         require(storageGlobal[BRIDGE_PAUSED_KEY].length == 0);
         require(storageGlobal[SUBMIT_IMPORTS_REENTRANCY_GUARD].length == 0);
-        storageGlobal[SUBMIT_IMPORTS_REENTRANCY_GUARD] = abi.encodePacked(uint8(1));
+
+        // Single length-slot read: the import is gone as soon as it has been executed.
         bytes32 pendingKey = _pendingImportKey(importTxid);
+        require(storageGlobal[pendingKey].length != 0);
+
+        uint256 notaryCount = notaries.length;
+        require(notaryCount > 0 && notaryCount <= 32);
+
+        uint256 notaryIndex = _resolveNotaryIndexFromSender();
+        require(notaryIndex != type(uint256).max);
+
+        bytes32 voteKey = keccak256(abi.encodePacked(approve ? RELEASE_VOTE_BITMAP_PREFIX : REJECT_VOTE_BITMAP_PREFIX, importTxid));
+        uint32 bitmap = storageGlobal[voteKey].length == 0
+            ? uint32(0)
+            : abi.decode(storageGlobal[voteKey], (uint32));
+
+        uint32 mask = uint32(1) << uint32(notaryIndex);
+        require((bitmap & mask) == 0);
+
+        // Only decode the full record once the caller is known to be an eligible first-time voter.
         VerusObjects.pendingImport memory pending = _loadPendingImport(pendingKey);
         require(pending.state == IMPORT_STATE_PENDING);
-        require(block.timestamp >= uint256(pending.submittedAt) + IMPORT_RELEASE_COOLDOWN);
+        // Approvals wait out the cooldown; rejections may be cast immediately.
+        require(!approve || block.timestamp >= uint256(pending.submittedAt) + IMPORT_RELEASE_COOLDOWN);
 
-        (uint256 count, address iAddr) = _recordBitmapVote(importTxid, RELEASE_VOTE_BITMAP_PREFIX);      
+        storageGlobal[SUBMIT_IMPORTS_REENTRANCY_GUARD] = abi.encodePacked(uint8(1));
 
-        emit PendingImportApproved(importTxid, iAddr, count);
+        bitmap |= mask;
+        storageGlobal[voteKey] = abi.encode(bitmap);
 
-        // Last quorum vote executes immediately after cooldown.
-        if (count >= (notaries.length >> 1) + 1) {
-            _executeImport(importTxid, pendingKey, pending);
+        uint256 count = _countSetBits32(bitmap);
+        uint256 quorum = (notaryCount >> 1) + 1;
+        address iAddr = notaries[notaryIndex];
+
+        if (approve) {
+            emit PendingImportApproved(importTxid, iAddr, count);
+            if (count >= quorum) {
+                _executeImport(importTxid, pendingKey, pending);
+            }
+        } else {
+            emit PendingImportRejectVote(importTxid, iAddr, count);
+            if (count >= quorum) {
+                _rejectImport(importTxid, pendingKey, pending);
+            }
         }
+
         delete storageGlobal[SUBMIT_IMPORTS_REENTRANCY_GUARD];
+    }
+
+    /// @dev Marks the import permanently rejected (it stays queued so the daemon can observe the
+    ///      final state) and halts the bridge.
+    function _rejectImport(
+        bytes32 importTxid,
+        bytes32 pendingKey,
+        VerusObjects.pendingImport memory pending
+    ) private {
+
+        pending.state = IMPORT_STATE_REJECTED;
+        storageGlobal[pendingKey] = abi.encode(pending);
+
+        if (storageGlobal[BRIDGE_PAUSED_KEY].length == 0) {
+            storageGlobal[BRIDGE_PAUSED_KEY] = abi.encode(true);
+            claimableFees[VerusConstants.VDXF_DISABLE_CONTRACT_KEY] =
+                VerusConstants.HALT_SUBMIT_IMPORTS +
+                VerusConstants.HALT_NOTARIZATIONS +
+                VerusConstants.HALT_SEND_TRANSFERS;
+            emit BridgePaused();
+        }
+
+        emit PendingImportRejected(importTxid);
     }
 
     function _executeTimedOutImport(bytes32 importTxid) private {
@@ -444,9 +462,10 @@ contract PendingImports is VerusStorage {
     // msg.sender is preserved through delegatecall so identity checks still work.
     // -------------------------------------------------------------------------
 
-    /// @notice VDXF path: data = abi.encode(bytes32 importTxid)
-    function approveImport(bytes calldata data) external {
-        _approveImport(abi.decode(data, (bytes32)));
+    /// @notice VDXF path: data = abi.encode(bytes32 importTxid, bool approve)
+    function approveOrRejectAcceptedImport(bytes calldata data) external {
+        (bytes32 importTxid, bool approve) = abi.decode(data, (bytes32, bool));
+        _approveOrRejectAcceptedImport(importTxid, approve);
     }
 
     /// @notice VDXF path: data = abi.encode(bool voteToHalt)
