@@ -63,7 +63,6 @@ contract NotarizationSerializer is VerusStorage {
     uint32 private constant SZ_U64  = 8;
 
     // ── Version constants ──────────────────────────────────────────────────
-    uint64 private constant VERSION_PBAAS         = 1;
     uint64 private constant VERSION_PBAAS_MAINNET = 2;
 
     // ── Proposer packing ──────────────────────────────────────────────────
@@ -123,6 +122,7 @@ contract NotarizationSerializer is VerusStorage {
         // ── version ───────────────────────────────────────────────────────
         uint64 version;
         (version, pos) = _readVarint(data, pos);
+        require(version == VERSION_PBAAS_MAINNET, "unsupported notarization version");
 
         // ── flags ─────────────────────────────────────────────────────────
         uint64 flags;
@@ -168,7 +168,7 @@ contract NotarizationSerializer is VerusStorage {
         // ── currencyStates vector ─────────────────────────────────────────
         // Also extracts reserves and detects bridge launch.
         bool launched;
-        (pos, reserves, launched) = _skipCurrencyStatesVector(data, pos, version);
+        (pos, reserves, launched) = _skipCurrencyStatesVector(data, pos);
 
         // Pack bridgeConverterLaunched flag at bit 176 of proposerAndLaunched.
         // VerusNotarizer gates activation on !bridgeConverterActive, so we pack
@@ -178,7 +178,7 @@ contract NotarizationSerializer is VerusStorage {
         }
 
         // ── proofRoots vector ─────────────────────────────────────────────
-        (stateRoot, height) = _readProofRoots(data, pos, version);
+        (stateRoot, height) = _readProofRoots(data, pos);
     }
 
     // ══════════════════════════════════════════════════════════════════════
@@ -476,20 +476,15 @@ contract NotarizationSerializer is VerusStorage {
      *        CS_FLAG_FRACTIONAL | CS_FLAG_LAUNCH_CONFIRMED | CS_FLAG_LAUNCH_COMPLETE
      *        all set, and CS_FLAG_REFUNDING clear.
      *
-     *      v1: each entry prefixed by a 20-byte key.
-     *      v2: no prefix; currencyID is inside the struct.
+    *      Mainnet format: no prefix; currencyID is inside the struct.
      */
-    function _skipCurrencyStatesVector(bytes memory data, uint32 pos, uint64 version)
+    function _skipCurrencyStatesVector(bytes memory data, uint32 pos)
         internal view returns (uint32 newPos, uint256 reserves, bool launched)
     {
         uint64 numStates;
         (numStates, pos) = _readCompactSize(data, pos);
 
         for (uint64 i = 0; i < numStates; i++) {
-            if (version == VERSION_PBAAS) {
-                pos += SZ_U160; // v1 key prefix
-            }
-
             _checkBounds(data, pos, 24); // version(2)+flags(2)+currencyID(20)
             uint16 csFlags;
             address currencyId;
@@ -539,10 +534,9 @@ contract NotarizationSerializer is VerusStorage {
      *        + rootHeight(u32 LE) + stateRoot(u256) + blockHash(u256)
      *        + compactPower(u256) [+ gasPrice(i64 LE) when type==ETH]
      *
-     *      v1: each entry prefixed by a 20-byte systemID key.
-     *      v2: no prefix.
+    *      Mainnet format: no prefix.
      */
-    function _readProofRoots(bytes memory data, uint32 pos, uint64 version)
+    function _readProofRoots(bytes memory data, uint32 pos)
         internal view returns (bytes32 stateRoot, uint32 height)
     {
         uint64 numRoots;
@@ -550,10 +544,6 @@ contract NotarizationSerializer is VerusStorage {
         bool found;
 
         for (uint64 i = 0; i < numRoots; i++) {
-            if (version == VERSION_PBAAS) {
-                pos += SZ_U160;
-            }
-
             _checkBounds(data, pos, 4); // version(2)+type(2)
             uint16 proofType;
             assembly {
