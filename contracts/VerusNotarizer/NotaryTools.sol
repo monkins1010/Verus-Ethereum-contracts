@@ -25,6 +25,7 @@ contract NotaryTools is VerusStorage {
     uint8 constant NUM_ADDRESSES_FOR_REVOKE = 2;
     uint8 constant COMPLETE = 2;
     uint8 constant ERROR = 4;
+    bytes32 constant BRIDGE_PAUSED_KEY = keccak256("bridge.import.paused");
 
     using VerusBlake2b for bytes;
 
@@ -236,6 +237,7 @@ contract NotaryTools is VerusStorage {
         }
 
         require(counter >= 8, "Need 8 valid notary signatures");
+        require(storageGlobal[BRIDGE_PAUSED_KEY].length == 0, "upgrade required");
 
         delete claimableFees[VerusConstants.VDXF_DISABLE_CONTRACT_KEY];
     }

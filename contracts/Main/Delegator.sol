@@ -184,7 +184,7 @@ contract Delegator is VerusStorage, ERC1155Holder, ERC721Holder {
         
         //NOTE: Upgraded contracts may need a initialize() function so they can setup things in a run once.
         (bool success,) = newcontract.delegatecall{gas: 3000000}(abi.encodeWithSignature("initialize()"));
-        success;
+        require(success);
     }
 
     function revokeWithMainAddress(bytes calldata data) external returns (bool) { 
