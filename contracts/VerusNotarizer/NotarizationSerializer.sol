@@ -483,6 +483,7 @@ contract NotarizationSerializer is VerusStorage {
     {
         uint64 numStates;
         (numStates, pos) = _readCompactSize(data, pos);
+        bool bridgeStateSeen;
 
         for (uint64 i = 0; i < numStates; i++) {
             _checkBounds(data, pos, 24); // version(2)+flags(2)+currencyID(20)
@@ -495,16 +496,15 @@ contract NotarizationSerializer is VerusStorage {
                 currencyId := shr(96, mload(add(add(data, 0x20), add(pos, 4))))
             }
 
-            if (currencyId == BRIDGE) {
-                // Detect bridge launch: FRACTIONAL + LAUNCH_CONFIRMED + LAUNCH_COMPLETE set, REFUNDING clear.
-                if (!launched &&
-                    (csFlags & CS_LAUNCH_CHECK_MASK) == CS_LAUNCH_REQUIRED)
-                {
-                    launched = true;
-                }
+            if (currencyId == BRIDGE && !bridgeStateSeen) {
+                bridgeStateSeen = true;
 
-                // Extract reserves from the first fractional BRIDGE state.
-                if (reserves == 0 && (csFlags & CS_FLAG_FRACTIONAL) != 0) {
+                // Detect bridge launch: FRACTIONAL + LAUNCH_CONFIRMED + LAUNCH_COMPLETE set, REFUNDING clear.
+                launched = (csFlags & CS_LAUNCH_CHECK_MASK) == CS_LAUNCH_REQUIRED;
+
+                // Extract reserves from this state if fractional; leave at 0 otherwise,
+                // even if a later duplicate BRIDGE entry is fractional.
+                if ((csFlags & CS_FLAG_FRACTIONAL) != 0) {
                     uint32 csPos = pos + 24; // skip version(2)+flags(2)+currencyID(20)
                     _checkBounds(data, csPos, 1);
                     uint8 numCurrencies;
