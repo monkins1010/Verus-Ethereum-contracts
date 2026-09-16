@@ -1,1 +1,1 @@
-remixd -s .
+remixd -s . --remix-ide https://app.remix.live
