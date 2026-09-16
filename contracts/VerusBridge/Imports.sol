@@ -104,7 +104,9 @@ contract Imports is VerusStorage {
                 (VerusObjects.PackedSend[], VerusObjects.PackedCurrencyLaunch[], uint64)
             );
             delete storageGlobal[execKey];
-            launchToken(launchTxs);
+            if (launchTxs.length > 0) {
+                launchToken(launchTxs);
+            }
         }
 
         refundsData = importTransactions(transfers);
@@ -178,6 +180,11 @@ contract Imports is VerusStorage {
         VerusObjects.mappedToken memory tempToken;
 
         for (uint256 i = 0; i < trans.length; i++) {
+
+            // Currency-launch marker entries carry no payout (amount 0, destination zero); skip them.
+            if (trans[i].launchTxIndexPlusOne > 0) {
+                continue;
+            }
 
             uint64  sendAmount  = trans[i].amount;
             address destination = trans[i].destination;
