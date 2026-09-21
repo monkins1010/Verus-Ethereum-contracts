@@ -45,6 +45,8 @@ contract SubmitImports is VerusStorage {
     uint32 constant ELVCHOBJ_NVOUTS_OFFSET = 49;
     uint32 constant ELVCHOBJ_NSHIELDEDSPENDS_OFFSET = 53;
     uint32 constant ELVCHOBJ_NSHIELDEDOUTPUTS_OFFSET = 57;
+    uint constant FORKS_DATA_OFFSET_FOR_HEIGHT = 224;
+    uint constant FORKS_PROPOSER_SLOT = 2;
     uint32 constant TYPE_REFUND = 1;
     uint constant TYPE_BYTE_LOCATION_IN_UINT176 = 168;
     uint8 constant TYPE_REFUND_BYTES32_LOCATION = 244;
@@ -189,6 +191,16 @@ contract SubmitImports is VerusStorage {
         // Parse CTransactionHeader from component 0 and validate the txid is not a replay.
         TxHeaderData memory hdr = _parseTxHeader(_import.partialtransactionproof.components[0].elVchObj);
 
+        require(_import.partialtransactionproof.txproof.length > 0, "Missing transaction proof");
+        VerusObjects.CMerkleBranch memory finalProof = _import.partialtransactionproof.txproof[
+            _import.partialtransactionproof.txproof.length - 1
+        ].proofSequence;
+        require(finalProof.nSize > 0, "Final proof nSize is zero");
+        require(
+            finalProof.nSize - 1 == _getLastConfirmedVRSCStateRootHeight(),
+            "Final proof height does not match state root"
+        );
+
         if (processedTxids[hdr.txHash]) 
         {
             revert();
@@ -268,6 +280,17 @@ contract SubmitImports is VerusStorage {
         delete storageGlobal[SUBMIT_IMPORTS_REENTRANCY_GUARD];
 
         return (0,0);
+    }
+
+    function _getLastConfirmedVRSCStateRootHeight() private view returns (uint32 height) {
+        bytes storage tempArray = bestForks[0];
+        if (tempArray.length == 0) return 0;
+
+        bytes32 slot;
+        assembly {
+            mstore(add(slot, 32), tempArray.slot)
+            height := shr(FORKS_DATA_OFFSET_FOR_HEIGHT, sload(add(keccak256(add(slot, 32), 32), FORKS_PROPOSER_SLOT)))
+        }
     }
 
     function setLastImport(bytes32 processedTXID, bytes32 hashofTXs, uint128 CCEheightsandTXNum ) private {
