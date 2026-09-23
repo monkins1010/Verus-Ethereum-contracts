@@ -346,6 +346,14 @@ contract VerusSerializer {
 
     // Deserialize Reserve Transfers and return an array of PackedSend objects, an array of PackedCurrencyLaunch objects, and the total fees.
 
+    // Offsets in this serializer are one-based because raw assembly reads use add(data, offset).
+    function _checkTransferBounds(bytes memory data, uint256 offset, uint256 size) internal pure {
+        require(
+            offset > 0 && offset <= data.length && size <= data.length - offset + 1,
+            "Transfer read past end"
+        );
+    }
+
     function deserializeTransfers(bytes memory reserveTransfers, uint8 numberOfTransfers) public pure
         returns (VerusObjects.PackedSend[] memory transfers, VerusObjects.PackedCurrencyLaunch[] memory launchTxs, uint64 fees)
     {
@@ -363,6 +371,7 @@ contract VerusSerializer {
                 uint8 destinationType;
                 uint64 flags;
 
+                _checkTransferBounds(reserveTransfers, nextOffset, VERUS_ID_LENGTH * 2);
                 assembly {
                     destinationType := mload(add(reserveTransfers, nextOffset))
                     if iszero(eq(and(destinationType,0xff), 1)) {
@@ -378,10 +387,12 @@ contract VerusSerializer {
                 transfers[transferIndex].amount = temporaryRegister1;
                 transfers[transferIndex].currency = tempaddress;
 
+                _checkTransferBounds(reserveTransfers, nextOffset, VERUS_ID_LENGTH);
                 nextOffset += VERUS_ID_LENGTH;
                 (temporaryRegister1, nextOffset) = readVarint(reserveTransfers, nextOffset);
                 fees += temporaryRegister1;
 
+                _checkTransferBounds(reserveTransfers, nextOffset, 2);
                 assembly {
                     nextOffset := add(nextOffset, 1)
                     destinationType := mload(add(reserveTransfers, nextOffset))
@@ -390,7 +401,10 @@ contract VerusSerializer {
 
                 (temporaryRegister1, nextOffset) = readCompactSizeLE(reserveTransfers, nextOffset);
 
+                _checkTransferBounds(reserveTransfers, nextOffset, temporaryRegister1);
+
                 if (destinationType & VerusConstants.DEST_ETH == VerusConstants.DEST_ETH) {
+                    require(temporaryRegister1 >= VERUS_ID_LENGTH, "Invalid ETH destination");
                     assembly {
                         tempaddress := mload(sub(add(add(reserveTransfers, nextOffset), VERUS_ID_LENGTH), 1))
                     }
@@ -416,6 +430,7 @@ contract VerusSerializer {
                 }
 
                 if (destinationType & VerusConstants.FLAG_DEST_GATEWAY == VerusConstants.FLAG_DEST_GATEWAY) {
+                    _checkTransferBounds(reserveTransfers, nextOffset, TRANSFER_GATEWAYSKIP);
                     assembly {
                         nextOffset := add(nextOffset, TRANSFER_GATEWAYSKIP)
                     }
@@ -429,17 +444,20 @@ contract VerusSerializer {
 
                 transferIndex++;
 
+                _checkTransferBounds(reserveTransfers, nextOffset, VERUS_ID_LENGTH);
                 assembly {
                     nextOffset := add(nextOffset, VERUS_ID_LENGTH)
                 }
 
                 if (flags & VerusConstants.RESERVE_TO_RESERVE == VerusConstants.RESERVE_TO_RESERVE) {
+                    _checkTransferBounds(reserveTransfers, nextOffset, VERUS_ID_LENGTH);
                     assembly {
                         nextOffset := add(nextOffset, VERUS_ID_LENGTH)
                     }
                 }
 
                 if (flags & VerusConstants.CROSS_SYSTEM == VerusConstants.CROSS_SYSTEM) {
+                    _checkTransferBounds(reserveTransfers, nextOffset, VERUS_ID_LENGTH);
                     assembly {
                         nextOffset := add(nextOffset, VERUS_ID_LENGTH)
                     }
@@ -463,6 +481,7 @@ contract VerusSerializer {
 
         for (uint i = temporaryRegister1; i > 0; i--) {
             (temporaryRegister1, currentOffset) = readCompactSizeLE(reserveTransfers, currentOffset);
+            _checkTransferBounds(reserveTransfers, currentOffset, temporaryRegister1);
             assembly {
                 refundAddress := mload(sub(add(add(reserveTransfers, currentOffset), temporaryRegister1), 1))
             }
@@ -583,6 +602,7 @@ contract VerusSerializer {
         uint64 tempReg1;
         uint8 tempuint8;
                     
+        _checkTransferBounds(serialized, 1, VERUS_ID_LENGTH * 2);
         assembly {
             nextOffset := add(nextOffset, 1) //move to read the version type
             tempuint8 := mload(add(serialized, nextOffset)) // read the version type
@@ -602,6 +622,7 @@ contract VerusSerializer {
 
         transfer.flags = uint32(tempReg1);  //copy the flags
 
+        _checkTransferBounds(serialized, nextOffset, VERUS_ID_LENGTH);
         assembly {
             nextOffset := add(nextOffset, VERUS_ID_LENGTH) //move to read the destination type, note already 1 byte in so only move 19
             tempaddress := mload(add(serialized, nextOffset)) // read the feecurrencyid
@@ -611,6 +632,7 @@ contract VerusSerializer {
 
         (transfer.fees, nextOffset) = readVarint(serialized, nextOffset); //read the fees and copy into structure
 
+        _checkTransferBounds(serialized, nextOffset, 1);
         assembly {
             nextOffset := add(nextOffset, 1)
             tempuint8 := mload(add(serialized, nextOffset))  // already at destination type location so read byte
@@ -620,7 +642,7 @@ contract VerusSerializer {
         if (tempuint8 == (VerusConstants.DEST_ETH + VerusConstants.FLAG_DEST_GATEWAY + VerusConstants.FLAG_DEST_AUX) || 
             tempuint8 == VerusConstants.DEST_ID ||
             tempuint8 == VerusConstants.DEST_PKH) {
-            
+            _checkTransferBounds(serialized, nextOffset, VERUS_ID_LENGTH + 1);
             assembly {
             nextOffset := add(nextOffset, 1)  // skip vector length
             nextOffset := add(nextOffset, VERUS_ID_LENGTH) //move to read the destinationaddress, note already at vector length. 
@@ -633,6 +655,7 @@ contract VerusSerializer {
 
         if (tempuint8 == (VerusConstants.DEST_ETH + VerusConstants.FLAG_DEST_GATEWAY + VerusConstants.FLAG_DEST_AUX)) {
 
+            _checkTransferBounds(serialized, nextOffset, ETH_SEND_GATEWAY_AND_AUX_DEST);
             tempBouncebacktype = this.slice(serialized, nextOffset, nextOffset + ETH_SEND_GATEWAY_AND_AUX_DEST);
             assembly {
                 nextOffset := add(nextOffset, ETH_SEND_GATEWAY_AND_AUX_DEST)  // skip vector length
@@ -641,6 +664,7 @@ contract VerusSerializer {
 
         transfer.destination.destinationaddress = abi.encodePacked(tempaddress, tempBouncebacktype);
 
+        _checkTransferBounds(serialized, nextOffset, VERUS_ID_LENGTH);
         assembly {
             nextOffset := add(nextOffset, VERUS_ID_LENGTH) //move to read the destinationcurrency address
             tempaddress := mload(add(serialized, nextOffset)) // read the destinationcurrency address
@@ -649,7 +673,7 @@ contract VerusSerializer {
         transfer.destcurrencyid = tempaddress;
 
         if (transfer.flags & VerusConstants.RESERVE_TO_RESERVE == VerusConstants.RESERVE_TO_RESERVE) {
-        
+            _checkTransferBounds(serialized, nextOffset, VERUS_ID_LENGTH);
             assembly {
                 nextOffset := add(nextOffset, VERUS_ID_LENGTH) //move to read the secondreserveid
                 tempaddress := mload(add(serialized, nextOffset)) // read the secondreserveid

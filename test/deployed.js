@@ -282,6 +282,29 @@ contract("Verus Contracts deployed tests", async(accounts)  => {
         assert.equal(toBase58Check(Buffer.from(reply.secondreserveid.slice(2),'hex'), 102), reservetransfer.bounceback.second_reserve_id , "secondreserveid does not equal transaction");
       });
 
+      it("Rejects truncated reserve transfers", async () => {
+        const VerusSerializerInst = await VerusSerializer.deployed();
+        const contractInstance = new web3.eth.Contract(verusSerializerAbi.abi, VerusSerializerInst.address);
+        const bounceback = reservetransfer.bounceback.toBuffer().toString('hex');
+        const truncatedSingle = `0x${bounceback.slice(0, 86 * 2)}`;
+        const twoTransfers = Buffer.concat([reservetransfer.twoReserveTransfers[0].toBuffer(), reservetransfer.twoReserveTransfers[1].toBuffer()]).toString('hex');
+        const truncatedBatch = `0x${twoTransfers.slice(0, -40)}`;
+
+        try {
+            await contractInstance.methods.deserializeTransfer(truncatedSingle).call();
+            assert.fail("deserializeTransfer accepted truncated input");
+        } catch (error) {
+            assert.include(error.message, "revert");
+        }
+
+        try {
+            await contractInstance.methods.deserializeTransfers(truncatedBatch, 2).call();
+            assert.fail("deserializeTransfers accepted truncated input");
+        } catch (error) {
+            assert.include(error.message, "revert");
+        }
+      });
+
       it("Deserialize two Reserve transfers", async () => {
         const VerusSerializerInst = await VerusSerializer.deployed();
         const contractAddress = VerusSerializerInst.address;
