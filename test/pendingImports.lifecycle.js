@@ -44,6 +44,7 @@ const encodeVote = (importTxid, approve) =>
 const VDXF_DISABLE_CONTRACT_KEY =
     '0x000000000000000000000000b024b1e290c833d9c5703ef6184a7c84e7ddd335';
 const IMPORT_RELEASE_COOLDOWN_SECS = 3601;
+const IMPORT_TIMEOUT_SECS = 24 * 60 * 60;
 const SUBMIT_IMPORTS_CALLDATA = goodTx['[RAW_INPUT]'];
 
 contract('PendingImports lifecycle', async (accounts) => {
@@ -126,12 +127,43 @@ contract('PendingImports lifecycle', async (accounts) => {
         assert.ok(importTxid, 'importTxid should be captured from PendingImportQueued event');
     });
 
+    it('timed-out import - non-witness cannot execute', async function () {
+        if (!importTxid) { this.skip(); return; }
+        await increaseTime(IMPORT_RELEASE_COOLDOWN_SECS + IMPORT_TIMEOUT_SECS);
+        await mine();
+        try {
+            await vdxfSend(
+                web3.eth.abi.encodeParameter('bytes32', importTxid),
+                'executeTimedOutImport',
+                accounts[0]
+            );
+            assert.fail('expected revert: caller is not a witness');
+        } catch (e) {
+            assert.include(e.message, 'revert', 'non-witness timeout execution should revert');
+        }
+    });
+
+    it('reject vote - same witness cannot later approve', async function () {
+        if (!importTxid) { this.skip(); return; }
+        const receipt = await vdxfSend(
+            encodeVote(importTxid, false), 'approveOrRejectAcceptedImport', NOTARY_SIGNERS[0]);
+        const rejectedEv = findPI(receipt, 'PendingImportRejectVote');
+        assert.ok(rejectedEv, 'expected PendingImportRejectVote event');
+        assert.equal(rejectedEv.rejectionCount.toString(), '1', 'rejection count should be 1');
+
+        try {
+            await vdxfSend(
+                encodeVote(importTxid, true), 'approveOrRejectAcceptedImport', NOTARY_SIGNERS[0]);
+            assert.fail('expected revert: witness already rejected this import');
+        } catch (e) {
+            assert.include(e.message, 'revert', 'rejecting witness must not later approve');
+        }
+    });
+
     it('approve vote 1 - import still pending (quorum not yet reached)', async function () {
         if (!importTxid) { this.skip(); return; }
-        await increaseTime(IMPORT_RELEASE_COOLDOWN_SECS);
-        await mine();
         const receipt = await vdxfSend(
-            encodeVote(importTxid, true), 'approveOrRejectAcceptedImport', NOTARY_SIGNERS[0]);
+            encodeVote(importTxid, true), 'approveOrRejectAcceptedImport', NOTARY_SIGNERS[1]);
         const approvedEv = findPI(receipt, 'PendingImportApproved');
         assert.ok(approvedEv, 'expected PendingImportApproved event');
         assert.equal(approvedEv.approvalCount.toString(), '1', 'approval count should be 1 after first vote');
@@ -142,7 +174,7 @@ contract('PendingImports lifecycle', async (accounts) => {
     it('approve vote 2 - quorum reached, import executed and dequeued', async function () {
         if (!importTxid) { this.skip(); return; }
         const receipt = await vdxfSend(
-            encodeVote(importTxid, true), 'approveOrRejectAcceptedImport', NOTARY_SIGNERS[1]);
+            encodeVote(importTxid, true), 'approveOrRejectAcceptedImport', NOTARY_SIGNERS[2]);
         const releasedEv = findPI(receipt, 'PendingImportReleased');
         assert.ok(releasedEv, 'expected PendingImportReleased event after quorum');
         assert.equal(releasedEv.importTxid.toLowerCase(), importTxid.toLowerCase(),

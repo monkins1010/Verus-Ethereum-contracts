@@ -35,7 +35,7 @@ contract PendingImports is VerusStorage {
     uint8 constant IMPORT_STATE_REJECTED = 3;
 
     uint256 constant IMPORT_RELEASE_COOLDOWN = 1 hours;
-    uint256 constant IMPORT_TIMEOUT = 4 hours;
+    uint256 constant IMPORT_TIMEOUT = 24 hours;
 
     bytes32 constant BRIDGE_PAUSED_KEY = keccak256("bridge.import.paused");
     event PendingImportQueued(bytes32 indexed importTxid, uint32 indexed nout, uint128 cceHeightsAndIndex, uint64 nonce);
@@ -382,6 +382,14 @@ contract PendingImports is VerusStorage {
         uint32 mask = uint32(1) << uint32(notaryIndex);
         require((bitmap & mask) == 0);
 
+        if (approve) {
+            bytes32 rejectVoteKey = keccak256(abi.encodePacked(REJECT_VOTE_BITMAP_PREFIX, importTxid));
+            uint32 rejectBitmap = storageGlobal[rejectVoteKey].length == 0
+                ? uint32(0)
+                : abi.decode(storageGlobal[rejectVoteKey], (uint32));
+            require((rejectBitmap & mask) == 0);
+        }
+
         // Only decode the full record once the caller is known to be an eligible first-time voter.
         VerusObjects.pendingImport memory pending = _loadPendingImport(pendingKey);
         require(pending.state == IMPORT_STATE_PENDING);
@@ -440,6 +448,10 @@ contract PendingImports is VerusStorage {
         require(storageGlobal[BRIDGE_PAUSED_KEY].length == 0);
         if (claimableFees[VerusConstants.VDXF_DISABLE_CONTRACT_KEY] != 0) revert();
         require(storageGlobal[SUBMIT_IMPORTS_REENTRANCY_GUARD].length == 0);
+
+        uint256 notaryIndex = _resolveNotaryIndexFromSender();
+        require(notaryIndex != type(uint256).max);
+
         storageGlobal[SUBMIT_IMPORTS_REENTRANCY_GUARD] = abi.encodePacked(uint8(1));
 
         bytes32 pendingKey = _pendingImportKey(importTxid);
