@@ -622,7 +622,7 @@ contract VerusSerializer {
 
         transfer.flags = uint32(tempReg1);  //copy the flags
 
-        _checkTransferBounds(serialized, nextOffset, VERUS_ID_LENGTH);
+        _checkTransferBounds(serialized, nextOffset + 1, VERUS_ID_LENGTH);
         assembly {
             nextOffset := add(nextOffset, VERUS_ID_LENGTH) //move to read the destination type, note already 1 byte in so only move 19
             tempaddress := mload(add(serialized, nextOffset)) // read the feecurrencyid
@@ -632,7 +632,7 @@ contract VerusSerializer {
 
         (transfer.fees, nextOffset) = readVarint(serialized, nextOffset); //read the fees and copy into structure
 
-        _checkTransferBounds(serialized, nextOffset, 1);
+        _checkTransferBounds(serialized, nextOffset + 1, 1);
         assembly {
             nextOffset := add(nextOffset, 1)
             tempuint8 := mload(add(serialized, nextOffset))  // already at destination type location so read byte
@@ -642,7 +642,7 @@ contract VerusSerializer {
         if (tempuint8 == (VerusConstants.DEST_ETH + VerusConstants.FLAG_DEST_GATEWAY + VerusConstants.FLAG_DEST_AUX) || 
             tempuint8 == VerusConstants.DEST_ID ||
             tempuint8 == VerusConstants.DEST_PKH) {
-            _checkTransferBounds(serialized, nextOffset, VERUS_ID_LENGTH + 1);
+            _checkTransferBounds(serialized, nextOffset + 1, VERUS_ID_LENGTH + 1);
             assembly {
             nextOffset := add(nextOffset, 1)  // skip vector length
             nextOffset := add(nextOffset, VERUS_ID_LENGTH) //move to read the destinationaddress, note already at vector length. 
@@ -655,7 +655,7 @@ contract VerusSerializer {
 
         if (tempuint8 == (VerusConstants.DEST_ETH + VerusConstants.FLAG_DEST_GATEWAY + VerusConstants.FLAG_DEST_AUX)) {
 
-            _checkTransferBounds(serialized, nextOffset, ETH_SEND_GATEWAY_AND_AUX_DEST);
+            _checkTransferBounds(serialized, nextOffset + 1, ETH_SEND_GATEWAY_AND_AUX_DEST);
             tempBouncebacktype = this.slice(serialized, nextOffset, nextOffset + ETH_SEND_GATEWAY_AND_AUX_DEST);
             assembly {
                 nextOffset := add(nextOffset, ETH_SEND_GATEWAY_AND_AUX_DEST)  // skip vector length
@@ -664,7 +664,7 @@ contract VerusSerializer {
 
         transfer.destination.destinationaddress = abi.encodePacked(tempaddress, tempBouncebacktype);
 
-        _checkTransferBounds(serialized, nextOffset, VERUS_ID_LENGTH);
+        _checkTransferBounds(serialized, nextOffset + 1, VERUS_ID_LENGTH);
         assembly {
             nextOffset := add(nextOffset, VERUS_ID_LENGTH) //move to read the destinationcurrency address
             tempaddress := mload(add(serialized, nextOffset)) // read the destinationcurrency address
@@ -673,7 +673,7 @@ contract VerusSerializer {
         transfer.destcurrencyid = tempaddress;
 
         if (transfer.flags & VerusConstants.RESERVE_TO_RESERVE == VerusConstants.RESERVE_TO_RESERVE) {
-            _checkTransferBounds(serialized, nextOffset, VERUS_ID_LENGTH);
+            _checkTransferBounds(serialized, nextOffset + 1, VERUS_ID_LENGTH);
             assembly {
                 nextOffset := add(nextOffset, VERUS_ID_LENGTH) //move to read the secondreserveid
                 tempaddress := mload(add(serialized, nextOffset)) // read the secondreserveid

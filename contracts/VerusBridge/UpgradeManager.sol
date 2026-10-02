@@ -75,10 +75,12 @@ contract UpgradeManager is VerusStorage {
 
     function upgradeContracts(bytes calldata data) external payable returns (uint8) {
 
+        require(msg.value == 0, "Upgrade does not accept ETH");
+
         VerusObjects.upgradeInfo memory _newContractPackage;
 
         (_newContractPackage) = abi.decode(data, (VerusObjects.upgradeInfo));
-        
+
         checkValidContractUpgrade(_newContractPackage);
             
         return PENDING; 

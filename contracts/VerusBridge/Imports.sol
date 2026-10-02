@@ -34,6 +34,15 @@ contract Imports is VerusStorage {
     uint32 constant TYPE_REFUND                    = 1;
     uint8  constant TYPE_REFUND_BYTES32_LOCATION   = 244;
 
+    uint32 constant SEND_SUCCESS_NO_DEBIT = 0;
+    uint32 constant SEND_FAILED = 1;
+    uint32 constant SEND_SUCCESS = 2;
+    uint32 constant SEND_SUCCESS_ETH = 6;
+    uint256 constant ETH_PAYOUT_GAS_LIMIT = 100000;
+    uint256 constant NFT_MINT_GAS_LIMIT = 150000;
+    bytes4 constant ERC721_SEND_SELECTOR = bytes4(0x23b872dd);
+    bytes4 constant ERC1155_SEND_SELECTOR = bytes4(0xf242432a);
+
     // Keys that match TokenManager storage.
     bytes32 constant PENDING_EXEC_DATA_PREFIX    = keccak256("pending.exec.data");
     bytes32 constant PENDING_EXEC_PARAMS_PREFIX  = keccak256("pending.exec.params");
@@ -193,14 +202,16 @@ contract Imports is VerusStorage {
             uint32 result;
 
             if (currency == VETH) {
-                (bool success, ) = destination.call{value: sendAmount * VerusConstants.SATS_TO_WEI_STD, gas: 100000}("");
-                result = success ? 6 : 1; // SEND_SUCCESS_ETH : SEND_FAILED
+                (bool success, ) = destination.call{value: sendAmount * VerusConstants.SATS_TO_WEI_STD, gas: ETH_PAYOUT_GAS_LIMIT}("");
+                result = success ? SEND_SUCCESS_ETH : SEND_FAILED;
             } else if (
                 tempToken.flags & VerusConstants.MAPPING_ERC721_NFT_DEFINITION == VerusConstants.MAPPING_ERC721_NFT_DEFINITION &&
                 tempToken.flags & VerusConstants.MAPPING_VERUS_OWNED == VerusConstants.MAPPING_VERUS_OWNED
             ) {
-                VerusNft(tempToken.erc20ContractAddress).mint(currency, tempToken.name, destination);
-                result = 0;
+                (bool success, ) = tempToken.erc20ContractAddress.call{gas: NFT_MINT_GAS_LIMIT}(
+                    abi.encodeWithSelector(VerusNft.mint.selector, currency, tempToken.name, destination)
+                );
+                result = success ? SEND_SUCCESS_NO_DEBIT : SEND_FAILED;
             } else {
                 // Determine which ERC selector is needed, then delegatecall ExportManager.
                 uint32 selector;
@@ -210,12 +221,12 @@ contract Imports is VerusStorage {
                             ? Token.mint.selector : ERC20.transfer.selector
                     );
                 } else if (tempToken.flags & VerusConstants.MAPPING_ERC721_NFT_DEFINITION == VerusConstants.MAPPING_ERC721_NFT_DEFINITION) {
-                    selector = uint32(bytes4(0x23b872dd)); // IERC721.transferFrom selector
+                    selector = uint32(ERC721_SEND_SELECTOR);
                 } else if (
                     tempToken.flags & VerusConstants.MAPPING_ERC1155_NFT_DEFINITION == VerusConstants.MAPPING_ERC1155_NFT_DEFINITION ||
                     tempToken.flags & VerusConstants.MAPPING_ERC1155_ERC_DEFINITION == VerusConstants.MAPPING_ERC1155_ERC_DEFINITION
                 ) {
-                    selector = uint32(bytes4(0xf242432a)); // IERC1155.safeTransferFrom selector
+                    selector = uint32(ERC1155_SEND_SELECTOR);
                 }
 
                 if (selector != 0) {
@@ -225,13 +236,14 @@ contract Imports is VerusStorage {
                             tempToken.erc20ContractAddress, destination, sendAmount, selector, tempToken.tokenID
                         )
                     );
-                    result = ok && ret.length > 0 ? abi.decode(ret, (uint8)) : 1; // 1 = SEND_FAILED
+                    result = ok && ret.length > 0 ? abi.decode(ret, (uint8)) : SEND_FAILED;
                 }
             }
 
-            if (result == 1 /* SEND_FAILED */ && sendAmount > 0) {
+            if (result == SEND_FAILED && sendAmount > 0) {
                 refundsData = abi.encodePacked(refundsData, trans[i].refundAddress, sendAmount, currency);
-            } else if (result == 2 /* SEND_SUCCESS */ || result == 6 /* SEND_SUCCESS_ETH */) {
+            } else if (result == SEND_SUCCESS ||
+                (result == SEND_SUCCESS_ETH && destination != address(this))) {
                 verusToERC20mapping[currency].tokenIndex -= sendAmount;
             }
         }

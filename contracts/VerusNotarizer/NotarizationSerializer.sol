@@ -67,9 +67,9 @@ contract NotarizationSerializer is VerusStorage {
 
     // ── Proposer packing ──────────────────────────────────────────────────
     // Offset of the vote address inside the first auxDest sub-vector.
-    uint32 private constant AUX_VOTE_ADDR_OFFSET = 1;
+    uint32 private constant AUX_VOTE_ADDR_OFFSET = 2;
     // Minimum sub-vector length that contains a valid vote address.
-    uint32 private constant AUX_VOTE_MIN_LEN = 21;
+    uint32 private constant AUX_VOTE_MIN_LEN = 22;
 
     // ── CCurrencyState flags ───────────────────────────────────────────────
     uint16 private constant CS_FLAG_FRACTIONAL      = 0x001;
@@ -346,9 +346,10 @@ contract NotarizationSerializer is VerusStorage {
                 uint64 auxLen;
                 (auxLen, pos) = _readCompactSize(data, pos);
                 if (i == 0 && auxLen >= AUX_VOTE_MIN_LEN) {
-                    _checkBounds(data, pos + 1, 20);
+                    uint32 votePos = pos + AUX_VOTE_ADDR_OFFSET;
+                    _checkBounds(data, votePos, SZ_U160);
                     assembly {
-                        votetxid := shr(96, mload(add(add(data, 0x20), add(pos, 1))))
+                        votetxid := shr(96, mload(add(add(data, 0x20), votePos)))
                     }
                 }
                 pos += uint32(auxLen);

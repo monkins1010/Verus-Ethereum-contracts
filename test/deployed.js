@@ -13,7 +13,9 @@ const { toBase58Check } = require("verus-typescript-primitives");
 const ERC721 = require("../build/contracts/ERC721.json");
 const { proofinput } = reservetransfer;
 const abi = web3.eth.abi
-const { randomBytes } = require('crypto');
+const { randomBytes, pbkdf2Sync } = require('crypto');
+const { hdkey } = require('ethereumjs-wallet');
+const { ecsign } = require('ethereumjs-util');
 
 const createUpgradeTuple = (addresses, salt, upgradetype) => {
 
@@ -56,6 +58,8 @@ contract("Verus Contracts deployed tests", async(accounts)  => {
     
         // Get the contract balance before sending ETH
         const initialBalance = await web3.eth.getBalance(contractAddress);
+        const veth = "0x67460C2f56774eD27EeB8685f29f6CEC0B090B00";
+        const initialIndex = (await DelegatorInst.verusToERC20mapping(veth)).tokenIndex;
     
         // Send 1 ETH to the contract
         const sendAmount = web3.utils.toWei("1", "ether");
@@ -67,6 +71,8 @@ contract("Verus Contracts deployed tests", async(accounts)  => {
         // Check if the contract balance increased by 1 ETH
         const expectedBalance = web3.utils.toBN(initialBalance).add(web3.utils.toBN(sendAmount));
         assert.equal(finalBalance.toString(), expectedBalance.toString(), "Contract balance is incorrect after sending ETH");
+        assert.equal((await DelegatorInst.verusToERC20mapping(veth)).tokenIndex.toString(), initialIndex.toString(),
+          "Unsolicited ETH must remain outside accounted VETH deposits");
       });
 
       it("Send 1 ETH in Serialized ReserveTransfer to Contract", async () => {
@@ -78,6 +84,8 @@ contract("Verus Contracts deployed tests", async(accounts)  => {
     
         // Send 1 ETH to the contract
         const sendAmount = web3.utils.toWei("1.003", "ether");
+        const veth = "0x67460C2f56774eD27EeB8685f29f6CEC0B090B00";
+        const initialIndex = web3.utils.toBN((await DelegatorInst.verusToERC20mapping(veth)).tokenIndex);
         const serializedTx = `0x${reservetransfer.prelaunchfundETH.toBuffer().toString('hex')}`;
         //console.log("reservetransfer transaction " + JSON.stringify(reservetransfer, null, 2))
         let reply
@@ -88,6 +96,9 @@ contract("Verus Contracts deployed tests", async(accounts)  => {
             let reserveimport = await DelegatorInst.getReadyExportsByRange.call(0, reply.blockNumber + 10);
         
           assert.equal(reply.blockNumber, reserveimport[0].endHeight, "Endheight should equal insertion height");
+          assert.equal((await DelegatorInst.verusToERC20mapping(veth)).tokenIndex.toString(),
+            initialIndex.add(web3.utils.toBN(sendAmount).div(web3.utils.toBN('10000000000'))).toString(),
+            "Serialized transfer must credit ETH principal and fees once");
         } catch(e) {
             console.log(e.message)
             assert.ok(false);
@@ -101,6 +112,8 @@ contract("Verus Contracts deployed tests", async(accounts)  => {
         const contractInstance = new web3.eth.Contract(verusDelegatorAbi.abi, contractAddress);
         // Send 1 ETH to the contract
         const sendAmount = web3.utils.toWei("2.003", "ether");
+        const veth = "0x67460C2f56774eD27EeB8685f29f6CEC0B090B00";
+        const initialIndex = web3.utils.toBN((await DelegatorInst.verusToERC20mapping(veth)).tokenIndex);
 
         const CReserveTransfer = {
             version: 1,
@@ -123,45 +136,70 @@ contract("Verus Contracts deployed tests", async(accounts)  => {
         // Get the contract balance after sending ETH exportHeights
         const previousStartHeight = await DelegatorInst.exportHeights.call(0);
         let reserveimport = await DelegatorInst.getReadyExportsByRange.call(0, reply.blockNumber + 10);
-        assert.isTrue(true);
+        assert.equal((await DelegatorInst.verusToERC20mapping(veth)).tokenIndex.toString(),
+          initialIndex.add(web3.utils.toBN(sendAmount).div(web3.utils.toBN('10000000000'))).toString(),
+          "Transfer must credit ETH principal and fees once");
       });
 
-      // it("Submit accepeted notarization by Notary", async () => {
-      //   const DelegatorInst = await VerusDelegator.deployed();
-      //   const contractAddress = DelegatorInst.address;
-      //   const contractInstance = new web3.eth.Contract(verusDelegatorAbi.abi, contractAddress);
+      it("Submit accepted notarization by Notary", async () => {
+        const DelegatorInst = await VerusDelegator.deployed();
+        const contractInstance = new web3.eth.Contract(verusDelegatorAbi.abi, DelegatorInst.address);
+        const [notaryIDs, signers] = getNotarizerIDS("development");
+        const notaryAddresses = notaryIDs.slice(0, 2);
+        const blockheights = [2750, 2751];
+        const votehash = "0x9304c78dd2c478a5cd5841dd751dc16baa320603";
+        const seed = pbkdf2Sync(
+          "myth like bonus scare over problem client lizard pioneer submit female collect",
+          "mnemonic", 2048, 64, "sha512"
+        );
+        const signingKeys = notaryAddresses.map((notaryID, index) => {
+          const wallet = hdkey.fromMasterSeed(seed).derivePath(`m/44'/60'/0'/0/${index + 1}`).getWallet();
+          assert.equal(wallet.getAddressString().toLowerCase(), signers[index].toLowerCase(),
+            "Test signing key must match the development notary");
+          return wallet.getPrivateKey();
+        });
+        const serializeUint32 = value => {
+          const buffer = Buffer.alloc(4);
+          buffer.writeUInt32LE(value);
+          return buffer.toString('hex');
+        };
+        const submitNotarization = async (serialized, txid, vout) => {
+          const txidHash = web3.utils.keccak256(`${txid}${serializeUint32(vout)}`);
+          const notarizationHash = web3.utils.keccak256(serialized);
+          const signatures = await Promise.all(notaryAddresses.map(async (notaryID, index) => {
+            const digest = web3.utils.keccak256(
+              `0x01367eaadd291e1976abc446a143f83c2d4d2c5a8401${txidHash.slice(2)}` +
+              `a6ef9ea235635e328124ff3429db9f9e91b64e2d${serializeUint32(blockheights[index])}` +
+              `${notaryID.slice(2)}${notarizationHash.slice(2)}`
+            );
+            const signature = ecsign(Buffer.from(digest.slice(2), 'hex'), signingKeys[index]);
+            return {
+              v: signature.v + 4,
+              r: `0x${signature.r.toString('hex')}`,
+              s: `0x${signature.s.toString('hex')}`,
+            };
+          }));
+          const signatureData = abi.encodeParameters(
+            ['uint8[]', 'bytes32[]', 'bytes32[]', 'uint32[]', 'address[]'],
+            [signatures.map(signature => signature.v), signatures.map(signature => signature.r),
+              signatures.map(signature => signature.s), blockheights, notaryAddresses]
+          );
+          return contractInstance.methods.setLatestData(serialized, txid, vout, signatureData)
+            .send({ from: accounts[0], gas: 6000000 });
+        };
 
-      //   let reply;
+        await submitNotarization(testNotarization.firstNotarization, testNotarization.firsttxid, testNotarization.firstvout);
+        await submitNotarization(testNotarization.secondNotarization, testNotarization.secondtxid, testNotarization.secondvout);
 
-      //   const votehash= "0x9304c78dd2c478a5cd5841dd751dc16baa320603";
-      //   try {
-      //       reply = await contractInstance.methods.setLatestData(testNotarization.firstNotarization, testNotarization.firsttxid, testNotarization.firstvout,  testNotarization.abiencodedSigData).send({ from: accounts[0], gas: 6000000 });  
-            
-      //       reply = await contractInstance.methods.setLatestData(testNotarization.secondNotarization, testNotarization.secondtxid, testNotarization.secondvout,  testNotarization.abiencodedSigData).send({ from: accounts[0], gas: 6000000 }); 
-      //       let test = await contractInstance.methods.rollingUpgradeVotes(0).call();
-      //       assert.equal(test.toLowerCase(), votehash, "Vote hash should be equal to the votehash");
-      //       test = await contractInstance.methods.rollingUpgradeVotes(1).call();
-      //       assert.equal(test.toLowerCase(), votehash, "Vote hash should be equal to the votehash");
-      //       test = await contractInstance.methods.rollingUpgradeVotes(2).call();
-      //       assert.equal(test.toLowerCase(), "0x0000000000000000000000000000000000000000", "Vote hash should be equal to the null");
+        assert.equal((await contractInstance.methods.rollingUpgradeVotes(0).call()).toLowerCase(), votehash);
+        assert.equal((await contractInstance.methods.rollingUpgradeVotes(1).call()).toLowerCase(), votehash);
+        assert.equal(await contractInstance.methods.rollingUpgradeVotes(2).call(), "0x0000000000000000000000000000000000000000");
+        assert.equal(await contractInstance.methods.getVoteCount(votehash).call(), "2", "Vote count should be 2");
 
-      //       let innerreply2 = await contractInstance.methods.getVoteCount(votehash).call();
-      //       assert.equal(innerreply2, "2", "Vote count should be 2");
-      //   } catch(e) {
-      //       console.log(e)
-      //       assert.isTrue(false);
-      //   }
-      //   // Get the contract balance after sending ETH exportHeights
-      //   const notarization = await contractInstance.methods.bestForks(0).call();
-      //   const vote = await contractInstance.methods.rollingUpgradeVotes(0).call();
-
-      //    const NotarizationResult = {
-      //      txid: notarization.substring(66, 130),
-      //      n: parseInt(notarization.slice(202, 210), 16),
-      //      hash: notarization.substring(2, 66),
-      //   };
-      //   assert.equal(`0x${NotarizationResult.txid}`, testNotarization.firsttxid, "Txid in best forks does not equal notarization");
-      // });
+        const notarization = await contractInstance.methods.bestForks(0).call();
+        assert.equal(`0x${notarization.substring(66, 130)}`, testNotarization.firsttxid,
+          "Txid in best forks does not equal notarization");
+      });
 
       // it("Test Votes", async () => {
       //   const DelegatorInst = await VerusDelegator.deployed();
