@@ -37,7 +37,8 @@ library VerusConstants {
     bytes32 constant VDXFID_DAI_DSR_SUPPLY =    0x00000000000000000000000084206E821f7bB4c6F390299c1367600F608c28C8;
     bytes32 constant SUBMIT_IMPORTS_LAST_TXID = 0x00000000000000000000000037256eef64a0bf17344bcb0cbfcde4bea6746347;
     bytes32 constant VDXFID_DAI_BURNBACK_TIME_THRESHOLD = 0x0000000000000000000000007d6505549c434ef651d799ede5f0d3f698464fcf;
-    // controls.control key — halt flags stored in storageGlobal
+    // Halt gate flags, stored in claimableFees[VDXF_DISABLE_CONTRACT_KEY]. Do not write these directly:
+    // they are derived from the halt state keys by BridgeHalt.refreshFlags.
     // Key name e.g. veth.vrsc::contract.halt.flags
     bytes32 constant VDXF_DISABLE_CONTRACT_KEY = 0x000000000000000000000000b024b1e290c833d9c5703ef6184a7c84e7ddd335;
     uint8 constant HALT_NOTARIZATIONS  = 1;  // bit 0: stops setLatestData
@@ -139,6 +140,5 @@ library VerusConstants {
     uint256 constant MAX_UINT256 = 0xffffffffffffffffffffffffffffffffffffffffffffffffffffffffffffffff;
 }
 
-//TODO: extra constants to add 176, 92 etc..
-//NOTE: Check constants with Mike
+
 

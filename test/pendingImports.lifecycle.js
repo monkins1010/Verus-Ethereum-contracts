@@ -193,50 +193,27 @@ contract('PendingImports lifecycle', async (accounts) => {
         }
     });
 
-    // ── HALT VOTE TESTS — must be last ────────────────────────────────────────
+    // ── HALT TESTS — must be last ────────────────────────────────────────
 
-    it('[halt] bridge not paused before any halt votes', async () => {
+    it('[halt] bridge not halted before any revocations', async () => {
         const disableFlag = await DelegatorInst.claimableFees(VDXF_DISABLE_CONTRACT_KEY);
         assert.equal(disableFlag.toString(), '0', 'VDXF_DISABLE_CONTRACT_KEY should be 0 before halt');
     });
 
-    it('[halt] vote 1 of 3 - bridge not yet paused', async () => {
-        const receipt = await vdxfSend(
-            web3.eth.abi.encodeParameter('bool', true), 'submitHaltVote', NOTARY_SIGNERS[0]);
-        const ev = findPI(receipt, 'HaltVoteSubmitted');
-        assert.ok(ev, 'expected HaltVoteSubmitted event');
-        assert.equal(ev.voteCount.toString(), '1');
-        assert.equal(ev.bridgePaused, false, 'bridge should not be paused after 1 halt vote');
-    });
-
-    it('[halt] vote 2 of 3 - bridge not yet paused', async () => {
-        const receipt = await vdxfSend(
-            web3.eth.abi.encodeParameter('bool', true), 'submitHaltVote', NOTARY_SIGNERS[1]);
-        const ev = findPI(receipt, 'HaltVoteSubmitted');
-        assert.ok(ev, 'expected HaltVoteSubmitted event');
-        assert.equal(ev.voteCount.toString(), '2');
-        assert.equal(ev.bridgePaused, false, 'bridge should not be paused after 2 halt votes');
-    });
-
-    it('[halt] vote 3 of 3 - bridge PAUSED, BridgePaused event fires', async () => {
-        const receipt = await vdxfSend(
-            web3.eth.abi.encodeParameter('bool', true), 'submitHaltVote', NOTARY_SIGNERS[2]);
-
-        const bridgePausedAbi = pendingImportsAbi.find(e => e.type === 'event' && e.name === 'BridgePaused');
-        const bridgePausedTopic = web3.eth.abi.encodeEventSignature(bridgePausedAbi);
-        assert.isTrue(
-            (receipt.logs || []).some(l => l.topics[0] === bridgePausedTopic),
-            'expected BridgePaused event after 3rd halt vote'
-        );
-
-        const haltEv = findPI(receipt, 'HaltVoteSubmitted');
-        assert.ok(haltEv, 'expected HaltVoteSubmitted event');
-        assert.equal(haltEv.voteCount.toString(), '3');
-        assert.equal(haltEv.bridgePaused, true, 'bridge should be paused after 3rd halt vote');
+    it('[halt] revoking the notaries up to the threshold TEMPORARILY HALTS the bridge', async () => {
+        // The dev network has 3 notaries, so the revoked threshold (min(4, n)) is 3.
+        let receipt;
+        for (const signer of NOTARY_SIGNERS) {
+            receipt = await web3.eth.sendTransaction({
+                from: signer, to: DelegatorInst.address,
+                data: contractInstance.methods.revokeWithMainAddress('0x').encodeABI(), gas: 6000000,
+            });
+        }
+        assert.ok(findPI(receipt, 'BridgeTemporarilyHalted'),
+            'expected BridgeTemporarilyHalted on the revocation that reaches the threshold');
 
         const disableFlag = await DelegatorInst.claimableFees(VDXF_DISABLE_CONTRACT_KEY);
-        assert.notEqual(disableFlag.toString(), '0',
-            'VDXF_DISABLE_CONTRACT_KEY should be non-zero after bridge is paused');
+        assert.equal(disableFlag.toString(), '7', 'temporary halt sets all halt flags');
     });
 
     it('[halt] submitImports reverts when bridge is paused', async () => {

@@ -4,15 +4,23 @@ pragma abicoder v2;
 
 import "../Libraries/VerusConstants.sol";
 import "../Libraries/VerusObjects.sol";
+import "../Libraries/BridgeHalt.sol";
 import "../Storage/StorageMaster.sol";
 
+/// @notice Pending-import queue plus the notary voting that drives the bridge halt states.
+///         Voting overview (full detail in docs/BRIDGE-HALT-VOTING.md); every route below is reached
+///         through Delegator.setVerusData(data, "<route>") and msg.sender must be a valid notary:
+///
+///         (no vote)                            more than 3 notaries revoked (NotaryTools) -> CONTRACTS_TEMPORARY_HALTED
+///         submitUnhaltVote(bool)               quorum of valid notaries -> back to normal (only while temporarily halted)
+///         approveOrRejectAcceptedImport(...)   quorum of rejects on one txid -> CONTRACTS_PERMANENTLY_HALTED
+///                                                         (cleared only by upgrading this contract, see initialize())
+///
+///         Revoked notaries cannot vote at all, and votes they cast before being revoked are not counted.
 contract PendingImports is VerusStorage {
 
     bytes32 constant SUBMIT_IMPORTS_REENTRANCY_GUARD = "submitimports.reentrancy.lock";
     bytes32 constant APPROVE_OR_REJECT_IMPORT_VDXF_KEY = keccak256("approveOrRejectAcceptedImport");
-    // Routes superseded by APPROVE_OR_REJECT_IMPORT_VDXF_KEY; deleted by initialize() on upgrade.
-    bytes32 constant LEGACY_RELEASE_IMPORT_VDXF_KEY = keccak256("releasePendingImport");
-    bytes32 constant LEGACY_APPROVE_IMPORT_VDXF_KEY = keccak256("approveImport");
     bytes32 constant GET_PENDING_IMPORTS_VDXF_KEY = keccak256("getPendingImports");
     bytes32 constant GET_PENDING_IMPORT_COUNT_VDXF_KEY = keccak256("getPendingImportCount");
     bytes32 constant PENDING_IMPORTS_CONTRACT_INDEX_KEY = keccak256("PendingImports.contract.index");
@@ -22,7 +30,7 @@ contract PendingImports is VerusStorage {
     bytes32 constant PENDING_IMPORT_QUEUE_INDEX_PREFIX = keccak256("pending.import.queue.index");
     bytes32 constant RELEASE_VOTE_BITMAP_PREFIX = keccak256("pending.import.release.vote.bitmap");
     bytes32 constant REJECT_VOTE_BITMAP_PREFIX = keccak256("pending.import.reject.vote.bitmap");
-    bytes32 constant HALT_VOTE_BITMAP_KEY = keccak256("bridge.halt.vote.bitmap");
+    bytes32 constant SUBMIT_UNHALT_VOTE_VDXF_KEY = keccak256("submitUnhaltVote");
     // Mirror of the constants in TokenManager / Imports — kept here so _executeImport
     // can clean up orphaned exec-data keys without depending on executePendingImport running.
     bytes32 constant PENDING_EXEC_DATA_PREFIX   = keccak256("pending.exec.data");
@@ -37,31 +45,44 @@ contract PendingImports is VerusStorage {
     uint256 constant IMPORT_RELEASE_COOLDOWN = 1 hours;
     uint256 constant IMPORT_TIMEOUT = 24 hours;
 
-    bytes32 constant BRIDGE_PAUSED_KEY = keccak256("bridge.import.paused");
     event PendingImportQueued(bytes32 indexed importTxid, uint32 indexed nout, uint128 cceHeightsAndIndex, uint64 nonce);
     event PendingImportReleased(bytes32 indexed importTxid, address indexed releaser);
     event PendingImportApproved(bytes32 indexed importTxid, address indexed notarizerID, uint256 approvalCount);
     event PendingImportRejectVote(bytes32 indexed importTxid, address indexed notarizerID, uint256 rejectionCount);
     event PendingImportRejected(bytes32 indexed importTxid);
-    event BridgePaused();
-    event HaltVoteSubmitted(address indexed notarizerID, bool voteToHalt, uint256 voteCount, bool bridgePaused);
+    // Emitted by NotaryTools (same storage context) when the revoked-notaries threshold is hit; declared here for the ABI.
+    event BridgeTemporarilyHalted();
+    event BridgeTemporarilyUnhalted();
+    event BridgePermanentlyHalted(bytes32 indexed blockedTxid);
+    event UnhaltVoteSubmitted(address indexed notarizerID, bool voteToUnhalt, uint256 voteCount, bool temporarilyHalted);
 
     constructor(address veth) {
         VETH = veth;
     }
 
     /// @notice Run once per upgrade of this contract via delegatecall from Delegator.replacecontract()
-    ///         (or the UpgradeManager upgrade loop). Re-points the notary vote route at this slot and
-    ///         retires the split approve/release routes it replaced.
-    ///         No-op on a first deployment, where UpgradeManager.initialize() does the registration
-    ///         before the slot-index key exists.
+    ///         (or the UpgradeManager upgrade loop).
+    ///         1. Lifts CONTRACTS_PERMANENTLY_HALTED: forgets the blocked txid. This is the ONLY way out of
+    ///            a permanent halt. The rejected import itself stays in the queue as REJECTED, so it can
+    ///            never be executed or re-queued. (A permanent halt always clears the temporary state, so
+    ///            the bridge returns to normal.)
+    ///         2. Re-points the notary vote routes at this slot.
+    ///            No-op for the routes on a first deployment, where UpgradeManager.initialize() does the
+    ///            registration before the slot-index key exists.
     function initialize() external {
+        delete storageGlobal[BridgeHalt.PERMANENTLY_HALTED_KEY];
+        BridgeHalt.refreshFlags(storageGlobal, claimableFees);
+
         bytes memory indexData = storageGlobal[PENDING_IMPORTS_CONTRACT_INDEX_KEY];
         if (indexData.length == 0) return;
 
         storageGlobal[APPROVE_OR_REJECT_IMPORT_VDXF_KEY] = indexData;
-        delete storageGlobal[LEGACY_RELEASE_IMPORT_VDXF_KEY];
-        delete storageGlobal[LEGACY_APPROVE_IMPORT_VDXF_KEY];
+        storageGlobal[SUBMIT_UNHALT_VOTE_VDXF_KEY] = indexData;
+    }
+
+    /// @dev True while submitImports / pending-import execution is blocked (any halt state).
+    function _submitImportsHalted() private view returns (bool) {
+        return claimableFees[VerusConstants.VDXF_DISABLE_CONTRACT_KEY] & VerusConstants.HALT_SUBMIT_IMPORTS != 0;
     }
 
     /// @notice Called by SubmitImports (via reentrancy guard) to place an incoming cross-chain
@@ -78,7 +99,7 @@ contract PendingImports is VerusStorage {
         uint176[3] calldata exporters
     ) external {
 
-        require(storageGlobal[BRIDGE_PAUSED_KEY].length == 0);
+        require(!_submitImportsHalted());
         bytes32 pendingKey = _pendingImportKey(importTxid);
         require(storageGlobal[pendingKey].length == 0);
 
@@ -109,15 +130,6 @@ contract PendingImports is VerusStorage {
             cceHeightsAndIndex,
             nonce
         );
-    }
-
-    // Brian Kerninghan's bit counting algorithm, O(number of set bits) instead of O(32).
-    function _countSetBits32(uint32 value) private pure returns (uint256 count) {
-        uint32 x = value;
-        while (x != 0) {
-            x &= (x - 1);
-            count++;
-        }
     }
 
     /// @notice VDXF dispatcher path — called via Delegator.setVerusData(data, "getPendingImportCount").
@@ -300,55 +312,67 @@ contract PendingImports is VerusStorage {
         return _resolveNotaryIAddress();
     }
 
-    function _loadHaltVoteBitmap() private view returns (uint32 bitmap) {
-        if (storageGlobal[HALT_VOTE_BITMAP_KEY].length != 0) {
-            bitmap = abi.decode(storageGlobal[HALT_VOTE_BITMAP_KEY], (uint32));
+    function _loadVoteBitmap(bytes32 key) private view returns (uint32 bitmap) {
+        if (storageGlobal[key].length != 0) {
+            bitmap = abi.decode(storageGlobal[key], (uint32));
         }
     }
 
-    function _submitHaltVote(bool voteToHalt) private {
+    /// @dev Counts the votes in `bitmap` that belong to currently valid notaries, and the number of
+    ///      revoked notaries. A notary revoked after voting no longer counts.
+    function _countValidVotes(uint32 bitmap) private view returns (uint256 votes, uint256 revoked) {
+        for (uint256 i = 0; i < notaries.length; i++) {
+            if (notaryAddressMapping[notaries[i]].state == VerusConstants.NOTARY_VALID) {
+                if ((bitmap >> i) & 1 != 0) votes++;
+            } else {
+                revoked++;
+            }
+        }
+    }
 
+    /// @dev Sets or clears the calling notary's bit in the bitmap stored at `key`.
+    ///      Reverts unless msg.sender is a valid (not revoked) notary. Returns the notary i-address and the new bitmap.
+    function _recordNotaryVote(bytes32 key, bool vote) private returns (address iAddr, uint32 bitmap) {
         require(notaries.length > 0 && notaries.length <= 32);
-        require(storageGlobal[SUBMIT_IMPORTS_REENTRANCY_GUARD].length == 0);
-        storageGlobal[SUBMIT_IMPORTS_REENTRANCY_GUARD] = abi.encodePacked(uint8(1));
 
         uint256 notaryIndex = _resolveNotaryIndexFromSender();
         require(notaryIndex != type(uint256).max);
-        address iAddr = notaries[notaryIndex];
+        iAddr = notaries[notaryIndex];
 
-        uint32 bitmap = _loadHaltVoteBitmap();
+        bitmap = _loadVoteBitmap(key);
         uint32 mask = uint32(1) << uint32(notaryIndex);
-        bool bridgePaused = storageGlobal[BRIDGE_PAUSED_KEY].length != 0;
-
-        if (voteToHalt) {
-            if ((bitmap & mask) == 0) {
-                bitmap |= mask;
-                storageGlobal[HALT_VOTE_BITMAP_KEY] = abi.encode(bitmap);
-            }
+        if (vote) {
+            bitmap |= mask;
         } else {
-            // allow notary to rescind their halt vote if the bridge is not already paused and they have previously voted to halt
-            uint256 voteCountBefore = _countSetBits32(bitmap);
-            require(!bridgePaused);
-            require(voteCountBefore < 3);
+            bitmap &= ~mask;
+        }
+        storageGlobal[key] = abi.encode(bitmap);
+    }
 
-            if ((bitmap & mask) != 0) {
-                bitmap &= ~mask;
-                storageGlobal[HALT_VOTE_BITMAP_KEY] = abi.encode(bitmap);
-            }
+    /// @dev Notary vote to lift CONTRACTS_TEMPORARY_HALTED. A quorum majority of valid notaries clears the
+    ///      halt and the votes, provided fewer notaries are revoked than the halt threshold (revoked notaries
+    ///      must recover themselves first). The endpoint is closed while CONTRACTS_PERMANENTLY_HALTED.
+    function _submitUnhaltVote(bool voteToUnhalt) private {
+
+        require(storageGlobal[SUBMIT_IMPORTS_REENTRANCY_GUARD].length == 0);
+        storageGlobal[SUBMIT_IMPORTS_REENTRANCY_GUARD] = abi.encodePacked(uint8(1));
+
+        require(BridgeHalt.isTemporarilyHalted(storageGlobal));
+        require(!BridgeHalt.isPermanentlyHalted(storageGlobal));
+
+        (address iAddr, uint32 bitmap) = _recordNotaryVote(BridgeHalt.UNHALT_VOTE_BITMAP_KEY, voteToUnhalt);
+        (uint256 voteCount, uint256 revoked) = _countValidVotes(bitmap);
+        bool halted = true;
+
+        if (voteCount >= BridgeHalt.quorum(notaries.length) && revoked < BridgeHalt.revokedHaltThreshold(notaries.length)) {
+            delete storageGlobal[BridgeHalt.TEMPORARY_HALTED_KEY];
+            delete storageGlobal[BridgeHalt.UNHALT_VOTE_BITMAP_KEY];
+            BridgeHalt.refreshFlags(storageGlobal, claimableFees);
+            halted = false;
+            emit BridgeTemporarilyUnhalted();
         }
 
-        uint256 voteCount = _countSetBits32(bitmap);
-        if (voteCount >= 3 && !bridgePaused) {
-            storageGlobal[BRIDGE_PAUSED_KEY] = abi.encode(true);
-            claimableFees[VerusConstants.VDXF_DISABLE_CONTRACT_KEY] =
-                VerusConstants.HALT_SUBMIT_IMPORTS +
-                VerusConstants.HALT_NOTARIZATIONS +
-                VerusConstants.HALT_SEND_TRANSFERS;
-            bridgePaused = true;
-            emit BridgePaused();
-        }
-
-        emit HaltVoteSubmitted(iAddr, voteToHalt, voteCount, bridgePaused);
+        emit UnhaltVoteSubmitted(iAddr, voteToUnhalt, voteCount, halted);
         delete storageGlobal[SUBMIT_IMPORTS_REENTRANCY_GUARD];
     }
 
@@ -361,7 +385,13 @@ contract PendingImports is VerusStorage {
     ///         storage decode of the pending import record.
     function _approveOrRejectAcceptedImport(bytes32 importTxid, bool approve) private {
 
-        require(storageGlobal[BRIDGE_PAUSED_KEY].length == 0);
+        // Approvals move funds, so any halt blocks them. A reject vote only raises the halt level, so it
+        // stays possible during a temporary halt, but is pointless once permanently halted.
+        if (approve) {
+            require(!_submitImportsHalted());
+        } else {
+            require(!BridgeHalt.isPermanentlyHalted(storageGlobal));
+        }
         require(storageGlobal[SUBMIT_IMPORTS_REENTRANCY_GUARD].length == 0);
 
         // Single length-slot read: the import is gone as soon as it has been executed.
@@ -401,7 +431,7 @@ contract PendingImports is VerusStorage {
         bitmap |= mask;
         storageGlobal[voteKey] = abi.encode(bitmap);
 
-        uint256 count = _countSetBits32(bitmap);
+        (uint256 count,) = _countValidVotes(bitmap);
         uint256 quorum = (notaryCount >> 1) + 1;
         address iAddr = notaries[notaryIndex];
 
@@ -421,7 +451,9 @@ contract PendingImports is VerusStorage {
     }
 
     /// @dev Marks the import permanently rejected (it stays queued so the daemon can observe the
-    ///      final state) and halts the bridge.
+    ///      final state) and enters CONTRACTS_PERMANENTLY_HALTED, recording the bad txid.
+    ///      submitImports and sendTransfer stop; notarizations (setLatestData) keep running so an
+    ///      upgrade can be voted in. initialize() of the upgraded contract clears the blocked txid.
     function _rejectImport(
         bytes32 importTxid,
         bytes32 pendingKey,
@@ -431,22 +463,15 @@ contract PendingImports is VerusStorage {
         pending.state = IMPORT_STATE_REJECTED;
         storageGlobal[pendingKey] = abi.encode(pending);
 
-        if (storageGlobal[BRIDGE_PAUSED_KEY].length == 0) {
-            storageGlobal[BRIDGE_PAUSED_KEY] = abi.encode(true);
-            claimableFees[VerusConstants.VDXF_DISABLE_CONTRACT_KEY] =
-                VerusConstants.HALT_SUBMIT_IMPORTS +
-                VerusConstants.HALT_NOTARIZATIONS +
-                VerusConstants.HALT_SEND_TRANSFERS;
-            emit BridgePaused();
-        }
+        BridgeHalt.enterPermanentHalt(storageGlobal, claimableFees, importTxid);
 
+        emit BridgePermanentlyHalted(importTxid);
         emit PendingImportRejected(importTxid);
     }
 
     function _executeTimedOutImport(bytes32 importTxid) private {
 
-        require(storageGlobal[BRIDGE_PAUSED_KEY].length == 0);
-        if (claimableFees[VerusConstants.VDXF_DISABLE_CONTRACT_KEY] != 0) revert();
+        require(!_submitImportsHalted());
         require(storageGlobal[SUBMIT_IMPORTS_REENTRANCY_GUARD].length == 0);
 
         uint256 notaryIndex = _resolveNotaryIndexFromSender();
@@ -475,18 +500,19 @@ contract PendingImports is VerusStorage {
         _approveOrRejectAcceptedImport(importTxid, approve);
     }
 
-    /// @notice VDXF path: data = abi.encode(bool voteToHalt)
-    function submitHaltVote(bytes calldata data) external {
-        _submitHaltVote(abi.decode(data, (bool)));
+    /// @notice VDXF path: data = abi.encode(bool voteToUnhalt). Notary vote to lift CONTRACTS_TEMPORARY_HALTED.
+    function submitUnhaltVote(bytes calldata data) external {
+        _submitUnhaltVote(abi.decode(data, (bool)));
     }
+
     /// @notice VDXF path: data = abi.encode(bytes32 importTxid)
     function executeTimedOutImport(bytes calldata data) external {
         _executeTimedOutImport(abi.decode(data, (bytes32)));
     }
 
-    /// @notice VDXF path: returns abi.encode(bool) — bridge paused status.
+    /// @notice VDXF path: returns abi.encode(bool) — true when temporarily or permanently halted.
     function isBridgePaused(bytes calldata) external view returns (bytes memory) {
-        return abi.encode(storageGlobal[BRIDGE_PAUSED_KEY].length != 0);
+        return abi.encode(BridgeHalt.currentState(storageGlobal) != BridgeHalt.CONTRACTS_NORMAL);
     }
 
     /// @notice VDXF path: returns abi.encode(address) — notary i-address for msg.sender.
@@ -498,9 +524,9 @@ contract PendingImports is VerusStorage {
     // Status helpers.
     // -------------------------------------------------------------------------
 
-    /// @notice Returns true if the bridge has been paused by 3 notary halt votes.
+    /// @notice Returns true if the bridge is temporarily or permanently halted.
     function isBridgePaused() external view returns (bool) {
-        return storageGlobal[BRIDGE_PAUSED_KEY].length != 0;
+        return BridgeHalt.currentState(storageGlobal) != BridgeHalt.CONTRACTS_NORMAL;
     }
 
     // -------------------------------------------------------------------------
@@ -514,9 +540,8 @@ contract PendingImports is VerusStorage {
         bytes32 pendingKey,
         VerusObjects.pendingImport memory pending
     ) private {
-        // Safety latch: once paused by halt quorum, no further pending imports can execute.
-        require(storageGlobal[BRIDGE_PAUSED_KEY].length == 0);
-        if (claimableFees[VerusConstants.VDXF_DISABLE_CONTRACT_KEY] != 0) revert();
+        // Safety latch: while halted (temporarily or permanently), no pending import can execute.
+        require(!_submitImportsHalted());
 
         pending.state = IMPORT_STATE_RELEASED;
         storageGlobal[pendingKey] = abi.encode(pending);

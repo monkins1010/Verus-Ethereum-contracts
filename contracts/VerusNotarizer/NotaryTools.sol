@@ -10,6 +10,7 @@ import "../VerusBridge/VerusSerializer.sol";
 import "./NotarizationSerializer.sol";
 import "../MMR/VerusBlake2b.sol";
 import "../VerusBridge/UpgradeManager.sol";
+import "../Libraries/BridgeHalt.sol";
 import "../Storage/StorageMaster.sol";
 import "../VerusBridge/Token.sol";
 import "../VerusBridge/TokenManager.sol";
@@ -20,12 +21,9 @@ contract NotaryTools is VerusStorage {
     uint8 constant TYPE_REVOKE = 2;
     uint8 constant TYPE_RECOVER = 3;
     uint8 constant TYPE_AUTO_REVOKE = 4;
-    uint8 constant TYPE_HALT = 5;
-    uint8 constant TYPE_RESUME = 6;
     uint8 constant NUM_ADDRESSES_FOR_REVOKE = 2;
     uint8 constant COMPLETE = 2;
     uint8 constant ERROR = 4;
-    bytes32 constant BRIDGE_PAUSED_KEY = keccak256("bridge.import.paused");
 
     using VerusBlake2b for bytes;
 
@@ -37,21 +35,24 @@ contract NotaryTools is VerusStorage {
         notaryAddressMapping[notarizer] = VerusObjects.notarizer(mainAddress, revokeAddress, state);
     }
 
-    // Auto-halts submitImports when > 3 notaries are revoked; auto-clears only if the flag was
-    // set by this function (exact HALT_SUBMIT_IMPORTS value) and fewer than 4 remain revoked.
-    function _checkAutoHalt() private {
+    event BridgeTemporarilyHalted();
+
+    // Revoking notaries (themselves, or by multisig) is what triggers CONTRACTS_TEMPORARY_HALTED:
+    // once more than 3 are revoked the bridge latches into the temporary halt. Recovering notaries does NOT
+    // lift it; a quorum of valid notaries must vote to unhalt (PendingImports.submitUnhaltVote).
+    // Not triggered while permanently halted, as that would stop the notarizations an upgrade needs.
+    function _haltIfTooManyRevoked() private {
+        if (BridgeHalt.isTemporarilyHalted(storageGlobal) || BridgeHalt.isPermanentlyHalted(storageGlobal)) return;
+
         uint revokedCount;
         for (uint i = 0; i < notaries.length; i++) {
             if (notaryAddressMapping[notaries[i]].state == VerusConstants.NOTARY_REVOKED) {
                 revokedCount++;
             }
         }
-        if (revokedCount > 3) {
-            if (claimableFees[VerusConstants.VDXF_DISABLE_CONTRACT_KEY] == 0) {
-                claimableFees[VerusConstants.VDXF_DISABLE_CONTRACT_KEY] = VerusConstants.HALT_SUBMIT_IMPORTS;
-            }
-        } else if (claimableFees[VerusConstants.VDXF_DISABLE_CONTRACT_KEY] == VerusConstants.HALT_SUBMIT_IMPORTS) {
-            delete claimableFees[VerusConstants.VDXF_DISABLE_CONTRACT_KEY];
+        if (revokedCount >= BridgeHalt.revokedHaltThreshold(notaries.length)) {
+            BridgeHalt.enterTemporaryHalt(storageGlobal, claimableFees);
+            emit BridgeTemporarilyHalted();
         }
     }
 
@@ -71,7 +72,7 @@ contract NotaryTools is VerusStorage {
             if(msg.sender == notaryAddressMapping[notaries[i]].main) {
                 require(notaryAddressMapping[notaries[i]].state == VerusConstants.NOTARY_VALID, "Notary not Valid");
                 notaryAddressMapping[notaries[i]].state = VerusConstants.NOTARY_REVOKED;
-                _checkAutoHalt();
+                _haltIfTooManyRevoked();
                 return true;
             }
         }
@@ -107,7 +108,7 @@ contract NotaryTools is VerusStorage {
         require(counter >= ((notaries.length >> 1) + 1), "not enough signatures");
 
         notaryAddressMapping[notarizerBeingRevoked].state = VerusConstants.NOTARY_REVOKED;
-        _checkAutoHalt();
+        _haltIfTooManyRevoked();
         return true;
     }
 
@@ -135,7 +136,6 @@ contract NotaryTools is VerusStorage {
                  
         updateNotarizer(_newRecoveryInfo.notarizerID, _newRecoveryInfo.contracts[0], 
                                        _newRecoveryInfo.contracts[1], VerusConstants.NOTARY_VALID);
-        _checkAutoHalt();
         return COMPLETE;
     }
 
@@ -170,78 +170,9 @@ contract NotaryTools is VerusStorage {
         require(counter >= ((notaries.length >> 1) + 1), "not enough sigs");
 
         updateNotarizer(notarizerBeingRecovered, newMainAddr, newRevokeAddr, VerusConstants.NOTARY_VALID);
-        _checkAutoHalt();
         return COMPLETE;
     }
 
-    /// @notice Halt or resume bridge functions with 3 notary signatures bearing fresh one-time salts.
-    /// @param dataIn abi.encode(revokeRecoverInfo[] memory sigs, uint8 flags)
-    ///   flags: 0 = normal, 1 = halt notarizations, 2 = halt submitimports, 4 = halt sendtransfers (combinable)
-    function haltBridge(bytes calldata dataIn) public {
-
-        (VerusObjects.revokeRecoverInfo[] memory _haltPacket, uint8 flags) = abi.decode(dataIn, (VerusObjects.revokeRecoverInfo[], uint8));
-        bytes memory be;
-        uint counter;
-
-        for (uint i = 0; i < _haltPacket.length; i++) {
-
-            for (uint j = i + 1; j < _haltPacket.length; j++) {
-                if (_haltPacket[i].notarizerID == _haltPacket[j].notarizerID) {
-                    revert("Duplicate signatures");
-                }
-            }
-
-            require(saltsUsed[_haltPacket[i].salt] == false, "salt already used");
-            saltsUsed[_haltPacket[i].salt] = true;
-
-            be = bytesToString(abi.encodePacked(uint8(TYPE_HALT), flags, _haltPacket[i].salt));
-            address signer = recoverString(be, _haltPacket[i]._vs, _haltPacket[i]._rs, _haltPacket[i]._ss);
-
-            if (signer == notaryAddressMapping[_haltPacket[i].notarizerID].main &&
-                notaryAddressMapping[_haltPacket[i].notarizerID].state == VerusConstants.NOTARY_VALID) {
-                counter++;
-            }
-        }
-
-        require(counter >= 3, "Need 3 valid notary signatures");
-
-        claimableFees[VerusConstants.VDXF_DISABLE_CONTRACT_KEY] = flags;
-    }
-
-    /// @notice Re-enable all bridge functions — requires 8 valid notary signatures with fresh one-time salts.
-    /// @param dataIn abi.encode(revokeRecoverInfo[] memory sigs)  — must contain >= 8 unique valid notaries
-    function resumeBridge(bytes calldata dataIn) public {
-
-        VerusObjects.revokeRecoverInfo[] memory _resumePacket = abi.decode(dataIn, (VerusObjects.revokeRecoverInfo[]));
-        bytes memory be;
-        uint counter;
-
-        for (uint i = 0; i < _resumePacket.length; i++) {
-
-            for (uint j = i + 1; j < _resumePacket.length; j++) {
-                if (_resumePacket[i].notarizerID == _resumePacket[j].notarizerID) {
-                    revert("Duplicate signatures");
-                }
-            }
-
-            require(saltsUsed[_resumePacket[i].salt] == false, "salt already used");
-            saltsUsed[_resumePacket[i].salt] = true;
-
-            be = bytesToString(abi.encodePacked(uint8(TYPE_RESUME), _resumePacket[i].salt));
-            address signer = recoverString(be, _resumePacket[i]._vs, _resumePacket[i]._rs, _resumePacket[i]._ss);
-
-            if (signer == notaryAddressMapping[_resumePacket[i].notarizerID].main &&
-                notaryAddressMapping[_resumePacket[i].notarizerID].state == VerusConstants.NOTARY_VALID) {
-                counter++;
-            }
-        }
-
-        require(counter >= 8, "Need 8 valid notary signatures");
-        require(storageGlobal[BRIDGE_PAUSED_KEY].length == 0, "upgrade required");
-
-        delete claimableFees[VerusConstants.VDXF_DISABLE_CONTRACT_KEY];
-    }
-    
     function bytesToString (bytes memory input) private pure returns (bytes memory output)
     {
         bytes memory _string = new bytes(input.length * 2);
