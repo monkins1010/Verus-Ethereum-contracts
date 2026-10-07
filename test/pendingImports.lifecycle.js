@@ -213,7 +213,7 @@ contract('PendingImports lifecycle', async (accounts) => {
             'expected BridgeTemporarilyHalted on the revocation that reaches the threshold');
 
         const disableFlag = await DelegatorInst.claimableFees(VDXF_DISABLE_CONTRACT_KEY);
-        assert.equal(disableFlag.toString(), '7', 'temporary halt sets all halt flags');
+        assert.equal(disableFlag.toString(), '6', 'temporary halt stops imports and transfers, notarizations keep running');
     });
 
     it('[halt] submitImports reverts when bridge is paused', async () => {

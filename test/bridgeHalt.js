@@ -16,6 +16,7 @@ const crypto            = require('crypto');
 const EC                = require('elliptic').ec;
 const VerusDelegator    = artifacts.require('../contracts/Main/Delegator.sol');
 const MockPermanentHalt = artifacts.require('MockPermanentHalt');
+const MockSeedImport    = artifacts.require('MockSeedImport');
 const verusDelegatorAbi = require('../build/contracts/Delegator.json');
 const pendingImportsAbi = require('../build/contracts/PendingImports.json').abi;
 const { getNotarizerIDS } = require('../migrations/setup.js');
@@ -28,13 +29,17 @@ const IMPORTS_SLOT = 12;
 const PENDING_IMPORTS_SLOT = 11;
 
 const FLAGS_NORMAL = '0';
-const FLAGS_TEMPORARY_HALT = '7';  // notarizations + submitImports + sendTransfer
+const FLAGS_TEMPORARY_HALT = '6';  // submitImports + sendTransfer (notarizations keep running)
 const FLAGS_PERMANENT_HALT = '6';  // submitImports + sendTransfer (notarizations keep running)
 
 const key = (name) => web3.utils.keccak256(name);
 const TEMPORARY_HALTED_KEY   = key('bridge.temporary.halted');
 const PERMANENTLY_HALTED_KEY = key('bridge.permanently.halted');
 const UNHALT_VOTE_BITMAP_KEY = key('bridge.unhalt.vote.bitmap');
+const HALT_LIFTED_AT_KEY     = key('bridge.halt.lifted.at');
+
+const HOUR = 3600;
+const IMPORT_WINDOW_SECS = HOUR + 24 * HOUR + 60;   // release cooldown + timeout, plus margin
 
 // ganache-cli -d private keys of accounts[1..3] (also the notaries' main and recovery addresses)
 const PRIVATE_KEYS = [
@@ -174,11 +179,11 @@ contract('Bridge halt states', async (accounts) => {
             assert.isFalse(await isSet(PERMANENTLY_HALTED_KEY));
         });
 
-        it('setLatestData and sendTransferDirect revert while halted', async () => {
-            await expectRevert(contractInstance.methods.setLatestData('0x', web3.utils.randomHex(32), 0, '0x')
-                .send({ from: accounts[0], gas: 6000000 }), 'setLatestData');
+        it('sendTransferDirect reverts while halted; the notarization gate bit is not set', async () => {
             await expectRevert(contractInstance.methods.sendTransferDirect('0x')
-                .send({ from: accounts[0], gas: 6000000 }), 'sendTransferDirect');
+                .call({ from: accounts[0], gas: 6000000 }), 'sendTransferDirect');
+            // HALT_NOTARIZATIONS (bit 0) stays clear so upgrade votes carried in notarizations can still land.
+            assert.equal(Number(await flags()) & 1, 0);
         });
 
         it('revoked notaries cannot vote at all', async () => {
@@ -222,6 +227,7 @@ contract('Bridge halt states', async (accounts) => {
             assert.equal(await flags(), FLAGS_NORMAL);
             assert.isFalse(await isSet(TEMPORARY_HALTED_KEY));
             assert.isFalse(await isSet(UNHALT_VOTE_BITMAP_KEY));
+            assert.isTrue(await isSet(HALT_LIFTED_AT_KEY), 'unhalt must record when the halt was lifted');
         });
 
         it('notary 2 is still revoked; revoking two more halts again', async () => {
@@ -272,9 +278,87 @@ contract('Bridge halt states', async (accounts) => {
         });
 
         it('upgrading PendingImports (initialize) clears the blocked txid and the halt', async () => {
+            await recover(0);
+            await recover(1);
+            await recover(2);
             await DelegatorInst.replacecontract(originalPendingImports, PENDING_IMPORTS_SLOT, { from: accounts[0], gas: 6000000 });
             assert.equal(await flags(), FLAGS_NORMAL);
             assert.isFalse(await isSet(PERMANENTLY_HALTED_KEY));
+            assert.isTrue(await isSet(HALT_LIFTED_AT_KEY), 'lifting the permanent halt must record the lift time');
+        });
+    });
+
+    describe('Permanent halt lifted while notaries are still revoked', () => {
+        isolate();
+
+        it('re-latches the temporary halt immediately instead of waiting for the next revoke', async () => {
+            const originalImports = await DelegatorInst.contracts(IMPORTS_SLOT);
+            const originalPendingImports = await DelegatorInst.contracts(PENDING_IMPORTS_SLOT);
+            const mock = await MockPermanentHalt.new();
+            await DelegatorInst.replacecontract(mock.address, IMPORTS_SLOT, { from: accounts[0], gas: 6000000 });
+            await DelegatorInst.replacecontract(originalImports, IMPORTS_SLOT, { from: accounts[0], gas: 6000000 });
+            await revokeSelf(0);
+            await revokeSelf(1);
+            await revokeSelf(2);
+            assert.isFalse(await isSet(TEMPORARY_HALTED_KEY), 'no temporary halt while permanently halted');
+
+            const receipt = await web3.eth.sendTransaction({
+                from: accounts[0], to: DelegatorInst.address, gas: 6000000,
+                data: DelegatorInst.contract.methods.replacecontract(originalPendingImports, PENDING_IMPORTS_SLOT).encodeABI(),
+            });
+            assert.ok(findEvent(receipt, 'BridgeTemporarilyHalted'), 'expected BridgeTemporarilyHalted from initialize()');
+            assert.isFalse(await isSet(PERMANENTLY_HALTED_KEY));
+            assert.isTrue(await isSet(TEMPORARY_HALTED_KEY));
+            assert.equal(await flags(), FLAGS_TEMPORARY_HALT);
+        });
+    });
+
+    describe('Pending imports across a halt', () => {
+        isolate();
+        let seeded;
+
+        before(async () => {
+            const seed = await MockSeedImport.new();
+            seeded = await seed.SEEDED_TXID();
+            await DelegatorInst.replacecontract(seed.address, IMPORTS_SLOT, { from: accounts[0], gas: 6000000 });
+        });
+
+        const reject = (index) => send(contractInstance.methods.setVerusData(
+            web3.eth.abi.encodeParameters(['bytes32', 'bool'], [seeded, false]), 'approveOrRejectAcceptedImport'), NOTARIES[index]);
+        const executeTimedOut = () => send(contractInstance.methods.setVerusData(
+            web3.eth.abi.encodeParameter('bytes32', seeded), 'executeTimedOutImport'), NOTARIES[1]);
+
+        it('a real reject quorum rejects the import and enters the permanent halt with its txid', async () => {
+            const snap = (await rpc('evm_snapshot')).result;
+            assert.isNull(findEvent(await reject(0), 'BridgePermanentlyHalted'), 'one reject is not a quorum');
+            const receipt = await reject(1);
+            const halted = findEvent(receipt, 'BridgePermanentlyHalted');
+            assert.ok(halted, 'expected BridgePermanentlyHalted at quorum');
+            assert.equal(halted.blockedTxid, seeded);
+            assert.ok(findEvent(receipt, 'PendingImportRejected'));
+            assert.equal(await flags(), FLAGS_PERMANENT_HALT);
+            assert.equal(web3.eth.abi.decodeParameter('bytes32', await DelegatorInst.storageGlobal(PERMANENTLY_HALTED_KEY)), seeded);
+            await rpc('evm_revert', [snap]);
+        });
+
+        it('lifting a temporary halt restarts the timed-out import clock', async () => {
+            await revokeSelf(0);
+            await revokeSelf(1);
+            await revokeSelf(2);
+            await rpc('evm_increaseTime', [IMPORT_WINDOW_SECS]);    // the import is past its timeout, but the bridge is halted
+            await rpc('evm_mine');
+            await expectRevert(executeTimedOut(), 'timed-out execution while halted');
+
+            await recover(0);
+            await recover(1);
+            await unhaltVote(true, NOTARIES[0]);
+            await unhaltVote(true, NOTARIES[1]);
+            assert.equal(await flags(), FLAGS_NORMAL);
+
+            await expectRevert(executeTimedOut(), 'a single notary must not execute an import that sat out the halt');
+            await rpc('evm_increaseTime', [IMPORT_WINDOW_SECS]);
+            await rpc('evm_mine');
+            assert.ok(findEvent(await executeTimedOut(), 'PendingImportReleased'), 'executable after a fresh window');
         });
     });
 

@@ -16,6 +16,9 @@ import "../Storage/StorageMaster.sol";
 ///         approveOrRejectAcceptedImport(...)   quorum of rejects on one txid -> CONTRACTS_PERMANENTLY_HALTED
 ///                                                         (cleared only by upgrading this contract, see initialize())
 ///
+///         Both halts keep notarizations running so an upgrade can always be voted in. Lifting either halt restarts
+///         the timed-out import clock (executeTimedOutImport) for every import still pending.
+///
 ///         Revoked notaries cannot vote at all, and votes they cast before being revoked are not counted.
 contract PendingImports is VerusStorage {
 
@@ -69,8 +72,21 @@ contract PendingImports is VerusStorage {
     ///         2. Re-points the notary vote routes at this slot.
     ///            No-op for the routes on a first deployment, where UpgradeManager.initialize() does the
     ///            registration before the slot-index key exists.
+    ///         3. If a permanent halt was lifted, restarts the timed-out import clock and re-latches the
+    ///            temporary halt when the revoked-notary threshold is still met.
     function initialize() external {
-        delete storageGlobal[BridgeHalt.PERMANENTLY_HALTED_KEY];
+        if (BridgeHalt.isPermanentlyHalted(storageGlobal)) {
+            delete storageGlobal[BridgeHalt.PERMANENTLY_HALTED_KEY];
+            BridgeHalt.markHaltLifted(storageGlobal);
+
+            if (notaries.length > 0) {
+                (, uint256 revoked) = _countValidVotes(0);
+                if (revoked >= BridgeHalt.revokedHaltThreshold(notaries.length)) {
+                    BridgeHalt.enterTemporaryHalt(storageGlobal, claimableFees);
+                    emit BridgeTemporarilyHalted();
+                }
+            }
+        }
         BridgeHalt.refreshFlags(storageGlobal, claimableFees);
 
         bytes memory indexData = storageGlobal[PENDING_IMPORTS_CONTRACT_INDEX_KEY];
@@ -367,6 +383,7 @@ contract PendingImports is VerusStorage {
         if (voteCount >= BridgeHalt.quorum(notaries.length) && revoked < BridgeHalt.revokedHaltThreshold(notaries.length)) {
             delete storageGlobal[BridgeHalt.TEMPORARY_HALTED_KEY];
             delete storageGlobal[BridgeHalt.UNHALT_VOTE_BITMAP_KEY];
+            BridgeHalt.markHaltLifted(storageGlobal);
             BridgeHalt.refreshFlags(storageGlobal, claimableFees);
             halted = false;
             emit BridgeTemporarilyUnhalted();
@@ -482,7 +499,10 @@ contract PendingImports is VerusStorage {
         bytes32 pendingKey = _pendingImportKey(importTxid);
         VerusObjects.pendingImport memory pending = _loadPendingImport(pendingKey);
         require(pending.state == IMPORT_STATE_PENDING);
-        require(block.timestamp >= uint256(pending.submittedAt) + IMPORT_RELEASE_COOLDOWN + IMPORT_TIMEOUT);
+        // The review window restarts when a halt is lifted, so one notary cannot execute imports that sat out the halt.
+        uint256 windowStart = BridgeHalt.haltLiftedAt(storageGlobal);
+        if (uint256(pending.submittedAt) > windowStart) windowStart = uint256(pending.submittedAt);
+        require(block.timestamp >= windowStart + IMPORT_RELEASE_COOLDOWN + IMPORT_TIMEOUT);
 
         _executeImport(importTxid, pendingKey, pending);
         delete storageGlobal[SUBMIT_IMPORTS_REENTRANCY_GUARD];
