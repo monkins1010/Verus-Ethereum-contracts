@@ -51,6 +51,8 @@ contract NotarizationSerializer is VerusStorage {
     // ── CTransferDestination flags ─────────────────────────────────────────
     uint8 private constant DEST_FLAG_GATEWAY = 0x80;
     uint8 private constant DEST_FLAG_AUX     = 0x40;
+    uint8 private constant DEST_TYPE_MASK    = 0x0f;
+    uint8 private constant DEST_TYPE_ETH     = 9;
 
     // ── CProofRoot types ───────────────────────────────────────────────────
     uint16 private constant PROOF_TYPE_PBAAS = 1;
@@ -134,7 +136,7 @@ contract NotarizationSerializer is VerusStorage {
         );
 
         // ── proposer (CTransferDestination) ───────────────────────────────
-        (proposerAndLaunched, votetxid, pos) = _readTransferDestination(data, pos);
+        (proposerAndLaunched, votetxid, pos) = _readTransferDestination(data, pos, uint32(flags));
 
         // ── currencyID (uint160) – validate it is VETH ────────────────────
         _checkBounds(data, pos, SZ_U160);
@@ -307,9 +309,12 @@ contract NotarizationSerializer is VerusStorage {
      * @dev Read a CTransferDestination.
      *      proposer: type(1)+destLen(1)+address(20) packed into lower 176 bits,
      *                type-flag nibble cleared. Zero when destLen != 20.
-     *      votetxid: 20-byte address at byte 1 of the first auxDest sub-vector.
+     *      votetxid: 20-byte DEST_ETH address in the first auxDest sub-vector (type, len, address).
+     *                Only read when FLAG_CONTRACT_UPGRADE is set, in which case a DEST_ETH first
+     *                auxDest is mandatory and the call reverts without it. Without the flag the
+     *                auxDests are ignored, so a beneficiary auxDest can never be read as a vote.
      */
-    function _readTransferDestination(bytes memory data, uint32 pos)
+    function _readTransferDestination(bytes memory data, uint32 pos, uint32 notarizationFlags)
         internal pure
         returns (bytes32 proposer, address votetxid, uint32 newPos)
     {
@@ -338,25 +343,45 @@ contract NotarizationSerializer is VerusStorage {
             pos += 48;
         }
 
+        bool upgradeFlagSet = (notarizationFlags & FLAG_CONTRACT_UPGRADE) != 0;
+
         // Optional auxDests: vec<vec<uint8>>
+        require(!upgradeFlagSet || (destType & DEST_FLAG_AUX) != 0, "contract upgrade requires DEST_ETH auxdest");
         if (destType & DEST_FLAG_AUX != 0) {
             uint64 numAux;
             (numAux, pos) = _readCompactSize(data, pos);
+            require(!upgradeFlagSet || numAux > 0, "contract upgrade requires DEST_ETH auxdest");
             for (uint64 i = 0; i < numAux; i++) {
                 uint64 auxLen;
                 (auxLen, pos) = _readCompactSize(data, pos);
-                if (i == 0 && auxLen >= AUX_VOTE_MIN_LEN) {
-                    uint32 votePos = pos + AUX_VOTE_ADDR_OFFSET;
-                    _checkBounds(data, votePos, SZ_U160);
-                    assembly {
-                        votetxid := shr(96, mload(add(add(data, 0x20), votePos)))
-                    }
+                if (i == 0 && upgradeFlagSet) {
+                    votetxid = _readUpgradeVote(data, pos, auxLen);
                 }
                 pos += uint32(auxLen);
             }
         }
 
         newPos = pos;
+    }
+
+    /// @dev Reads the DEST_ETH contract address from a serialized aux destination (type, len, address).
+    function _readUpgradeVote(bytes memory data, uint32 pos, uint64 auxLen)
+        private pure returns (address votetxid)
+    {
+        require(auxLen >= AUX_VOTE_MIN_LEN, "contract upgrade requires DEST_ETH auxdest");
+        _checkBounds(data, pos, AUX_VOTE_MIN_LEN);
+        uint8 auxType;
+        uint8 auxAddrLen;
+        assembly {
+            let w := mload(add(add(data, 0x20), pos))
+            auxType := byte(0, w)
+            auxAddrLen := byte(1, w)
+            votetxid := shr(96, mload(add(add(data, 0x20), add(pos, 2))))
+        }
+        require(
+            (auxType & DEST_TYPE_MASK) == DEST_TYPE_ETH && auxAddrLen == SZ_U160,
+            "contract upgrade requires DEST_ETH auxdest"
+        );
     }
 
     // ══════════════════════════════════════════════════════════════════════
