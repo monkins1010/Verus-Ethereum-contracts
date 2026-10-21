@@ -430,7 +430,7 @@ contract VerusProof is VerusStorage  {
 
             return (packed, cce.exporter, cce.exporter2, cce.exporter3);
         }
-        return (uint128(0), uint176(0), uint176(0), uint176(0));
+        revert();
     }
 
     // Collects all 3 exporter addresses from the CTransferDestination and optional AUX dests.
@@ -462,9 +462,9 @@ contract VerusProof is VerusStorage  {
 
         if (exporterType & VerusConstants.FLAG_DEST_AUX == VerusConstants.FLAG_DEST_AUX) {
             (nextOffset, addr2, addr3) = readAuxDest(firstObj, nextOffset);
-            nextOffset -= 1;  // readAuxDest returns one past the last consumed byte; adjust back to assembly convention
+          
         }
-
+        nextOffset -= 1; // adjust back to assembly convention after reading aux dests      
         return (nextOffset, addr1, addr2, addr3);
     }
 
