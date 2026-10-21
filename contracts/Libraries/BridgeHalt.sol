@@ -20,11 +20,11 @@ library BridgeHalt {
     uint8 constant CONTRACTS_TEMPORARY_HALTED   = 1;
     uint8 constant CONTRACTS_PERMANENTLY_HALTED = 2;
 
-    // Temporary halt: everything important stops, including notarizations (setLatestData).
-    // = HALT_NOTARIZATIONS (1) + HALT_SUBMIT_IMPORTS (2) + HALT_SEND_TRANSFERS (4)
-    uint8 constant TEMPORARY_HALT_FLAGS = 7;
-    // Permanent halt: no value moves in or out, but notarizations keep flowing so an upgrade can be voted in.
+    // Both halts stop all value movement but leave notarizations (setLatestData) running: upgrade votes ride
+    // in notarizations, so stopping them could leave a bridge with unrecoverable notaries with no way out.
+    // A notarization still needs a notary quorum, so a revoked minority cannot forge one.
     // = HALT_SUBMIT_IMPORTS (2) + HALT_SEND_TRANSFERS (4)
+    uint8 constant TEMPORARY_HALT_FLAGS = 6;
     uint8 constant PERMANENT_HALT_FLAGS = 6;
 
     // The temporary halt triggers when this many notaries are revoked ("more than 3").
@@ -34,6 +34,8 @@ library BridgeHalt {
     // Holds abi.encode(bytes32 blockedTxid) while permanently halted.
     bytes32 constant PERMANENTLY_HALTED_KEY    = keccak256("bridge.permanently.halted");
     bytes32 constant UNHALT_VOTE_BITMAP_KEY    = keccak256("bridge.unhalt.vote.bitmap");
+    // Holds abi.encode(uint256 timestamp) of the last time any halt was lifted.
+    bytes32 constant HALT_LIFTED_AT_KEY        = keccak256("bridge.halt.lifted.at");
 
     function isTemporarilyHalted(mapping(bytes32 => bytes) storage g) internal view returns (bool) {
         return g[TEMPORARY_HALTED_KEY].length != 0;
@@ -41,6 +43,17 @@ library BridgeHalt {
 
     function isPermanentlyHalted(mapping(bytes32 => bytes) storage g) internal view returns (bool) {
         return g[PERMANENTLY_HALTED_KEY].length != 0;
+    }
+
+    /// @dev Records that a halt was just lifted. Pending imports must get their full review window again from here.
+    function markHaltLifted(mapping(bytes32 => bytes) storage g) internal {
+        g[HALT_LIFTED_AT_KEY] = abi.encode(block.timestamp);
+    }
+
+    /// @return Timestamp of the last halt lift, 0 if no halt was ever lifted.
+    function haltLiftedAt(mapping(bytes32 => bytes) storage g) internal view returns (uint256) {
+        bytes memory data = g[HALT_LIFTED_AT_KEY];
+        return data.length == 0 ? 0 : abi.decode(data, (uint256));
     }
 
     /// @return NORMAL, TEMPORARY_HALTED or PERMANENTLY_HALTED (the two are mutually exclusive).

@@ -40,7 +40,7 @@ contract NotaryTools is VerusStorage {
     // Revoking notaries (themselves, or by multisig) is what triggers CONTRACTS_TEMPORARY_HALTED:
     // once more than 3 are revoked the bridge latches into the temporary halt. Recovering notaries does NOT
     // lift it; a quorum of valid notaries must vote to unhalt (PendingImports.submitUnhaltVote).
-    // Not triggered while permanently halted, as that would stop the notarizations an upgrade needs.
+    // Not triggered while permanently halted, as the permanent halt already stops all value movement.
     function _haltIfTooManyRevoked() private {
         if (BridgeHalt.isTemporarilyHalted(storageGlobal) || BridgeHalt.isPermanentlyHalted(storageGlobal)) return;
 

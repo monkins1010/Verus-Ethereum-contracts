@@ -34,8 +34,8 @@ resolves `route` through `VerusCrossChainExport.checkVDFXId` and `delegatecall`s
 |---|---|---|---|
 | `submitImports` | ok | **blocked** | **blocked** |
 | `sendTransfer` / `sendTransferDirect` | ok | **blocked** | **blocked** |
-| `setLatestData` (notarizations, incl. upgrade votes carried in them) | ok | **blocked** | **ok** (needed to vote in the upgrade) |
-| Pending import approve vote / `executeTimedOutImport` | ok | **blocked** | **blocked** |
+| `setLatestData` (notarizations, incl. upgrade votes carried in them) | ok | **ok** (needed to vote in an upgrade) | **ok** (needed to vote in the upgrade) |
+| Pending import approve vote / `executeTimedOutImport` | ok | **blocked** | **blocked** (the timed-out clock restarts when a halt is lifted, see 3 and 4) |
 | Pending import **reject** vote | ok | ok (raises the halt to permanent) | blocked (already permanent) |
 | `submitUnhaltVote` (true or false) | reverts | ok | **reverts** (endpoint closed) |
 | `claimfees`, `sendfees`, `burnFees` (DAI), `claimRefund`, `getProof`, `upgradeContracts`, revoke/recover | ok | ok | ok |
@@ -48,7 +48,7 @@ Gates are bit flags in `claimableFees[VDXF_DISABLE_CONTRACT_KEY]` (`1` notarizat
 | State | Flags |
 |---|---|
 | Normal | `0` |
-| Temporary Halted | `7` |
+| Temporary Halted | `6` |
 | Permanently Halted | `6` |
 
 ## 3. Temporary halt
@@ -64,8 +64,12 @@ valid notaries xQ: setVerusData(abi.encode(true), "submitUnhaltVote")       -> Q
 * `submitUnhaltVote(false)` rescinds your own unhalt vote while still halted.
 * The halt clears when `valid unhalt votes >= quorum` **and** fewer notaries are revoked than the halt threshold. With 8 notaries the first condition already
   implies the second; with larger sets, revoked notaries must recover first. The check runs on each unhalt vote, so re-send a vote after a recovery if needed.
-* On unhalt, the temporary halt and the unhalt votes are cleared. The bridge is **not** re-halted until the next revoke is processed, so recover revoked notaries before
-  relying on the full notary set.
+* On unhalt, the temporary halt and the unhalt votes are cleared and the lift time is recorded (`bridge.halt.lifted.at`). The bridge is **not** re-halted until the next
+  revoke is processed, so recover revoked notaries before relying on the full notary set.
+* Notarizations (`setLatestData`) keep running during a temporary halt, so an upgrade can still be voted in if too many notaries lost their recovery keys
+  and the unhalt quorum can never be reached. A notarization still needs a notary quorum, so a revoked minority cannot forge one.
+* **Timed-out imports:** `executeTimedOutImport` needs `max(submittedAt, halt lifted at) + 1h + 24h` to have passed, so every import still pending when a halt is lifted gets a
+  full review window again instead of becoming executable by a single notary at once.
 * Unhalt votes are not tied to a time window; they stay until rescinded or the halt is cleared.
 
 ## 4. Permanent halt (automatic, already exists)
@@ -82,7 +86,8 @@ notary xQ:  setVerusData(abi.encode(bytes32 badImportTxid, false), "approveOrRej
 * `submitImports` and `sendTransfer*` stop, so no value moves in or out. `setLatestData` keeps working so notarizations (and the upgrade vote) can go in.
 * The only exit is an upgrade that replaces the `PendingImports` contract: the upgrade calls its `initialize()`, which deletes the blocked txid
   and recomputes the flags. **Any** upgrade of `PendingImports` lifts the permanent halt; this is by design, so only upgrade it once the cause is fixed.
-* After the upgrade the bridge is normal. If 4 or more notaries are still revoked at that point, the temporary halt is only re-applied on the next revoke.
+* `initialize()` also records the lift time (restarting the timed-out import clock, see section 3). If 4 or more notaries are still revoked at that point, it
+  re-latches the temporary halt immediately (`BridgeTemporarilyHalted`); otherwise the bridge is normal.
 
 ## 5. Endpoints for the notary API
 
@@ -102,7 +107,7 @@ Txid byte order: the bridgekeeper passes the Verus txid byte-reversed (`ethInter
 
 | What | Call | Value |
 |---|---|---|
-| Gate flags | `claimableFees(0x000000000000000000000000b024b1e290c833d9c5703ef6184a7c84e7ddd335)` | `0`, `6` or `7` |
+| Gate flags | `claimableFees(0x000000000000000000000000b024b1e290c833d9c5703ef6184a7c84e7ddd335)` | `0` or `6` |
 | Temporarily halted | `storageGlobal(0xe1062f0ad08aee861a65b0586bf7df4b1be6575fb927fb5da459a3383d597c27)` | non-empty = halted |
 | Permanently halted + blocked txid | `storageGlobal(0x087558cbb31fc6b87e2c3ecf8141e6fd7d66c9d747e7ac3f093e17a5ed2c397d)` | `abi.encode(bytes32 txid)`, empty = not halted |
 | Unhalt votes bitmap | `storageGlobal(0xe2835974332c677006ec892a78804605ad49a7f03463b0ca5a5124d48b8d1b5e)` | `abi.encode(uint32)` (includes bits of notaries revoked since voting) |
@@ -188,4 +193,5 @@ The bridgekeeper already has the automatic permanent-halt path (`approveOrReject
 * `UpgradeManager` and `VerusCrossChainExport` were edited so that *fresh* deployments register the new routes and stop registering the removed ones;
   an existing deployment does not need them replaced.
 * Removed: `NotaryTools.haltBridge` / `resumeBridge` (signature based halt/resume) and the `submitHaltVote` vote, so a temporary halt has a single trigger.
+* `MockPermanentHalt` and `MockSeedImport` (under `contracts/Libraries`) are test-only; the migrations never deploy them, and they must not be part of any production artifact set.
 * `PendingImports` deployed size is about 22.6 KB (limit 24.576 KB, unoptimized build).
