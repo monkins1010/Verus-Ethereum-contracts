@@ -364,6 +364,8 @@ contract VerusNotarizer is VerusStorage {
         uint256 proposerAndHeight;
         bytes memory tempBytes = bestForks[0];
 
+        verusToERC20mapping[VETH].tokenIndex += msg.value / VerusConstants.SATS_TO_WEI_STD;
+
         assembly {
             proposerAndHeight := mload(add(tempBytes, FORKS_DATA_CONFIRMED_PROPOSER))
         } 

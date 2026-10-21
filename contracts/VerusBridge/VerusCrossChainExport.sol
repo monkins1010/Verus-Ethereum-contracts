@@ -39,11 +39,6 @@ contract VerusCrossChainExport is VerusStorage {
         // vat.hope(daiJoin);
         // vat.hope(pot);
         // IERC20(DAIERC20).approve(daiJoin, uint256(int256(-1)));
-
-        // Register haltBridge and resumeBridge as callable via Delegator.setVerusData()
-        // required for testnet contracts should always be set up.
-        storageGlobal[keccak256(abi.encodePacked("haltBridge"))]   = abi.encode(uint(VerusConstants.ContractType.VerusNotaryTools));
-        storageGlobal[keccak256(abi.encodePacked("resumeBridge"))]  = abi.encode(uint(VerusConstants.ContractType.VerusNotaryTools));
     }
 
     // Called by Delegator.setVerusData() to resolve a function name to its implementation contract index.

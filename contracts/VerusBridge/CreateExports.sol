@@ -148,10 +148,9 @@ contract CreateExports is VerusStorage {
             }
 
             exportERC20Tokens(tokenAmount, token, (iaddressMapping.flags & VerusConstants.MAPPING_VERUS_OWNED) == VerusConstants.MAPPING_VERUS_OWNED);
-        } else {
-            // VETH - account for ETH received into the bridge
-            verusToERC20mapping[VETH].tokenIndex += transfer.currencyvalue.amount;
         }
+
+        verusToERC20mapping[VETH].tokenIndex += msg.value / VerusConstants.SATS_TO_WEI_STD;
 
         _createExports(transfer, false);
 
@@ -196,7 +195,7 @@ contract CreateExports is VerusStorage {
         // If notarization has happened increment CCE to next boundary when the tx comes in
         // If changing from pool closed to pool open create a boundary (As all sends will then go through the bridge)
         uint64 blockNumber = uint64(block.number);
-        uint64 blockDelta = blockNumber - cceLastStartHeight;
+        uint64 blockDelta = blockNumber > cceLastStartHeight ? blockNumber - cceLastStartHeight : 0;
         uint64 lastTransfersLength = uint64(_readyExports[cceLastStartHeight].transfers.length);
         bytes32 prevHash = _readyExports[cceLastStartHeight].exportHash;
         // if there are no transfers then there is no need to make a new CCE as this is the first one, and the endheight can become the block number if it is less than the current block no.

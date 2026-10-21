@@ -83,7 +83,7 @@ contract SubmitImports is VerusStorage {
         // is defined; any other value means the field offsets below are invalid.
         uint8 hdrStructVer;
         assembly { hdrStructVer := mload(add(elVchObj, ELVCHOBJ_STRUCT_VERSION_OFFSET)) }
-        require(hdrStructVer >= HEADER_STRUCT_VERSION);
+        require(hdrStructVer == HEADER_STRUCT_VERSION);
 
         uint32 v;
         bytes32 txHash;
@@ -365,13 +365,17 @@ contract SubmitImports is VerusStorage {
                     claimAmount -= claimShare;
                     (success, ) = payable(notaryAddressMapping[notaries[i]].main).call{value: claimShare * VerusConstants.SATS_TO_WEI_STD}("");
                     require(success);
-                    verusToERC20mapping[VETH].tokenIndex -= claimShare;
+                    if (notaryAddressMapping[notaries[i]].main != address(this)) {
+                        verusToERC20mapping[VETH].tokenIndex -= claimShare;
+                    }
                 }
             }
             claimableFees[VerusConstants.VDXF_SYSTEM_NOTARIZATION_NOTARYFEEPOOL] = claimAmount;
             (success, ) = payable(msg.sender).call{value: txReimburse}("");
             require(success);
-            verusToERC20mapping[VETH].tokenIndex -= (txReimburse / VerusConstants.SATS_TO_WEI_STD);
+            if (msg.sender != address(this)) {
+                verusToERC20mapping[VETH].tokenIndex -= txReimburse / VerusConstants.SATS_TO_WEI_STD;
+            }
         }
         delete storageGlobal[SUBMIT_IMPORTS_REENTRANCY_GUARD];
     }
@@ -402,10 +406,13 @@ contract SubmitImports is VerusStorage {
         } else {
             fees = getImportFeeForReserveTransfer(currency);
             require (refundAmount > fees);
+            refundAmount -= fees;
             feeCurrency = currency;
         }
 
         LPtransfer = buildReserveTransfer(uint64(refundAmount), verusAddress, currency, fees, feeCurrency);
+
+        verusToERC20mapping[VETH].tokenIndex += msg.value / VerusConstants.SATS_TO_WEI_STD;
 
         (success, ) = contracts[uint(VerusConstants.ContractType.CreateExport)]
                             .delegatecall(abi.encodeWithSelector(CreateExports.externalCreateExportCallPayable.selector, abi.encode(LPtransfer, false)));
@@ -433,7 +440,9 @@ contract SubmitImports is VerusStorage {
             claimableFees[bytes32(claimant)] = 0;
             (bool success, ) = payable(msg.sender).call{value: feeShare * VerusConstants.SATS_TO_WEI_STD }("");
             require(success);
-            verusToERC20mapping[VETH].tokenIndex -= feeShare;
+            if (msg.sender != address(this)) {
+                verusToERC20mapping[VETH].tokenIndex -= feeShare;
+            }
             return;
         }
 

@@ -35,7 +35,7 @@ contract UpgradeManager is VerusStorage {
     bytes32 constant EXECUTE_TIMED_OUT_IMPORT_VDXF_KEY    = keccak256("executeTimedOutImport");
     bytes32 constant IS_BRIDGE_PAUSED_VDXF_KEY            = keccak256("isBridgePaused");
     bytes32 constant GET_NOTARY_IADDRESS_VDXF_KEY         = keccak256("getNotaryIAddress");
-    bytes32 constant SUBMIT_HALT_VOTE_VDXF_KEY            = keccak256("submitHaltVote");
+    bytes32 constant SUBMIT_UNHALT_VOTE_VDXF_KEY          = keccak256("submitUnhaltVote");
 
     event contractUpdated(bool);
 
@@ -64,7 +64,7 @@ contract UpgradeManager is VerusStorage {
             storageGlobal[IS_BRIDGE_PAUSED_VDXF_KEY]         = abi.encode(uint256(11));
             storageGlobal[GET_NOTARY_IADDRESS_VDXF_KEY]      = abi.encode(uint256(11));
             storageGlobal[PENDING_IMPORTS_CONTRACT_INDEX_KEY]   = abi.encode(uint256(11));
-            storageGlobal[SUBMIT_HALT_VOTE_VDXF_KEY]         = abi.encode(uint256(11));
+            storageGlobal[SUBMIT_UNHALT_VOTE_VDXF_KEY]       = abi.encode(uint256(11));
             storageGlobal[IMPORTS_CONTRACT_INDEX_KEY]         = abi.encode(uint256(12));
         } else if (contracts.length == 12) {
             contracts.push(IMPORTS_ADDR);
@@ -75,10 +75,12 @@ contract UpgradeManager is VerusStorage {
 
     function upgradeContracts(bytes calldata data) external payable returns (uint8) {
 
+        require(msg.value == 0, "Upgrade does not accept ETH");
+
         VerusObjects.upgradeInfo memory _newContractPackage;
 
         (_newContractPackage) = abi.decode(data, (VerusObjects.upgradeInfo));
-        
+
         checkValidContractUpgrade(_newContractPackage);
             
         return PENDING; 

@@ -50,6 +50,22 @@ Then to run the tests run:
 npm run test
 ```
 
+### Endpoint tests
+
+`test/endpoints.js` has at least one test for every external Delegator function, every public getter and every
+`setVerusData` route. It sends real ETH, DAI and MKR through `sendTransfer` / `sendTransferDirect` like
+`testnet/send-transfers.js`. Meta tests at the end of the file fail when an endpoint is added without being listed.
+
+```shell
+ganache-cli -d -l 1500000000 &
+truffle test test/endpoints.js test/bridgeHalt.js --to 2
+```
+
+`testnet/fixture-notarization.js` submits the recorded testnet notarizations to a running deployment
+(`node testnet/fixture-notarization.js [rpcUrl] [delegatorAddress]`) so proofs, exports and notarization data can be queried.
+The bridge is pre-launch on the dev network, so the launch-only endpoints (`claimfees`, `sendfees`, `claimRefund`, `burnFees`)
+are tested for their guards. `test/verustoken.js` is stale (its contract no longer exists) and is not run.
+
 ## Update 21st July 2023
 - Added truffle tests
 
