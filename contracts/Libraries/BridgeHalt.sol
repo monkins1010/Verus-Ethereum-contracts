@@ -84,8 +84,11 @@ library BridgeHalt {
         mapping(bytes32 => bytes) storage g,
         mapping(bytes32 => uint256) storage flagStore
     ) internal {
-        g[TEMPORARY_HALTED_KEY] = abi.encode(true);
-        delete g[UNHALT_VOTE_BITMAP_KEY];
+        // Only a NORMAL -> TEMPORARY transition starts a fresh vote episode; re-entry must keep votes.
+        if (g[TEMPORARY_HALTED_KEY].length == 0) {
+            g[TEMPORARY_HALTED_KEY] = abi.encode(true);
+            delete g[UNHALT_VOTE_BITMAP_KEY];
+        }
         refreshFlags(g, flagStore);
     }
 
