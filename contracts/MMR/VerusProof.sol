@@ -38,6 +38,7 @@ contract VerusProof is VerusStorage  {
     uint8 constant CCE_EVAL_EXPORT = 0xc;
     uint8 constant BRANCH_MMRBLAKE_NODE = 2;      // CMerkleBranchBase::BRANCH_MMRBLAKE_NODE
     uint8 constant VERSION_TXHASH_CAP = 2;         // only proofs with version >= this are accepted
+    uint8 constant VERSION_TXHASH_DOUBLE_CAP = 3;  // block MMR leaf is H(H(txRoot || count)): extra single-input hash
     uint8 constant TX_PREVOUTSEQ = 2;              // CTransactionHeader::TX_PREVOUTSEQ
     uint8 constant TX_SIGNATURE_TYPE = 3;          // CTransactionHeader::TX_SIGNATURE
     uint8 constant CCOPTPARAMS_VERSION = 3;
@@ -575,7 +576,8 @@ contract VerusProof is VerusStorage  {
         // The last branch element encodes the total element count, preventing the prover
         // from extending the tree to a larger size than was actually committed.
         require(
-            _import.partialtransactionproof.version >= VERSION_TXHASH_CAP,
+            _import.partialtransactionproof.version >= VERSION_TXHASH_CAP &&
+            _import.partialtransactionproof.version <= VERSION_TXHASH_DOUBLE_CAP,
             "Only capped proofs accepted"
         );
         require(
@@ -716,6 +718,12 @@ contract VerusProof is VerusStorage  {
             if(txRoot == bytes32(0)) revert("Components do not validate");
 
             require(_import.partialtransactionproof.txproof.length == NUM_TX_PROOFS);
+
+            if (_import.partialtransactionproof.version >= VERSION_TXHASH_DOUBLE_CAP) {
+                // Block MMR leaf is the capped tx root hashed again on its own (32 byte input),
+                // which can never be produced by a 64 byte node step.
+                txRoot = abi.encodePacked(txRoot).createHash();
+            } 
 
             bytes32 retStateRoot = checkProof(txRoot, _import.partialtransactionproof.txproof);
             if (retStateRoot == bytes32(0) || retStateRoot != getLastConfirmedVRSCStateRoot()) {
