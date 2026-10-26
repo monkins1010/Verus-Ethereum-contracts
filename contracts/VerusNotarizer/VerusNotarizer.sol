@@ -38,6 +38,8 @@ contract VerusNotarizer is VerusStorage {
 
     // notarization vdxf key
     bytes22 constant vdxfcodePlusVersion = bytes22(0x01367Eaadd291E1976ABc446A143f83c2D4D2C5a8401);
+    // upgrade vote carried by a pending notarization, cast only once that notarization is confirmed
+    bytes32 constant NOTARIZATION_VOTE_PREFIX = keccak256("notarization.upgrade.vote");
     event NewNotarization (bytes32);
     using VerusBlake2b for bytes;
     
@@ -139,8 +141,9 @@ contract VerusNotarizer is VerusStorage {
         (bytes32 launchedAndProposer, bytes32 prevnotarizationtxid, bytes32 hashprevnotarization, bytes32 stateRoot, 
                 uint32 verusProofheight, address votetxid, uint256 reserves) = abi.decode(returnBytes, (bytes32, bytes32, bytes32, bytes32, uint32, address, uint256));
 
+        // Hold the vote until this notarization is confirmed, so votes on forks that are later pruned are never counted.
         if (votetxid != address(0)) {
-            castVote(votetxid);
+            storageGlobal[keccak256(abi.encodePacked(NOTARIZATION_VOTE_PREFIX, blakeNotarizationHash))] = abi.encode(votetxid);
         }
 
         if( reserves != 0) {
@@ -184,8 +187,8 @@ contract VerusNotarizer is VerusStorage {
             // if 20 days have passed since the vote started, set the vote hash as used
             successfulVoteHashes[votetxid] = VerusConstants.MAX_UINT256;
 
-            // reset the rolling vote index to DEFAULT, if there are other hashes they will continue, otherwise voting will go idle.
-            rollingVoteIndex = VerusConstants.DEFAULT_INDEX_VALUE;
+            // reset the rolling votes, voting goes idle until a new vote is cast.
+            resetVotes();
             return;
         }
         
@@ -200,6 +203,33 @@ contract VerusNotarizer is VerusStorage {
             rollingUpgradeVotes[rollingVoteIndex] = votetxid;
         }
 
+    }
+
+    function castConfirmedVote(bytes32 hashOfNotarization) private {
+
+        bytes32 voteKey = keccak256(abi.encodePacked(NOTARIZATION_VOTE_PREFIX, hashOfNotarization));
+        bytes memory vote = storageGlobal[voteKey];
+
+        // A notarization without a vote still rolls the window, so votes that are no longer given age out.
+        if (vote.length == 0) {
+            castVote(address(0));
+            return;
+        }
+
+        delete storageGlobal[voteKey];
+        castVote(abi.decode(vote, (address)));
+    }
+
+    function resetVotes() private {
+
+        rollingVoteIndex = VerusConstants.DEFAULT_INDEX_VALUE;
+
+        for (uint i = 0; i < VerusConstants.VOTE_LENGTH; i++)
+        {
+            if (rollingUpgradeVotes[i] != address(0)) {
+                rollingUpgradeVotes[i] = address(0);
+            }
+        }
     }
 
     function decodeNotarization(uint index) public view returns (VerusObjectsNotarization.NotarizationForks[] memory)
@@ -348,6 +378,8 @@ contract VerusNotarizer is VerusStorage {
             //pack vout in at the end of the proposer 22 bytes ctransferdest
             encodeStandardNotarization(notarizations[1], abi.encode(hashedNotarization, 
                 txidHash, proposer));
+
+            castConfirmedVote(notarizations[1].hashOfNotarization);
 
             // The proofs are indexed by height, the height is stored in the proposers last 32 bits. Stored ine the proof is stateroot and the previous proof height.
 

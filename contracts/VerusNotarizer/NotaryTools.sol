@@ -25,6 +25,11 @@ contract NotaryTools is VerusStorage {
     uint8 constant COMPLETE = 2;
     uint8 constant ERROR = 4;
 
+    // Vote bitmap keys, must match the constants in PendingImports.sol
+    bytes32 constant PENDING_IMPORT_QUEUE_KEY = keccak256("pending.import.queue");
+    bytes32 constant RELEASE_VOTE_BITMAP_PREFIX = keccak256("pending.import.release.vote.bitmap");
+    bytes32 constant REJECT_VOTE_BITMAP_PREFIX = keccak256("pending.import.reject.vote.bitmap");
+
     using VerusBlake2b for bytes;
 
     //reset to empty 9-July-26
@@ -32,10 +37,49 @@ contract NotaryTools is VerusStorage {
     
     function updateNotarizer(address notarizer, address mainAddress, address revokeAddress, uint8 state) private
     {
+        // A zero key would let a zero signature (ecrecover returns address(0)) act for the seat.
+        require(mainAddress != address(0) && revokeAddress != address(0), "Zero notary address");
+
+        // Votes are keyed by the seat resolved from the main address, so no two seats may share one.
+        for (uint i = 0; i < notaries.length; i++) {
+            require(notaries[i] == notarizer || notaryAddressMapping[notaries[i]].main != mainAddress, "Main address in use");
+        }
         notaryAddressMapping[notarizer] = VerusObjects.notarizer(mainAddress, revokeAddress, state);
     }
 
     event BridgeTemporarilyHalted();
+
+    /// @dev Clears a revoked notary's bit from the unhalt vote bitmap and from the release and reject
+    ///      bitmaps of every queued import, so a vote cast before revocation cannot count after recovery.
+    function _clearNotaryVotes(address notarizer) private {
+        uint32 mask;
+        for (uint i = 0; i < notaries.length && i < 32; i++) {
+            if (notaries[i] == notarizer) {
+                mask = ~(uint32(1) << uint32(i));
+                break;
+            }
+        }
+        if (mask == 0) return;
+
+        _clearVoteBit(BridgeHalt.UNHALT_VOTE_BITMAP_KEY, mask);
+
+        bytes memory queueData = storageGlobal[PENDING_IMPORT_QUEUE_KEY];
+        if (queueData.length == 0) return;
+        bytes32[] memory queue = abi.decode(queueData, (bytes32[]));
+
+        for (uint i = 0; i < queue.length; i++) {
+            _clearVoteBit(keccak256(abi.encodePacked(RELEASE_VOTE_BITMAP_PREFIX, queue[i])), mask);
+            _clearVoteBit(keccak256(abi.encodePacked(REJECT_VOTE_BITMAP_PREFIX, queue[i])), mask);
+        }
+    }
+
+    function _clearVoteBit(bytes32 key, uint32 mask) private {
+        if (storageGlobal[key].length == 0) return;
+        uint32 bitmap = abi.decode(storageGlobal[key], (uint32));
+        if (bitmap & ~mask != 0) {
+            storageGlobal[key] = abi.encode(bitmap & mask);
+        }
+    }
 
     // Revoking notaries (themselves, or by multisig) is what triggers CONTRACTS_TEMPORARY_HALTED:
     // once more than 3 are revoked the bridge latches into the temporary halt. Recovering notaries does NOT
@@ -72,6 +116,7 @@ contract NotaryTools is VerusStorage {
             if(msg.sender == notaryAddressMapping[notaries[i]].main) {
                 require(notaryAddressMapping[notaries[i]].state == VerusConstants.NOTARY_VALID, "Notary not Valid");
                 notaryAddressMapping[notaries[i]].state = VerusConstants.NOTARY_REVOKED;
+                _clearNotaryVotes(notaries[i]);
                 _haltIfTooManyRevoked();
                 return true;
             }
@@ -100,7 +145,7 @@ contract NotaryTools is VerusStorage {
             be = bytesToString(abi.encodePacked(uint8(TYPE_REVOKE),notarizerBeingRevoked, _revokePacket[i].salt));
             address signer = recoverString(be, _revokePacket[i]._vs, _revokePacket[i]._rs, _revokePacket[i]._ss);
 
-            if (signer == notaryAddressMapping[_revokePacket[i].notarizerID].main && 
+            if (signer != address(0) && signer == notaryAddressMapping[_revokePacket[i].notarizerID].main && 
                 notaryAddressMapping[_revokePacket[i].notarizerID].state == VerusConstants.NOTARY_VALID) {
                     counter++;
             }
@@ -108,6 +153,7 @@ contract NotaryTools is VerusStorage {
         require(counter >= ((notaries.length >> 1) + 1), "not enough signatures");
 
         notaryAddressMapping[notarizerBeingRevoked].state = VerusConstants.NOTARY_REVOKED;
+        _clearNotaryVotes(notarizerBeingRevoked);
         _haltIfTooManyRevoked();
         return true;
     }
@@ -129,7 +175,7 @@ contract NotaryTools is VerusStorage {
 
         address signer = recoverString(be, _newRecoveryInfo._vs, _newRecoveryInfo._rs, _newRecoveryInfo._ss);
 
-        if (signer != notaryAddressMapping[_newRecoveryInfo.notarizerID].recovery)
+        if (signer == address(0) || signer != notaryAddressMapping[_newRecoveryInfo.notarizerID].recovery)
         {
             revert();  
         }
@@ -162,7 +208,7 @@ contract NotaryTools is VerusStorage {
             be = bytesToString(abi.encodePacked(uint8(TYPE_RECOVER),notarizerBeingRecovered, newMainAddr, newRevokeAddr, _recoverPacket[i].salt));
             address signer = recoverString(be, _recoverPacket[i]._vs, _recoverPacket[i]._rs, _recoverPacket[i]._ss);
 
-            if (signer == notaryAddressMapping[_recoverPacket[i].notarizerID].recovery &&
+            if (signer != address(0) && signer == notaryAddressMapping[_recoverPacket[i].notarizerID].recovery &&
                 notaryAddressMapping[_recoverPacket[i].notarizerID].state == VerusConstants.NOTARY_VALID) {
                 counter++;
             }

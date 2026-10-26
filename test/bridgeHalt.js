@@ -97,13 +97,14 @@ contract('Bridge halt states', async (accounts) => {
     const unhaltVote = (voteValue, from) => send(contractInstance.methods.setVerusData(
         web3.eth.abi.encodeParameter('bool', voteValue), 'submitUnhaltVote'), from);
     const revokeSelf = (index) => send(contractInstance.methods.revokeWithMainAddress('0x'), NOTARIES[index]);
-    const recover = (index) => {
-        const mainAddr = NOTARIES[index].toLowerCase();
+    const recover = (index, newMain = NOTARIES[index], newRecovery = NOTARIES[index]) => {
+        const mainAddr = newMain.toLowerCase();
+        const recoveryAddr = newRecovery.toLowerCase();
         const salt = web3.utils.randomHex(32);
-        const packed = '0x03' + mainAddr.slice(2) + mainAddr.slice(2) + salt.slice(2);
+        const packed = '0x03' + mainAddr.slice(2) + recoveryAddr.slice(2) + salt.slice(2);
         const sig = verusSign(packed, PRIVATE_KEYS[index]);
         const data = web3.eth.abi.encodeParameter(UPGRADE_INFO_TYPE, {
-            _vs: sig.v, _rs: sig.r, _ss: sig.s, contracts: [mainAddr, mainAddr],
+            _vs: sig.v, _rs: sig.r, _ss: sig.s, contracts: [mainAddr, recoveryAddr],
             upgradeType: 3, salt, notarizerID: NOTARY_IDS[index], startHeight: 0,
         });
         return send(contractInstance.methods.recoverWithRecoveryAddress(data), accounts[0]);
@@ -125,6 +126,8 @@ contract('Bridge halt states', async (accounts) => {
         const v = await DelegatorInst.storageGlobal(k);
         return v !== null && v !== '0x' && v !== '';
     };
+    const bitmap = async (k) => (await isSet(k))
+        ? Number(web3.eth.abi.decodeParameter('uint32', await DelegatorInst.storageGlobal(k))) : 0;
 
     // Each describe starts from the freshly deployed (normal) state.
     const isolate = () => {
@@ -163,6 +166,20 @@ contract('Bridge halt states', async (accounts) => {
             await revokeSelf(1);
             assert.equal(await flags(), FLAGS_NORMAL);
             assert.isFalse(await isSet(TEMPORARY_HALTED_KEY));
+        });
+
+        it('a notary cannot be recovered onto another seat\'s main address', async () => {
+            await expectRevert(recover(0, NOTARIES[2]), 'main address of a valid seat');
+            await expectRevert(recover(0, NOTARIES[1]), 'main address of a revoked seat');
+            await recover(0);
+        });
+
+        it('a notary cannot be recovered with a zero main or recovery key', async () => {
+            const ZERO = '0x0000000000000000000000000000000000000000';
+            await revokeSelf(0);
+            await expectRevert(recover(0, ZERO), 'zero main key');
+            await expectRevert(recover(0, NOTARIES[0], ZERO), 'zero recovery key');
+            await recover(0);
         });
     });
 
@@ -213,7 +230,9 @@ contract('Bridge halt states', async (accounts) => {
         });
 
         it('a vote from a notary who was revoked afterwards is not counted', async () => {
+            assert.equal(await bitmap(UNHALT_VOTE_BITMAP_KEY), 1);
             await revokeSelf(0);                                    // notary 0 had voted to unhalt
+            assert.equal(await bitmap(UNHALT_VOTE_BITMAP_KEY), 0, 'revoking clears the seat\'s vote');
             const ev = findEvent(await unhaltVote(true, NOTARIES[1]), 'UnhaltVoteSubmitted');
             assert.equal(ev.voteCount.toString(), '1', "revoked notary's vote must not count");
             assert.isTrue(ev.temporarilyHalted);
@@ -221,7 +240,8 @@ contract('Bridge halt states', async (accounts) => {
         });
 
         it('a quorum of valid notaries unhalts and clears everything', async () => {
-            await recover(0);                                       // notary 0 is valid again, earlier vote counts again
+            await recover(0);                                       // notary 0 is valid again, its earlier vote is gone
+            assert.equal(await bitmap(UNHALT_VOTE_BITMAP_KEY), 2, 'only notary 1\'s vote is held after recovery');
             const receipt = await unhaltVote(true, NOTARIES[0]);
             assert.ok(findEvent(receipt, 'BridgeTemporarilyUnhalted'), 'expected BridgeTemporarilyUnhalted');
             assert.equal(await flags(), FLAGS_NORMAL);
@@ -338,6 +358,18 @@ contract('Bridge halt states', async (accounts) => {
             assert.ok(findEvent(receipt, 'PendingImportRejected'));
             assert.equal(await flags(), FLAGS_PERMANENT_HALT);
             assert.equal(web3.eth.abi.decodeParameter('bytes32', await DelegatorInst.storageGlobal(PERMANENTLY_HALTED_KEY)), seeded);
+            await rpc('evm_revert', [snap]);
+        });
+
+        it('revoking a notary clears its release and reject votes on queued imports', async () => {
+            const snap = (await rpc('evm_snapshot')).result;
+            const rejectKey = web3.utils.soliditySha3(key('pending.import.reject.vote.bitmap'), seeded);
+            await reject(0);
+            await reject(2);
+            await revokeSelf(0);
+            assert.equal(await bitmap(rejectKey), 4, 'only notary 2\'s reject vote is left');
+            await recover(0);
+            assert.equal(await bitmap(rejectKey), 4, 'recovery does not revive the vote');
             await rpc('evm_revert', [snap]);
         });
 

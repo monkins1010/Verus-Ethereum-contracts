@@ -328,7 +328,7 @@ contract Imports is VerusStorage {
             uint64 protocolShare = exporterTotal - exporterHalf;
 
             setClaimedFees(bytes32(uint256(proposer)), feeShare);
-            setClaimedFees(bytes32(uint256(exporters[1])), exporterHalf);
+            setExporterFees(exporters[1], exporterHalf);
 
             bool normalProtocolFeeRecipent = false;
             if (block.timestamp >= DEPLOYED_AT + THREE_YEARS) {
@@ -341,7 +341,7 @@ contract Imports is VerusStorage {
             }
 
             if (normalProtocolFeeRecipent) {
-                setClaimedFees(bytes32(uint256(exporters[0])), protocolShare);
+                setExporterFees(exporters[0], protocolShare);
             } else {
                 (bool success, ) = payable(VerusConstants.VERUS_USAGE_CONTRACT).call{value: protocolShare * VerusConstants.SATS_TO_WEI_STD}("");
                 require(success);
@@ -352,6 +352,18 @@ contract Imports is VerusStorage {
 
     function setClaimedFees(bytes32 _address, uint256 fees) private {
         claimableFees[_address] += fees;
+    }
+
+    /// @dev Credits an exporter only when it is a 20-byte R-address or i-address, the only keys sendfees pays out.
+    ///      Any other shape could land on a system key in claimableFees (halt flags, reserves), so it goes to the notary pool.
+    function setExporterFees(uint176 exporter, uint256 fees) private {
+        uint16 typeAndLength = uint16(exporter >> VerusConstants.UINT160_BITS_SIZE);
+        if ((typeAndLength == ((uint16(VerusConstants.DEST_PKH) << 8) | 20) || typeAndLength == ((uint16(VerusConstants.DEST_ID) << 8) | 20))
+                && uint160(exporter) != 0) {
+            setClaimedFees(bytes32(uint256(exporter)), fees);
+        } else {
+            claimableFees[VerusConstants.VDXF_SYSTEM_NOTARIZATION_NOTARYFEEPOOL] += fees;
+        }
     }
 
     /// @dev Stores failed-transfer refund amounts for later claim via SubmitImports.claimRefund.

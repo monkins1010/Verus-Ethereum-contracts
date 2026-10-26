@@ -191,14 +191,24 @@ contract("Verus Contracts deployed tests", async(accounts)  => {
         await submitNotarization(testNotarization.firstNotarization, testNotarization.firsttxid, testNotarization.firstvout);
         await submitNotarization(testNotarization.secondNotarization, testNotarization.secondtxid, testNotarization.secondvout);
 
-        assert.equal((await contractInstance.methods.rollingUpgradeVotes(0).call()).toLowerCase(), votehash);
-        assert.equal((await contractInstance.methods.rollingUpgradeVotes(1).call()).toLowerCase(), votehash);
-        assert.equal(await contractInstance.methods.rollingUpgradeVotes(2).call(), "0x0000000000000000000000000000000000000000");
-        assert.equal(await contractInstance.methods.getVoteCount(votehash).call(), "2", "Vote count should be 2");
+        // Votes are only cast once a notarization is confirmed, neither of these is confirmed yet.
+        assert.equal(await contractInstance.methods.rollingVoteIndex().call(), "200");
+        assert.equal(await contractInstance.methods.getVoteCount(votehash).call(), "0", "Vote count should be 0 before confirmation");
 
         const notarization = await contractInstance.methods.bestForks(0).call();
         assert.equal(`0x${notarization.substring(66, 130)}`, testNotarization.firsttxid,
           "Txid in best forks does not equal notarization");
+
+        // A third notarization built on the second confirms it, which casts the second's vote.
+        const thirdtxid = web3.utils.keccak256("third notarization");
+        const second = testNotarization.secondNotarization.slice(2);
+        const third = '0x' + second.slice(0, 235 * 2) + testNotarization.secondtxid.slice(2) + second.slice(267 * 2, 985 * 2) +
+          'd60a0000' + second.slice(989 * 2); // prevNotarizationTxId = second txid, VRSC proof height 2774
+        await submitNotarization(third, thirdtxid, 0);
+
+        assert.equal((await contractInstance.methods.rollingUpgradeVotes(0).call()).toLowerCase(), votehash);
+        assert.equal(await contractInstance.methods.rollingUpgradeVotes(1).call(), "0x0000000000000000000000000000000000000000");
+        assert.equal(await contractInstance.methods.getVoteCount(votehash).call(), "1", "Vote count should be 1 after confirmation");
       });
 
       // it("Test Votes", async () => {
