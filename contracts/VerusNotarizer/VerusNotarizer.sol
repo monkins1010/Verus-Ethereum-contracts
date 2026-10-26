@@ -34,6 +34,7 @@ contract VerusNotarizer is VerusStorage {
     uint32 constant FORKS_DATA_CONFIRMED_PROPOSER = 96;
     uint32 constant PROOF_HEIGHT_LOCATION = 68 - 32;  //NOTE: removed blockhash from proofroot, so this is now 68 bytes minus 32 bytes for the blockhash
     uint32 constant LENGTH_OF_FORK_DATA = 96;
+    uint constant FORKS_PROPOSER_SLOT = 2;
 
     // notarization vdxf key
     bytes22 constant vdxfcodePlusVersion = bytes22(0x01367Eaadd291E1976ABc446A143f83c2D4D2C5a8401);
@@ -254,12 +255,46 @@ contract VerusNotarizer is VerusStorage {
 
     }
 
-    function setNotarizationProofRoot(bytes32 hashedNotarization, 
+    function getHighestPendingHeight() private view returns (uint32 highestHeight)
+    {
+        for (uint i = 0; i < bestForks.length; i++)
+        {
+            bytes storage tempArray = bestForks[i];
+            uint entries = tempArray.length / LENGTH_OF_FORK_DATA;
+            bytes32 slotHash;
+            bytes32 slot;
+            assembly {
+                mstore(add(slot, 32), tempArray.slot)
+                slotHash := keccak256(add(slot, 32), 32)
+            }
+            // Skip entry 0 (the confirmed notarization), each entry is 3 slots: hash, txid, proposer.
+            for (uint j = 1; j < entries; j++)
+            {
+                uint32 height;
+                assembly {
+                    height := shr(FORKS_DATA_OFFSET_FOR_HEIGHT, sload(add(slotHash, add(mul(j, 3), FORKS_PROPOSER_SLOT))))
+                }
+                if (height > highestHeight)
+                {
+                    highestHeight = height;
+                }
+            }
+        }
+    }
+
+    function setNotarizationProofRoot(bytes32 hashedNotarization,
             bytes32 hashprevnotarization, bytes32 txidHash, bytes32 hashprevtxid, bytes32 proposer, bytes32 stateRoot) private 
     {
         int forkIdx = -1;
         int forkPos;
-        
+
+        // Incoming notarization height must be greater than the highest pending notarization height in any fork
+        // (bestForks[i][1] onwards), so a same height notarization cannot overwrite an existing proofs[] entry.
+        if (uint32(uint256(proposer >> FORKS_DATA_OFFSET_FOR_HEIGHT)) <= getHighestPendingHeight())
+        {
+            revert("notarization height not above pending");
+        }
+
         VerusObjectsNotarization.NotarizationForks[] memory notarizations;   
         for (int i = 0; i < int(bestForks.length) ; i++) 
         {
