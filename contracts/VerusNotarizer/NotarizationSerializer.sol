@@ -599,7 +599,8 @@ contract NotarizationSerializer is VerusStorage {
                 pos += SZ_U64; // gasPrice
             }
 
-            if (!found && proofType == PROOF_TYPE_PBAAS && systemID == VERUS) {
+            if (proofType == PROOF_TYPE_PBAAS && systemID == VERUS) {
+                require(!found);
                 stateRoot = thisStateRoot;
                 height    = thisHeight;
                 found     = true;

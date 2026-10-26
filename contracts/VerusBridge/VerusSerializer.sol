@@ -321,26 +321,18 @@ contract VerusSerializer {
 
         returnCurrency.ERCContract = nativeCurrencyID;
         
-        if (NativeCurrencyType & VerusConstants.FLAG_DEST_AUX == VerusConstants.FLAG_DEST_AUX) {
+        // For DEST_ETHNFT the tokenID is taken from the nativeCurrencyID only, the auxdest is not checked, as the
+        // Verus import vote binds the tokenID to the nativeCurrencyID. Dropping the launch here would leave the
+        // ETH import out of step with Verus and the import would be rejected by the notaries.
+        if (NativeCurrencyType & VerusConstants.FLAG_DEST_AUX == VerusConstants.FLAG_DEST_AUX &&
+            NativeCurrencyTypeNoFlags == VerusConstants.DEST_ETH) {
 
             assembly {
-                nextOffset := add(nextOffset, 1) //move to vector length 
+                nextOffset := add(nextOffset, 1) //move to vector length
             }
 
-            uint256 TokenId;
-
-            TokenId = readAuxDestPK(input, nextOffset);
-
-            if (NativeCurrencyTypeNoFlags == VerusConstants.DEST_ETH) {
-                returnCurrency.tokenID = TokenId;
-            }
-            else if (NativeCurrencyTypeNoFlags == VerusConstants.DEST_ETHNFT &&
-                TokenId != nftID) {
-                // if the NFT ID does not match the auxdest NFT ID then the currency is invalid
-                returnCurrency.flags = uint8(VerusConstants.MAPPING_INVALID);
-                return returnCurrency;
-            }
-        } 
+            returnCurrency.tokenID = readAuxDestPK(input, nextOffset);
+        }
         return returnCurrency;
     }
 
@@ -535,7 +527,7 @@ contract VerusSerializer {
                 // bounds check: retidx must not exceed the buffer length
                 if gt(retidx, mload(buf)) { revert(0, 0) }
                 // overflow check: v must fit in 57 bits so that shl(7, v) stays within uint64
-                if gt(v, 0x1FFFFFFFFFFFFF) { revert(0, 0) }
+                if gt(v, 0x1FFFFFFFFFFFFFF) { revert(0, 0) }
                 b := mload(add(buf, retidx))
                 i := add(i, 1)
                 v := or(shl(7, v), and(b, 0x7f))

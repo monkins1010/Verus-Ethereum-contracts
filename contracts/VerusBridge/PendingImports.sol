@@ -503,6 +503,8 @@ contract PendingImports is VerusStorage {
         uint256 windowStart = BridgeHalt.haltLiftedAt(storageGlobal);
         if (uint256(pending.submittedAt) > windowStart) windowStart = uint256(pending.submittedAt);
         require(block.timestamp >= windowStart + IMPORT_RELEASE_COOLDOWN + IMPORT_TIMEOUT);
+        (uint256 rejects,) = _countValidVotes(_loadVoteBitmap(keccak256(abi.encodePacked(REJECT_VOTE_BITMAP_PREFIX, importTxid))));
+        require(rejects == 0);
 
         _executeImport(importTxid, pendingKey, pending);
         delete storageGlobal[SUBMIT_IMPORTS_REENTRANCY_GUARD];

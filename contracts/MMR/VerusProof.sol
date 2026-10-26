@@ -405,7 +405,7 @@ contract VerusProof is VerusStorage  {
 
             // Parse CTxOut: validate scriptPubKey structure and locate the CCE body
             (uint32 cceBodyOffset, bool ok) = _parseCTxOut(firstObj);
-            if (!ok) revert("No CCE output component proven"); 
+            if (!ok) revert(); 
 
             // Deserialize CCE fields from the located body
             CCEData memory cce = _readCCEFields(firstObj, cceBodyOffset);
@@ -415,7 +415,7 @@ contract VerusProof is VerusStorage  {
                   cce.sourceSystemID == VERUS &&
                   cce.destSystemID   == VETH &&
                   cce.destCurrencyID == VETH)) {
-                revert("CCE information does not checkout");
+                revert(); 
             }
 
             // Pack heights + nIndex + numInputs into a single uint128 for the caller.
@@ -517,7 +517,7 @@ contract VerusProof is VerusStorage  {
         if (elType == TYPE_TX_OUTPUT)   return 1 + 2 * nVins + uint32(elIdx);
         if (elType == TX_SHIELDEDSPEND)  return 1 + 2 * nVins + nVouts + uint32(elIdx);
         if (elType == TX_SHIELDEDOUTPUT) return 1 + 2 * nVins + nVouts + nShieldedSpends + uint32(elIdx);
-        revert("Unknown elType");
+        revert();
     }
 
     // Decode capped-size branch tail format:
@@ -715,7 +715,7 @@ contract VerusProof is VerusStorage  {
 
         {
             bytes32 txRoot = proveComponents(_import);
-            if(txRoot == bytes32(0)) revert("Components do not validate");
+            if(txRoot == bytes32(0)) revert();
 
             require(_import.partialtransactionproof.txproof.length == NUM_TX_PROOFS);
 
@@ -727,7 +727,7 @@ contract VerusProof is VerusStorage  {
 
             bytes32 retStateRoot = checkProof(txRoot, _import.partialtransactionproof.txproof);
             if (retStateRoot == bytes32(0) || retStateRoot != getLastConfirmedVRSCStateRoot()) {
-                revert("Stateroot does not match");
+                revert();
             }
         }
 
@@ -889,7 +889,7 @@ contract VerusProof is VerusStorage  {
         }
         else
         {
-            revert("Compact-size too large");
+            revert();
         }
     }
 }

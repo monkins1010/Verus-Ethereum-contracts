@@ -331,6 +331,8 @@ contract SubmitImports is VerusStorage {
 
         uint256 claimAmount;
 
+        require(claimableFees[VerusConstants.VDXF_DISABLE_CONTRACT_KEY] & (VerusConstants.HALT_SUBMIT_IMPORTS | VerusConstants.HALT_SEND_TRANSFERS) == 0, "Bridge halted");
+
         // Reentrancy guard
 
         require(bridgeConverterActive && storageGlobal[SUBMIT_IMPORTS_REENTRANCY_GUARD].length == 0);
@@ -390,6 +392,7 @@ contract SubmitImports is VerusStorage {
 
         refundAmount = refunds[refundAddressFormatted][currency];
         require (bridgeConverterActive && refundAmount > 0 && verusAddress != uint176(0));
+        require(claimableFees[VerusConstants.VDXF_DISABLE_CONTRACT_KEY] & (VerusConstants.HALT_SUBMIT_IMPORTS | VerusConstants.HALT_SEND_TRANSFERS) == 0, "Bridge halted");
         
         delete refunds[refundAddressFormatted][currency];
         uint64 fees;
@@ -425,6 +428,7 @@ contract SubmitImports is VerusStorage {
     function sendfees(bytes32 publicKeyX, bytes32 publicKeyY) external 
     {
         require(bridgeConverterActive);
+        require(claimableFees[VerusConstants.VDXF_DISABLE_CONTRACT_KEY] & (VerusConstants.HALT_SUBMIT_IMPORTS | VerusConstants.HALT_SEND_TRANSFERS) == 0, "Bridge halted");
         uint8 leadingByte;
         uint256 claimant; 
         uint64 feeShare;

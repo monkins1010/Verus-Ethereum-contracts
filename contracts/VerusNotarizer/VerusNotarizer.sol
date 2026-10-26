@@ -101,20 +101,25 @@ contract VerusNotarizer is VerusStorage {
             }
 
            // hashedNotarizationByID = keccak256(tempBytes);
+            {
 
-            if (ecrecover(hashedNotarizationByID, _vs[i]-4, _rs[i], _ss[i]) != notaryAddressMapping[notaryAddresses[i]].main)
-            {
-                revert("Invalid notary signature");  
-            }
-            if (notaryAddressMapping[notaryAddresses[i]].state != VerusConstants.NOTARY_VALID)
-            {
-                revert("Notary revoked"); 
+                address notaryMainAddress = notaryAddressMapping[notaryAddresses[i]].main;
+                require(notaryMainAddress != address(0));
+
+                if (ecrecover(hashedNotarizationByID, _vs[i]-4, _rs[i], _ss[i]) != notaryMainAddress)
+                {
+                    revert();  
+                }
+                if (notaryAddressMapping[notaryAddresses[i]].state != VerusConstants.NOTARY_VALID)
+                {
+                    revert(); 
+                }
             }
         }
 
-        if(i < ((notaries.length >> 1) + 1 ))
+        if(i < ((notaryAddresses.length >> 1) + 1 ))
         {
-            revert("not enough notary signatures");
+            revert();
         }
 
         checkNotarization(serializedNotarization, txid, uint64(n));
@@ -318,7 +323,7 @@ contract VerusNotarizer is VerusStorage {
 
         if (forkIdx == -1 && bestForks.length != 0)
         {
-            revert("invalid notarization hash");
+            revert();
         }
 
         if (forkIdx == -1){
@@ -375,7 +380,7 @@ contract VerusNotarizer is VerusStorage {
         for (uint j = i + 1; j < ids.length; j++)
         {
             if (ids[i] == ids[j])
-                revert("duplicate signatures found");
+                revert();
         }
     }
 
