@@ -119,7 +119,7 @@ contract VerusNotarizer is VerusStorage {
             }
         }
 
-        if(i < ((notaryAddresses.length >> 1) + 1 ))
+        if(i < ((notaries.length >> 1) + 1 ))
         {
             revert();
         }
