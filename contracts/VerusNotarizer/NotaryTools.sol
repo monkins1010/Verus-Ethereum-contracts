@@ -47,6 +47,14 @@ contract NotaryTools is VerusStorage {
         notaryAddressMapping[notarizer] = VerusObjects.notarizer(mainAddress, revokeAddress, state);
     }
 
+    /// @dev Seats outside notaries[] must never be revoked, recovered or counted as signers.
+    function _isNotary(address notarizer) private view returns (bool) {
+        for (uint i = 0; i < notaries.length; i++) {
+            if (notaries[i] == notarizer) return true;
+        }
+        return false;
+    }
+
     event BridgeTemporarilyHalted();
 
     /// @dev Clears a revoked notary's bit from the unhalt vote bitmap and from the release and reject
@@ -128,7 +136,9 @@ contract NotaryTools is VerusStorage {
 
         // Revoke with a quorum of notary sigs.
         (VerusObjects.revokeRecoverInfo[] memory _revokePacket, address notarizerBeingRevoked) = abi.decode(dataIn, (VerusObjects.revokeRecoverInfo[], address));
-        bytes memory be; 
+        bytes memory be;
+
+        require(_isNotary(notarizerBeingRevoked), "Not a notary");
 
         uint counter;
         for (uint i = 0; i < _revokePacket.length; i++) {
@@ -145,8 +155,9 @@ contract NotaryTools is VerusStorage {
             be = bytesToString(abi.encodePacked(uint8(TYPE_REVOKE),notarizerBeingRevoked, _revokePacket[i].salt));
             address signer = recoverString(be, _revokePacket[i]._vs, _revokePacket[i]._rs, _revokePacket[i]._ss);
 
-            if (signer != address(0) && signer == notaryAddressMapping[_revokePacket[i].notarizerID].main && 
-                notaryAddressMapping[_revokePacket[i].notarizerID].state == VerusConstants.NOTARY_VALID) {
+            if (signer != address(0) && signer == notaryAddressMapping[_revokePacket[i].notarizerID].main &&
+                notaryAddressMapping[_revokePacket[i].notarizerID].state == VerusConstants.NOTARY_VALID &&
+                _isNotary(_revokePacket[i].notarizerID)) {
                     counter++;
             }
         }
@@ -192,7 +203,8 @@ contract NotaryTools is VerusStorage {
         bytes memory be; 
 
         require(notaryAddressMapping[notarizerBeingRecovered].state == VerusConstants.NOTARY_REVOKED, "Notary not revoked");
-        
+        require(_isNotary(notarizerBeingRecovered), "Not a notary");
+
         uint counter;
         for (uint i = 0; i < _recoverPacket.length; i++) {
 
@@ -209,7 +221,8 @@ contract NotaryTools is VerusStorage {
             address signer = recoverString(be, _recoverPacket[i]._vs, _recoverPacket[i]._rs, _recoverPacket[i]._ss);
 
             if (signer != address(0) && signer == notaryAddressMapping[_recoverPacket[i].notarizerID].recovery &&
-                notaryAddressMapping[_recoverPacket[i].notarizerID].state == VerusConstants.NOTARY_VALID) {
+                notaryAddressMapping[_recoverPacket[i].notarizerID].state == VerusConstants.NOTARY_VALID &&
+                _isNotary(_recoverPacket[i].notarizerID)) {
                 counter++;
             }
         }

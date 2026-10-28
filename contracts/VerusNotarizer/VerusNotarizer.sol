@@ -187,8 +187,8 @@ contract VerusNotarizer is VerusStorage {
             // if 20 days have passed since the vote started, set the vote hash as used
             successfulVoteHashes[votetxid] = VerusConstants.MAX_UINT256;
 
-            // reset the rolling votes, voting goes idle until a new vote is cast.
-            resetVotes();
+            // clear only the expired hash's votes, other packages keep theirs.
+            clearVotesFor(votetxid);
             return;
         }
         
@@ -220,13 +220,11 @@ contract VerusNotarizer is VerusStorage {
         castVote(abi.decode(vote, (address)));
     }
 
-    function resetVotes() private {
-
-        rollingVoteIndex = VerusConstants.DEFAULT_INDEX_VALUE;
+    function clearVotesFor(address votetxid) private {
 
         for (uint i = 0; i < VerusConstants.VOTE_LENGTH; i++)
         {
-            if (rollingUpgradeVotes[i] != address(0)) {
+            if (rollingUpgradeVotes[i] == votetxid) {
                 rollingUpgradeVotes[i] = address(0);
             }
         }

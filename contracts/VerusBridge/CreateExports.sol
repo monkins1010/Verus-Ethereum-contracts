@@ -267,6 +267,7 @@ contract CreateExports is VerusStorage {
     function burnFees(bytes calldata) external {
 
         require(bridgeConverterActive, "Bridge Converter not active");
+        require(claimableFees[VerusConstants.VDXF_DISABLE_CONTRACT_KEY] & (VerusConstants.HALT_SUBMIT_IMPORTS | VerusConstants.HALT_SEND_TRANSFERS) == 0, "Bridge halted");
 
         bool success;
         bytes memory retData;

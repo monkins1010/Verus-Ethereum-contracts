@@ -40,6 +40,7 @@ contract Imports is VerusStorage {
     uint32 constant SEND_SUCCESS_ETH = 6;
     uint256 constant ETH_PAYOUT_GAS_LIMIT = 100000;
     uint256 constant NFT_MINT_GAS_LIMIT = 150000;
+    uint256 constant MAX_ERC_NAME_LENGTH = 64;
     bytes4 constant ERC721_SEND_SELECTOR = bytes4(0x23b872dd);
     bytes4 constant ERC1155_SEND_SELECTOR = bytes4(0xf242432a);
 
@@ -156,7 +157,8 @@ contract Imports is VerusStorage {
                         offset := mload(add(result, 0x20))
                         strlen := mload(add(result, 0x40))
                     }
-                    outputName = (offset == 0x20 && strlen <= result.length - 64)
+                    // a long name() would make the launch, and its whole import, too costly to release
+                    outputName = (offset == 0x20 && strlen <= MAX_ERC_NAME_LENGTH && strlen <= result.length - 64)
                         ? abi.decode(result, (string))
                         : "...";
                 } else {
@@ -237,6 +239,9 @@ contract Imports is VerusStorage {
                         )
                     );
                     result = ok && ret.length > 0 ? abi.decode(ret, (uint8)) : SEND_FAILED;
+                } else {
+                    // currency not launched on ETH yet, refund rather than drop the payment
+                    result = SEND_FAILED;
                 }
             }
 

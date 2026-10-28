@@ -17,6 +17,8 @@ contract VerusSerializer {
     uint32 constant ETH_SEND_GATEWAY_AND_AUX_DEST = 20 + 20 + 8 + 4 + 20;
     uint32 constant TRANSFER_GATEWAYSKIP = 48; // skip gatewayID (20), gatewayCode (20), fees (8)
     uint8 constant FLAG_MASK = 192; // 11000000
+    uint8 constant TYPE_NO_FLAGS_MASK = 0x0f; // destination type without flag or reserved bits
+    uint8 constant REFUND_AUX_LENGTH = 22; // type(1) + length(1) + address(20)
     // version(1) + currencyID(20) + varint_amount(1) + varint_flags(1) + feecurrencyid(20) +
     // varint_fees(1) + desttype(1) + vec_length(1) + destaddress(20) + destcurrencyid(20) = 86
     uint32 constant MIN_TRANSFER_LENGTH = 86;
@@ -145,7 +147,7 @@ contract VerusSerializer {
 
         uint256 destinationSize;
 
-        if ((ctd.destinationtype & VerusConstants.DEST_REGISTERCURRENCY) == VerusConstants.DEST_REGISTERCURRENCY) {
+        if ((ctd.destinationtype & TYPE_NO_FLAGS_MASK) == VerusConstants.DEST_REGISTERCURRENCY) {
 
             destinationSize = ctd.destinationaddress.length;
 
@@ -395,15 +397,17 @@ contract VerusSerializer {
 
                 _checkTransferBounds(reserveTransfers, nextOffset, temporaryRegister1);
 
-                if (destinationType & VerusConstants.DEST_ETH == VerusConstants.DEST_ETH) {
+                // compare the type without flags for equality, a bitwise match lets DEST_RAW (11) read as DEST_ETH (9)
+                // and type 7 read as DEST_REGISTERCURRENCY (6)
+                if (destinationType & TYPE_NO_FLAGS_MASK == VerusConstants.DEST_ETH) {
                     require(temporaryRegister1 >= VERUS_ID_LENGTH, "Invalid ETH destination");
                     assembly {
                         tempaddress := mload(sub(add(add(reserveTransfers, nextOffset), VERUS_ID_LENGTH), 1))
                     }
                     transfers[transferIndex].destination = tempaddress;
                 }
-                else if (destinationType & VerusConstants.DEST_REGISTERCURRENCY == VerusConstants.DEST_REGISTERCURRENCY ||
-                         destinationType & VerusConstants.DEST_ETHNFT == VerusConstants.DEST_ETHNFT) {
+                else if (destinationType & TYPE_NO_FLAGS_MASK == VerusConstants.DEST_REGISTERCURRENCY ||
+                         destinationType & TYPE_NO_FLAGS_MASK == VerusConstants.DEST_ETHNFT) {
 
                     VerusObjects.PackedCurrencyLaunch memory launchTx = currencyParser(reserveTransfers, nextOffset);
 
@@ -474,8 +478,15 @@ contract VerusSerializer {
         for (uint i = temporaryRegister1; i > 0; i--) {
             (temporaryRegister1, currentOffset) = readCompactSizeLE(reserveTransfers, currentOffset);
             _checkTransferBounds(reserveTransfers, currentOffset, temporaryRegister1);
-            assembly {
-                refundAddress := mload(sub(add(add(reserveTransfers, currentOffset), temporaryRegister1), 1))
+            // only a 22 byte PKH, ID or ETH entry with a 20 byte address is a refund address. Others are
+            // skipped rather than reverted, so a malformed aux can't stall the import.
+            if (temporaryRegister1 == REFUND_AUX_LENGTH && uint8(reserveTransfers[currentOffset]) == VERUS_ID_LENGTH) {
+                uint8 auxType = uint8(reserveTransfers[currentOffset - 1]);
+                if (auxType == VerusConstants.DEST_PKH || auxType == VerusConstants.DEST_ID || auxType == VerusConstants.DEST_ETH) {
+                    assembly {
+                        refundAddress := mload(sub(add(add(reserveTransfers, currentOffset), temporaryRegister1), 1))
+                    }
+                }
             }
             currentOffset += temporaryRegister1;
         }
@@ -537,6 +548,8 @@ contract VerusSerializer {
                 v := add(v, 1)
                 retidx := add(retidx, 1)
             }
+            // no terminator within 10 bytes: the last byte read still has the continuation bit set
+            if eq(and(b, 0x80), 0x80) { revert(0, 0) }
             v := and(v, 0xFFFFFFFFFFFFFFFF)
         }
 
@@ -720,8 +733,8 @@ contract VerusSerializer {
 
         if (temporaryRegister1 == 1) {
             (temporaryRegister1, nextOffset) = readCompactSizeLE(input, nextOffset);    // get the length of the auxDest sub array, this will be a CReserveDestination
-            if (uint8(input[nextOffset - 1]) == VerusConstants.DEST_PK && uint8(input[nextOffset]) == 0x21 //check for PKH and 33 bytes
-                && uint8(input[nextOffset + 1]) == VerusConstants.DEST_PKH) {
+            if (uint8(input[nextOffset - 1]) == VerusConstants.DEST_PK && uint8(input[nextOffset]) == 0x21 //check for PK and 33 bytes
+                && (uint8(input[nextOffset + 1]) == 0x02 || uint8(input[nextOffset + 1]) == 0x03)) { //compressed key prefix, as verusd requires
 
                 assembly {
                     nextOffset := add(nextOffset, 1) //move to vector length
