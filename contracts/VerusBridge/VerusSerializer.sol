@@ -480,7 +480,9 @@ contract VerusSerializer {
             _checkTransferBounds(reserveTransfers, currentOffset, temporaryRegister1);
             // only a 22 byte PKH, ID or ETH entry with a 20 byte address is a refund address. Others are
             // skipped rather than reverted, so a malformed aux can't stall the import.
-            if (temporaryRegister1 == REFUND_AUX_LENGTH && uint8(reserveTransfers[currentOffset]) == VERUS_ID_LENGTH) {
+            // The first qualifying entry wins, matching verusd's GetCompatibleAuxDestination. refundAddress
+            // includes the non-zero type byte, so it is only zero until an entry has been taken.
+            if (refundAddress == 0 && temporaryRegister1 == REFUND_AUX_LENGTH && uint8(reserveTransfers[currentOffset]) == VERUS_ID_LENGTH) {
                 uint8 auxType = uint8(reserveTransfers[currentOffset - 1]);
                 if (auxType == VerusConstants.DEST_PKH || auxType == VerusConstants.DEST_ID || auxType == VerusConstants.DEST_ETH) {
                     assembly {
