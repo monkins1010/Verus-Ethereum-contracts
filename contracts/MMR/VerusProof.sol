@@ -88,7 +88,8 @@ contract VerusProof is VerusStorage  {
         bytes memory joined;
         //hashInProgress = blake2b.bytesToBytes32(abi.encodePacked(_hashToCheck));
 
-        uint64 hashIndex = VerusMMR.GetMMRProofIndex(_branch.nIndex, _branch.nSize, _branch.extraHashes);
+        (uint64 hashIndex, ) = VerusMMR.GetMMRProofIndex(_branch.nIndex, _branch.nSize, _branch.extraHashes);
+
         require(hashIndex != type(uint64).max);
         
         for (uint i = 0;i < branchLength; i++) {
@@ -585,6 +586,12 @@ contract VerusProof is VerusStorage  {
             "Capped: size hash mismatch"
         );
 
+        // --- Explicit branch-length check (capped component proofs) ---
+        {
+            (, uint64 headerPathLen) = VerusMMR.GetMMRProofIndex(b0.nIndex, elHashSize, b0.extraHashes);
+            require(headerPathLen == b0.branch.length - 1, "Header branch length mismatch");
+        }
+
         // --- Per-component structural validation ---
         // Each component i >= 1 must:
         //   1. Have exactly one BRANCH_MMRBLAKE_NODE proof over the same elHashSize tree.
@@ -656,6 +663,20 @@ contract VerusProof is VerusStorage  {
                 comp.elProof[0].proofSequence.nIndex == expected,
                 "Component nIndex mismatch"
             );
+
+            // Explicit branch-length check (capped): canonical uncapped path length + 1 (size hash).
+            // See the header check above; nSize == elHashSize and extraHashes == 0 are enforced above.
+            {
+                (, uint64 compPathLen) = VerusMMR.GetMMRProofIndex(
+                    comp.elProof[0].proofSequence.nIndex,
+                    elHashSize,
+                    comp.elProof[0].proofSequence.extraHashes
+                );
+                require(
+                    compPathLen == comp.elProof[0].proofSequence.branch.length - 1,
+                    "Component branch length mismatch"
+                );
+            }
         }
     }
 
