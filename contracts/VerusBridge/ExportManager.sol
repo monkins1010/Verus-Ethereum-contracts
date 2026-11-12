@@ -323,7 +323,10 @@ contract ExportManager is VerusStorage  {
             (success, data) = tokenERCAddress.call{gas: 30000}(abi.encodeWithSelector(bytes4(0x313ce567))); // ERC20.decimals()
             if (!success || data.length != 32) return SEND_FAILED;
             uint256 dec = abi.decode(data, (uint256));
-            if (dec > 18) return SEND_FAILED;
+            // New deposits are capped at 18 decimals (CreateExports). The payout bound is the overflow-safe one so
+            // custody deposited before that cap can still leave; an overflow in convertFromVerusNumber reverts
+            // inside this delegatecall and becomes a refund, so it can't revert the import.
+            if (dec > 85) return SEND_FAILED;
             amount = convertFromVerusNumber(sendAmount, uint8(dec));
         }
 

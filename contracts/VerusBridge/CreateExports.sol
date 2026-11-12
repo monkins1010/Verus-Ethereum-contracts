@@ -136,7 +136,9 @@ contract CreateExports is VerusStorage {
             Token token = Token(iaddressMapping.erc20ContractAddress); 
             //Check user has allowed the verusBridgeStorage contract to spend on their behalf
             uint256 allowedTokens = token.allowance(msg.sender, address(this));
-            uint256 tokenAmount = convertFromVerusNumber(transfer.currencyvalue.amount, token.decimals()); //convert to wei from verus satoshis
+            uint8 tokenDecimals = token.decimals();
+            require(tokenDecimals <= 18, "Token decimals > 18");
+            uint256 tokenAmount = convertFromVerusNumber(transfer.currencyvalue.amount, tokenDecimals); //convert to wei from verus satoshis
             require( allowedTokens >= tokenAmount);
 
             if (iaddressMapping.flags & VerusConstants.MAPPING_ETHEREUM_OWNED == VerusConstants.MAPPING_ETHEREUM_OWNED) {

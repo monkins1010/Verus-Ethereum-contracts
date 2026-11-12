@@ -465,16 +465,25 @@ contract NotarizationSerializer is VerusStorage {
 
         uint8 cap = numCurrencies < 4 ? numCurrencies : 4;
         _checkBounds(data, currPos + 1, uint32(cap) * SZ_U160);
+        // Bitmask of slots already assigned. A duplicated currency would
+        // otherwise OR a second reserve into the same 64-bit slot and corrupt
+        // it; the first occurrence wins and later duplicates are ignored.
+        uint8 seen;
         for (uint8 i = 0; i < cap; i++) {
             address currency;
             uint32 p = currPos + 1 + uint32(i) * 20;
             assembly {
                 currency := shr(96, mload(add(add(data, 0x20), p)))
             }
-            if      (currency == VETH)  currSlot[i] = 0;
-            else if (currency == DAI)   currSlot[i] = 1;
-            else if (currency == VERUS) currSlot[i] = 2;
-            else if (currency == MKR)   currSlot[i] = 3;
+            uint8 slot = 0xff;
+            if      (currency == VETH)  slot = 0;
+            else if (currency == DAI)   slot = 1;
+            else if (currency == VERUS) slot = 2;
+            else if (currency == MKR)   slot = 3;
+            if (slot != 0xff && (seen & (uint8(1) << slot)) == 0) {
+                seen |= uint8(1) << slot;
+                currSlot[i] = slot;
+            }
         }
 
         // reservePos = currPos + 1(cs) + n*20(addrs) + 1(weights-cs) + n*4(weights) + 1(reserves-cs)

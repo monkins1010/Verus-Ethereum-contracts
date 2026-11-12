@@ -141,7 +141,9 @@ contract Imports is VerusStorage {
             if (verusToERC20mapping[_tx[j].iaddress].flags > 0 || _tx[j].iaddress == address(0))
                 continue;
 
-            VerusSerializer(contracts[uint(VerusConstants.ContractType.VerusSerializer)]).checkIAddress(_tx[j]);
+            // On a mismatch leave the currency unmapped; its payouts refund via the "not launched on ETH yet" branch.
+            if (!VerusSerializer(contracts[uint(VerusConstants.ContractType.VerusSerializer)]).checkIAddress(_tx[j]))
+                continue;
 
             string memory outputName;
 
@@ -188,8 +190,6 @@ contract Imports is VerusStorage {
     ///      ERC-20/721/1155 sends are delegated to ExportManager.sendCurrencyToETHAddress.
     function importTransactions(VerusObjects.PackedSend[] memory trans) private returns (bytes memory refundsData) {
 
-        VerusObjects.mappedToken memory tempToken;
-
         for (uint256 i = 0; i < trans.length; i++) {
 
             // Currency-launch marker entries carry no payout (amount 0, destination zero); skip them.
@@ -197,60 +197,73 @@ contract Imports is VerusStorage {
                 continue;
             }
 
-            uint64  sendAmount  = trans[i].amount;
-            address destination = trans[i].destination;
-            address currency    = trans[i].currency;
-            tempToken = verusToERC20mapping[currency];
-            uint32 result;
-
-            if (currency == VETH) {
-                (bool success, ) = destination.call{value: sendAmount * VerusConstants.SATS_TO_WEI_STD, gas: ETH_PAYOUT_GAS_LIMIT}("");
-                result = success ? SEND_SUCCESS_ETH : SEND_FAILED;
-            } else if (
-                tempToken.flags & VerusConstants.MAPPING_ERC721_NFT_DEFINITION == VerusConstants.MAPPING_ERC721_NFT_DEFINITION &&
-                tempToken.flags & VerusConstants.MAPPING_VERUS_OWNED == VerusConstants.MAPPING_VERUS_OWNED
-            ) {
-                (bool success, ) = tempToken.erc20ContractAddress.call{gas: NFT_MINT_GAS_LIMIT}(
-                    abi.encodeWithSelector(VerusNft.mint.selector, currency, tempToken.name, destination)
-                );
-                result = success ? SEND_SUCCESS_NO_DEBIT : SEND_FAILED;
-            } else {
-                // Determine which ERC selector is needed, then delegatecall ExportManager.
-                uint32 selector;
-                if (tempToken.flags & VerusConstants.MAPPING_ERC20_DEFINITION == VerusConstants.MAPPING_ERC20_DEFINITION) {
-                    selector = uint32(
-                        tempToken.flags & VerusConstants.MAPPING_VERUS_OWNED == VerusConstants.MAPPING_VERUS_OWNED
-                            ? Token.mint.selector : ERC20.transfer.selector
-                    );
-                } else if (tempToken.flags & VerusConstants.MAPPING_ERC721_NFT_DEFINITION == VerusConstants.MAPPING_ERC721_NFT_DEFINITION) {
-                    selector = uint32(ERC721_SEND_SELECTOR);
-                } else if (
-                    tempToken.flags & VerusConstants.MAPPING_ERC1155_NFT_DEFINITION == VerusConstants.MAPPING_ERC1155_NFT_DEFINITION ||
-                    tempToken.flags & VerusConstants.MAPPING_ERC1155_ERC_DEFINITION == VerusConstants.MAPPING_ERC1155_ERC_DEFINITION
-                ) {
-                    selector = uint32(ERC1155_SEND_SELECTOR);
-                }
-
-                if (selector != 0) {
-                    (bool ok, bytes memory ret) = contracts[uint(VerusConstants.ContractType.ExportManager)].delegatecall(
-                        abi.encodeWithSignature(
-                            "sendCurrencyToETHAddress(address,address,uint256,uint32,uint256)",
-                            tempToken.erc20ContractAddress, destination, sendAmount, selector, tempToken.tokenID
-                        )
-                    );
-                    result = ok && ret.length > 0 ? abi.decode(ret, (uint8)) : SEND_FAILED;
-                } else {
-                    // currency not launched on ETH yet, refund rather than drop the payment
-                    result = SEND_FAILED;
-                }
-            }
+            uint64 sendAmount = trans[i].amount;
+            uint32 result = _payOut(trans[i].destination, trans[i].currency, sendAmount, ETH_PAYOUT_GAS_LIMIT);
 
             if (result == SEND_FAILED && sendAmount > 0) {
-                refundsData = abi.encodePacked(refundsData, trans[i].refundAddress, sendAmount, currency);
-            } else if (result == SEND_SUCCESS ||
-                (result == SEND_SUCCESS_ETH && destination != address(this))) {
-                verusToERC20mapping[currency].tokenIndex -= sendAmount;
+                refundsData = abi.encodePacked(refundsData, trans[i].refundAddress, sendAmount, trans[i].currency);
             }
+        }
+    }
+
+    /// @notice Pays a stored refund out on Ethereum to its DEST_ETH refund address.
+    ///         Called via delegatecall from SubmitImports.claimRefund, which has already removed the refund
+    ///         entry; reverts if the payout fails so the refund stays claimable.
+    function payRefundOnETH(address destination, address currency, uint64 amount) external {
+        require(_payOut(destination, currency, amount, gasleft()) != SEND_FAILED, "Refund payout failed");
+    }
+
+    /// @dev Sends one payout to an Ethereum address and debits custody on success.
+    ///      ethGas is the gas forwarded to a plain vETH send.
+    function _payOut(address destination, address currency, uint64 sendAmount, uint256 ethGas) private returns (uint32 result) {
+
+        VerusObjects.mappedToken memory tempToken = verusToERC20mapping[currency];
+
+        if (currency == VETH) {
+            (bool success, ) = destination.call{value: sendAmount * VerusConstants.SATS_TO_WEI_STD, gas: ethGas}("");
+            result = success ? SEND_SUCCESS_ETH : SEND_FAILED;
+        } else if (
+            tempToken.flags & VerusConstants.MAPPING_ERC721_NFT_DEFINITION == VerusConstants.MAPPING_ERC721_NFT_DEFINITION &&
+            tempToken.flags & VerusConstants.MAPPING_VERUS_OWNED == VerusConstants.MAPPING_VERUS_OWNED
+        ) {
+            (bool success, ) = tempToken.erc20ContractAddress.call{gas: NFT_MINT_GAS_LIMIT}(
+                abi.encodeWithSelector(VerusNft.mint.selector, currency, tempToken.name, destination)
+            );
+            result = success ? SEND_SUCCESS_NO_DEBIT : SEND_FAILED;
+        } else {
+            // Determine which ERC selector is needed, then delegatecall ExportManager.
+            uint32 selector;
+            if (tempToken.flags & VerusConstants.MAPPING_ERC20_DEFINITION == VerusConstants.MAPPING_ERC20_DEFINITION) {
+                selector = uint32(
+                    tempToken.flags & VerusConstants.MAPPING_VERUS_OWNED == VerusConstants.MAPPING_VERUS_OWNED
+                        ? Token.mint.selector : ERC20.transfer.selector
+                );
+            } else if (tempToken.flags & VerusConstants.MAPPING_ERC721_NFT_DEFINITION == VerusConstants.MAPPING_ERC721_NFT_DEFINITION) {
+                selector = uint32(ERC721_SEND_SELECTOR);
+            } else if (
+                tempToken.flags & VerusConstants.MAPPING_ERC1155_NFT_DEFINITION == VerusConstants.MAPPING_ERC1155_NFT_DEFINITION ||
+                tempToken.flags & VerusConstants.MAPPING_ERC1155_ERC_DEFINITION == VerusConstants.MAPPING_ERC1155_ERC_DEFINITION
+            ) {
+                selector = uint32(ERC1155_SEND_SELECTOR);
+            }
+
+            if (selector != 0) {
+                (bool ok, bytes memory ret) = contracts[uint(VerusConstants.ContractType.ExportManager)].delegatecall(
+                    abi.encodeWithSignature(
+                        "sendCurrencyToETHAddress(address,address,uint256,uint32,uint256)",
+                        tempToken.erc20ContractAddress, destination, sendAmount, selector, tempToken.tokenID
+                    )
+                );
+                result = ok && ret.length > 0 ? abi.decode(ret, (uint8)) : SEND_FAILED;
+            } else {
+                // currency not launched on ETH yet, refund rather than drop the payment
+                result = SEND_FAILED;
+            }
+        }
+
+        if (result == SEND_SUCCESS ||
+            (result == SEND_SUCCESS_ETH && destination != address(this))) {
+            verusToERC20mapping[currency].tokenIndex -= sendAmount;
         }
     }
 

@@ -395,6 +395,28 @@ contract SubmitImports is VerusStorage {
         require(claimableFees[VerusConstants.VDXF_DISABLE_CONTRACT_KEY] & (VerusConstants.HALT_SUBMIT_IMPORTS | VerusConstants.HALT_SEND_TRANSFERS) == 0, "Bridge halted");
         
         delete refunds[refundAddressFormatted][currency];
+
+        uint8 refundType = uint8(verusAddress >> TYPE_BYTE_LOCATION_IN_UINT176);
+
+        if (refundType == VerusConstants.DEST_ETH) {
+            // An Ethereum refund address is paid on Ethereum: the caller pays the gas and no bridge fee is taken.
+            // Reverts (leaving the refund claimable) if the payout fails.
+            require(msg.value == 0);
+            require(storageGlobal[SUBMIT_IMPORTS_REENTRANCY_GUARD].length == 0);
+            storageGlobal[SUBMIT_IMPORTS_REENTRANCY_GUARD] = abi.encodePacked(uint8(1));
+            (success, ) = contracts[uint(VerusConstants.ContractType.Imports)].delegatecall(
+                abi.encodeWithSignature("payRefundOnETH(address,address,uint64)", address(uint160(verusAddress)), currency, uint64(refundAmount)));
+            require(success, "Refund payout failed");
+            delete storageGlobal[SUBMIT_IMPORTS_REENTRANCY_GUARD];
+            return 0;
+        }
+
+        // PKH and ID refunds are sent back to Verus. verusd pays a P2SH destination only in the native currency
+        // (reserve outputs go to ID/PK/PKH only and anything else is absorbed), so a P2SH refund is sent back
+        // only for VRSC; other currencies stay held under the P2SH key rather than being burned on import.
+        require(refundType == VerusConstants.DEST_PKH || refundType == VerusConstants.DEST_ID ||
+                (refundType == VerusConstants.DEST_SH && currency == VERUS), "Refund type not payable");
+
         uint64 fees;
         address feeCurrency;
 

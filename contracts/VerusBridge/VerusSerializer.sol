@@ -10,9 +10,7 @@ import "../Libraries/VerusConstants.sol";
 contract VerusSerializer {
 
     uint constant ETH_ADDRESS_SIZE_BYTES = 20;
-    uint32 constant CCC_PREFIX_TO_OPTIONS = 3 + 4; // already starts on the byte so 3 first
     uint32 constant VERUS_ID_LENGTH = 20;
-    uint32 constant CCC_NATIVE_OFFSET = 4 + 4 + 1;
     uint32 constant CCC_TOKENID_OFFSET = 32;
     uint32 constant ETH_SEND_GATEWAY_AND_AUX_DEST = 20 + 20 + 8 + 4 + 20;
     uint32 constant TRANSFER_GATEWAYSKIP = 48; // skip gatewayID (20), gatewayCode (20), fees (8)
@@ -22,6 +20,34 @@ contract VerusSerializer {
     // version(1) + currencyID(20) + varint_amount(1) + varint_flags(1) + feecurrencyid(20) +
     // varint_fees(1) + desttype(1) + vec_length(1) + destaddress(20) + destcurrencyid(20) = 86
     uint32 constant MIN_TRANSFER_LENGTH = 86;
+
+    // CCurrencyDefinition layout (offsets from the start of the definition, in bytes)
+    uint32 constant CCD_OPTIONS_END = 8;                                      // version(4) + options(4)
+    uint32 constant CCD_PARENT_END = 28;                                      // CCD_OPTIONS_END + parent(20); literal for inline assembly
+    uint32 constant CCD_MIN_HEADER = CCD_PARENT_END + 1;                      // + name compact-size(1 minimum) = 29
+    // after the name: launchSystemID(20) + systemID(20) + notarizationProtocol(4) + proofProtocol(4) = 48
+    uint32 constant CCD_SYSTEMS_AND_PROTOCOLS = VERUS_ID_LENGTH + VERUS_ID_LENGTH + 4 + 4;
+    uint32 constant CCD_NATIVE_TYPE_SIZE = 1;                                 // nativeCurrencyID destination type byte
+    uint32 constant ETHNFT_NATIVE_LENGTH = 52;     // contract(20) + tokenID(32); a literal so inline assembly can use it
+
+    // CompactSize encoding
+    uint8 constant COMPACTSIZE_MARKER_16 = 253;    // 0xfd + 2 byte value
+    uint8 constant COMPACTSIZE_MARKER_32 = 254;    // 0xfe + 4 byte value
+    uint32 constant COMPACTSIZE_16_SIZE = 3;       // marker(1) + value(2)
+    uint32 constant COMPACTSIZE_32_SIZE = 5;       // marker(1) + value(4)
+    uint32 constant COMPACTSIZE_MIN_32 = 0x10000;  // smallest value that must use the 4 byte form
+
+    // Single DEST_PK aux destination: count(1) + entry length(1) + type(1) + key length(1) + key prefix(1) + key(32)
+    uint32 constant AUX_PK_COUNT_POS = 0;
+    uint32 constant AUX_PK_ENTRYLEN_POS = 1;
+    uint32 constant AUX_PK_TYPE_POS = 2;
+    uint32 constant AUX_PK_KEYLEN_POS = 3;
+    uint32 constant AUX_PK_PREFIX_POS = 4;
+    uint32 constant AUX_PK_SIZE = 37;
+    uint8 constant SINGLE_AUX_DEST = 1;
+    uint8 constant COMPRESSED_PK_LENGTH = 33;      // 0x21
+    uint8 constant COMPRESSED_PK_PREFIX_EVEN = 0x02;
+    uint8 constant COMPRESSED_PK_PREFIX_ODD = 0x03;
 
     //reset to empty 9-July-26
     function initialize() external {}
@@ -238,104 +264,139 @@ contract VerusSerializer {
         return output;
     }
 
-    function currencyParser(bytes memory input, uint256 offset) public pure
+    // Parses a CCurrencyDefinition carried in a DEST_REGISTERCURRENCY / DEST_ETHNFT destination vector.
+    function currencyParser(bytes memory input, uint256 offset, uint256 vecLen) public pure
                     returns (VerusObjects.PackedCurrencyLaunch memory returnCurrency)
     {
-        uint32 nextOffset;
-        uint32 tempUint32;
+        // p is the zero-based index of the next unread byte, end is one past the last byte of the vector.
+        if (offset == 0) return returnCurrency;
+        uint256 p = offset - 1;
+        uint256 end = p + vecLen;
+        if (end > input.length) return returnCurrency;
+
         address parent;
-        address nativeCurrencyID;
-        uint256 nftID;
-        uint8 NativeCurrencyType;
-        uint8 NativeCurrencyTypeNoFlags;
         uint32 options;
 
-        nextOffset = CCC_PREFIX_TO_OPTIONS + uint32(offset);
-
+        // version(4) + options(4) + parent(20) + name compact-size(1 minimum)
+        if (p + CCD_MIN_HEADER > end) return returnCurrency;
         assembly {
-            options := mload(add(input, nextOffset))
-            nextOffset := add(nextOffset, VERUS_ID_LENGTH)
-            parent := mload(add(input, nextOffset))
-            nextOffset := add(nextOffset, 1)  // one byte move forwards to read string length
-            tempUint32 := and(mload(add(input, nextOffset)), 0x000000ff) // string length MAX 64 so will always be a byte
+            options := mload(add(input, add(p, CCD_OPTIONS_END)))   // low 4 bytes = input[p+4 .. p+7]
+            parent := mload(add(input, add(p, CCD_PARENT_END)))     // low 20 bytes = input[p+8 .. p+27]
         }
-
         options = serializeUint32(options);  //reverse endian
+        p += CCD_PARENT_END;
+
+        uint256 len;
+        (len, p) = _readBoundedCompactSize(input, p, end);
+        if (p == 0 || len > end - p) return returnCurrency;
+
+        bytes memory tempname = new bytes(len);
+        for (uint256 i = 0; i < len; i++) {
+            tempname[i] = input[p + i];
+        }
+        p += len;
+
+        // launchSystemID(20) + systemID(20) + notarizationProtocol(4) + proofProtocol(4) + native type(1)
+        (address nativeCurrencyID, uint8 flags, uint256 tokenID) = _parseNativeCurrency(input, p, end, options);
+        if (flags == 0) return returnCurrency;
+
         returnCurrency.parent = parent;
-        bytes memory tempname = new bytes(tempUint32);
-
-        for (uint32 i = 0; i < tempUint32; i++) { 
-            tempname[i] = input[i + nextOffset];
-        }
-        
         returnCurrency.name = string(tempname);
-        nextOffset += tempUint32;
-        assembly {
-            nextOffset := add(nextOffset, VERUS_ID_LENGTH) // move to read launchsystemID
-            nextOffset := add(nextOffset, VERUS_ID_LENGTH) // move to read systemID
-            nextOffset := add(nextOffset, CCC_NATIVE_OFFSET) // move to read the native currency type
-            NativeCurrencyType := mload(add(input, nextOffset)) 
-        }
-
-        NativeCurrencyTypeNoFlags = NativeCurrencyType & ~FLAG_MASK; //remove flags
-       
-        if (NativeCurrencyTypeNoFlags == VerusConstants.DEST_ETHNFT) {
-            assembly {
-                nextOffset := add(add(nextOffset, VERUS_ID_LENGTH), 1) //skip vector length 
-                nativeCurrencyID := mload(add(input, nextOffset))
-                nextOffset := add(nextOffset, CCC_TOKENID_OFFSET)
-                nftID := mload(add(input, nextOffset))
-            }   
-
-            if (NativeCurrencyType == VerusConstants.DEST_ETHNFT) { //if there is no auxdest then it is an ERC721
-                returnCurrency.flags |= uint8(VerusConstants.MAPPING_ERC721_NFT_DEFINITION); 
-            } else {
-                returnCurrency.flags |= uint8(VerusConstants.MAPPING_ERC1155_NFT_DEFINITION);
-            }
-            returnCurrency.flags |= uint8(VerusConstants.MAPPING_ETHEREUM_OWNED);
-            returnCurrency.tokenID = nftID;
-        }
-        else if (NativeCurrencyTypeNoFlags == VerusConstants.DEST_ETH) {
-            
-            assembly {
-                nextOffset := add(add(nextOffset, VERUS_ID_LENGTH), 1) //skip vector length 
-                nativeCurrencyID := mload(add(input, nextOffset))
-            }
-
-            if (NativeCurrencyType == VerusConstants.DEST_ETH) {  //if there is no auxdest then it is an ERC20
-                returnCurrency.flags |= uint8(VerusConstants.MAPPING_ERC20_DEFINITION);
-            } else {
-                returnCurrency.flags |= uint8(VerusConstants.MAPPING_ERC1155_ERC_DEFINITION);
-            }
-            returnCurrency.flags |= uint8(VerusConstants.MAPPING_ETHEREUM_OWNED);
-        }
-        else if (options & VerusConstants.OPTION_NFT_TOKEN == VerusConstants.OPTION_NFT_TOKEN) { //minted NFT from verus
-        
-            returnCurrency.flags |= uint8(VerusConstants.MAPPING_ERC721_NFT_DEFINITION);
-            returnCurrency.flags |= uint8(VerusConstants.MAPPING_VERUS_OWNED);
-            nativeCurrencyID = address(0); //The Verus NFT contract is not known by this contract so it will be set when the NFT is minted.
-        }
-        else { // Verus owned ERC20, ERC20 contract not known yet.
-        
-            returnCurrency.flags |= uint8(VerusConstants.MAPPING_ERC20_DEFINITION);
-            returnCurrency.flags |= uint8(VerusConstants.MAPPING_VERUS_OWNED);
-        }
-
         returnCurrency.ERCContract = nativeCurrencyID;
-        
-        // For DEST_ETHNFT the tokenID is taken from the nativeCurrencyID only, the auxdest is not checked, as the
-        // Verus import vote binds the tokenID to the nativeCurrencyID. Dropping the launch here would leave the
-        // ETH import out of step with Verus and the import would be rejected by the notaries.
-        if (NativeCurrencyType & VerusConstants.FLAG_DEST_AUX == VerusConstants.FLAG_DEST_AUX &&
+        returnCurrency.flags = flags;
+        returnCurrency.tokenID = tokenID;
+        return returnCurrency;
+    }
+
+    // Parses the CCurrencyDefinition fields from launchSystemID up to and including nativeCurrencyID, starting at
+    // zero-based index p and bounded by end. Returns flags == 0 if the definition is malformed.
+    function _parseNativeCurrency(bytes memory input, uint256 p, uint256 end, uint32 options) private pure
+        returns (address nativeCurrencyID, uint8 flags, uint256 tokenID)
+    {
+        // launchSystemID(20) + systemID(20) + notarizationProtocol(4) + proofProtocol(4) + native type(1)
+        if (p + CCD_SYSTEMS_AND_PROTOCOLS + CCD_NATIVE_TYPE_SIZE > end) return (address(0), 0, 0);
+        uint8 NativeCurrencyType = uint8(input[p + CCD_SYSTEMS_AND_PROTOCOLS]);
+        uint8 NativeCurrencyTypeNoFlags = NativeCurrencyType & ~FLAG_MASK; //remove flags
+        p += CCD_SYSTEMS_AND_PROTOCOLS + CCD_NATIVE_TYPE_SIZE;
+
+        if (NativeCurrencyTypeNoFlags == VerusConstants.DEST_ETHNFT ||
             NativeCurrencyTypeNoFlags == VerusConstants.DEST_ETH) {
 
+            // The native vector length is a CompactSize; a long (>= 253 byte) vector has a 3 byte prefix,
+            // so it must be decoded, not assumed to be one byte.
+            uint256 nativeLen;
+            (nativeLen, p) = _readBoundedCompactSize(input, p, end);
+            // DEST_ETHNFT: contract(20) + tokenID(32). DEST_ETH: exactly 20 bytes, as verusd's CTransferDestination
+            // deserializer clears any other length.
+            if (p == 0 || nativeLen > end - p ||
+                (NativeCurrencyTypeNoFlags == VerusConstants.DEST_ETHNFT
+                    ? nativeLen < ETHNFT_NATIVE_LENGTH
+                    : nativeLen != VERUS_ID_LENGTH))
+                return (address(0), 0, 0);
+
             assembly {
-                nextOffset := add(nextOffset, 1) //move to vector length
+                nativeCurrencyID := mload(add(input, add(p, VERUS_ID_LENGTH)))       // input[p .. p+19]
             }
 
-            returnCurrency.tokenID = readAuxDestPK(input, nextOffset);
+            if (NativeCurrencyTypeNoFlags == VerusConstants.DEST_ETHNFT) {
+                assembly {
+                    tokenID := mload(add(input, add(p, ETHNFT_NATIVE_LENGTH)))   // input[p+20 .. p+51]
+                }
+                //if there is no auxdest then it is an ERC721
+                flags = NativeCurrencyType == VerusConstants.DEST_ETHNFT
+                        ? uint8(VerusConstants.MAPPING_ERC721_NFT_DEFINITION)
+                        : uint8(VerusConstants.MAPPING_ERC1155_NFT_DEFINITION);
+            } else {
+                //if there is no auxdest then it is an ERC20
+                flags = NativeCurrencyType == VerusConstants.DEST_ETH
+                        ? uint8(VerusConstants.MAPPING_ERC20_DEFINITION)
+                        : uint8(VerusConstants.MAPPING_ERC1155_ERC_DEFINITION);
+            }
+            flags |= uint8(VerusConstants.MAPPING_ETHEREUM_OWNED);
+            p += nativeLen;
+
+            // For DEST_ETHNFT the tokenID is taken from the nativeCurrencyID only, the auxdest is not checked, as the
+            // Verus import vote binds the tokenID to the nativeCurrencyID. Dropping the launch here would leave the
+            // ETH import out of step with Verus and the import would be rejected by the notaries.
+            if (NativeCurrencyType & VerusConstants.FLAG_DEST_AUX == VerusConstants.FLAG_DEST_AUX &&
+                NativeCurrencyTypeNoFlags == VerusConstants.DEST_ETH) {
+
+                if (NativeCurrencyType & VerusConstants.FLAG_DEST_GATEWAY == VerusConstants.FLAG_DEST_GATEWAY) {
+                    p += TRANSFER_GATEWAYSKIP;
+                }
+                tokenID = readAuxDestPK(input, p, end);
+            }
         }
-        return returnCurrency;
+        else if (options & VerusConstants.OPTION_NFT_TOKEN == VerusConstants.OPTION_NFT_TOKEN) { //minted NFT from verus
+            //The Verus NFT contract is not known by this contract so it will be set when the NFT is minted.
+            flags = uint8(VerusConstants.MAPPING_ERC721_NFT_DEFINITION) | uint8(VerusConstants.MAPPING_VERUS_OWNED);
+        }
+        else { // Verus owned ERC20, ERC20 contract not known yet.
+            flags = uint8(VerusConstants.MAPPING_ERC20_DEFINITION) | uint8(VerusConstants.MAPPING_VERUS_OWNED);
+        }
+    }
+
+    // Reads a canonical CompactSize at zero-based index p without reading at or past end.
+    // Returns the value and the zero-based index after it, or (0, 0) if it is truncated, too large
+    // or non-canonical, so callers can treat the definition as malformed instead of reverting.
+    function _readBoundedCompactSize(bytes memory input, uint256 p, uint256 end) private pure returns (uint256, uint256) {
+        if (p >= end) return (0, 0);
+        uint8 first = uint8(input[p]);
+        if (first < COMPACTSIZE_MARKER_16) return (first, p + 1);
+        if (first == COMPACTSIZE_MARKER_16) {
+            if (p + COMPACTSIZE_16_SIZE > end) return (0, 0);
+            // little-endian value in the 2 bytes after the marker
+            uint256 v = uint256(uint8(input[p + 1])) | (uint256(uint8(input[p + 2])) << 8);
+            return v >= COMPACTSIZE_MARKER_16 ? (v, p + COMPACTSIZE_16_SIZE) : (0, 0);
+        }
+        if (first == COMPACTSIZE_MARKER_32) {
+            if (p + COMPACTSIZE_32_SIZE > end) return (0, 0);
+            // little-endian value in the 4 bytes after the marker
+            uint256 v = uint256(uint8(input[p + 1])) | (uint256(uint8(input[p + 2])) << 8) |
+                        (uint256(uint8(input[p + 3])) << 16) | (uint256(uint8(input[p + 4])) << 24);
+            return v >= COMPACTSIZE_MIN_32 ? (v, p + COMPACTSIZE_32_SIZE) : (0, 0);
+        }
+        return (0, 0);
     }
 
     // Deserialize Reserve Transfers and return an array of PackedSend objects, an array of PackedCurrencyLaunch objects, and the total fees.
@@ -409,7 +470,7 @@ contract VerusSerializer {
                 else if (destinationType & TYPE_NO_FLAGS_MASK == VerusConstants.DEST_REGISTERCURRENCY ||
                          destinationType & TYPE_NO_FLAGS_MASK == VerusConstants.DEST_ETHNFT) {
 
-                    VerusObjects.PackedCurrencyLaunch memory launchTx = currencyParser(reserveTransfers, nextOffset);
+                    VerusObjects.PackedCurrencyLaunch memory launchTx = currencyParser(reserveTransfers, nextOffset, temporaryRegister1);
 
                     if (launchTx.flags != 0) {
                         launchTx.iaddress = transfers[transferIndex].currency;
@@ -436,6 +497,14 @@ contract VerusSerializer {
                     uint176 refundAddress;
                     (refundAddress, nextOffset) = _readRefundAddresses(reserveTransfers, nextOffset);
                     transfers[transferIndex].refundAddress = refundAddress;
+                }
+
+                // With no usable refund aux, key a failed payout's refund to the Ethereum destination itself, so it
+                // can be claimed (and paid on Ethereum) instead of landing in the unclaimable zero slot.
+                if (transfers[transferIndex].refundAddress == 0 &&
+                    destinationType & TYPE_NO_FLAGS_MASK == VerusConstants.DEST_ETH) {
+                    transfers[transferIndex].refundAddress = (uint176(VerusConstants.DEST_ETH) << 168) |
+                        (uint176(VERUS_ID_LENGTH) << 160) | uint176(uint160(transfers[transferIndex].destination));
                 }
 
                 transferIndex++;
@@ -478,13 +547,14 @@ contract VerusSerializer {
         for (uint i = temporaryRegister1; i > 0; i--) {
             (temporaryRegister1, currentOffset) = readCompactSizeLE(reserveTransfers, currentOffset);
             _checkTransferBounds(reserveTransfers, currentOffset, temporaryRegister1);
-            // only a 22 byte PKH, ID or ETH entry with a 20 byte address is a refund address. Others are
+            // only a 22 byte PKH, ID, SH or ETH entry with a 20 byte address is a refund address. Others are
             // skipped rather than reverted, so a malformed aux can't stall the import.
             // The first qualifying entry wins, matching verusd's GetCompatibleAuxDestination. refundAddress
             // includes the non-zero type byte, so it is only zero until an entry has been taken.
             if (refundAddress == 0 && temporaryRegister1 == REFUND_AUX_LENGTH && uint8(reserveTransfers[currentOffset]) == VERUS_ID_LENGTH) {
                 uint8 auxType = uint8(reserveTransfers[currentOffset - 1]);
-                if (auxType == VerusConstants.DEST_PKH || auxType == VerusConstants.DEST_ID || auxType == VerusConstants.DEST_ETH) {
+                if (auxType == VerusConstants.DEST_PKH || auxType == VerusConstants.DEST_ID ||
+                    auxType == VerusConstants.DEST_SH || auxType == VerusConstants.DEST_ETH) {
                     assembly {
                         refundAddress := mload(sub(add(add(reserveTransfers, currentOffset), temporaryRegister1), 1))
                     }
@@ -718,35 +788,32 @@ contract VerusSerializer {
         return sha256(abi.encodePacked(sha256(abi.encodePacked(_string))));
     }
 
-    function checkIAddress(VerusObjects.PackedCurrencyLaunch memory _tx) public pure{
+    // Returns whether the launch's i-address matches its parent and name. Non-reverting: a mismatch (e.g. a
+    // non-canonical legacy name) must only skip the launch, not revert the whole import and leave it pending.
+    // CleanName is deliberately not ported here; verusd enforces the canonical form at definition time.
+    function checkIAddress(VerusObjects.PackedCurrencyLaunch memory _tx) public pure returns (bool) {
 
         address calculated;
 
         calculated = address(ripemd160(abi.encodePacked(sha256(abi.encodePacked(sha256d(string(abi.encodePacked(_tx.parent,sha256d(_toLower(bytes(_tx.name)))))))))));
 
-        require(calculated == _tx.iaddress, "Iaddress does not match");
+        return calculated == _tx.iaddress;
     }
 
-    function readAuxDestPK(bytes memory input, uint256 nextOffset) internal pure returns(uint256) { 
-
-        uint64 temporaryRegister1;
-        uint256 tokenID;
-        (temporaryRegister1, nextOffset) = readCompactSizeLE(input, nextOffset);    // get the length of the auxDest
-
-        if (temporaryRegister1 == 1) {
-            (temporaryRegister1, nextOffset) = readCompactSizeLE(input, nextOffset);    // get the length of the auxDest sub array, this will be a CReserveDestination
-            if (uint8(input[nextOffset - 1]) == VerusConstants.DEST_PK && uint8(input[nextOffset]) == 0x21 //check for PK and 33 bytes
-                && (uint8(input[nextOffset + 1]) == 0x02 || uint8(input[nextOffset + 1]) == 0x03)) { //compressed key prefix, as verusd requires
-
-                assembly {
-                    nextOffset := add(nextOffset, 1) //move to vector length
-                    nextOffset := add(nextOffset, 1) //move to PKtype
-                    nextOffset := add(nextOffset, CCC_TOKENID_OFFSET) //move to TokenId address
-                    tokenID := mload(add(input, nextOffset)) 
-                }
-            return tokenID;
-            }  
+    // Reads the tokenID from a single DEST_PK aux destination at zero-based index p, bounded by end.
+    // Layout: count(1) = 1, entry length(1), type(1) = DEST_PK, key length(1) = 33, key prefix(1) = 02/03, key(32).
+    // Anything else, or a truncated entry, returns 0 without reverting.
+    function readAuxDestPK(bytes memory input, uint256 p, uint256 end) internal pure returns(uint256 tokenID) {
+        if (p + AUX_PK_SIZE > end) return 0;
+        uint8 keyPrefix = uint8(input[p + AUX_PK_PREFIX_POS]);
+        if (uint8(input[p + AUX_PK_COUNT_POS]) == SINGLE_AUX_DEST &&
+            uint8(input[p + AUX_PK_ENTRYLEN_POS]) < COMPACTSIZE_MARKER_16 &&
+            uint8(input[p + AUX_PK_TYPE_POS]) == VerusConstants.DEST_PK &&
+            uint8(input[p + AUX_PK_KEYLEN_POS]) == COMPRESSED_PK_LENGTH &&
+            (keyPrefix == COMPRESSED_PK_PREFIX_EVEN || keyPrefix == COMPRESSED_PK_PREFIX_ODD)) { //compressed key, as verusd requires
+            assembly {
+                tokenID := mload(add(input, add(p, AUX_PK_SIZE)))   // the 32 key bytes after the prefix: input[p+5 .. p+36]
+            }
         }
-        return tokenID;
     }
 }
