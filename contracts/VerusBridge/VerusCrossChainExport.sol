@@ -9,6 +9,7 @@ import "../Libraries/VerusConstants.sol";
 import "../VerusBridge/VerusSerializer.sol";
 import "../Storage/StorageMaster.sol";
 import "./dsrinterface.sol";
+import "../Libraries/InternalCall.sol";
 
 contract VerusCrossChainExport is VerusStorage {
     
@@ -22,6 +23,7 @@ contract VerusCrossChainExport is VerusStorage {
 
     address immutable pot;
     address immutable daiJoin;
+    address immutable SELF;
 
     constructor(address vETH, address Bridge, address Verus, address daiERC20, address potAddress, address daiJoinAddress) {
 
@@ -31,6 +33,7 @@ contract VerusCrossChainExport is VerusStorage {
         DAIERC20 = daiERC20;
         pot = potAddress;
         daiJoin = daiJoinAddress;
+        SELF = address(this);
     }
 
     function initialize() external {
@@ -41,11 +44,21 @@ contract VerusCrossChainExport is VerusStorage {
         // IERC20(DAIERC20).approve(daiJoin, uint256(int256(-1)));
     }
 
-    // Called by Delegator.setVerusData() to resolve a function name to its implementation contract index.
-    function checkVDFXId(string calldata vdxfid) external view returns (uint) {
-        bytes memory stored = storageGlobal[keccak256(abi.encodePacked(vdxfid))];
-        require(stored.length > 0, "VDXF not registered");
-        return abi.decode(stored, (uint));
+    /// @notice Called by Delegator.setVerusData() to resolve a route name to the contract that implements it.
+    /// @dev    Only the fixed names below are routes, and all of them are PendingImports functions. Route names are
+    ///         not looked up in storageGlobal: that mapping also holds data records whose keys a caller can
+    ///         reproduce (keccak256 of a prefix and a txid), and resolving those would turn them into call targets.
+    ///         Adding a route means adding its name here.
+    function checkVDFXId(string calldata vdxfid) external pure returns (uint) {
+        bytes32 route = keccak256(bytes(vdxfid));
+        require(route == keccak256("approveOrRejectAcceptedImport") ||
+                route == keccak256("executeTimedOutImport") ||
+                route == keccak256("submitUnhaltVote") ||
+                route == keccak256("getPendingImports") ||
+                route == keccak256("getPendingImportCount") ||
+                route == keccak256("isBridgePaused") ||
+                route == keccak256("getNotaryIAddress"), "VDXF not registered");
+        return uint(VerusConstants.ContractType.PendingImports);
     }
 
     uint256 constant RAY = 10 ** 27;
@@ -109,6 +122,9 @@ contract VerusCrossChainExport is VerusStorage {
     }
 
     function generateCCE(bytes memory bytesin) external returns(bytes memory){
+
+        // Uses this contract's own storage (currencies, fees): only ever called directly, never by delegatecall.
+        require(address(this) == SELF);
 
         (VerusObjects.CReserveTransfer[] memory transfers, bool bridgeReady, uint64 startheight, uint64 endheight, address verusSerializer) = abi.decode(bytesin, (VerusObjects.CReserveTransfer[], bool, uint64, uint64, address));
         
@@ -188,12 +204,14 @@ contract VerusCrossChainExport is VerusStorage {
     }
 
     function daiBalance() external returns (uint256 wad) {
+        InternalCall.only(claimableFees, InternalCall.BURN_FEES);
         uint256 chi = (block.timestamp > PotLike(pot).rho()) ? PotLike(pot).drip() : PotLike(pot).chi();
         wad = rmul(chi, claimableFees[VerusConstants.VDXFID_DAI_DSR_SUPPLY]);
     }
 
     // wad is denominated in dai
     function join(uint256 wad) external payable {
+        InternalCall.only(claimableFees, InternalCall.SEND_TRANSFER);
         uint256 chi = (block.timestamp > PotLike(pot).rho()) ? PotLike(pot).drip() : PotLike(pot).chi();
         uint256 pie = rdiv(wad, chi);
         claimableFees[VerusConstants.VDXFID_DAI_DSR_SUPPLY] = add(claimableFees[VerusConstants.VDXFID_DAI_DSR_SUPPLY], pie);
@@ -204,6 +222,7 @@ contract VerusCrossChainExport is VerusStorage {
 
     // wad is denominated in dai
     function exit(address dst, uint256 wad) external {
+        InternalCall.only(claimableFees, InternalCall.BURN_FEES | InternalCall.EXECUTE_IMPORT | InternalCall.CLAIM_REFUND);
         uint256 chi = (block.timestamp > PotLike(pot).rho()) ? PotLike(pot).drip() : PotLike(pot).chi();
         uint256 pie = rdivup(wad, chi);
 

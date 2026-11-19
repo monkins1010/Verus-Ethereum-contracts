@@ -14,6 +14,7 @@ import "./ExportManager.sol";
 import '@openzeppelin/contracts/token/ERC1155/IERC1155.sol';
 import '@openzeppelin/contracts/token/ERC20/utils/SafeERC20.sol';
 import "./SubmitImports.sol";
+import "../Libraries/InternalCall.sol";
 
 contract CreateExports is VerusStorage {
 
@@ -72,6 +73,7 @@ contract CreateExports is VerusStorage {
 
         require(storageGlobal[SUBMIT_IMPORTS_REENTRANCY_GUARD].length == 0);
         storageGlobal[SUBMIT_IMPORTS_REENTRANCY_GUARD] = abi.encodePacked(uint8(1));
+        uint256 previousFlow = InternalCall.enter(claimableFees, InternalCall.SEND_TRANSFER);
         uint256 fees;
         VerusObjects.mappedToken memory iaddressMapping;
         uint32 ethNftFlag;
@@ -156,6 +158,7 @@ contract CreateExports is VerusStorage {
 
         _createExports(transfer, false);
 
+        InternalCall.exit(claimableFees, previousFlow);
         delete storageGlobal[SUBMIT_IMPORTS_REENTRANCY_GUARD];
     }
 
@@ -179,14 +182,11 @@ contract CreateExports is VerusStorage {
         }
     }
 
+    /// @notice Appends a transfer the bridge built itself (refund, fee payout, burn-back) to the export set, with no
+    ///         payment or custody checks, so only those flows may call it.
     function externalCreateExportCallPayable(bytes memory data) external payable {
 
-        (VerusObjects.CReserveTransfer memory reserveTransfer, bool forceNewCCE) = abi.decode(data, (VerusObjects.CReserveTransfer, bool));
-        _createExports(reserveTransfer, forceNewCCE);
-    }
-
-    function externalCreateExportCall(bytes memory data) external {
-
+        InternalCall.only(claimableFees, InternalCall.CLAIM_REFUND | InternalCall.SEND_FEES | InternalCall.NOTARIZE);
         (VerusObjects.CReserveTransfer memory reserveTransfer, bool forceNewCCE) = abi.decode(data, (VerusObjects.CReserveTransfer, bool));
         _createExports(reserveTransfer, forceNewCCE);
     }
@@ -270,6 +270,7 @@ contract CreateExports is VerusStorage {
 
         require(bridgeConverterActive, "Bridge Converter not active");
         require(claimableFees[VerusConstants.VDXF_DISABLE_CONTRACT_KEY] & (VerusConstants.HALT_SUBMIT_IMPORTS | VerusConstants.HALT_SEND_TRANSFERS) == 0, "Bridge halted");
+        uint256 previousFlow = InternalCall.enter(claimableFees, InternalCall.BURN_FEES);
 
         bool success;
         bytes memory retData;
@@ -343,6 +344,7 @@ contract CreateExports is VerusStorage {
 
         // Track DAI sent to Verus in SATS (mirrors verusToERC20mapping accounting units).
         verusToERC20mapping[DAI].tokenIndex += truncatedInterest;
+        InternalCall.exit(claimableFees, previousFlow);
     }
         
     function convertFromVerusNumber(uint256 a,uint8 decimals) public pure returns (uint256) {

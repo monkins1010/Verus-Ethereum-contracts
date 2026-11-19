@@ -164,8 +164,10 @@ contract VerusNotarizer is VerusStorage {
                 require(success2);
                 (VerusObjects.CReserveTransfer memory LPtransfer,) = abi.decode(retData, (VerusObjects.CReserveTransfer, bool)); 
 
-                (success2, retData) = contracts[uint(VerusConstants.ContractType.CreateExport)].delegatecall(abi.encodeWithSelector(CreateExports.externalCreateExportCall.selector, abi.encode(LPtransfer, true)));
+                uint256 previousFlow = InternalCall.enter(claimableFees, InternalCall.NOTARIZE);
+                (success2, retData) = contracts[uint(VerusConstants.ContractType.CreateExport)].delegatecall(abi.encodeWithSelector(CreateExports.externalCreateExportCallPayable.selector, abi.encode(LPtransfer, true)));
                 require(success2);
+                InternalCall.exit(claimableFees, previousFlow);
                 remainingLaunchFeeReserves = 0;
             }
         }
@@ -449,8 +451,17 @@ contract VerusNotarizer is VerusStorage {
 
             // Proposer and notaries get share of fees
             // any remainder from divide by 2 or equal share to the notaries gets added to proposers share.
+            // The proposer is credited only when sendfees can pay its key (a 20-byte PKH or ID, as for the
+            // exporters in Imports.setExporterFees); any other key's share goes to the notary pool.
             claimableFees[VerusConstants.VDXF_SYSTEM_NOTARIZATION_NOTARYFEEPOOL] += feeShare;
-            setClaimedFees(bytes32(uint256(uint176(proposerAndHeight))), (feeShare + remainder));
+            uint176 proposer = uint176(proposerAndHeight);
+            uint16 proposerTypeAndLength = uint16(proposer >> VerusConstants.UINT160_BITS_SIZE);
+            bytes32 proposerKey = VerusConstants.VDXF_SYSTEM_NOTARIZATION_NOTARYFEEPOOL;
+            if ((proposerTypeAndLength == ((uint16(VerusConstants.DEST_PKH) << 8) | 20) ||
+                 proposerTypeAndLength == ((uint16(VerusConstants.DEST_ID) << 8) | 20)) && uint160(proposer) != 0) {
+                proposerKey = bytes32(uint256(proposer));
+            }
+            setClaimedFees(proposerKey, (feeShare + remainder));
         }
 
         if (proofHeightOptions == 0) {

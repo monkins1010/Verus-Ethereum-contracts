@@ -85,19 +85,26 @@ notary xQ:  setVerusData(abi.encode(bytes32 badImportTxid, false), "approveOrRej
   flags become `6`, and `BridgePermanentlyHalted(txid)` + `PendingImportRejected(txid)` are emitted.
 * `submitImports` and `sendTransfer*` stop, so no value moves in or out. `setLatestData` keeps working so notarizations (and the upgrade vote) can go in.
 * The only exit is an upgrade that replaces the `PendingImports` contract: the upgrade calls its `initialize()`, which deletes the blocked txid
-  and recomputes the flags. **Any** upgrade of `PendingImports` lifts the permanent halt; this is by design, so only upgrade it once the cause is fixed.
+  and recomputes the flags. **Any** upgrade that installs a newly deployed `PendingImports` lifts the permanent halt; this is by design, so only
+  upgrade it once the cause is fixed. `initialize()` runs once per deployed `PendingImports`, and only while it is the installed one:
+  re-installing an address that was installed before, or calling `initialize()` any other way, does nothing.
 * `initialize()` also records the lift time (restarting the timed-out import clock, see section 3). If 4 or more notaries are still revoked at that point, it
   re-latches the temporary halt immediately (`BridgeTemporarilyHalted`); otherwise the bridge is normal.
 
 ## 5. Endpoints for the notary API
 
 Votes are `Delegator.setVerusData(bytes data, string route)`; sender must be a valid notary main address.
+Route names resolve from a fixed list in `VerusCrossChainExport.checkVDFXId` (all to `PendingImports`, slot 11):
+`approveOrRejectAcceptedImport`, `executeTimedOutImport`, `submitUnhaltVote`, `getPendingImports`, `getPendingImportCount`,
+`isBridgePaused`, `getNotaryIAddress`. They are not looked up in `storageGlobal`, which also holds data records whose keys a caller can
+reproduce; any other name reverts with "VDXF not registered". The route entries `UpgradeManager.initialize()` writes to `storageGlobal`
+are informational only.
 
 | Route / function | `data` encoding | Effect |
 |---|---|---|
 | `Delegator.revokeWithMainAddress(bytes)` | any bytes (`0x`) | revoke yourself; the 4th revoked notary halts the bridge |
 | `setVerusData(.., "submitUnhaltVote")` | `abi.encode(bool voteToUnhalt)` | only while temporarily halted; quorum of valid notaries clears the halt |
-| `setVerusData(.., "approveOrRejectAcceptedImport")` | `abi.encode(bytes32 importTxid, bool approve)` | `false` = reject vote (permanent halt at quorum). `true` = approve, blocked while halted |
+| `setVerusData(.., "approveOrRejectAcceptedImport")` | `abi.encode(bytes32 importTxid, bool approve)` | `false` = reject vote (permanent halt at quorum). `true` = approve, blocked while halted and until the 1 h cooldown has passed; the quorum vote releases the import. |
 
 Txid byte order: the bridgekeeper passes the Verus txid byte-reversed (`ethInteractor.approveOrRejectAcceptedImport`).
 
@@ -190,8 +197,10 @@ The bridgekeeper already has the automatic permanent-halt path (`approveOrReject
   `submitUnhaltVote` and rebuilds the flags (**this also lifts a permanent halt**, see section 4).
   It does not clean up older routes or keys: an existing deployment keeps stale `haltBridge` / `resumeBridge` / `submitHaltVote` route entries
   (they now revert, as those functions no longer exist) and the unused `bridge.import.paused` key (nothing reads it).
-* `UpgradeManager` and `VerusCrossChainExport` were edited so that *fresh* deployments register the new routes and stop registering the removed ones;
-  an existing deployment does not need them replaced.
+* `VerusCrossChainExport` holds the route resolver (`checkVDFXId`), so it must be replaced for the fixed route list to take effect; stale stored
+  route entries (`haltBridge`, `resumeBridge`, ...) no longer resolve once it is. `UpgradeManager.initialize()` marks the `PendingImports` it
+  pushes as already initialized, so that copy's `initialize()` can never run later.
 * Removed: `NotaryTools.haltBridge` / `resumeBridge` (signature based halt/resume) and the `submitHaltVote` vote, so a temporary halt has a single trigger.
-* `MockPermanentHalt` and `MockSeedImport` (under `contracts/Libraries`) are test-only; the migrations never deploy them, and they must not be part of any production artifact set.
-* `PendingImports` deployed size is about 22.6 KB (limit 24.576 KB, unoptimized build).
+* `MockPermanentHalt`, `MockSeedImport`, `MockImportProof`, `MockInternalCaller` and `MockSetStorageGlobal` (under `contracts/Libraries`) are
+  test-only; the migrations never deploy them, and they must not be part of any production artifact set.
+* `PendingImports` deployed size is 23,793 bytes (limit 24,576, unoptimized build): 783 bytes of headroom.

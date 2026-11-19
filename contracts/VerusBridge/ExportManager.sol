@@ -4,6 +4,7 @@ pragma solidity >=0.8.9;
 pragma abicoder v2;
 
 import "../Libraries/VerusObjects.sol";
+import "../Libraries/InternalCall.sol";
 import "../Libraries/VerusObjectsCommon.sol";
 import "../Libraries/VerusConstants.sol";
 import "../Storage/StorageMaster.sol";
@@ -51,6 +52,8 @@ contract ExportManager is VerusStorage  {
     }
 
     function checkExport(VerusObjects.CReserveTransfer memory transfer) external payable returns (uint256 fees){
+
+        InternalCall.only(claimableFees, InternalCall.SEND_TRANSFER);
        
         uint256 requiredFees = VerusConstants.transactionFee;  //0.003 eth in WEI (To vrsc) NOTE: convert to VRSC from ETH.
         int64 bounceBackFee;
@@ -315,6 +318,7 @@ contract ExportManager is VerusStorage  {
         uint256 TokenId
     ) public returns (uint8) {
 
+        InternalCall.only(claimableFees, InternalCall.EXECUTE_IMPORT | InternalCall.CLAIM_REFUND);
         bytes memory data;
         uint256 amount;
         bool success;

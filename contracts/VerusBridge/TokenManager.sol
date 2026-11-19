@@ -10,6 +10,7 @@ import "../Libraries/VerusObjects.sol";
 import {VerusSerializer} from "../VerusBridge/VerusSerializer.sol";
 import "../Storage/StorageMaster.sol";
 import "./PendingImports.sol";
+import "../Libraries/InternalCall.sol";
 
 
 contract TokenManager is VerusStorage {
@@ -47,6 +48,8 @@ contract TokenManager is VerusStorage {
         uint256 tokenID
     ) public {
 
+        // Overwrites any existing mapping, so only the release of an import and the owner's setup may call it.
+        InternalCall.only(claimableFees, InternalCall.EXECUTE_IMPORT | InternalCall.LAUNCH_TOKENS);
         address ERCContract;
 
         if (flags & VerusConstants.MAPPING_VERUS_OWNED == VerusConstants.MAPPING_VERUS_OWNED) {
@@ -76,6 +79,7 @@ contract TokenManager is VerusStorage {
         uint176[3] calldata exporters
     ) external {
 
+        InternalCall.only(claimableFees, InternalCall.SUBMIT_IMPORT);
         VerusObjects.PackedSend[] memory transfers;
         VerusObjects.PackedCurrencyLaunch[] memory launchTxs;
         uint64 fees;

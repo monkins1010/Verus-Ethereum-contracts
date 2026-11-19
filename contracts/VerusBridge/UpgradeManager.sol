@@ -36,6 +36,8 @@ contract UpgradeManager is VerusStorage {
     bytes32 constant IS_BRIDGE_PAUSED_VDXF_KEY            = keccak256("isBridgePaused");
     bytes32 constant GET_NOTARY_IADDRESS_VDXF_KEY         = keccak256("getNotaryIAddress");
     bytes32 constant SUBMIT_UNHALT_VOTE_VDXF_KEY          = keccak256("submitUnhaltVote");
+    // Must match PendingImports.INITIALIZED_PREFIX.
+    bytes32 constant PENDING_IMPORTS_INITIALIZED_PREFIX   = keccak256("PendingImports.initialized");
 
     event contractUpdated(bool);
 
@@ -66,6 +68,9 @@ contract UpgradeManager is VerusStorage {
             storageGlobal[PENDING_IMPORTS_CONTRACT_INDEX_KEY]   = abi.encode(uint256(11));
             storageGlobal[SUBMIT_UNHALT_VOTE_VDXF_KEY]       = abi.encode(uint256(11));
             storageGlobal[IMPORTS_CONTRACT_INDEX_KEY]         = abi.encode(uint256(12));
+            // PendingImports is pushed, not installed through its initialize(): spend that one run here so it
+            // can never be triggered later.
+            storageGlobal[keccak256(abi.encodePacked(PENDING_IMPORTS_INITIALIZED_PREFIX, PENDING_IMPORTS_ADDR))] = abi.encodePacked(uint8(1));
         } else if (contracts.length == 12) {
             contracts.push(IMPORTS_ADDR);
             storageGlobal[IMPORTS_CONTRACT_INDEX_KEY] = abi.encode(uint256(12));

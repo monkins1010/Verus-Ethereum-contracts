@@ -17,9 +17,14 @@ const EC                = require('elliptic').ec;
 const VerusDelegator    = artifacts.require('../contracts/Main/Delegator.sol');
 const MockPermanentHalt = artifacts.require('MockPermanentHalt');
 const MockSeedImport    = artifacts.require('MockSeedImport');
+const PendingImports    = artifacts.require('PendingImports');
 const verusDelegatorAbi = require('../build/contracts/Delegator.json');
 const pendingImportsAbi = require('../build/contracts/PendingImports.json').abi;
-const { getNotarizerIDS } = require('../migrations/setup.js');
+const { getNotarizerIDS, returnConstructorCurrencies } = require('../migrations/setup.js');
+
+// PendingImports.initialize() runs once per deployed PendingImports, so an "upgrade" that lifts a halt
+// installs a freshly deployed one (re-installing the same address is a no-op).
+const freshPendingImports = async () => (await PendingImports.new(returnConstructorCurrencies(false)[0])).address;
 
 const ec = new EC('secp256k1');
 
@@ -297,11 +302,18 @@ contract('Bridge halt states', async (accounts) => {
             assert.isFalse(await isSet(TEMPORARY_HALTED_KEY));
         });
 
+        it('re-installing the same PendingImports does not lift the halt (initialize() runs once per deployment)', async () => {
+            await DelegatorInst.replacecontract(originalPendingImports, PENDING_IMPORTS_SLOT, { from: accounts[0], gas: 6000000 });
+            assert.equal(await flags(), FLAGS_PERMANENT_HALT);
+            assert.isTrue(await isSet(PERMANENTLY_HALTED_KEY));
+        });
+
         it('upgrading PendingImports (initialize) clears the blocked txid and the halt', async () => {
             await recover(0);
             await recover(1);
             await recover(2);
-            await DelegatorInst.replacecontract(originalPendingImports, PENDING_IMPORTS_SLOT, { from: accounts[0], gas: 6000000 });
+            const upgraded = await freshPendingImports();
+            await DelegatorInst.replacecontract(upgraded, PENDING_IMPORTS_SLOT, { from: accounts[0], gas: 6000000 });
             assert.equal(await flags(), FLAGS_NORMAL);
             assert.isFalse(await isSet(PERMANENTLY_HALTED_KEY));
             assert.isTrue(await isSet(HALT_LIFTED_AT_KEY), 'lifting the permanent halt must record the lift time');
@@ -313,7 +325,7 @@ contract('Bridge halt states', async (accounts) => {
 
         it('re-latches the temporary halt immediately instead of waiting for the next revoke', async () => {
             const originalImports = await DelegatorInst.contracts(IMPORTS_SLOT);
-            const originalPendingImports = await DelegatorInst.contracts(PENDING_IMPORTS_SLOT);
+            const upgradedPendingImports = await freshPendingImports();
             const mock = await MockPermanentHalt.new();
             await DelegatorInst.replacecontract(mock.address, IMPORTS_SLOT, { from: accounts[0], gas: 6000000 });
             await DelegatorInst.replacecontract(originalImports, IMPORTS_SLOT, { from: accounts[0], gas: 6000000 });
@@ -324,7 +336,7 @@ contract('Bridge halt states', async (accounts) => {
 
             const receipt = await web3.eth.sendTransaction({
                 from: accounts[0], to: DelegatorInst.address, gas: 6000000,
-                data: DelegatorInst.contract.methods.replacecontract(originalPendingImports, PENDING_IMPORTS_SLOT).encodeABI(),
+                data: DelegatorInst.contract.methods.replacecontract(upgradedPendingImports, PENDING_IMPORTS_SLOT).encodeABI(),
             });
             assert.ok(findEvent(receipt, 'BridgeTemporarilyHalted'), 'expected BridgeTemporarilyHalted from initialize()');
             assert.isFalse(await isSet(PERMANENTLY_HALTED_KEY));

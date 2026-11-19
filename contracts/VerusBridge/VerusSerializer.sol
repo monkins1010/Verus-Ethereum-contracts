@@ -49,6 +49,14 @@ contract VerusSerializer {
     uint8 constant COMPRESSED_PK_PREFIX_EVEN = 0x02;
     uint8 constant COMPRESSED_PK_PREFIX_ODD = 0x03;
 
+    // The Verus chain's native currency (VRSC), the only currency a P2SH refund key can be paid in.
+    // The deploy scripts pass (VETH, BRIDGE, VRSC).
+    address immutable VERUS;
+
+    constructor(address, address, address verus) {
+        VERUS = verus;
+    }
+
     //reset to empty 9-July-26
     function initialize() external {}
 
@@ -409,7 +417,7 @@ contract VerusSerializer {
         );
     }
 
-    function deserializeTransfers(bytes memory reserveTransfers, uint8 numberOfTransfers) public pure
+    function deserializeTransfers(bytes memory reserveTransfers, uint8 numberOfTransfers) public view
         returns (VerusObjects.PackedSend[] memory transfers, VerusObjects.PackedCurrencyLaunch[] memory launchTxs, uint64 fees)
     {
         transfers = new VerusObjects.PackedSend[](numberOfTransfers);
@@ -495,7 +503,8 @@ contract VerusSerializer {
 
                 if (destinationType & VerusConstants.FLAG_DEST_AUX == VerusConstants.FLAG_DEST_AUX) {
                     uint176 refundAddress;
-                    (refundAddress, nextOffset) = _readRefundAddresses(reserveTransfers, nextOffset);
+                    (refundAddress, nextOffset) = _readRefundAddresses(reserveTransfers, nextOffset,
+                        transfers[transferIndex].currency == VERUS);
                     transfers[transferIndex].refundAddress = refundAddress;
                 }
 
@@ -537,7 +546,8 @@ contract VerusSerializer {
 
     function _readRefundAddresses(
         bytes memory reserveTransfers,
-        uint256 nextOffset
+        uint256 nextOffset,
+        bool allowP2SH
     ) private pure returns (uint176 refundAddress, uint256 updatedOffset) {
         uint64 temporaryRegister1;
         uint256 currentOffset = nextOffset;
@@ -551,10 +561,12 @@ contract VerusSerializer {
             // skipped rather than reverted, so a malformed aux can't stall the import.
             // The first qualifying entry wins, matching verusd's GetCompatibleAuxDestination. refundAddress
             // includes the non-zero type byte, so it is only zero until an entry has been taken.
+            // A P2SH entry qualifies only for the native currency: claimRefund cannot pay any other currency to
+            // P2SH (verusd pays reserve outputs only to ID/PK/PKH), so for other currencies the next entry is used.
             if (refundAddress == 0 && temporaryRegister1 == REFUND_AUX_LENGTH && uint8(reserveTransfers[currentOffset]) == VERUS_ID_LENGTH) {
                 uint8 auxType = uint8(reserveTransfers[currentOffset - 1]);
                 if (auxType == VerusConstants.DEST_PKH || auxType == VerusConstants.DEST_ID ||
-                    auxType == VerusConstants.DEST_SH || auxType == VerusConstants.DEST_ETH) {
+                    (auxType == VerusConstants.DEST_SH && allowP2SH) || auxType == VerusConstants.DEST_ETH) {
                     assembly {
                         refundAddress := mload(sub(add(add(reserveTransfers, currentOffset), temporaryRegister1), 1))
                     }

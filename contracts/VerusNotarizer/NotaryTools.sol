@@ -14,6 +14,7 @@ import "../Libraries/BridgeHalt.sol";
 import "../Storage/StorageMaster.sol";
 import "../VerusBridge/Token.sol";
 import "../VerusBridge/TokenManager.sol";
+import "../Libraries/InternalCall.sol";
 
 contract NotaryTools is VerusStorage {
         
@@ -58,7 +59,8 @@ contract NotaryTools is VerusStorage {
     event BridgeTemporarilyHalted();
 
     /// @dev Clears a revoked notary's bit from the unhalt vote bitmap and from the release and reject
-    ///      bitmaps of every queued import, so a vote cast before revocation cannot count after recovery.
+    ///      bitmaps of every queued import, so a vote cast before revocation
+    ///      cannot count after recovery.
     function _clearNotaryVotes(address notarizer) private {
         uint32 mask;
         for (uint i = 0; i < notaries.length && i < 32; i++) {
@@ -267,8 +269,12 @@ contract NotaryTools is VerusStorage {
         return output;
     }
 
+    /// @notice Owner setup only (Delegator.launchContractTokens checks the owner). Closed once any token is
+    ///         recorded besides the VerusNFT entry, whoever calls it.
     function launchContractTokens(bytes calldata data) external {
 
+        require(tokenList.length == 1);
+        uint256 previousFlow = InternalCall.enter(claimableFees, InternalCall.LAUNCH_TOKENS);
         VerusObjects.setupToken[] memory tokensToDeploy = abi.decode(data, (VerusObjects.setupToken[]));
 
         for (uint256 i = 0; i < tokensToDeploy.length; i++) {
@@ -284,6 +290,7 @@ contract NotaryTools is VerusStorage {
             
             require(success);
         }
+        InternalCall.exit(claimableFees, previousFlow);
     }
 
 }

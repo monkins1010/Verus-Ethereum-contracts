@@ -9,6 +9,7 @@ import "../Libraries/VerusConstants.sol";
 import "./Token.sol";
 import "../Storage/StorageMaster.sol";
 import "./CreateExports.sol";
+import "../Libraries/InternalCall.sol";
 
 
 contract SubmitImports is VerusStorage {
@@ -184,6 +185,7 @@ contract SubmitImports is VerusStorage {
         storageGlobal[SUBMIT_IMPORTS_REENTRANCY_GUARD] = abi.encodePacked(uint8(1));
 
         if (claimableFees[VerusConstants.VDXF_DISABLE_CONTRACT_KEY] & VerusConstants.HALT_SUBMIT_IMPORTS != 0) revert();
+        uint256 previousFlow = InternalCall.enter(claimableFees, InternalCall.SUBMIT_IMPORT);
 
       //  uint256 gasleftStart = gasleft();
         VerusObjects.CReserveTransferImport memory _import = abi.decode(data, (VerusObjects.CReserveTransferImport));
@@ -277,6 +279,7 @@ contract SubmitImports is VerusStorage {
         //     refund(returnBytes);
         // }
 
+        InternalCall.exit(claimableFees, previousFlow);
         delete storageGlobal[SUBMIT_IMPORTS_REENTRANCY_GUARD];
 
         return (0,0);
@@ -395,6 +398,7 @@ contract SubmitImports is VerusStorage {
         require(claimableFees[VerusConstants.VDXF_DISABLE_CONTRACT_KEY] & (VerusConstants.HALT_SUBMIT_IMPORTS | VerusConstants.HALT_SEND_TRANSFERS) == 0, "Bridge halted");
         
         delete refunds[refundAddressFormatted][currency];
+        uint256 previousFlow = InternalCall.enter(claimableFees, InternalCall.CLAIM_REFUND);
 
         uint8 refundType = uint8(verusAddress >> TYPE_BYTE_LOCATION_IN_UINT176);
 
@@ -408,6 +412,7 @@ contract SubmitImports is VerusStorage {
                 abi.encodeWithSignature("payRefundOnETH(address,address,uint64)", address(uint160(verusAddress)), currency, uint64(refundAmount)));
             require(success, "Refund payout failed");
             delete storageGlobal[SUBMIT_IMPORTS_REENTRANCY_GUARD];
+            InternalCall.exit(claimableFees, previousFlow);
             return 0;
         }
 
@@ -442,6 +447,7 @@ contract SubmitImports is VerusStorage {
         (success, ) = contracts[uint(VerusConstants.ContractType.CreateExport)]
                             .delegatecall(abi.encodeWithSelector(CreateExports.externalCreateExportCallPayable.selector, abi.encode(LPtransfer, false)));
         require(success);
+        InternalCall.exit(claimableFees, previousFlow);
 
         return 0;
   
@@ -484,9 +490,11 @@ contract SubmitImports is VerusStorage {
             claimableFees[publicKeyX] = 0;
             VerusObjects.CReserveTransfer memory LPtransfer;
             LPtransfer = buildReserveTransfer(feeShare, uint176(uint256(publicKeyX)), VETH, VerusConstants.verusvETHTransactionFee, VETH);
+            uint256 previousFlow = InternalCall.enter(claimableFees, InternalCall.SEND_FEES);
             (bool success, ) = contracts[uint(VerusConstants.ContractType.CreateExport)]
                                 .delegatecall(abi.encodeWithSelector(CreateExports.externalCreateExportCallPayable.selector, abi.encode(LPtransfer, false)));
             require(success);
+            InternalCall.exit(claimableFees, previousFlow);
         }
     
     }

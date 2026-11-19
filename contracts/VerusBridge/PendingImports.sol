@@ -5,6 +5,7 @@ pragma abicoder v2;
 import "../Libraries/VerusConstants.sol";
 import "../Libraries/VerusObjects.sol";
 import "../Libraries/BridgeHalt.sol";
+import "../Libraries/InternalCall.sol";
 import "../Storage/StorageMaster.sol";
 
 /// @notice Pending-import queue plus the notary voting that drives the bridge halt states.
@@ -33,6 +34,7 @@ contract PendingImports is VerusStorage {
     bytes32 constant PENDING_IMPORT_QUEUE_INDEX_PREFIX = keccak256("pending.import.queue.index");
     bytes32 constant RELEASE_VOTE_BITMAP_PREFIX = keccak256("pending.import.release.vote.bitmap");
     bytes32 constant REJECT_VOTE_BITMAP_PREFIX = keccak256("pending.import.reject.vote.bitmap");
+    bytes32 constant INITIALIZED_PREFIX = keccak256("PendingImports.initialized");
     bytes32 constant SUBMIT_UNHALT_VOTE_VDXF_KEY = keccak256("submitUnhaltVote");
     // Mirror of the constants in TokenManager / Imports — kept here so _executeImport
     // can clean up orphaned exec-data keys without depending on executePendingImport running.
@@ -40,6 +42,7 @@ contract PendingImports is VerusStorage {
     bytes32 constant PENDING_EXEC_PARAMS_PREFIX = keccak256("pending.exec.params");
 
     address immutable VETH;
+    address immutable SELF;
 
     uint8 constant IMPORT_STATE_PENDING = 1;
     uint8 constant IMPORT_STATE_RELEASED = 2;
@@ -61,6 +64,7 @@ contract PendingImports is VerusStorage {
 
     constructor(address veth) {
         VETH = veth;
+        SELF = address(this);
     }
 
     /// @notice Run once per upgrade of this contract via delegatecall from Delegator.replacecontract()
@@ -74,7 +78,14 @@ contract PendingImports is VerusStorage {
     ///            registration before the slot-index key exists.
     ///         3. If a permanent halt was lifted, restarts the timed-out import clock and re-latches the
     ///            temporary halt when the revoked-notary threshold is still met.
+    ///         Runs once per deployed PendingImports, while it is the installed one: that is the upgrade step
+    ///         that installs it. Any other call is a no-op, so initialize() cannot be used to lift a halt.
+    ///         Re-installing an address that was installed before therefore does not lift a halt either.
     function initialize() external {
+        bytes32 initializedKey = keccak256(abi.encodePacked(INITIALIZED_PREFIX, SELF));
+        if (contracts[uint(VerusConstants.ContractType.PendingImports)] != SELF || storageGlobal[initializedKey].length != 0) return;
+        storageGlobal[initializedKey] = abi.encodePacked(uint8(1));
+
         if (BridgeHalt.isPermanentlyHalted(storageGlobal)) {
             delete storageGlobal[BridgeHalt.PERMANENTLY_HALTED_KEY];
             BridgeHalt.markHaltLifted(storageGlobal);
@@ -115,6 +126,7 @@ contract PendingImports is VerusStorage {
         uint176[3] calldata exporters
     ) external {
 
+        InternalCall.only(claimableFees, InternalCall.SUBMIT_IMPORT);
         require(!_submitImportsHalted());
         bytes32 pendingKey = _pendingImportKey(importTxid);
         require(storageGlobal[pendingKey].length == 0);
@@ -321,13 +333,6 @@ contract PendingImports is VerusStorage {
         return idx == type(uint256).max ? address(0) : notaries[idx];
     }
 
-    /// @notice Returns the notary i-address whose .main ETH address matches mainAddress.
-    ///         Returns address(0) if mainAddress is not a registered notary main address.
-    ///         The bridgekeeper calls this once at startup and caches the result for logging.
-    function getNotaryIAddress() external view returns (address) {
-        return _resolveNotaryIAddress();
-    }
-
     function _loadVoteBitmap(bytes32 key) private view returns (uint32 bitmap) {
         if (storageGlobal[key].length != 0) {
             bitmap = abi.decode(storageGlobal[key], (uint32));
@@ -395,8 +400,8 @@ contract PendingImports is VerusStorage {
 
 
     /// @notice Single notary entry point: records an approve or reject vote for a pending import and,
-    ///         when that vote completes quorum, immediately executes (approve) or rejects and halts
-    ///         the bridge (reject) in the same transaction — no follow-up call is required.
+    ///         when that vote completes quorum, immediately executes (approve) or rejects and halts the
+    ///         bridge (reject) in the same transaction — no follow-up call is required.
     /// @dev    Checks are ordered cheapest-first so that losing races (a notary voting on an import
     ///         that another notary just completed, or double voting) revert before any expensive
     ///         storage decode of the pending import record.
@@ -421,21 +426,15 @@ contract PendingImports is VerusStorage {
         uint256 notaryIndex = _resolveNotaryIndexFromSender();
         require(notaryIndex != type(uint256).max);
 
-        bytes32 voteKey = keccak256(abi.encodePacked(approve ? RELEASE_VOTE_BITMAP_PREFIX : REJECT_VOTE_BITMAP_PREFIX, importTxid));
+        bytes32 voteKey = keccak256(abi.encodePacked(
+            approve ? RELEASE_VOTE_BITMAP_PREFIX : REJECT_VOTE_BITMAP_PREFIX,
+            importTxid));
         uint32 bitmap = storageGlobal[voteKey].length == 0
             ? uint32(0)
             : abi.decode(storageGlobal[voteKey], (uint32));
 
         uint32 mask = uint32(1) << uint32(notaryIndex);
         require((bitmap & mask) == 0);
-
-        if (approve) {
-            bytes32 rejectVoteKey = keccak256(abi.encodePacked(REJECT_VOTE_BITMAP_PREFIX, importTxid));
-            uint32 rejectBitmap = storageGlobal[rejectVoteKey].length == 0
-                ? uint32(0)
-                : abi.decode(storageGlobal[rejectVoteKey], (uint32));
-            require((rejectBitmap & mask) == 0);
-        }
 
         // Only decode the full record once the caller is known to be an eligible first-time voter.
         VerusObjects.pendingImport memory pending = _loadPendingImport(pendingKey);
@@ -503,8 +502,9 @@ contract PendingImports is VerusStorage {
         uint256 windowStart = BridgeHalt.haltLiftedAt(storageGlobal);
         if (uint256(pending.submittedAt) > windowStart) windowStart = uint256(pending.submittedAt);
         require(block.timestamp >= windowStart + IMPORT_RELEASE_COOLDOWN + IMPORT_TIMEOUT);
-        (uint256 rejects,) = _countValidVotes(_loadVoteBitmap(keccak256(abi.encodePacked(REJECT_VOTE_BITMAP_PREFIX, importTxid))));
-        require(rejects == 0);
+        // Any valid reject vote keeps a single notary from releasing it by timeout.
+        (uint256 objections,) = _countValidVotes(_loadVoteBitmap(keccak256(abi.encodePacked(REJECT_VOTE_BITMAP_PREFIX, importTxid))));
+        require(objections == 0);
 
         _executeImport(importTxid, pendingKey, pending);
         delete storageGlobal[SUBMIT_IMPORTS_REENTRANCY_GUARD];
@@ -516,7 +516,7 @@ contract PendingImports is VerusStorage {
     // msg.sender is preserved through delegatecall so identity checks still work.
     // -------------------------------------------------------------------------
 
-    /// @notice VDXF path: data = abi.encode(bytes32 importTxid, bool approve)
+    /// @notice VDXF path: data = abi.encode(bytes32 importTxid, bool approve).
     function approveOrRejectAcceptedImport(bytes calldata data) external {
         (bytes32 importTxid, bool approve) = abi.decode(data, (bytes32, bool));
         _approveOrRejectAcceptedImport(importTxid, approve);
@@ -543,15 +543,6 @@ contract PendingImports is VerusStorage {
     }
 
     // -------------------------------------------------------------------------
-    // Status helpers.
-    // -------------------------------------------------------------------------
-
-    /// @notice Returns true if the bridge is temporarily or permanently halted.
-    function isBridgePaused() external view returns (bool) {
-        return BridgeHalt.currentState(storageGlobal) != BridgeHalt.CONTRACTS_NORMAL;
-    }
-
-    // -------------------------------------------------------------------------
     // Private: execute an approved or timed-out import.
     // Sets state to RELEASED (prevents re-entry), then delegates to SubmitImports.
     // -------------------------------------------------------------------------
@@ -569,10 +560,12 @@ contract PendingImports is VerusStorage {
         storageGlobal[pendingKey] = abi.encode(pending);
 
         address logic = contracts[uint(VerusConstants.ContractType.Imports)];
+        uint256 previousFlow = InternalCall.enter(claimableFees, InternalCall.EXECUTE_IMPORT);
         (bool success,) = logic.delegatecall(
             abi.encodeWithSignature("executePendingImport(bytes32)", importTxid)
         );
         require(success);
+        InternalCall.exit(claimableFees, previousFlow);
 
         _dequeuePendingImport(importTxid);
         delete storageGlobal[pendingKey];

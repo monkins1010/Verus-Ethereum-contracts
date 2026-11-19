@@ -16,6 +16,7 @@ import "../Libraries/VerusObjects.sol";
 import "../Storage/StorageMaster.sol";
 import "./VerusCrossChainExport.sol";
 import {VerusSerializer} from "./VerusSerializer.sol";
+import "../Libraries/InternalCall.sol";
 
 interface IVerusToken {
     function supply() external view returns (uint256);
@@ -27,12 +28,14 @@ contract Imports is VerusStorage {
     address immutable VETH;
     address immutable VERUS;
     uint256 immutable DEPLOYED_AT;
+    address immutable SELF;
     uint256 constant THREE_YEARS = 3 * 365 days;
 
     // ── Constants (from SubmitImports) ──────────────────────────────────────
     uint32 constant FORKS_NOTARY_PROPOSER_POSITION = 96;
     uint32 constant TYPE_REFUND                    = 1;
     uint8  constant TYPE_REFUND_BYTES32_LOCATION   = 244;
+    uint8  constant TYPE_BYTE_LOCATION_IN_UINT176  = 168;
 
     uint32 constant SEND_SUCCESS_NO_DEBIT = 0;
     uint32 constant SEND_FAILED = 1;
@@ -41,6 +44,17 @@ contract Imports is VerusStorage {
     uint256 constant ETH_PAYOUT_GAS_LIMIT = 100000;
     uint256 constant NFT_MINT_GAS_LIMIT = 150000;
     uint256 constant MAX_ERC_NAME_LENGTH = 64;
+    // A release is one transaction, so its cost must stay bounded. A launch of a Verus-owned ERC-20 deploys a Token
+    // (about 1.75M gas); four launches plus a full batch of payouts stay well inside the 16M gas a releasing vote
+    // may use. verusd puts at most two currency definitions in one export. Launches beyond the cap are skipped:
+    // the currency stays unmapped and its payouts refund.
+    uint256 constant MAX_LAUNCHES_PER_IMPORT = 4;
+    // Gas given to each launch and each payout, each run in its own call frame so that a failure there is local.
+    // The caller must leave enough gas for the full amount: a releasing vote sent with too little gas reverts
+    // instead of turning a payout into a refund or skipping a launch.
+    uint256 constant LAUNCH_GAS = 3000000;
+    uint256 constant PAYOUT_GAS = 400000;
+    uint256 constant PROTOCOL_SHARE_GAS = 50000;
     bytes4 constant ERC721_SEND_SELECTOR = bytes4(0x23b872dd);
     bytes4 constant ERC1155_SEND_SELECTOR = bytes4(0xf242432a);
 
@@ -53,6 +67,7 @@ contract Imports is VerusStorage {
         VETH        = vETH;
         VERUS       = verus;
         DEPLOYED_AT = block.timestamp;
+        SELF        = address(this);
     }
 
     /// @notice No-op — array extension is handled by UpgradeManager.initialize().
@@ -66,6 +81,7 @@ contract Imports is VerusStorage {
 
     function executePendingImport(bytes32 importTxid) external {
 
+        InternalCall.only(claimableFees, InternalCall.EXECUTE_IMPORT);
         uint256 gasleftStart = gasleft();
         bytes memory refundsData;
         uint64 fees;
@@ -84,9 +100,14 @@ contract Imports is VerusStorage {
             delete storageGlobal[paramsKey];
         }
 
+        // Export height range; an end below the start (only a malformed export) counts as a single block
+        // rather than reverting the release.
+        uint32 startHeight = uint32(cceHeightsAndIndex);
+        uint32 endHeight = uint32(cceHeightsAndIndex >> 32);
+
         calulateGasFees(
             gasleftStart, fees, refundAddresses,
-            uint32(cceHeightsAndIndex >> 32) - uint32(cceHeightsAndIndex),
+            endHeight > startHeight ? endHeight - startHeight : 0,
             exporters
         );
 
@@ -134,16 +155,26 @@ contract Imports is VerusStorage {
     // These functions delegate to ExportManager so the heavy ERC20/721/1155 send
     // logic and recordToken bytecode live there, keeping Imports.sol lean.
 
-    /// @dev Registers any newly launched currencies via ExportManager.recordToken.
+    /// @dev Registers any newly launched currencies via TokenManager.recordToken.
+    ///      A launch that is skipped (mismatched name, over the cap) or fails leaves the currency unmapped; its
+    ///      payouts then refund via the "not launched on ETH yet" branch. None of them reverts the release.
     function launchToken(VerusObjects.PackedCurrencyLaunch[] memory _tx) private {
+
+        uint256 launched;
 
         for (uint j = 0; j < _tx.length; j++) {
             if (verusToERC20mapping[_tx[j].iaddress].flags > 0 || _tx[j].iaddress == address(0))
                 continue;
 
-            // On a mismatch leave the currency unmapped; its payouts refund via the "not launched on ETH yet" branch.
             if (!VerusSerializer(contracts[uint(VerusConstants.ContractType.VerusSerializer)]).checkIAddress(_tx[j]))
                 continue;
+
+            if (launched == MAX_LAUNCHES_PER_IMPORT)
+                break;
+            launched++;
+
+            // Too little gas reverts the whole release, so a sender cannot make a launch fail on purpose.
+            require(gasleft() > LAUNCH_GAS + LAUNCH_GAS / 32);
 
             string memory outputName;
 
@@ -175,13 +206,13 @@ contract Imports is VerusStorage {
                 outputName = string(abi.encodePacked(outputName, ".", verusToERC20mapping[_tx[j].parent].name));
             }
 
-            (bool ok,) = contracts[uint(VerusConstants.ContractType.TokenManager)].delegatecall(
+            // A failed launch is undone and skipped (its result is deliberately ignored).
+            contracts[uint(VerusConstants.ContractType.TokenManager)].delegatecall{gas: LAUNCH_GAS}(
                 abi.encodeWithSignature(
                     "recordToken(address,address,string,string,uint8,uint256)",
                     _tx[j].iaddress, _tx[j].ERCContract, outputName, _tx[j].name, uint8(_tx[j].flags), _tx[j].tokenID
                 )
             );
-            require(ok);
         }
     }
 
@@ -198,18 +229,33 @@ contract Imports is VerusStorage {
             }
 
             uint64 sendAmount = trans[i].amount;
-            uint32 result = _payOut(trans[i].destination, trans[i].currency, sendAmount, ETH_PAYOUT_GAS_LIMIT);
 
-            if (result == SEND_FAILED && sendAmount > 0) {
+            // Each payout runs in its own call frame (payOutImport), so anything that reverts in it, the send or
+            // the custody debit, undoes that payout alone and turns it into a refund instead of reverting the release.
+            // Too little gas reverts the whole release, so a sender cannot make a payout fail on purpose.
+            require(gasleft() > PAYOUT_GAS + PAYOUT_GAS / 32);
+            (bool paid,) = SELF.delegatecall{gas: PAYOUT_GAS}(
+                abi.encodeWithSelector(this.payOutImport.selector, trans[i].destination, trans[i].currency, sendAmount)
+            );
+
+            if (!paid && sendAmount > 0) {
                 refundsData = abi.encodePacked(refundsData, trans[i].refundAddress, sendAmount, trans[i].currency);
             }
         }
+    }
+
+    /// @notice One import payout. Called only by importTransactions (via delegatecall to this contract) during a
+    ///         release; reverts unless the payout succeeded and custody was debited.
+    function payOutImport(address destination, address currency, uint64 amount) external {
+        InternalCall.only(claimableFees, InternalCall.EXECUTE_IMPORT);
+        require(_payOut(destination, currency, amount, ETH_PAYOUT_GAS_LIMIT) != SEND_FAILED);
     }
 
     /// @notice Pays a stored refund out on Ethereum to its DEST_ETH refund address.
     ///         Called via delegatecall from SubmitImports.claimRefund, which has already removed the refund
     ///         entry; reverts if the payout fails so the refund stays claimable.
     function payRefundOnETH(address destination, address currency, uint64 amount) external {
+        InternalCall.only(claimableFees, InternalCall.CLAIM_REFUND);
         require(_payOut(destination, currency, amount, gasleft()) != SEND_FAILED, "Refund payout failed");
     }
 
@@ -309,9 +355,12 @@ contract Imports is VerusStorage {
                 feeRefunds       = feeRefunds / uint64(refundAddresses.length);
 
                 for (uint i = 0; i < refundAddresses.length; i++) {
-                    bytes32 addr = bytes32(uint256(refundAddresses[i]));
-                    if (addr != bytes32(0)) {
-                        addr |= bytes32(uint256(TYPE_REFUND) << TYPE_REFUND_BYTES32_LOCATION);
+                    // vETH fee refunds go only to keys claimRefund pays vETH to: PKH and ID (sent back to Verus) and
+                    // ETH (paid on Ethereum). A P2SH key is paid only VRSC, and the zero key not at all, so those
+                    // shares go to the processors' fees instead of being stranded.
+                    uint8 keyType = uint8(refundAddresses[i] >> TYPE_BYTE_LOCATION_IN_UINT176);
+                    if (keyType == VerusConstants.DEST_PKH || keyType == VerusConstants.DEST_ID || keyType == VerusConstants.DEST_ETH) {
+                        bytes32 addr = bytes32(uint256(refundAddresses[i]) | uint256(TYPE_REFUND) << TYPE_REFUND_BYTES32_LOCATION);
                         refunds[addr][VETH] += feeRefunds;
                     } else {
                         processorsFees += feeRefunds;
@@ -338,14 +387,18 @@ contract Imports is VerusStorage {
 
             bytes memory proposerBytes = bestForks[0];
             uint176 proposer;
-            require(proposerBytes.length >= FORKS_NOTARY_PROPOSER_POSITION + 22);
-            assembly { proposer := mload(add(proposerBytes, FORKS_NOTARY_PROPOSER_POSITION)) }
+            // A confirmed-notarization record too short to hold the proposer leaves it zero (its share then goes to
+            // the notary pool) rather than reverting the release.
+            if (proposerBytes.length >= FORKS_NOTARY_PROPOSER_POSITION + 22) {
+                assembly { proposer := and(mload(add(proposerBytes, FORKS_NOTARY_PROPOSER_POSITION)), sub(shl(176, 1), 1)) }
+            }
 
             uint64 exporterTotal = processorsFees - (feeShare << 1);
             uint64 exporterHalf  = exporterTotal / 2;
             uint64 protocolShare = exporterTotal - exporterHalf;
 
-            setClaimedFees(bytes32(uint256(proposer)), feeShare);
+            // Same type filter as the exporters: a proposer key sendfees cannot pay goes to the notary pool.
+            setExporterFees(proposer, feeShare);
             setExporterFees(exporters[1], exporterHalf);
 
             bool normalProtocolFeeRecipent = false;
@@ -360,10 +413,18 @@ contract Imports is VerusStorage {
 
             if (normalProtocolFeeRecipent) {
                 setExporterFees(exporters[0], protocolShare);
-            } else {
-                (bool success, ) = payable(VerusConstants.VERUS_USAGE_CONTRACT).call{value: protocolShare * VerusConstants.SATS_TO_WEI_STD}("");
-                require(success);
-                verusToERC20mapping[VETH].tokenIndex -= protocolShare;
+            } else if (protocolShare <= verusToERC20mapping[VETH].tokenIndex) {
+                // Neither a refused send nor a share the vETH ledger does not cover reverts the release. A refused
+                // share is still held by the bridge, so it goes to the notary pool. An uncovered share is not
+                // credited to anyone.
+                // + the value-transfer (9,000) and cold-account (2,600) charges of the call, with margin.
+                require(gasleft() > PROTOCOL_SHARE_GAS + 15000 + (PROTOCOL_SHARE_GAS + 15000) / 32);
+                (bool success, ) = payable(VerusConstants.VERUS_USAGE_CONTRACT).call{value: protocolShare * VerusConstants.SATS_TO_WEI_STD, gas: PROTOCOL_SHARE_GAS}("");
+                if (success) {
+                    verusToERC20mapping[VETH].tokenIndex -= protocolShare;
+                } else {
+                    claimableFees[VerusConstants.VDXF_SYSTEM_NOTARIZATION_NOTARYFEEPOOL] += protocolShare;
+                }
             }
         }
     }
