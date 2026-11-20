@@ -17,6 +17,9 @@ contract VerusSerializer {
     uint8 constant FLAG_MASK = 192; // 11000000
     uint8 constant TYPE_NO_FLAGS_MASK = 0x0f; // destination type without flag or reserved bits
     uint8 constant REFUND_AUX_LENGTH = 22; // type(1) + length(1) + address(20)
+    // Largest fee one imported transfer may carry, in vETH satoshis (10 vETH). A normal fee is well under 0.1 vETH.
+    // 255 transfers at the cap stay far below the uint64 limit of the fee total.
+    uint64 constant MAX_IMPORT_FEE_PER_TRANSFER = 1000000000;
     // version(1) + currencyID(20) + varint_amount(1) + varint_flags(1) + feecurrencyid(20) +
     // varint_fees(1) + desttype(1) + vec_length(1) + destaddress(20) + destcurrencyid(20) = 86
     uint32 constant MIN_TRANSFER_LENGTH = 86;
@@ -453,7 +456,11 @@ contract VerusSerializer {
                 _checkTransferBounds(reserveTransfers, nextOffset, VERUS_ID_LENGTH);
                 nextOffset += VERUS_ID_LENGTH;
                 (temporaryRegister1, nextOffset) = readVarint(reserveTransfers, nextOffset);
-                fees += temporaryRegister1;
+                // A fee outside the range is not counted, rather than reverting: a revert here would stop this import
+                // being queued, and every import after it. The cap also keeps the uint64 total from overflowing.
+                if (temporaryRegister1 <= MAX_IMPORT_FEE_PER_TRANSFER) {
+                    fees += temporaryRegister1;
+                }
 
                 _checkTransferBounds(reserveTransfers, nextOffset, 2);
                 assembly {

@@ -23,6 +23,9 @@ const Token              = artifacts.require('Token');
 const MockImportProof    = artifacts.require('MockImportProof');
 const MockInternalCaller = artifacts.require('MockInternalCaller');
 const MockSetStorageGlobal = artifacts.require('MockSetStorageGlobal');
+const MockReentrantToken = artifacts.require('MockReentrantToken');
+const MockMapToken       = artifacts.require('MockMapToken');
+const MockSetClaimableFee = artifacts.require('MockSetClaimableFee');
 const pendingImportsAbi  = artifacts.require('PendingImports').abi;
 
 const abi = web3.eth.abi;
@@ -386,10 +389,10 @@ contract('Audit eaa9a0d1 fixes', async (accounts) => {
         });
     });
 
-    describe('Finding 4: a payout above the custody ledger refunds instead of reverting the release', () => {
+    describe('Finding 4 and 3: a payout above the custody ledger neither reverts the release nor leaves an unbacked refund', () => {
         isolate();
 
-        it('releases; the over-ledger payout becomes a refund and the rest of the batch is paid', async () => {
+        it('releases; the over-ledger payout is undone, not refunded, and the rest of the batch is paid', async () => {
             // ETH sent outside sendTransfer is held but not counted in tokenIndex.
             await web3.eth.sendTransaction({ from: USER, to: delegator.address, value: web3.utils.toWei('30'), gas: 100000 });
             const ledger = await tokenIndex(VETH);
@@ -401,12 +404,98 @@ contract('Audit eaa9a0d1 fixes', async (accounts) => {
                 payout({ amount: tooMuch.toString(), to: PAYEE2, aux: [[DEST_PKH, PKH_A]] }),
                 payout({ amount: COIN, to: PAYEE, aux: [[DEST_PKH, PKH_B]] }),
             ]);
-            await release(txid);
+            const receipt = await release(txid);
 
             assert.equal(BN(await web3.eth.getBalance(PAYEE2)).sub(payee2Before).toString(), '0', 'over-ledger payout undone');
-            assert.equal((await refund(destKey(DEST_PKH, PKH_A), VETH)).toString(), tooMuch.toString());
+            assert.equal((await refund(destKey(DEST_PKH, PKH_A), VETH)).toString(), '0', 'no refund custody cannot back');
+            const notBacked = receipt.logs.filter(l => l.topics[0] === keccak(web3.utils.utf8ToHex('RefundNotBacked(uint176,address,uint256)')));
+            assert.equal(notBacked.length, 1, 'RefundNotBacked emitted');
             assert.equal(BN(await web3.eth.getBalance(PAYEE)).sub(payeeBefore).toString(), BN(COIN).mul(SATS_TO_WEI).toString());
             assert.equal((await tokenIndex(VETH)).toString(), ledger.sub(BN(COIN)).toString());
+        });
+    });
+
+    describe('Finding 3: every refund in a held currency is backed by custody', () => {
+        isolate();
+        const backing = async (currency) => claimable('0x' + BN(keccak(web3.utils.utf8ToHex('refund.backing')))
+            .xor(BN(currency)).toString(16).padStart(64, '0'));
+        let half;
+
+        it('refunds are recorded while all outstanding refunds fit in custody, and not beyond', async () => {
+            const ledger = await tokenIndex(VETH);
+            half = ledger.divn(2);
+            // Both payouts fail (the recipient refuses ETH). Each alone fits in custody; together they do not.
+            const txid = await submitImport([
+                payout({ amount: half.toString(), to: rejecter.address, aux: [[DEST_ETH, PAYEE2]] }),
+                payout({ amount: ledger.sub(half).addn(1).toString(), to: rejecter.address, aux: [[DEST_PKH, PKH_B]] }),
+            ], { launched: true });
+            await release(txid);
+            assert.equal((await refund(destKey(DEST_ETH, PAYEE2), VETH)).toString(), half.toString(), 'first refund recorded');
+            assert.equal((await refund(destKey(DEST_PKH, PKH_B), VETH)).toString(), '0', 'second refund would exceed custody');
+            assert.equal((await backing(VETH)).toString(), half.toString(), 'outstanding refunds counted');
+        });
+
+        it('claiming a refund releases its backing, so a later refund fits again', async () => {
+            await send(web3Delegator.methods.claimRefund(destKey(DEST_ETH, PAYEE2), VETH), USER);
+            assert.equal((await backing(VETH)).toString(), '0', 'backing released on claim');
+            const ledger = await tokenIndex(VETH);   // custody after paying the claim
+            const txid = await submitImport([payout({ amount: ledger.toString(), to: rejecter.address, aux: [[DEST_PKH, PKH_A]] })],
+                { launched: true });
+            await release(txid);
+            assert.equal((await refund(destKey(DEST_PKH, PKH_A), VETH)).toString(), ledger.toString(),
+                'recorded: without the release on claim it would not fit');
+        });
+
+        it('a refund custody no longer covers cannot be claimed', async () => {
+            // A payout that succeeds still draws on custody that outstanding refunds count on (only a broken export
+            // can do this); the refund then exceeds custody and its claim reverts, leaving it recorded.
+            // A vETH refund sent back to Verus pays its fee from the refund, priced from the notarized reserves:
+            // seed vETH = VRSC = 1 (fee 0.04 vETH).
+            const reservesKey = '0x' + '0'.repeat(24) + '1b83ebe56d691b909cfb0dfc291e5a0edaafc64c';
+            const reserves = BN(COIN).or(BN(COIN).shln(128)).toString();
+            const original = await delegator.contracts(SPARE_SLOT);
+            const seeder = await MockSetClaimableFee.new(reservesKey, reserves);
+            await delegator.replacecontract(seeder.address, SPARE_SLOT, { from: OWNER, gas: 6000000 });
+            await delegator.replacecontract(original, SPARE_SLOT, { from: OWNER, gas: 6000000 });
+
+            const outstanding = await refund(destKey(DEST_PKH, PKH_A), VETH);
+            const claim = () => send(web3Delegator.methods.claimRefund(destKey(DEST_PKH, PKH_A), VETH), USER);
+            // control: while custody covers it, the same claim succeeds
+            const snap = (await rpc('evm_snapshot')).result;
+            await claim();
+            assert.equal((await refund(destKey(DEST_PKH, PKH_A), VETH)).toString(), '0', 'control claim paid');
+            await rpc('evm_revert', [snap]);
+
+            const txid = await submitImport([payout({ amount: (await tokenIndex(VETH)).toString(), to: PAYEE })], { launched: true });
+            await release(txid);
+            assert.equal((await tokenIndex(VETH)).toString(), '0');
+            await expectRevert(claim(), 'claim of an uncovered refund');
+            assert.equal((await refund(destKey(DEST_PKH, PKH_A), VETH)).toString(), outstanding.toString(), 'refund kept');
+        });
+    });
+
+    describe('Finding 2: an import fee outside the range is not counted and cannot block the queue', () => {
+        isolate();
+        const MAX_FEE = 1000000000;   // VerusSerializer.MAX_IMPORT_FEE_PER_TRANSFER, 10 vETH
+
+        it('a fee above the per-transfer range is not counted', async () => {
+            const poolBefore = await claimable(NOTARY_FEE_POOL);
+            const txid = await submitImport([payout({ amount: COIN, to: PAYEE, fees: MAX_FEE + 1 })]);
+            await release(txid);
+            assert.equal((await claimable(NOTARY_FEE_POOL)).sub(poolBefore).toString(), '0', 'nothing credited from the fee');
+        });
+
+        it('control: a fee at the top of the range is counted', async () => {
+            const poolBefore = await claimable(NOTARY_FEE_POOL);
+            const txid = await submitImport([payout({ amount: COIN, to: PAYEE, fees: MAX_FEE })]);
+            await release(txid);
+            assert.isTrue((await claimable(NOTARY_FEE_POOL)).gt(poolBefore), 'fee credited');
+        });
+
+        it('fees summing past 2^64 no longer stop the import being queued', async () => {
+            const huge = '9223372036854775808';   // 2^63, twice is 2^64
+            const txid = await submitImport([payout({ amount: COIN, to: PAYEE, fees: huge }), payout({ amount: COIN, to: PAYEE, fees: huge })]);
+            await release(txid);
         });
     });
 
@@ -511,6 +600,113 @@ contract('Audit eaa9a0d1 fixes', async (accounts) => {
             }
             assert.equal(BN(await web3.eth.getBalance(PAYEE)).sub(payeeBefore).toString(), BN(COIN).mul(SATS_TO_WEI).toString());
             assert.isBelow(receipt.gasUsed, 10000000, 'release gas stays bounded');
+        });
+    });
+
+    // ------------------------------------------------------------------------------------------------
+    describe('Finding 1: a token callback cannot use the flow that is active while the bridge calls it', () => {
+        isolate();
+
+        const HOSTILE = '0x' + '9e'.repeat(20);                 // Verus currency id mapped to the hostile token
+        const HOSTILE_I = toBase58Check(Buffer.from(HOSTILE.slice(2), 'hex'), 102);
+        const MAPPING_ETHEREUM_OWNED_ERC20 = 1 | 32;
+        const FLOW_KEY = keccak(web3.utils.utf8ToHex('veth.internal.call.flow'));
+        const IMPORTS_SLOT = 12, EXPORT_MANAGER_SLOT = 7;
+        const ONE_TOKEN = BN(COIN).mul(SATS_TO_WEI).toString();  // 18 decimals: 1 Verus unit = 1e18
+
+        let hostile;
+        let calls;
+
+        // Transfers in every export set so far.
+        const exportedTransfers = async () => {
+            const latest = await web3.eth.getBlockNumber();
+            const exports = await web3Delegator.methods.getReadyExportsByRange('0', String(latest + 1)).call();
+            return exports.reduce((n, e) => n + e.transfers.length, 0);
+        };
+        const readRecord = async () => {
+            const record = BN(await hostile.record());
+            return { ran: record.andln(2) === 2, flow: record.shrn(8).andln(0xff), succeeded: record.shrn(16).toString(2) };
+        };
+        const encodeCall = (signature, types, values) => abi.encodeFunctionSignature(signature) + abi.encodeParameters(types, values).slice(2);
+        const arm = (list) => hostile.arm(list.map(c => c.to), list.map(c => c.data), list.map(c => c.value || '0'));
+
+        before(async () => {
+            hostile = await MockReentrantToken.new(delegator.address, USER, BN(ONE_TOKEN).muln(10).toString());
+            await web3.eth.sendTransaction({ from: USER, to: hostile.address, value: web3.utils.toWei('1'), gas: 100000 });
+            const original = await delegator.contracts(SPARE_SLOT);
+            const mapper = await MockMapToken.new(HOSTILE, hostile.address, MAPPING_ETHEREUM_OWNED_ERC20);
+            await delegator.replacecontract(mapper.address, SPARE_SLOT, { from: OWNER, gas: 6000000 });
+            await delegator.replacecontract(original, SPARE_SLOT, { from: OWNER, gas: 6000000 });
+
+            const imports = await delegator.contracts(IMPORTS_SLOT);
+            const exportManager = await delegator.contracts(EXPORT_MANAGER_SLOT);
+            const vethDeposit = {
+                version: 1, currencyvalue: { currency: VETH, amount: COIN }, flags: 1, feecurrencyid: VRSC, fees: VRSC_FEE_SATS,
+                destination: { destinationtype: DEST_PKH, destinationaddress: PKH_A }, destcurrencyid: VRSC,
+                destsystemid: ZERO, secondreserveid: ZERO,
+            };
+            const route = (name, data = '0x') => ({ to: delegator.address, data: web3Delegator.methods.setVerusData(data, name).encodeABI() });
+            calls = {
+                checkExportRoute: route('checkExport'),
+                createExportRoute: route('externalCreateExportCallPayable'),
+                sendTransfer: { to: delegator.address, data: web3Delegator.methods.sendTransfer(vethDeposit).encodeABI(),
+                                value: BN(COIN).mul(SATS_TO_WEI).add(BN(TX_FEE_WEI)).toString() },
+                payOutImportDirect: { to: imports, data: encodeCall('payOutImport(address,address,uint64)',
+                    ['address', 'address', 'uint64'], [USER, VETH, '1']) },
+                sendCurrencyDirect: { to: exportManager, data: encodeCall('sendCurrencyToETHAddress(address,address,uint256,uint32,uint256)',
+                    ['address', 'address', 'uint256', 'uint32', 'uint256'], [hostile.address, USER, '1', '0xa9059cbb', '0']) },
+            };
+        });
+
+        it('deposit: during transferFrom (SEND_TRANSFER flow) every re-entry is refused, and the deposit completes once', async () => {
+            await arm([calls.checkExportRoute, calls.createExportRoute, calls.sendTransfer, calls.payOutImportDirect, calls.sendCurrencyDirect]);
+            await hostile.approve(delegator.address, ONE_TOKEN, { from: USER });
+            const before = await exportedTransfers();
+            const deposit = {
+                version: 1, currencyvalue: { currency: HOSTILE, amount: COIN }, flags: 1, feecurrencyid: VRSC, fees: VRSC_FEE_SATS,
+                destination: { destinationtype: DEST_PKH, destinationaddress: PKH_A }, destcurrencyid: VRSC,
+                destsystemid: ZERO, secondreserveid: ZERO,
+            };
+            await send(web3Delegator.methods.sendTransfer(deposit), USER, TX_FEE_WEI);
+
+            const record = await readRecord();
+            assert.isTrue(record.ran, 'the hook ran');
+            assert.equal(record.flow, 16, 'the hook ran inside the SEND_TRANSFER flow');
+            assert.equal(record.succeeded, '0', 'no re-entry succeeded (bit i = call i)');
+            assert.equal(await exportedTransfers(), before + 1, 'only the outer deposit was exported');
+            assert.equal((await tokenIndex(HOSTILE)).toString(), String(COIN));
+            assert.equal(BN(await hostile.balanceOf(delegator.address)).toString(), ONE_TOKEN);
+            assert.equal((await claimable(FLOW_KEY)).toString(), '0', 'flow cleared');
+        });
+
+        it('control: the re-entered sendTransfer is valid on its own', async () => {
+            const before = await exportedTransfers();
+            await web3.eth.sendTransaction({ from: USER, to: delegator.address, data: calls.sendTransfer.data,
+                value: calls.sendTransfer.value, gas: 15000000 });
+            assert.equal(await exportedTransfers(), before + 1);
+        });
+
+        it('payout: during transfer (EXECUTE_IMPORT flow) every re-entry is refused, and the rest of the batch is paid', async () => {
+            // The payout gets 100,000 gas: the token builds its three calls in code (payOutImport and vote routes,
+            // and a direct payOutImport), and PAYEE already holds 1 wei so the transfer's balance write is cheap.
+            await hostile.transfer(PAYEE, 1, { from: USER });
+            await hostile.armPayout(await delegator.contracts(IMPORTS_SLOT));
+            const payee2Before = BN(await web3.eth.getBalance(PAYEE2));
+            const txid = await submitImport([
+                payout({ currencyI: HOSTILE_I, amount: COIN, to: PAYEE }),
+                payout({ amount: COIN, to: PAYEE2 }),
+            ]);
+            await release(txid);
+
+            const record = await readRecord();
+            assert.isTrue(record.ran, 'the hook ran');
+            assert.equal(record.flow, 2, 'the hook ran inside the EXECUTE_IMPORT flow');
+            assert.equal(record.succeeded, '0', 'no re-entry succeeded (bit i = call i)');
+            assert.equal(BN(await hostile.balanceOf(PAYEE)).toString(), BN(ONE_TOKEN).addn(1).toString(), 'token payout made');
+            assert.equal((await tokenIndex(HOSTILE)).toString(), '0', 'token ledger debited');
+            assert.equal(BN(await web3.eth.getBalance(PAYEE2)).sub(payee2Before).toString(), BN(COIN).mul(SATS_TO_WEI).toString(),
+                'the next payout still runs in its flow');
+            assert.equal((await claimable(FLOW_KEY)).toString(), '0', 'flow cleared');
         });
     });
 

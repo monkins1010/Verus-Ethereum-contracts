@@ -53,6 +53,7 @@ contract SubmitImports is VerusStorage {
     uint8 constant TYPE_REFUND_BYTES32_LOCATION = 244;
     bytes32 constant SUBMIT_IMPORTS_REENTRANCY_GUARD = "submitimports.reentrancy.lock";
     bytes32 constant PENDING_IMPORT_KEY_PREFIX = keccak256("pending.import");
+    bytes32 constant REFUND_BACKING_TAG = keccak256("refund.backing");   // must match Imports
     enum Currency {VETH, DAI, VERUS, MKR}
 
     // Parsed fields from the CTransactionHeader serialized in components[0].elVchObj.
@@ -385,6 +386,19 @@ contract SubmitImports is VerusStorage {
         delete storageGlobal[SUBMIT_IMPORTS_REENTRANCY_GUARD];
     }
 
+    /// @dev A claimed refund no longer needs custody set aside for it (see Imports._creditRefund). For a currency the
+    ///      bridge holds, the claim must also still be covered by custody: a refund paid on Ethereum is debited from
+    ///      it, and one sent back to Verus is minted there against it. Refunds recorded before the backing count
+    ///      existed are not in it, so the count is reduced only down to zero.
+    function _releaseRefundBacking(address currency, uint256 amount) private {
+        if (currency == VETH || verusToERC20mapping[currency].flags & VerusConstants.MAPPING_ETHEREUM_OWNED != 0) {
+            require(amount <= verusToERC20mapping[currency].tokenIndex);
+            bytes32 backingKey = REFUND_BACKING_TAG ^ bytes32(uint256(uint160(currency)));
+            uint256 outstanding = claimableFees[backingKey];
+            claimableFees[backingKey] = outstanding > amount ? outstanding - amount : 0;
+        }
+    }
+
     function claimRefund(uint176 verusAddress, address currency) external payable returns (uint)
     {
         uint256 refundAmount;
@@ -398,6 +412,7 @@ contract SubmitImports is VerusStorage {
         require(claimableFees[VerusConstants.VDXF_DISABLE_CONTRACT_KEY] & (VerusConstants.HALT_SUBMIT_IMPORTS | VerusConstants.HALT_SEND_TRANSFERS) == 0, "Bridge halted");
         
         delete refunds[refundAddressFormatted][currency];
+        _releaseRefundBacking(currency, refundAmount);
         uint256 previousFlow = InternalCall.enter(claimableFees, InternalCall.CLAIM_REFUND);
 
         uint8 refundType = uint8(verusAddress >> TYPE_BYTE_LOCATION_IN_UINT176);

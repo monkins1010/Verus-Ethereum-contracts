@@ -62,6 +62,13 @@ contract Imports is VerusStorage {
     bytes32 constant PENDING_EXEC_DATA_PREFIX    = keccak256("pending.exec.data");
     bytes32 constant PENDING_EXEC_PARAMS_PREFIX  = keccak256("pending.exec.params");
     bytes32 constant IMPORTS_CONTRACT_INDEX_KEY  = keccak256("Imports.contract.index");
+    // claimableFees[REFUND_BACKING_TAG ^ currency] = refunds outstanding in a currency the bridge holds in custody
+    // (ETH and Ethereum-owned tokens). The tag's random top 96 bits keep these keys clear of every destination and
+    // system key. Must match SubmitImports.
+    bytes32 constant REFUND_BACKING_TAG          = keccak256("refund.backing");
+
+    /// A refund the custody ledger could not back was not recorded.
+    event RefundNotBacked(uint176 indexed refundAddress, address indexed currency, uint256 amount);
 
     constructor(address vETH, address verus) {
         VETH        = vETH;
@@ -359,10 +366,9 @@ contract Imports is VerusStorage {
                     // ETH (paid on Ethereum). A P2SH key is paid only VRSC, and the zero key not at all, so those
                     // shares go to the processors' fees instead of being stranded.
                     uint8 keyType = uint8(refundAddresses[i] >> TYPE_BYTE_LOCATION_IN_UINT176);
-                    if (keyType == VerusConstants.DEST_PKH || keyType == VerusConstants.DEST_ID || keyType == VerusConstants.DEST_ETH) {
-                        bytes32 addr = bytes32(uint256(refundAddresses[i]) | uint256(TYPE_REFUND) << TYPE_REFUND_BYTES32_LOCATION);
-                        refunds[addr][VETH] += feeRefunds;
-                    } else {
+                    // A fee refund the vETH ledger cannot back goes to the processors' fees as well.
+                    if (!((keyType == VerusConstants.DEST_PKH || keyType == VerusConstants.DEST_ID || keyType == VerusConstants.DEST_ETH)
+                            && _creditRefund(refundAddresses[i], VETH, feeRefunds))) {
                         processorsFees += feeRefunds;
                     }
                 }
@@ -459,8 +465,26 @@ contract Imports is VerusStorage {
                 amount       := mload(add(add(refundAmount, 30), i))
                 currency     := mload(add(add(refundAmount, 50), i))
             }
-            bytes32 refundAddress = bytes32(uint256(verusAddress) | uint256(TYPE_REFUND) << TYPE_REFUND_BYTES32_LOCATION);
-            refunds[refundAddress][currency] += amount;
+            if (!_creditRefund(verusAddress, currency, amount)) {
+                emit RefundNotBacked(verusAddress, currency, amount);
+            }
         }
+    }
+
+    /// @dev Records a refund, but only one custody can back. For ETH and Ethereum-owned tokens the bridge holds the
+    ///      asset, and tokenIndex is how much it holds. A refund there is a claim on that custody (paid out on Ethereum,
+    ///      or re-exported to Verus against it), so all such refunds outstanding must fit in tokenIndex. Payouts made
+    ///      earlier in the same release have already been debited. A refund that would exceed it is not recorded:
+    ///      nothing on Ethereum backs it. Verus-owned currencies are minted here, not held, so they are not limited.
+    ///      SubmitImports.claimRefund releases the backing when a refund is claimed.
+    function _creditRefund(uint176 verusAddress, address currency, uint256 amount) private returns (bool) {
+        if (currency == VETH || verusToERC20mapping[currency].flags & VerusConstants.MAPPING_ETHEREUM_OWNED != 0) {
+            bytes32 backingKey = REFUND_BACKING_TAG ^ bytes32(uint256(uint160(currency)));
+            uint256 outstanding = claimableFees[backingKey] + amount;
+            if (outstanding > verusToERC20mapping[currency].tokenIndex) return false;
+            claimableFees[backingKey] = outstanding;
+        }
+        refunds[bytes32(uint256(verusAddress) | uint256(TYPE_REFUND) << TYPE_REFUND_BYTES32_LOCATION)][currency] += amount;
+        return true;
     }
 }

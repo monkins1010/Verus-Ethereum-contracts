@@ -201,6 +201,6 @@ The bridgekeeper already has the automatic permanent-halt path (`approveOrReject
   route entries (`haltBridge`, `resumeBridge`, ...) no longer resolve once it is. `UpgradeManager.initialize()` marks the `PendingImports` it
   pushes as already initialized, so that copy's `initialize()` can never run later.
 * Removed: `NotaryTools.haltBridge` / `resumeBridge` (signature based halt/resume) and the `submitHaltVote` vote, so a temporary halt has a single trigger.
-* `MockPermanentHalt`, `MockSeedImport`, `MockImportProof`, `MockInternalCaller` and `MockSetStorageGlobal` (under `contracts/Libraries`) are
+* `MockPermanentHalt`, `MockSeedImport`, `MockImportProof`, `MockInternalCaller`, `MockSetStorageGlobal`, `MockReentrantToken`, `MockMapToken` and `MockSetClaimableFee` (under `contracts/Libraries`) are
   test-only; the migrations never deploy them, and they must not be part of any production artifact set.
 * `PendingImports` deployed size is 23,793 bytes (limit 24,576, unoptimized build): 783 bytes of headroom.
