@@ -15,9 +15,11 @@ resolves `route` through `VerusCrossChainExport.checkVDFXId` and `delegatecall`s
 |---|---|---|---|
 | Normal | `CONTRACTS_NORMAL` (0) | - | - |
 | **Bridge Temporary Halted** | `CONTRACTS_TEMPORARY_HALTED` (1) | **4 or more notaries revoked** (notaries revoking themselves, or by multisig) | `submitUnhaltVote(true)` from a **quorum** of *valid* notaries |
-| **Bridge Permanently Halted** | `CONTRACTS_PERMANENTLY_HALTED` (2) | `approveOrRejectAcceptedImport(txid, false)` from a **quorum** of notaries on the same bad import txid (automatic, already exists) | **Contract upgrade only**: `PendingImports.initialize()` clears the blocked txid |
+| **Bridge Permanently Halted** | `CONTRACTS_PERMANENTLY_HALTED` (2) | `approveOrRejectAcceptedImport(txid, false)` from **4** valid notaries (**2** on sets of fewer than 4 notaries, e.g. testnet) on the same bad import txid | **Contract upgrade only**: `PendingImports.initialize()` clears the blocked txid |
 
-* Quorum = `(notaries.length >> 1) + 1`.
+* Quorum = `(notaries.length >> 1) + 1`. Used for unhalt votes and import approvals.
+* Reject threshold = `BridgeHalt.rejectHaltThreshold(notaries.length)`: **4** valid rejects when there are 4 or more notaries (mainnet),
+  otherwise **2** (the 3-notary testnet / dev sets; capped at the notary count). It is a fixed count, not a majority, so a few notaries can stop a bad import.
 * There is **no halt vote**. A temporary halt happens when the number of revoked notaries reaches the threshold, checked on every revoke
   (`revokeWithMainAddress`, `revokeWithMultiSig`). Threshold is `min(4, notaries.length)`, i.e. "more than 3" on any real notary set;
   the cap only lets the 3-notary dev/Sepolia sets halt too.
@@ -77,10 +79,10 @@ valid notaries xQ: setVerusData(abi.encode(true), "submitUnhaltVote")       -> Q
 A notary that sees a transfer discrepancy rejects the pending import for the bad transaction:
 
 ```
-notary xQ:  setVerusData(abi.encode(bytes32 badImportTxid, false), "approveOrRejectAcceptedImport")
+notary xR:  setVerusData(abi.encode(bytes32 badImportTxid, false), "approveOrRejectAcceptedImport")
 ```
 
-* When valid reject votes on that txid reach quorum: the import is marked `REJECTED` (stays in the queue, can never execute or be re-queued),
+* When valid reject votes on that txid reach the reject threshold R (4, or 2 with fewer than 4 notaries): the import is marked `REJECTED` (stays in the queue, can never execute or be re-queued),
   `storageGlobal[bridge.permanently.halted] = abi.encode(badImportTxid)` is set, any temporary halt and its unhalt votes are cleared,
   flags become `6`, and `BridgePermanentlyHalted(txid)` + `PendingImportRejected(txid)` are emitted.
 * `submitImports` and `sendTransfer*` stop, so no value moves in or out. `setLatestData` keeps working so notarizations (and the upgrade vote) can go in.
@@ -104,7 +106,7 @@ are informational only.
 |---|---|---|
 | `Delegator.revokeWithMainAddress(bytes)` | any bytes (`0x`) | revoke yourself; the 4th revoked notary halts the bridge |
 | `setVerusData(.., "submitUnhaltVote")` | `abi.encode(bool voteToUnhalt)` | only while temporarily halted; quorum of valid notaries clears the halt |
-| `setVerusData(.., "approveOrRejectAcceptedImport")` | `abi.encode(bytes32 importTxid, bool approve)` | `false` = reject vote (permanent halt at quorum). `true` = approve, blocked while halted and until the 1 h cooldown has passed; the quorum vote releases the import. |
+| `setVerusData(.., "approveOrRejectAcceptedImport")` | `abi.encode(bytes32 importTxid, bool approve)` | `false` = reject vote (permanent halt at 4 valid rejects, 2 with fewer than 4 notaries). `true` = approve, blocked while halted and until the 1 h cooldown has passed; the quorum vote releases the import. |
 
 Txid byte order: the bridgekeeper passes the Verus txid byte-reversed (`ethInteractor.approveOrRejectAcceptedImport`).
 

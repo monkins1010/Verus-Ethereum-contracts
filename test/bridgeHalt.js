@@ -6,7 +6,8 @@
  *   CONTRACTS_PERMANENTLY_HALTED - lifted only by upgrading (initialize()) the PendingImports contract
  *
  * Run:  ganache-cli -d (deterministic accounts), then  truffle test test/bridgeHalt.js --to 2
- * The dev network has 3 notaries (accounts[1..3]): revoked threshold = min(4, 3) = 3, quorum = 2.
+ * The dev network has 3 notaries (accounts[1..3]): revoked threshold = min(4, 3) = 3, quorum = 2,
+ * reject threshold = 2 (4 on sets of 4 or more notaries, checked through MockBridgeHaltThresholds).
  * Notary recovery signatures use the ganache -d private keys of accounts[1..3].
  */
 
@@ -16,6 +17,7 @@ const crypto            = require('crypto');
 const EC                = require('elliptic').ec;
 const VerusDelegator    = artifacts.require('../contracts/Main/Delegator.sol');
 const MockPermanentHalt = artifacts.require('MockPermanentHalt');
+const MockBridgeHaltThresholds = artifacts.require('MockBridgeHaltThresholds');
 const MockSeedImport    = artifacts.require('MockSeedImport');
 const PendingImports    = artifacts.require('PendingImports');
 const verusDelegatorAbi = require('../build/contracts/Delegator.json');
@@ -345,6 +347,22 @@ contract('Bridge halt states', async (accounts) => {
         });
     });
 
+    describe('Reject threshold', () => {
+        it('is 4 valid rejects on sets of 4 or more notaries and 2 on smaller sets', async () => {
+            const t = await MockBridgeHaltThresholds.new();
+            const expected = { 1: 1, 2: 2, 3: 2, 4: 4, 5: 4, 8: 4, 15: 4, 32: 4 };
+            for (const [n, want] of Object.entries(expected)) {
+                assert.equal((await t.rejectHaltThreshold(n)).toNumber(), want, `rejectHaltThreshold(${n})`);
+            }
+        });
+
+        it('leaves the approve quorum at a majority', async () => {
+            const t = await MockBridgeHaltThresholds.new();
+            assert.equal((await t.quorum(3)).toNumber(), 2);
+            assert.equal((await t.quorum(15)).toNumber(), 8);
+        });
+    });
+
     describe('Pending imports across a halt', () => {
         isolate();
         let seeded;
@@ -360,12 +378,12 @@ contract('Bridge halt states', async (accounts) => {
         const executeTimedOut = () => send(contractInstance.methods.setVerusData(
             web3.eth.abi.encodeParameter('bytes32', seeded), 'executeTimedOutImport'), NOTARIES[1]);
 
-        it('a real reject quorum rejects the import and enters the permanent halt with its txid', async () => {
+        it('reaching the reject threshold (2 of 3 notaries) rejects the import and enters the permanent halt with its txid', async () => {
             const snap = (await rpc('evm_snapshot')).result;
-            assert.isNull(findEvent(await reject(0), 'BridgePermanentlyHalted'), 'one reject is not a quorum');
+            assert.isNull(findEvent(await reject(0), 'BridgePermanentlyHalted'), 'one reject is below the threshold');
             const receipt = await reject(1);
             const halted = findEvent(receipt, 'BridgePermanentlyHalted');
-            assert.ok(halted, 'expected BridgePermanentlyHalted at quorum');
+            assert.ok(halted, 'expected BridgePermanentlyHalted at the reject threshold');
             assert.equal(halted.blockedTxid, seeded);
             assert.ok(findEvent(receipt, 'PendingImportRejected'));
             assert.equal(await flags(), FLAGS_PERMANENT_HALT);

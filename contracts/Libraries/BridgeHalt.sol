@@ -9,7 +9,8 @@ import "./VerusConstants.sol";
 ///  State                          Set by                                          Cleared by
 ///  ------------------------------ ----------------------------------------------- ---------------------------------
 ///  CONTRACTS_TEMPORARY_HALTED     4 or more notaries revoked (NotaryTools)        quorum of submitUnhaltVote votes
-///  CONTRACTS_PERMANENTLY_HALTED   quorum of reject votes on one import txid       contract upgrade -> initialize()
+///  CONTRACTS_PERMANENTLY_HALTED   4 reject votes on one import txid               contract upgrade -> initialize()
+///                                 (2 on sets of fewer than 4 notaries, e.g. testnet)
 ///                                 (also clears any temporary halt and its votes)
 ///
 /// Each state has its own storageGlobal key. The gates in the other contracts only read the
@@ -29,6 +30,12 @@ library BridgeHalt {
 
     // The temporary halt triggers when this many notaries are revoked ("more than 3").
     uint8 constant REVOKED_HALT_THRESHOLD = 4;
+
+    // Valid reject votes on one import txid that permanently halt the bridge. This is a fixed count, not a
+    // majority: a few honest notaries that see a bad import must be able to stop it.
+    // Notary sets smaller than REJECT_HALT_THRESHOLD (the 3-notary testnet / dev sets) use SMALL_SET_REJECT_HALT_THRESHOLD.
+    uint8 constant REJECT_HALT_THRESHOLD = 4;
+    uint8 constant SMALL_SET_REJECT_HALT_THRESHOLD = 2;
 
     bytes32 constant TEMPORARY_HALTED_KEY      = keccak256("bridge.temporary.halted");
     // Holds abi.encode(bytes32 blockedTxid) while permanently halted.
@@ -114,5 +121,13 @@ library BridgeHalt {
     /// @dev Revoked notaries needed to halt; capped at the notary count so small (test) notary sets can still halt.
     function revokedHaltThreshold(uint256 notaryCount) internal pure returns (uint256) {
         return notaryCount < REVOKED_HALT_THRESHOLD ? notaryCount : REVOKED_HALT_THRESHOLD;
+    }
+
+    /// @dev Valid reject votes on one import txid needed to reject it and enter the permanent halt:
+    ///      4 on a set of 4 or more notaries (mainnet), otherwise 2 (capped at the notary count so a
+    ///      single-notary set can still reject).
+    function rejectHaltThreshold(uint256 notaryCount) internal pure returns (uint256) {
+        if (notaryCount >= REJECT_HALT_THRESHOLD) return REJECT_HALT_THRESHOLD;
+        return notaryCount < SMALL_SET_REJECT_HALT_THRESHOLD ? notaryCount : SMALL_SET_REJECT_HALT_THRESHOLD;
     }
 }

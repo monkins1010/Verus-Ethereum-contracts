@@ -14,7 +14,8 @@ import "../Storage/StorageMaster.sol";
 ///
 ///         (no vote)                            more than 3 notaries revoked (NotaryTools) -> CONTRACTS_TEMPORARY_HALTED
 ///         submitUnhaltVote(bool)               quorum of valid notaries -> back to normal (only while temporarily halted)
-///         approveOrRejectAcceptedImport(...)   quorum of rejects on one txid -> CONTRACTS_PERMANENTLY_HALTED
+///         approveOrRejectAcceptedImport(...)   quorum of approves on one txid -> import executes
+///                                              4 rejects on one txid (2 if < 4 notaries) -> CONTRACTS_PERMANENTLY_HALTED
 ///                                                         (cleared only by upgrading this contract, see initialize())
 ///
 ///         Both halts keep notarizations running so an upgrade can always be voted in. Lifting either halt restarts
@@ -400,8 +401,10 @@ contract PendingImports is VerusStorage {
 
 
     /// @notice Single notary entry point: records an approve or reject vote for a pending import and,
-    ///         when that vote completes quorum, immediately executes (approve) or rejects and halts the
+    ///         when that vote reaches its threshold, immediately executes (approve) or rejects and halts the
     ///         bridge (reject) in the same transaction — no follow-up call is required.
+    ///         Approve threshold: quorum majority. Reject threshold: BridgeHalt.rejectHaltThreshold
+    ///         (4 valid rejects, or 2 on sets of fewer than 4 notaries).
     /// @dev    Checks are ordered cheapest-first so that losing races (a notary voting on an import
     ///         that another notary just completed, or double voting) revert before any expensive
     ///         storage decode of the pending import record.
@@ -448,17 +451,16 @@ contract PendingImports is VerusStorage {
         storageGlobal[voteKey] = abi.encode(bitmap);
 
         (uint256 count,) = _countValidVotes(bitmap);
-        uint256 quorum = (notaryCount >> 1) + 1;
         address iAddr = notaries[notaryIndex];
 
         if (approve) {
             emit PendingImportApproved(importTxid, iAddr, count);
-            if (count >= quorum) {
+            if (count >= BridgeHalt.quorum(notaryCount)) {
                 _executeImport(importTxid, pendingKey, pending);
             }
         } else {
             emit PendingImportRejectVote(importTxid, iAddr, count);
-            if (count >= quorum) {
+            if (count >= BridgeHalt.rejectHaltThreshold(notaryCount)) {
                 _rejectImport(importTxid, pendingKey, pending);
             }
         }
