@@ -421,9 +421,10 @@ contract VerusNotarizer is VerusStorage {
         return feePrices[proofOption];
     }
 
-    //users can pass in 0,1,2 to get the latest confirmed / priorconfirmed  / second prior confirmed statroot and blockhash.
+    //users can pass in 0,1,2 to get the latest confirmed / priorconfirmed  / second prior confirmed stateroot.
     //otherwise if they enter a height the proof is free.
-    // returned value is uint32 height bytes32 blockhash and bytes32 stateroot serialized together. 
+    // returned value is uint32 height, bytes32 stateroot and uint32 previous height serialized together (big-endian).
+    // if an explicit height has no stored proof only the uint32 height is returned.
     function getProof(uint256 proofHeightOptions) public payable returns (bytes memory) {
 
         uint256 feePrice;

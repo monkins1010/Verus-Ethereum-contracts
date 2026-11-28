@@ -35,14 +35,13 @@ contract SubmitImports is VerusStorage {
     uint32 constant ELVCHOBJ_TXID_OFFSET = 32;
     uint32 constant ELVCHOBJ_NVINS_OFFSET = 45;
     // Minimum byte length of a valid CTransactionHeader elVchObj:
-    // 32 (txHash) + 1 (struct ver) + 4 (nVersion) + 4 (nVersionGroupId) + 4*4 (counts) = 57
+    // 32 (txHash) + 1 (fOverwintered) + 4 (nVersion) + 4 (nVersionGroupId) + 4*4 (counts) = 57
     uint32 constant ELVCHOBJ_MIN_LENGTH = 57;
-    // CTransactionHeader struct version — only version 1 is supported; other values mean
-    // the field layout is unknown and the offsets below would be wrong.
-    uint8 constant HEADER_STRUCT_VERSION = 1;
-    // Offset used to read the struct-version byte: mload(elVchObj+33) puts data[32] in the
+    // fOverwintered must be set; imported Verus transactions are always overwintered.
+    uint8 constant HEADER_FOVERWINTERED_EXPECTED = 1;
+    // Offset used to read the fOverwintered byte: mload(elVchObj+33) puts data[32] in the
     // rightmost (uint8) position of the 32-byte word.
-    uint32 constant ELVCHOBJ_STRUCT_VERSION_OFFSET = 33;
+    uint32 constant ELVCHOBJ_FOVERWINTERED_OFFSET = 33;
     uint32 constant ELVCHOBJ_NVOUTS_OFFSET = 49;
     uint32 constant ELVCHOBJ_NSHIELDEDSPENDS_OFFSET = 53;
     uint32 constant ELVCHOBJ_NSHIELDEDOUTPUTS_OFFSET = 57;
@@ -69,7 +68,7 @@ contract SubmitImports is VerusStorage {
     // Parse the CTransactionHeader from components[0].elVchObj.
     // Layout (all counts are LE uint32):
     //   bytes  0-31 : txHash
-    //   byte   32   : CTransactionHeader struct version
+    //   byte   32   : fOverwintered
     //   bytes 33-36 : tx nVersion
     //   bytes 37-40 : nVersionGroupId
     //   bytes 41-44 : nVins
@@ -81,11 +80,9 @@ contract SubmitImports is VerusStorage {
         // allocated bytes would silently return zeroes and produce a wrong elHashSize.
         require(elVchObj.length >= ELVCHOBJ_MIN_LENGTH);
 
-        // Validate the CTransactionHeader struct version (byte at data[32]).  Only version 1
-        // is defined; any other value means the field offsets below are invalid.
-        uint8 hdrStructVer;
-        assembly { hdrStructVer := mload(add(elVchObj, ELVCHOBJ_STRUCT_VERSION_OFFSET)) }
-        require(hdrStructVer == HEADER_STRUCT_VERSION);
+        uint8 fOverwintered;
+        assembly { fOverwintered := mload(add(elVchObj, ELVCHOBJ_FOVERWINTERED_OFFSET)) }
+        require(fOverwintered == HEADER_FOVERWINTERED_EXPECTED);
 
         uint32 v;
         bytes32 txHash;
